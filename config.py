@@ -84,8 +84,8 @@ PRINTER_PRODUCT_ID = 0x5011
 # 56mm paper @ 203dpi -> 384 printable dots. Drop to 360 if the right edge
 # wraps; some clones lie about their printable width.
 PRINTER_WIDTH_DOTS = 384
-# Text wrap column at the chosen size. AI line printed at 2x = ~16 cols.
-PRINTER_TEXT_COLS = 16
+# Text wrap column at the chosen size. AI line printed at 1x bold = ~32 cols.
+PRINTER_TEXT_COLS = 32
 # width / height of the printed image. <1 = portrait; 0.75 = classic 3:4.
 PRINTER_IMAGE_ASPECT = 0.75
 PRINTER_TIMEOUT_MS = 0  # 0 = libusb default

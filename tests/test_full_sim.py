@@ -1,5 +1,11 @@
-"""Full end-to-end sim run. Identical state machine, simulated hardware."""
+"""Full end-to-end sim run. Identical state machine, simulated hardware.
+
+When --receipts is set (default), each cycle also drops a PNG preview of the
+receipt that would have been printed into tests/sim_receipts/, named with the
+cycle timestamp. Open the folder to flip through them while the sim runs.
+"""
 import argparse
+import datetime
 import os
 import sys
 import threading
@@ -10,6 +16,36 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import main as mirror_main
+from tests.test_printer import render_preview
+
+
+class SimPrinter:
+    """Drop-in for ReceiptPrinter that writes a PNG preview per call."""
+
+    def __init__(self, out_dir: str, show_each: bool = False):
+        self.out_dir = out_dir
+        self.show_each = show_each
+        os.makedirs(out_dir, exist_ok=True)
+
+    def print_receipt(self, frame, text):
+        if frame is None:
+            return
+        ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        out = os.path.join(self.out_dir, f"receipt_{ts}.png")
+        try:
+            render_preview(frame.copy(), text, out)
+            print(f"[SIM] receipt preview -> {out}")
+            if self.show_each:
+                try:
+                    from PIL import Image
+                    Image.open(out).show()
+                except Exception as e:
+                    print(f"[SIM] open viewer failed: {e}")
+        except Exception as e:
+            print(f"[SIM] receipt preview failed: {e}")
+
+    def shutdown(self):
+        pass
 
 
 def run():
@@ -18,6 +54,10 @@ def run():
     p.add_argument("--no-api", action="store_true")
     p.add_argument("--loop", type=int, default=0,
                    help="auto-press the button N times then exit")
+    p.add_argument("--no-receipts", action="store_true",
+                   help="disable per-cycle receipt preview PNGs")
+    p.add_argument("--show-receipts", action="store_true",
+                   help="auto-open each receipt PNG in the default viewer")
     args = p.parse_args()
 
     from simulator.led_simulator import LEDSimulator
@@ -26,9 +66,15 @@ def run():
 
     matrix = LEDSimulator()
     camera = CameraMock(mode=args.camera)
-    import led_strip, printer as printer_mod
+    import led_strip
     strip = led_strip.create_strip(sim_matrix=matrix)
-    printer = printer_mod.create_printer()
+    if args.no_receipts:
+        import printer as printer_mod
+        printer = printer_mod.create_printer()
+    else:
+        out_dir = os.path.join(os.path.dirname(__file__), "sim_receipts")
+        printer = SimPrinter(out_dir, show_each=args.show_receipts)
+        print(f"[SIM] receipt previews will be saved to {out_dir}")
     mirror = mirror_main.MagicMirror(matrix, camera, lambda cb: ButtonMock(cb),
                                      strip=strip, printer=printer,
                                      sim_mode=True, no_api=args.no_api)

@@ -50,10 +50,10 @@ AI_MODEL = "gpt-4o-mini"
 AI_MAX_TOKENS = 80
 AI_TIMEOUT_SEC = 10
 MIRROR_PERSONA = (
-    "You are mirror. In a flatshare entrance of a fun flatshare."
+    "You are mirror. In a flatshare entrance of a fun gay flatshare."
     "The person in the image is standing before you. "
     "Respond with a single short sentence (max 12 words) — "
-    "It can be critical, motivational, but always specific to what you see. Make them very creative and sometimes htought provoking. Look especially at expressions. Sometimes they can be a bit gay or naughty."
+    "It can be critical, motivational, but always specific to what you see. Make them very creative and sometimes htought provoking. Look especially at expressions. They can be a bit gay or naughty."
     "No quotation marks. No preamble."
 )
 AI_FALLBACK_MESSAGE = "The mirror sees all, but speaks slowly tonight."
@@ -76,6 +76,20 @@ SIM_SCALE = 4
 SIM_TITLE = "Magic Mirror Simulator — 128x192"
 SIM_STRIP_BORDER_PX = 18  # thickness of the strip border in the sim window
 
+# Thermal receipt printer (optional, ESC/POS over USB). Use `lsusb` on the
+# Pi to find the vendor/product IDs of yours; defaults match the GOOJPRT /
+# Xprinter family that your existing slack printer uses.
+PRINTER_VENDOR_ID = 0x0416
+PRINTER_PRODUCT_ID = 0x5011
+# 56mm paper @ 203dpi -> 384 printable dots. Drop to 360 if the right edge
+# wraps; some clones lie about their printable width.
+PRINTER_WIDTH_DOTS = 384
+# Text wrap column at the chosen size. AI line printed at 2x = ~16 cols.
+PRINTER_TEXT_COLS = 16
+# width / height of the printed image. <1 = portrait; 0.75 = classic 3:4.
+PRINTER_IMAGE_ASPECT = 0.75
+PRINTER_TIMEOUT_MS = 0  # 0 = libusb default
+
 # Logging
 USAGE_LOG = "usage.log"
 
@@ -88,7 +102,7 @@ USAGE_LOG = "usage.log"
 # instead — `rpi_ws281x` supports SPI, no PWM conflict. You may need to
 # enable SPI in raspi-config and set `core_freq=250` in
 # /boot/firmware/config.txt for stable timing.
-LED_STRIP_COUNT = 60          # total LEDs around the perimeter
+LED_STRIP_COUNT = 600          # total LEDs around the perimeter
 LED_STRIP_PIN = 10            # GPIO 10 = SPI0 MOSI; safe with the HAT
 LED_STRIP_DMA = 10
 LED_STRIP_CHANNEL = 0         # SPI channel

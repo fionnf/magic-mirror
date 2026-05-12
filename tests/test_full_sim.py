@@ -26,11 +26,12 @@ def run():
 
     matrix = LEDSimulator()
     camera = CameraMock(mode=args.camera)
-    import led_strip
+    import led_strip, printer as printer_mod
     strip = led_strip.create_strip(sim_matrix=matrix)
+    printer = printer_mod.create_printer()
     mirror = mirror_main.MagicMirror(matrix, camera, lambda cb: ButtonMock(cb),
-                                     strip=strip, sim_mode=True,
-                                     no_api=args.no_api)
+                                     strip=strip, printer=printer,
+                                     sim_mode=True, no_api=args.no_api)
 
     worker = threading.Thread(target=mirror.run, daemon=True)
     worker.start()

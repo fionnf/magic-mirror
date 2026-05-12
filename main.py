@@ -33,11 +33,12 @@ class State(enum.Enum):
 
 
 class MagicMirror:
-    def __init__(self, matrix, camera, button_factory, strip,
+    def __init__(self, matrix, camera, button_factory, strip, printer,
                  sim_mode: bool, no_api: bool):
         self.matrix = matrix
         self.camera = camera
         self.strip = strip
+        self.printer = printer
         self.sim_mode = sim_mode
         self.no_api = no_api
         self.state = State.IDLE
@@ -243,6 +244,10 @@ class MagicMirror:
                 cloud_uploader.upload_async(frame, text)
             except Exception as e:
                 print(f"[DRIVE] skip: {e}")
+            try:
+                self.printer.print_receipt(frame, text)
+            except Exception as e:
+                print(f"[PRINTER] skip: {e}")
             held = self._do_display(text)
             self._set_state(State.FADE_OUT)
             self.strip.set_mode("fading")
@@ -280,7 +285,7 @@ class MagicMirror:
             self.matrix.clear()
         except Exception:
             pass
-        for obj in (self.button, self.camera, self.strip, self.matrix):
+        for obj in (self.button, self.camera, self.strip, self.printer, self.matrix):
             try:
                 obj.shutdown()
             except Exception:
@@ -305,10 +310,12 @@ def main(argv=None):
         from simulator.button_mock import ButtonMock
         matrix = LEDSimulator()
         camera = CameraMock(mode=args.camera)
-        import led_strip
+        import led_strip, printer as printer_mod
         strip = led_strip.create_strip(sim_matrix=matrix)
+        printer = printer_mod.create_printer()
         mirror = MagicMirror(matrix, camera, lambda cb: ButtonMock(cb),
-                             strip=strip, sim_mode=True, no_api=args.no_api)
+                             strip=strip, printer=printer,
+                             sim_mode=True, no_api=args.no_api)
 
         worker = threading.Thread(target=mirror.run, daemon=True)
         worker.start()
@@ -343,10 +350,12 @@ def main(argv=None):
     from gpio_button import GPIOButton
     matrix = LedMatrix()
     camera = Camera()
-    import led_strip
+    import led_strip, printer as printer_mod
     strip = led_strip.create_strip()
+    printer = printer_mod.create_printer()
     mirror = MagicMirror(matrix, camera, lambda cb: GPIOButton(cb),
-                         strip=strip, sim_mode=False, no_api=args.no_api)
+                         strip=strip, printer=printer,
+                         sim_mode=False, no_api=args.no_api)
 
     def handle_signal(signum, _frame):
         print(f"[SIGNAL] {signum} received, shutting down")

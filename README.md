@@ -117,6 +117,67 @@ LED_STRIP_WARM_LEVEL = 60   # warm-white base brightness (W channel, 0-255)
 If `rpi_ws281x` isn't installed or the strip fails to init, the project logs
 `[STRIP] not available, disabling: …` and runs without it.
 
+## Thermal receipt printer (optional)
+
+A 56 mm ESC/POS thermal receipt printer connected via USB can print a
+**physical keepsake** after every cycle: header, portrait-cropped photo,
+and the AI's response in chunky double-size bold underneath. Same printer
+family as your existing Slack `/ptsk` setup — `Usb(0x0416, 0x5011)` is the
+default.
+
+### Wiring & permissions
+
+1. Plug the printer into a free USB port on the Pi. It needs **its own
+   power** — these printers pull 1.5–2 A peaks, more than the Pi can
+   safely supply.
+2. Find its USB IDs (in case you have a different model):
+   ```bash
+   lsusb
+   # Bus 001 Device 005: ID 0416:5011 Winbond Electronics ...
+   ```
+   Update `PRINTER_VENDOR_ID` / `PRINTER_PRODUCT_ID` in [`config.py`](config.py)
+   if they differ.
+3. Grant non-root USB access (the `systemd` unit runs as root anyway, so
+   this is only needed if you run `main.py` manually as a user). Create
+   `/etc/udev/rules.d/99-thermalprinter.rules`:
+   ```
+   SUBSYSTEM=="usb", ATTRS{idVendor}=="0416", ATTRS{idProduct}=="5011", MODE="0666"
+   ```
+   Then `sudo udevadm control --reload-rules && sudo udevadm trigger`.
+
+### What gets printed
+
+```
+        MAGIC MIRROR
+       2026-05-12  19:04
+
+      [portrait photo —
+       384 dots wide,
+       3:4 aspect,
+       autocontrasted]
+
+  YOUR EYES HOLD
+   THE WEIGHT OF
+   FORGOTTEN STARS
+
+         (cut)
+```
+
+### Tuning
+
+In [`config.py`](config.py):
+
+- `PRINTER_WIDTH_DOTS = 384` — drop to 360 if the right edge wraps.
+- `PRINTER_TEXT_COLS = 16` — chars per line at 2×2 font size.
+- `PRINTER_IMAGE_ASPECT = 0.75` — width/height. Lower = taller image.
+
+### Graceful disable
+
+If the printer is unplugged or python-escpos isn't installed, the mirror
+logs `[PRINTER] not connected; skipping receipt` and runs unchanged. To
+disable entirely, just keep the printer disconnected — there's no flag
+to flip.
+
 ## Google Drive archive (optional)
 
 Every time the mirror takes a photo and gets an AI response, the JPEG can be

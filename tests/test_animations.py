@@ -34,6 +34,7 @@ def main():
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_g:
                     matrix.toggle_grid()
             matrix.draw(next(gen))
+            matrix.tick()
             time.sleep(interval)
         idx += 1
     matrix.shutdown()

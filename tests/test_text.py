@@ -17,6 +17,7 @@ def hold(matrix, image, seconds, poll):
         if poll():
             return False
         matrix.draw(image)
+        matrix.tick()
         time.sleep(0.05)
     return True
 
@@ -65,6 +66,7 @@ def main():
             if poll():
                 break
             matrix.draw(frame)
+            matrix.tick()
             time.sleep(1.0 / config.IDLE_ANIMATION_FPS)
             if finished:
                 break

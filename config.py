@@ -31,16 +31,23 @@ FRAME_HEIGHT = 480
 BG_HISTORY = 500
 BG_THRESHOLD = 50
 SILHOUETTE_COLOUR = (0, 100, 255)
+# Live silhouette is continuously rendered as the always-on background of the
+# mirror. Refresh rate (Hz) for the capture/extract loop:
+LIVE_SILHOUETTE_FPS = 12
+# Absdiff threshold (0-255) used when a static background frame is available.
+SILHOUETTE_DIFF_THRESHOLD = 30
+# Dim factor applied to the live silhouette while text is overlaid.
+SILHOUETTE_DIM_FACTOR = 0.3
 
-# AI
-AI_MODEL = "claude-opus-4-20250514"
+# AI (OpenAI Chat Completions, vision-capable model)
+AI_MODEL = "gpt-4o-mini"
 AI_MAX_TOKENS = 80
 AI_TIMEOUT_SEC = 10
 MIRROR_PERSONA = (
-    "You are an ancient magic mirror. "
+    "You are mirror. In a flatshare entrance of a fun flatshare."
     "The person in the image is standing before you. "
     "Respond with a single short sentence (max 12 words) — "
-    "whimsical, slightly mysterious, and personal to what you observe. "
+    "It can be critical, motivational, but always specific to what you see. Make them very creative and sometimes htought provoking. Look especially at expressions. Sometimes they can be a bit gay or naughty."
     "No quotation marks. No preamble."
 )
 AI_FALLBACK_MESSAGE = "The mirror sees all, but speaks slowly tonight."
@@ -63,3 +70,7 @@ SIM_TITLE = "Magic Mirror Simulator — 128x64"
 
 # Logging
 USAGE_LOG = "usage.log"
+
+# Google Drive archive (optional — uploads skipped if either is missing)
+GOOGLE_CREDENTIALS_PATH = "gcp-credentials.json"
+# Folder ID comes from .env (GOOGLE_DRIVE_FOLDER_ID)

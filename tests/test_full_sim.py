@@ -60,6 +60,7 @@ def run():
                 # one final idle cycle then quit
                 time.sleep(2.0)
                 running = False
+            matrix.tick()
             clock.tick(60)
     except KeyboardInterrupt:
         pass

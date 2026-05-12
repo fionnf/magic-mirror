@@ -32,7 +32,7 @@ pip3 install --break-system-packages -r "${PROJECT_DIR}/requirements.txt"
 echo "==> Setting up .env"
 if [ ! -f "${PROJECT_DIR}/.env" ]; then
     cp "${PROJECT_DIR}/.env.example" "${PROJECT_DIR}/.env"
-    read -rp "Enter your ANTHROPIC_API_KEY: " KEY
+    read -rp "Enter your OPENAI_API_KEY: " KEY
     sed -i "s|your_key_here|${KEY}|" "${PROJECT_DIR}/.env"
 fi
 

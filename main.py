@@ -1,6 +1,11 @@
 """Magic Mirror — main state machine.
 
-Runs either on real hardware (default) or with --sim using the simulator.
+Runs on real hardware by default, or with --sim using the simulator.
+
+The live silhouette is ALWAYS rendered as the background of whatever the mirror
+is showing — idle, thinking, or speaking. A dedicated thread continuously
+captures camera frames, extracts the silhouette mask, and stores the latest
+rendered overlay in `_live_silhouette` for the display loop to composite.
 """
 import argparse
 import signal
@@ -22,7 +27,6 @@ class State(enum.Enum):
     IDLE = "IDLE"
     TRIGGERED = "TRIGGERED"
     CAPTURING = "CAPTURING"
-    SILHOUETTE = "SILHOUETTE"
     AI_WAITING = "AI_WAITING"
     DISPLAYING = "DISPLAYING"
     FADE_OUT = "FADE_OUT"
@@ -38,20 +42,58 @@ class MagicMirror:
         self._trigger_event = threading.Event()
         self._stop = threading.Event()
         self.button = button_factory(self._on_button)
-        self._latest_silhouette: Optional[Image.Image] = None
-        self._latest_message: Optional[str] = None
+        self._latest_frame = None              # last raw camera frame (for AI)
+        self._live_silhouette: Optional[Image.Image] = None  # PIL RGB, full canvas
+        self._silhouette_lock = threading.Lock()
+        self._capture_thread: Optional[threading.Thread] = None
+
+    # ---- button ----
 
     def _on_button(self):
         if self.state == State.IDLE:
             self._trigger_event.set()
         else:
-            print(f"[STATE] button ignored in state {self.state.name}")
+            print(f"[STATE] touch ignored in state {self.state.name}")
+
+    # ---- state ----
 
     def _set_state(self, s: State):
         self.state = s
         print(f"[STATE] {s.name}")
         if hasattr(self.matrix, "set_state_label"):
             self.matrix.set_state_label(s.name)
+
+    # ---- continuous silhouette capture ----
+
+    def _capture_loop(self):
+        interval = 1.0 / max(1, config.LIVE_SILHOUETTE_FPS)
+        while not self._stop.is_set():
+            t0 = time.monotonic()
+            try:
+                frame = self.camera.capture_frame()
+                self._latest_frame = frame
+                mask = self.camera.extract_silhouette(
+                    frame, getattr(self.camera, "_background", None))
+                img = silhouette_render.render_silhouette(mask)
+                with self._silhouette_lock:
+                    self._live_silhouette = img
+            except Exception as e:
+                print(f"[CAPTURE] {e}")
+                time.sleep(0.5)
+                continue
+            dt = time.monotonic() - t0
+            time.sleep(max(0.0, interval - dt))
+
+    def _silhouette(self, dim: float = 1.0) -> Image.Image:
+        with self._silhouette_lock:
+            img = self._live_silhouette
+        if img is None:
+            return Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
+        if dim >= 0.999:
+            return img.copy()
+        return Image.eval(img, lambda v: int(v * dim))
+
+    # ---- behaviours ----
 
     def _ai_call(self, frame):
         if self.no_api:
@@ -61,49 +103,62 @@ class MagicMirror:
         return ai_client.get_mirror_message(frame)
 
     def _flash_white(self, ms: int):
+        # short white flash on top of the silhouette as touch feedback
         white = Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT), (255, 255, 255))
         self.matrix.draw(white)
         time.sleep(ms / 1000.0)
 
     def _fade_out(self, base: Image.Image, seconds: float):
+        """Fade `base` (the text+silhouette composite) down to just the live
+        silhouette — the mirror never goes fully black while someone is there.
+        """
         steps = max(1, int(seconds * config.IDLE_ANIMATION_FPS))
+        interval = 1.0 / config.IDLE_ANIMATION_FPS
         for i in range(steps, -1, -1):
             alpha = i / steps
             faded = Image.eval(base, lambda v: int(v * alpha))
-            self.matrix.draw(faded)
-            time.sleep(1.0 / config.IDLE_ANIMATION_FPS)
+            # composite over current live silhouette so it bleeds through
+            live = self._silhouette()
+            combined = Image.blend(live, faded, alpha)
+            self.matrix.draw(combined)
+            time.sleep(interval)
 
     def _run_idle_until_trigger(self):
-        anim = animations.starfield()
         interval = 1.0 / config.IDLE_ANIMATION_FPS
         while not self._stop.is_set():
             if self._trigger_event.is_set():
                 self._trigger_event.clear()
                 return
-            frame = next(anim)
-            self.matrix.draw(frame)
+            self.matrix.draw(self._silhouette())
             time.sleep(interval)
+
+    def _do_countdown(self, seconds: int = 3):
+        """Show a 3-2-1 countdown centred on top of the live silhouette."""
+        interval = 1.0 / config.IDLE_ANIMATION_FPS
+        for n in range(seconds, 0, -1):
+            end = time.monotonic() + 1.0
+            while time.monotonic() < end and not self._stop.is_set():
+                canvas = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
+                text_renderer.render_static_text(canvas, str(n),
+                                                 colour=(255, 255, 255))
+                self.matrix.draw(canvas)
+                time.sleep(interval)
 
     def _do_trigger_capture(self):
         self._set_state(State.TRIGGERED)
         self._flash_white(config.TRIGGER_FLASH_MS)
+        self._do_countdown(3)
         self._set_state(State.CAPTURING)
-        if self.camera._background is None if hasattr(self.camera, "_background") else False:
-            self.camera.get_background_frame()
-        frame = self.camera.capture_frame()
+        # use the most recent live frame from the capture thread; fall back to
+        # a fresh capture if the thread hasn't produced one yet.
+        frame = self._latest_frame
+        if frame is None:
+            frame = self.camera.capture_frame()
         if self.sim_mode:
-            print("[SIM] Camera: captured frame")
+            print("[SIM] Camera: using latest live frame")
         return frame
 
-    def _do_silhouette(self, frame):
-        self._set_state(State.SILHOUETTE)
-        mask = self.camera.extract_silhouette(frame, getattr(self.camera, "_background", None))
-        sil_img = silhouette_render.render_silhouette(mask)
-        self._latest_silhouette = sil_img
-        self.matrix.draw(sil_img)
-        return sil_img
-
-    def _do_ai_wait(self, frame, sil_img):
+    def _do_ai_wait(self, frame):
         self._set_state(State.AI_WAITING)
         if self.sim_mode:
             print("[SIM] API call started (threaded)")
@@ -114,14 +169,18 @@ class MagicMirror:
         t = threading.Thread(target=worker, daemon=True)
         t.start()
 
-        # Show silhouette + pulsing dots until response arrives or hard timeout
-        dots = animations.thinking_dots(base=sil_img)
-        deadline = time.monotonic() + config.AI_TIMEOUT_SEC + 2.0
         min_show_until = time.monotonic() + config.SILHOUETTE_DISPLAY_SEC
+        hard_deadline = time.monotonic() + config.AI_TIMEOUT_SEC + 2.0
         interval = 1.0 / config.IDLE_ANIMATION_FPS
+        # pulsing thinking dots overlaid on the live silhouette
+        dots_gen = animations.thinking_dots(base=self._silhouette())
         while t.is_alive() or time.monotonic() < min_show_until:
-            self.matrix.draw(next(dots))
-            if time.monotonic() > deadline:
+            # rebuild dot generator each frame against fresh silhouette so the
+            # background tracks the person as they move
+            base = self._silhouette()
+            dots_gen = animations.thinking_dots(base=base)
+            self.matrix.draw(next(dots_gen))
+            if time.monotonic() > hard_deadline:
                 break
             time.sleep(interval)
         t.join(timeout=0.5)
@@ -130,27 +189,43 @@ class MagicMirror:
             print(f"[SIM] API response: {text!r}")
         return text
 
-    def _do_display(self, sil_img, text):
+    def _do_display(self, text: str):
         self._set_state(State.DISPLAYING)
-        dim = Image.eval(sil_img, lambda v: int(v * 0.3))
         if self.sim_mode:
             print("[SIM] Scrolling text...")
-        text_renderer.scroll_text(self.matrix, text, background=dim)
-        # hold final state with text centred
-        held = dim.copy()
-        text_renderer.render_static_text(held, text)
-        end = time.monotonic() + config.MESSAGE_HOLD_SEC
-        while time.monotonic() < end and not self._stop.is_set():
-            self.matrix.draw(held)
-            time.sleep(0.1)
-        return held
+
+        interval = 1.0 / config.IDLE_ANIMATION_FPS
+        import numpy as np
+        # The scroll generator renders text over a (now-stale) silhouette
+        # snapshot. We composite each produced frame with the *current* live
+        # silhouette via per-channel max — text stays bright, the live
+        # silhouette tracks the person underneath. Scroll the message twice.
+        for _pass in range(2):
+            gen = text_renderer.scroll_text_frames(
+                text, background=self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR))
+            for text_frame, finished in gen:
+                live_dim = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
+                a = np.asarray(text_frame, dtype=np.uint8)
+                b = np.asarray(live_dim, dtype=np.uint8)
+                self.matrix.draw(Image.fromarray(np.maximum(a, b), "RGB"))
+                if finished:
+                    break
+                time.sleep(interval)
+            if self._stop.is_set():
+                break
+        # return the dim live silhouette for the fade-out to consume
+        return self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
 
     def run_cycle(self):
         try:
             frame = self._do_trigger_capture()
-            sil = self._do_silhouette(frame)
-            text = self._do_ai_wait(frame, sil)
-            held = self._do_display(sil, text)
+            text = self._do_ai_wait(frame)
+            try:
+                import cloud_uploader
+                cloud_uploader.upload_async(frame, text)
+            except Exception as e:
+                print(f"[DRIVE] skip: {e}")
+            held = self._do_display(text)
             self._set_state(State.FADE_OUT)
             self._fade_out(held, config.FADE_OUT_SEC)
         except Exception as e:
@@ -159,11 +234,17 @@ class MagicMirror:
             self._set_state(State.IDLE)
 
     def run(self):
-        # capture initial background if camera supports it
+        # capture initial background frame for absdiff silhouette extraction
         try:
             self.camera.get_background_frame()
         except Exception as e:
             print(f"[WARN] background capture failed: {e}")
+
+        # start the continuous silhouette capture thread
+        self._capture_thread = threading.Thread(
+            target=self._capture_loop, daemon=True, name="silhouette-capture")
+        self._capture_thread.start()
+
         self._set_state(State.IDLE)
         while not self._stop.is_set():
             self._run_idle_until_trigger()
@@ -190,7 +271,7 @@ def build_args():
     p.add_argument("--sim", action="store_true", help="Run in simulator mode (no Pi hardware)")
     p.add_argument("--camera", default="webcam", choices=["webcam", "static"],
                    help="Sim camera source")
-    p.add_argument("--no-api", action="store_true", help="Skip Claude API calls (canned reply)")
+    p.add_argument("--no-api", action="store_true", help="Skip API call (canned reply)")
     return p
 
 
@@ -203,11 +284,9 @@ def main(argv=None):
         from simulator.button_mock import ButtonMock
         matrix = LEDSimulator()
         camera = CameraMock(mode=args.camera)
-        button_factory = lambda cb: ButtonMock(cb)
-        mirror = MagicMirror(matrix, camera, button_factory,
+        mirror = MagicMirror(matrix, camera, lambda cb: ButtonMock(cb),
                              sim_mode=True, no_api=args.no_api)
 
-        # run state machine in a background thread; main thread pumps pygame events
         worker = threading.Thread(target=mirror.run, daemon=True)
         worker.start()
 
@@ -226,6 +305,7 @@ def main(argv=None):
                             matrix.toggle_grid()
                         else:
                             mirror.button.handle_event(event)
+                matrix.tick()
                 clock.tick(60)
         except KeyboardInterrupt:
             pass

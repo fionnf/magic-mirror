@@ -62,11 +62,16 @@ class CameraMock:
         return self._background
 
     def extract_silhouette(self, frame: np.ndarray, background: np.ndarray = None) -> np.ndarray:
-        if background is not None and self.mode == "static":
-            # static mode: classic absdiff threshold for stability
-            diff = cv2.absdiff(frame, background)
+        bg = background if background is not None else self._background
+        if bg is not None:
+            # absdiff keeps stationary subjects visible — required for the
+            # always-on live silhouette feed.
+            if bg.shape != frame.shape:
+                bg = cv2.resize(bg, (frame.shape[1], frame.shape[0]))
+            diff = cv2.absdiff(frame, bg)
             grey = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-            _, mask = cv2.threshold(grey, 30, 255, cv2.THRESH_BINARY)
+            _, mask = cv2.threshold(grey, config.SILHOUETTE_DIFF_THRESHOLD,
+                                    255, cv2.THRESH_BINARY)
         else:
             mask = self._subtractor.apply(frame)
             _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)

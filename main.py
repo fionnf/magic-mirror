@@ -33,9 +33,11 @@ class State(enum.Enum):
 
 
 class MagicMirror:
-    def __init__(self, matrix, camera, button_factory, sim_mode: bool, no_api: bool):
+    def __init__(self, matrix, camera, button_factory, strip,
+                 sim_mode: bool, no_api: bool):
         self.matrix = matrix
         self.camera = camera
+        self.strip = strip
         self.sim_mode = sim_mode
         self.no_api = no_api
         self.state = State.IDLE
@@ -77,6 +79,16 @@ class MagicMirror:
                 img = silhouette_render.render_silhouette(mask)
                 with self._silhouette_lock:
                     self._live_silhouette = img
+                # tell the strip where the silhouette is so its hue band can
+                # follow the person horizontally
+                try:
+                    import numpy as np
+                    cols = np.where(mask.any(axis=0))[0]
+                    if len(cols) > 0:
+                        centroid_x = float(cols.mean()) / max(1, mask.shape[1])
+                        self.strip.set_centroid(centroid_x)
+                except Exception:
+                    pass
             except Exception as e:
                 print(f"[CAPTURE] {e}")
                 time.sleep(0.5)
@@ -133,7 +145,9 @@ class MagicMirror:
             time.sleep(interval)
 
     def _do_countdown(self, seconds: int = 3):
-        """Show a 3-2-1 countdown centred on top of the live silhouette."""
+        """Show a 3-2-1 countdown centred on top of the live silhouette,
+        with the strip breathing in sync."""
+        self.strip.set_mode("countdown")
         interval = 1.0 / config.IDLE_ANIMATION_FPS
         for n in range(seconds, 0, -1):
             end = time.monotonic() + 1.0
@@ -149,17 +163,20 @@ class MagicMirror:
         self._flash_white(config.TRIGGER_FLASH_MS)
         self._do_countdown(3)
         self._set_state(State.CAPTURING)
-        # use the most recent live frame from the capture thread; fall back to
-        # a fresh capture if the thread hasn't produced one yet.
+        # strip goes pure white for the photo moment
+        self.strip.set_mode("capture_flash")
         frame = self._latest_frame
         if frame is None:
             frame = self.camera.capture_frame()
         if self.sim_mode:
             print("[SIM] Camera: using latest live frame")
+        # brief hold so the flash registers visually
+        time.sleep(0.15)
         return frame
 
     def _do_ai_wait(self, frame):
         self._set_state(State.AI_WAITING)
+        self.strip.set_mode("thinking")
         if self.sim_mode:
             print("[SIM] API call started (threaded)")
         result = {"text": None}
@@ -191,6 +208,7 @@ class MagicMirror:
 
     def _do_display(self, text: str):
         self._set_state(State.DISPLAYING)
+        self.strip.set_mode("displaying")
         if self.sim_mode:
             print("[SIM] Scrolling text...")
 
@@ -227,11 +245,13 @@ class MagicMirror:
                 print(f"[DRIVE] skip: {e}")
             held = self._do_display(text)
             self._set_state(State.FADE_OUT)
+            self.strip.set_mode("fading")
             self._fade_out(held, config.FADE_OUT_SEC)
         except Exception as e:
             print(f"[ERROR] cycle failed: {e}")
         finally:
             self._set_state(State.IDLE)
+            self.strip.set_mode("idle")
 
     def run(self):
         # capture initial background frame for absdiff silhouette extraction
@@ -246,6 +266,7 @@ class MagicMirror:
         self._capture_thread.start()
 
         self._set_state(State.IDLE)
+        self.strip.set_mode("idle")
         while not self._stop.is_set():
             self._run_idle_until_trigger()
             if self._stop.is_set():
@@ -259,7 +280,7 @@ class MagicMirror:
             self.matrix.clear()
         except Exception:
             pass
-        for obj in (self.button, self.camera, self.matrix):
+        for obj in (self.button, self.camera, self.strip, self.matrix):
             try:
                 obj.shutdown()
             except Exception:
@@ -284,8 +305,10 @@ def main(argv=None):
         from simulator.button_mock import ButtonMock
         matrix = LEDSimulator()
         camera = CameraMock(mode=args.camera)
+        import led_strip
+        strip = led_strip.create_strip(sim_matrix=matrix)
         mirror = MagicMirror(matrix, camera, lambda cb: ButtonMock(cb),
-                             sim_mode=True, no_api=args.no_api)
+                             strip=strip, sim_mode=True, no_api=args.no_api)
 
         worker = threading.Thread(target=mirror.run, daemon=True)
         worker.start()
@@ -320,8 +343,10 @@ def main(argv=None):
     from gpio_button import GPIOButton
     matrix = LedMatrix()
     camera = Camera()
+    import led_strip
+    strip = led_strip.create_strip()
     mirror = MagicMirror(matrix, camera, lambda cb: GPIOButton(cb),
-                         sim_mode=False, no_api=args.no_api)
+                         strip=strip, sim_mode=False, no_api=args.no_api)
 
     def handle_signal(signum, _frame):
         print(f"[SIGNAL] {signum} received, shutting down")

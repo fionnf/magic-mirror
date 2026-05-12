@@ -13,9 +13,14 @@ always "sees" you.
 
 - Raspberry Pi 4 (2GB+)
 - Adafruit RGB Matrix HAT (#2345)
-- 4× P5 SMD2121 HUB75E panels (64×32 each), arranged 2×2, chained in a U
-  - HAT → Panel 1 (top-left) → Panel 2 (top-right) → Panel 3 (bottom-right)
-    → Panel 4 (bottom-left). The `U-mapper` pixel mapper handles the wrap.
+- 6× HUB75E **64×64** panels, arranged 2 wide × 3 tall (**portrait**, total
+  canvas 128 × 192). Chain serpentine: HAT → top-left → top-right →
+  middle-right → middle-left → bottom-left → bottom-right.
+  - Default `PIXEL_MAPPER = "U-mapper"` in [`config.py`](config.py) — if your
+    image is mirrored, flipped, or split, try `"U-mapper;Rotate:180"`,
+    `"V-mapper"`, or re-wire. The mapper has to match your physical chain.
+  - Confirm scan rate from the sticker; most 64×64 panels are 1/32, which is
+    the new default (`SCAN_RATE = 32`).
 - 5V 40A PSU **direct to panels**. Share **GND only** with the Pi. Never feed
   panel +5V through the Pi.
 - Pi Camera Module v3 (or v2)
@@ -44,6 +49,73 @@ sudo systemctl start magic-mirror.service
 5. Disable Pi onboard audio (`dtparam=audio=off`) — required, the audio PWM
    conflicts with the HUB75 clock pin.
 6. Install and enable a `systemd` service that auto-starts on boot.
+
+## SK6812 RGBWW LED strip around the frame (optional)
+
+The mirror can drive an addressable RGBWW strip (e.g. SK6812 60 LEDs/m)
+wrapped around the perimeter. It's **fully optional** — if the strip isn't
+wired up or the library isn't installed, the project runs unchanged with
+no strip behaviour. The strip is also rendered in the simulator window as
+a border around the matrix preview, so you can see it without the hardware.
+
+### Behaviours
+
+| State | Strip |
+|---|---|
+| Idle / displaying / fading | Warm white base with a slow-drifting hue band that *follows the silhouette horizontally* — the colour bloom tracks where you're standing. |
+| Countdown (3-2-1) | Breathes on/off in sync with the on-screen countdown. |
+| Photo capture moment | Solid bright white (uses the dedicated W channel). |
+| Thinking (AI in flight) | Hue band pulses gently. |
+
+### Wiring — **important, has a real conflict**
+
+The Adafruit RGB Matrix HAT uses **GPIO 18 / PWM** for panel OE. `rpi_ws281x`
+defaults to the same pin. They will fight and the strip will glitch or the
+panels will flicker.
+
+**Solution: drive the strip over SPI (GPIO 10 / MOSI) instead.** This is the
+default in [`config.py`](config.py) (`LED_STRIP_PIN = 10`). It needs three
+things on the Pi:
+
+1. Enable SPI:
+   ```bash
+   sudo raspi-config   # Interface Options → SPI → Enable
+   ```
+2. Pin SPI frequency for stable timing — append to `/boot/firmware/config.txt`
+   (or `/boot/config.txt` on older OSes):
+   ```
+   core_freq=250
+   core_freq_min=250
+   ```
+   then reboot.
+3. The `rpi_ws281x` user must be able to access `/dev/spidev0.0`. The
+   systemd unit runs as root, so this is already fine.
+
+### Strip wiring
+
+- **VCC** → 5V (use the panel PSU — the strip can pull 60mA × LEDs × 3 channels;
+  a 60-LED strip at full white can draw ~3A. Don't power from the Pi.)
+- **GND** → common ground (Pi + PSU + strip all share GND)
+- **DI (data in)** → Pi **GPIO 10** via a 330Ω series resistor
+- Optionally a level shifter (74AHCT125) for reliability — the Pi's 3.3V
+  signal is sometimes marginal for 5V WS/SK strips. Most short runs work
+  without one.
+
+### Configuration
+
+In [`config.py`](config.py):
+
+```python
+LED_STRIP_COUNT = 60        # how many LEDs you actually have
+LED_STRIP_PIN = 10          # leave at 10 (SPI MOSI) to avoid HAT conflict
+LED_STRIP_BRIGHTNESS = 180  # 0-255
+LED_STRIP_BAND_FRACTION = 0.25  # width of the hue band as % of strip length
+LED_STRIP_HUE_SPEED = 0.05  # how fast the colour drifts; Hz-ish
+LED_STRIP_WARM_LEVEL = 60   # warm-white base brightness (W channel, 0-255)
+```
+
+If `rpi_ws281x` isn't installed or the strip fails to init, the project logs
+`[STRIP] not available, disabling: …` and runs without it.
 
 ## Google Drive archive (optional)
 
@@ -229,6 +301,10 @@ IDLE → TRIGGERED → (3-2-1 countdown) → CAPTURING → AI_WAITING
                               DISPLAYING (scrolls 2x) ← (response or timeout)
                                                        ↓
                                                     FADE_OUT → IDLE
+
+Strip:  idle  →  countdown (breathing)  →  capture_flash (white)
+                  ↓
+                  thinking (hue pulse)  →  displaying  →  fading  →  idle
 ```
 
 The live silhouette runs in its own thread and is composited as the background

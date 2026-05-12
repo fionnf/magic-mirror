@@ -89,6 +89,8 @@ PRINTER_TEXT_COLS = 32
 # width / height of the printed image. <1 = portrait; 0.75 = classic 3:4.
 PRINTER_IMAGE_ASPECT = 0.75
 PRINTER_TIMEOUT_MS = 0  # 0 = libusb default
+# Bold header line printed above the timestamp. Empty string to omit.
+PRINTER_HEADER = "FORTUNAGASSE 24"
 
 # Logging
 USAGE_LOG = "usage.log"

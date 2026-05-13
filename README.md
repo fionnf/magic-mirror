@@ -9,6 +9,113 @@ A live silhouette of whoever is in frame is rendered continuously as the
 background of every state — idle, thinking, and speaking — so the mirror
 always "sees" you.
 
+## Python-first setup (no hardware yet)
+
+If your LED panels/HAT haven't arrived yet, you can still build and test the
+full mirror flow now.
+
+This mode uses:
+
+- simulator window instead of HUB75 panels
+- webcam (or static image) instead of Pi camera
+- keyboard instead of capacitive touch button
+
+### 1) Clone the repo
+
+```bash
+git clone https://github.com/fionnf/magic-mirror.git
+cd magic-mirror
+```
+
+If you already cloned elsewhere, just `cd` into your existing checkout.
+
+### 2) Create and activate a virtual environment
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+```
+
+On Windows PowerShell, activate with:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+### 3) Install Python dependencies for simulator/dev work
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+`requirements-dev.txt` includes the base requirements plus simulator extras
+like `pygame`.
+
+### 4) Set up environment variables
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env`:
+
+- Set `OPENAI_API_KEY=...` if you want real model responses.
+- Leave it as-is if you plan to run with `--no-api` first.
+
+### 5) Run the full simulator (recommended first run)
+
+No API calls (free, uses canned response):
+
+```bash
+python tests/test_full_sim.py --camera webcam --no-api
+```
+
+With real API calls:
+
+```bash
+python tests/test_full_sim.py --camera webcam
+```
+
+No webcam available:
+
+```bash
+python tests/test_full_sim.py --camera static --no-api
+```
+
+### 6) Simulator controls
+
+- `SPACE` / `ENTER` — trigger a mirror cycle
+- `Q` — quit
+- `G` — toggle panel grid overlay
+
+### 7) Useful focused scripts while hardware is missing
+
+- `python tests/test_ai.py --image tests/test_image.jpg`  
+  Verify OpenAI vision request/response path.
+- `python tests/test_silhouette.py`  
+  Tune silhouette extraction from webcam feed.
+- `python tests/test_animations.py`  
+  Preview animation timing.
+- `python tests/test_text.py`  
+  Tune scrolling/static text rendering.
+
+### 8) Optional: run the main app in sim mode
+
+```bash
+python main.py --sim --camera webcam --no-api
+```
+
+### 9) When hardware arrives
+
+Keep your Python code and config changes, then on the Pi run:
+
+```bash
+./install.sh
+sudo reboot
+sudo systemctl start magic-mirror.service
+```
+
 ## Hardware
 
 - Raspberry Pi 4 (2GB+)

@@ -174,39 +174,19 @@ class MagicMirror:
                 time.sleep(interval)
 
     def _do_trigger_capture(self):
+        """Single-shot capture: countdown then grab the latest frame from the
+        live thread — no LED flash. Booth mode has its own _capture_with_flash
+        that does illuminate the subject."""
         self._set_state(State.TRIGGERED)
-        self._flash_white(config.TRIGGER_FLASH_MS)
         self._do_countdown(3)
         self._set_state(State.CAPTURING)
-
-        # Light the subject. Both the matrix and the strip go full white.
-        # The strip's "capture_flash" mode pushes the W channel to max.
-        self.strip.set_mode("capture_flash")
-        white = Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT),
-                          (255, 255, 255))
-        self.matrix.draw(white)
-
-        # Pre-flash hold: let the camera's auto-exposure settle on the new
-        # bright scene before we grab a frame. Without this the capture
-        # happens during the AE ramp and the image comes out blown-out or
-        # half-lit.
-        time.sleep(config.PHOTO_FLASH_PRE_MS / 1000.0)
-
-        # Take an explicit fresh capture *during* the flash rather than
-        # relying on the live-silhouette thread's last frame (which is
-        # whatever lighting the room had a moment ago).
         try:
             frame = self.camera.capture_frame()
         except Exception as e:
             print(f"[CAPTURE] direct grab failed, falling back: {e}")
             frame = self._latest_frame or None
-
-        # Post-flash tail — the flash needs to feel intentional, not a blip.
-        time.sleep(config.PHOTO_FLASH_POST_MS / 1000.0)
-
         if self.sim_mode:
-            print(f"[SIM] Camera: captured illuminated frame "
-                  f"({config.PHOTO_FLASH_PRE_MS + config.PHOTO_FLASH_POST_MS}ms flash)")
+            print("[SIM] Camera: captured frame (no flash)")
         return frame
 
     def _do_ai_wait(self, frame):
@@ -252,20 +232,17 @@ class MagicMirror:
         # The scroll generator renders text over a (now-stale) silhouette
         # snapshot. We composite each produced frame with the *current* live
         # silhouette via per-channel max — text stays bright, the live
-        # silhouette tracks the person underneath. Scroll the message twice.
-        for _pass in range(2):
-            gen = text_renderer.scroll_text_frames(
-                text, background=self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR))
-            for text_frame, finished in gen:
-                live_dim = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
-                a = np.asarray(text_frame, dtype=np.uint8)
-                b = np.asarray(live_dim, dtype=np.uint8)
-                self.matrix.draw(Image.fromarray(np.maximum(a, b), "RGB"))
-                if finished:
-                    break
-                time.sleep(interval)
-            if self._stop.is_set():
+        # silhouette tracks the person underneath. Single scroll pass.
+        gen = text_renderer.scroll_text_frames(
+            text, background=self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR))
+        for text_frame, finished in gen:
+            live_dim = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
+            a = np.asarray(text_frame, dtype=np.uint8)
+            b = np.asarray(live_dim, dtype=np.uint8)
+            self.matrix.draw(Image.fromarray(np.maximum(a, b), "RGB"))
+            if finished:
                 break
+            time.sleep(interval)
         # return the dim live silhouette for the fade-out to consume
         return self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
 
@@ -330,7 +307,11 @@ class MagicMirror:
         cols = max(8, W // max(1, char_w))
         lines = textwrap.wrap(text, width=cols) or [text]
 
-        canvas = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
+        # Use a brighter silhouette than the normal text-overlay state — the
+        # prompt is a call-to-action, not a quiet caption, and dim blue with
+        # amber-on-top reads as "off". Bright base + white text is legible
+        # even from across the hallway.
+        canvas = self._silhouette(dim=0.7)
         d = _ImageDraw.Draw(canvas)
         line_h = _text_size(d, "Ag")[1] + 2
         total_h = line_h * len(lines)
@@ -338,7 +319,7 @@ class MagicMirror:
         for i, line in enumerate(lines):
             tw, _ = _text_size(d, line)
             d.text(((W - tw) // 2, y0 + i * line_h),
-                   line, fill=config.TEXT_COLOUR, font=_FONT)
+                   line, fill=(255, 255, 255), font=_FONT)
 
         end = time.monotonic() + seconds
         while time.monotonic() < end and not self._stop.is_set():
@@ -378,15 +359,43 @@ class MagicMirror:
                 print("[BOOTH] no frames captured; aborting cycle")
                 return
 
-            # compose, print, upload, and display — captions = the prompts
+            # Create a fresh Drive subfolder for this session so its three
+            # photos live together, and the QR on the strip can link to it.
+            qr_url = None
+            booth_folder_id = None
+            try:
+                import cloud_uploader
+                session = cloud_uploader.create_booth_session_folder()
+                if session is not None:
+                    booth_folder_id, qr_url = session
+            except Exception as e:
+                print(f"[BOOTH] folder create skip: {e}")
+
+            # compose strip (now with optional QR), print, display, upload.
             strip_image = render_booth_pil(frames, label="PHOTOBOOTH",
-                                           prompts=prompts[:len(frames)])
+                                           prompts=prompts[:len(frames)],
+                                           qr_url=qr_url)
             try:
                 self.printer.print_strip(strip_image)
             except Exception as e:
                 print(f"[BOOTH] print failed: {e}")
             try:
-                import cloud_uploader
+                if booth_folder_id:
+                    # photos go into the session subfolder
+                    for i, f in enumerate(frames):
+                        prompt = prompts[i] if i < len(prompts) else ""
+                        desc = (f"Photobooth {i + 1}/{len(frames)}"
+                                + (f" — {prompt}" if prompt else ""))
+                        cloud_uploader.upload_photo_to_folder_async(
+                            f, booth_folder_id, desc)
+                else:
+                    # no folder (Drive disabled) — fall back to flat upload
+                    for i, f in enumerate(frames):
+                        prompt = prompts[i] if i < len(prompts) else ""
+                        desc = (f"Photobooth {i + 1}/{len(frames)}"
+                                + (f" — {prompt}" if prompt else ""))
+                        cloud_uploader.upload_photo_only_async(f, desc)
+                # composed strip still goes to the receipts folder
                 cloud_uploader.upload_booth_async(strip_image)
             except Exception as e:
                 print(f"[BOOTH] drive upload skip: {e}")

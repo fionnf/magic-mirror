@@ -56,6 +56,31 @@ class SimPrinter:
         except Exception as e:
             print(f"[SIM] receipt preview failed: {e}")
 
+    def print_strip(self, pil_image):
+        """Save the booth strip as a PNG preview AND forward to the real
+        printer if one is attached."""
+        if pil_image is None:
+            return
+        if self.real_printer is not None:
+            try:
+                self.real_printer.print_strip(pil_image)
+                print("[SIM] forwarded booth strip to real printer")
+            except Exception as e:
+                print(f"[SIM] real-printer strip forward failed: {e}")
+        ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        out = os.path.join(self.out_dir, f"booth_{ts}.png")
+        try:
+            pil_image.save(out)
+            print(f"[SIM] booth strip preview -> {out}")
+            if self.show_each:
+                try:
+                    from PIL import Image
+                    Image.open(out).show()
+                except Exception as e:
+                    print(f"[SIM] open viewer failed: {e}")
+        except Exception as e:
+            print(f"[SIM] booth preview failed: {e}")
+
     def shutdown(self):
         if self.real_printer is not None:
             try:

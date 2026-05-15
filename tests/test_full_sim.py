@@ -17,19 +17,31 @@ load_dotenv()
 
 import main as mirror_main
 from tests.test_printer import render_preview
+import config
 
 
 class SimPrinter:
-    """Drop-in for ReceiptPrinter that writes a PNG preview per call."""
+    """Drop-in for ReceiptPrinter that writes a PNG preview per call,
+    and additionally forwards to a real ReceiptPrinter if one is wired up."""
 
-    def __init__(self, out_dir: str, show_each: bool = False):
+    def __init__(self, out_dir: str, show_each: bool = False,
+                 real_printer=None):
         self.out_dir = out_dir
         self.show_each = show_each
+        self.real_printer = real_printer
         os.makedirs(out_dir, exist_ok=True)
 
     def print_receipt(self, frame, text):
         if frame is None:
             return
+        # Hand off to the real printer first so its async USB transfer can
+        # overlap with the preview render.
+        if self.real_printer is not None:
+            try:
+                self.real_printer.print_receipt(frame, text)
+                print("[SIM] forwarded to real printer")
+            except Exception as e:
+                print(f"[SIM] real-printer forward failed: {e}")
         ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         out = os.path.join(self.out_dir, f"receipt_{ts}.png")
         try:
@@ -45,7 +57,11 @@ class SimPrinter:
             print(f"[SIM] receipt preview failed: {e}")
 
     def shutdown(self):
-        pass
+        if self.real_printer is not None:
+            try:
+                self.real_printer.shutdown()
+            except Exception:
+                pass
 
 
 def run():
@@ -67,15 +83,35 @@ def run():
     matrix = LEDSimulator()
     camera = CameraMock(mode=args.camera)
     import led_strip
+    import printer as printer_mod
     strip = led_strip.create_strip(sim_matrix=matrix)
     if args.no_receipts:
-        import printer as printer_mod
         printer = printer_mod.create_printer()
     else:
         out_dir = os.path.join(os.path.dirname(__file__), "sim_receipts")
-        printer = SimPrinter(out_dir, show_each=args.show_receipts)
+        # Try to attach a real USB printer too — if one is plugged in,
+        # every cycle will write a PNG preview AND print a real receipt.
+        real = printer_mod.create_printer()
+        if isinstance(real, printer_mod._NullPrinter):
+            real = None
+            print("[SIM] python-escpos missing — preview only")
+        else:
+            # actively probe the USB device so we can tell the user whether
+            # a physical receipt will actually come out
+            try:
+                from escpos.printer import Usb
+                from escpos.exceptions import USBNotFoundError
+                Usb(config.PRINTER_VENDOR_ID, config.PRINTER_PRODUCT_ID,
+                    timeout=config.PRINTER_TIMEOUT_MS).close()
+                print("[SIM] real printer detected — physical receipts on each cycle")
+            except (USBNotFoundError, Exception) as e:
+                print(f"[SIM] no USB printer found ({type(e).__name__}); preview only")
+                real = None
+        printer = SimPrinter(out_dir, show_each=args.show_receipts,
+                             real_printer=real)
         print(f"[SIM] receipt previews will be saved to {out_dir}")
-    mirror = mirror_main.MagicMirror(matrix, camera, lambda cb: ButtonMock(cb),
+    mirror = mirror_main.MagicMirror(matrix, camera,
+                                     lambda short, long_: ButtonMock(short, long_),
                                      strip=strip, printer=printer,
                                      sim_mode=True, no_api=args.no_api)
 
@@ -100,6 +136,9 @@ def run():
                         matrix.toggle_grid()
                     else:
                         mirror.button.handle_event(event)
+                elif event.type == pygame.KEYUP:
+                    # forward releases so short vs long press can be detected
+                    mirror.button.handle_event(event)
             if next_auto is not None and time.monotonic() >= next_auto and auto_remaining > 0:
                 mirror.button.trigger()
                 auto_remaining -= 1

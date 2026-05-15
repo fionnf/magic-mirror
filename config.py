@@ -65,6 +65,44 @@ MESSAGE_SCROLL_SPEED = 40  # pixels per second
 MESSAGE_HOLD_SEC = 4
 FADE_OUT_SEC = 1.0
 TRIGGER_FLASH_MS = 50
+# Photo-illumination flash. Both the matrix and the strip light up bright
+# white just before the camera grabs the frame, then stay on briefly after
+# so the flash doesn't feel "snapped". Total visible flash ≈ pre + post.
+PHOTO_FLASH_PRE_MS = 220   # warm-up window for camera auto-exposure
+PHOTO_FLASH_POST_MS = 180  # tail so the flash reads as a flash, not a blip
+
+# Photobooth mode — long-press the touch sensor for LONG_PRESS_MS ms.
+LONG_PRESS_MS = 2000
+BOOTH_PHOTO_COUNT = 3
+BOOTH_PER_PHOTO_COUNTDOWN = 3      # seconds (3-2-1 per shot)
+BOOTH_PHOTO_HEIGHT = 280           # printed height in dots per photo
+BOOTH_DISPLAY_SEC = 3              # strip on matrix after print
+BOOTH_INTER_PHOTO_PAUSE_MS = 400   # tiny breath between shots
+# Ask GPT for 3 short pose directions to show before each shot. Falls back
+# to the curated list below if the API call fails.
+BOOTH_USE_AI_PROMPTS = True
+BOOTH_PROMPT_HOLD_SEC = 2.0          # how long each prompt stays on screen
+BOOTH_PROMPT_MAX_WORDS = 6
+BOOTH_AI_PROMPT_SYSTEM = (
+    "You are directing a quick photobooth session in a flatshare hallway. "
+    "Give exactly THREE short pose directions, one per line, no numbering, "
+    "no quotes. Each direction should be max 6 words, imperative, playful, "
+    "varied in mood (cheeky, dramatic, silly, sweet). Examples: "
+    "'Best regal pose', 'Pretend you just lost your keys', "
+    "'Fake-laugh at the worst joke', 'Show me chaos'."
+)
+BOOTH_FALLBACK_PROMPTS = [
+    "Best regal pose",
+    "Pretend you saw a ghost",
+    "Fake-laugh at a joke",
+    "Show me chaos",
+    "Most mysterious look",
+    "Act like a statue",
+    "Pretend it's freezing",
+    "Strike a power pose",
+    "Look casually heartbroken",
+    "Sing silently and loud",
+]
 
 # Text rendering
 TEXT_COLOUR = (255, 160, 50)
@@ -91,6 +129,14 @@ PRINTER_IMAGE_ASPECT = 0.75
 PRINTER_TIMEOUT_MS = 0  # 0 = libusb default
 # Bold header line printed above the timestamp. Empty string to omit.
 PRINTER_HEADER = "FORTUNAGASSE 24"
+# Image-tonemapping knobs. Thermal printers crush midtones to pure black,
+# so we pre-process with a small autocontrast stretch + gamma boost + a
+# Floyd–Steinberg dither for proper greyscale-looking output.
+PRINTER_IMAGE_AUTOCONTRAST = 1   # 0-5, percentile to crop from each end
+PRINTER_IMAGE_GAMMA = 0.7        # <1 brightens midtones; lower = brighter
+PRINTER_IMAGE_BRIGHTNESS = 1.1   # multiplicative; 1.0 = unchanged
+PRINTER_IMAGE_CONTRAST = 1.1     # multiplicative; 1.0 = unchanged
+PRINTER_IMAGE_SHARPEN = True     # subtle unsharp pass before dithering
 
 # Logging
 USAGE_LOG = "usage.log"
@@ -128,6 +174,16 @@ LED_STRIP_BAND_INTENSITY = 0.55
 LED_STRIP_WOBBLE_AMPLITUDE = 0.04  # fraction of strip length
 LED_STRIP_WOBBLE_HZ = (0.07, 0.11)  # two coprime-ish slow frequencies
 
-# Google Drive archive (optional — uploads skipped if either is missing)
+# Google Drive archive (optional — uploads skipped if no auth file present)
+# Two auth modes are supported. Set whichever fits your account:
+#   1. OAuth user credentials (works on Workspace accounts blocked from
+#      service-account key creation). Run `tools/auth_drive.py` on your
+#      laptop once to generate `token.json`; copy it to the Pi.
+#   2. Service-account JSON (works on personal Gmail / orgs without
+#      iam.disableServiceAccountKeyCreation). Drop the downloaded key as
+#      `gcp-credentials.json` in the project root.
+# The uploader checks OAuth token first, then service account.
+GOOGLE_OAUTH_TOKEN_PATH = "token.json"
+GOOGLE_OAUTH_CLIENT_PATH = "oauth_client.json"
 GOOGLE_CREDENTIALS_PATH = "gcp-credentials.json"
 # Folder ID comes from .env (GOOGLE_DRIVE_FOLDER_ID)

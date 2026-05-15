@@ -78,3 +78,57 @@ def get_mirror_message(frame: np.ndarray) -> str:
 
 def get_mirror_message_async(frame: np.ndarray) -> "concurrent.futures.Future[str]":
     return _executor.submit(get_mirror_message, frame)
+
+
+# ---- photobooth direction prompts ----
+
+def _call_booth_prompts(n: int) -> list[str]:
+    from openai import OpenAI
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    resp = client.chat.completions.create(
+        model=config.AI_MODEL,
+        max_tokens=120,
+        messages=[
+            {"role": "system", "content": config.BOOTH_AI_PROMPT_SYSTEM},
+            {"role": "user",
+             "content": f"Give me {n} pose directions for this session."},
+        ],
+        timeout=config.AI_TIMEOUT_SEC,
+    )
+    text = (resp.choices[0].message.content or "").strip()
+    lines = [ln.strip(" -*•\"'") for ln in text.splitlines()
+             if ln.strip(" -*•\"'")]
+    # trim long words / strip stray punctuation, keep the first n
+    cleaned = []
+    for ln in lines:
+        words = ln.split()
+        if len(words) > config.BOOTH_PROMPT_MAX_WORDS:
+            words = words[:config.BOOTH_PROMPT_MAX_WORDS]
+        cleaned.append(" ".join(words).rstrip(".!?,;:"))
+        if len(cleaned) == n:
+            break
+    return cleaned
+
+
+def get_booth_prompts(n: int = 3) -> list[str]:
+    """Return `n` short photobooth direction prompts. Falls back to the
+    curated list in config on any failure (no API key, timeout, parse error)."""
+    import random
+    if not config.BOOTH_USE_AI_PROMPTS or not os.environ.get("OPENAI_API_KEY"):
+        return random.sample(config.BOOTH_FALLBACK_PROMPTS, k=n)
+    start = time.monotonic()
+    future = _executor.submit(_call_booth_prompts, n)
+    try:
+        prompts = future.result(timeout=config.AI_TIMEOUT_SEC + 2)
+        if len(prompts) < n:
+            # top up from the fallback bank if the model gave fewer than asked
+            extras = random.sample(
+                [p for p in config.BOOTH_FALLBACK_PROMPTS if p not in prompts],
+                k=n - len(prompts))
+            prompts = prompts + extras
+        print(f"[AI] booth prompts ({time.monotonic() - start:.2f}s): "
+              f"{prompts}")
+        return prompts
+    except Exception as e:
+        print(f"[AI] booth prompts failed ({e}); using fallback")
+        return random.sample(config.BOOTH_FALLBACK_PROMPTS, k=n)

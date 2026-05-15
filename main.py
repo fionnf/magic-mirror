@@ -14,7 +14,7 @@ import time
 import threading
 import enum
 from typing import Optional
-from PIL import Image
+from PIL import Image, ImageDraw, ImageOps
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -30,6 +30,7 @@ class State(enum.Enum):
     AI_WAITING = "AI_WAITING"
     DISPLAYING = "DISPLAYING"
     FADE_OUT = "FADE_OUT"
+    BOOTH = "BOOTH"
 
 
 class MagicMirror:
@@ -43,8 +44,9 @@ class MagicMirror:
         self.no_api = no_api
         self.state = State.IDLE
         self._trigger_event = threading.Event()
+        self._booth_event = threading.Event()
         self._stop = threading.Event()
-        self.button = button_factory(self._on_button)
+        self.button = button_factory(self._on_button, self._on_long_press)
         self._latest_frame = None              # last raw camera frame (for AI)
         self._live_silhouette: Optional[Image.Image] = None  # PIL RGB, full canvas
         self._silhouette_lock = threading.Lock()
@@ -57,6 +59,13 @@ class MagicMirror:
             self._trigger_event.set()
         else:
             print(f"[STATE] touch ignored in state {self.state.name}")
+
+    def _on_long_press(self):
+        if self.state == State.IDLE:
+            print("[STATE] long press -> photobooth")
+            self._booth_event.set()
+        else:
+            print(f"[STATE] long press ignored in state {self.state.name}")
 
     # ---- state ----
 
@@ -136,14 +145,19 @@ class MagicMirror:
             self.matrix.draw(combined)
             time.sleep(interval)
 
-    def _run_idle_until_trigger(self):
+    def _run_idle_until_trigger(self) -> str:
+        """Block until short or long press. Returns 'short' or 'long'."""
         interval = 1.0 / config.IDLE_ANIMATION_FPS
         while not self._stop.is_set():
+            if self._booth_event.is_set():
+                self._booth_event.clear()
+                return "long"
             if self._trigger_event.is_set():
                 self._trigger_event.clear()
-                return
+                return "short"
             self.matrix.draw(self._silhouette())
             time.sleep(interval)
+        return "short"
 
     def _do_countdown(self, seconds: int = 3):
         """Show a 3-2-1 countdown centred on top of the live silhouette,
@@ -164,15 +178,35 @@ class MagicMirror:
         self._flash_white(config.TRIGGER_FLASH_MS)
         self._do_countdown(3)
         self._set_state(State.CAPTURING)
-        # strip goes pure white for the photo moment
+
+        # Light the subject. Both the matrix and the strip go full white.
+        # The strip's "capture_flash" mode pushes the W channel to max.
         self.strip.set_mode("capture_flash")
-        frame = self._latest_frame
-        if frame is None:
+        white = Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT),
+                          (255, 255, 255))
+        self.matrix.draw(white)
+
+        # Pre-flash hold: let the camera's auto-exposure settle on the new
+        # bright scene before we grab a frame. Without this the capture
+        # happens during the AE ramp and the image comes out blown-out or
+        # half-lit.
+        time.sleep(config.PHOTO_FLASH_PRE_MS / 1000.0)
+
+        # Take an explicit fresh capture *during* the flash rather than
+        # relying on the live-silhouette thread's last frame (which is
+        # whatever lighting the room had a moment ago).
+        try:
             frame = self.camera.capture_frame()
+        except Exception as e:
+            print(f"[CAPTURE] direct grab failed, falling back: {e}")
+            frame = self._latest_frame or None
+
+        # Post-flash tail — the flash needs to feel intentional, not a blip.
+        time.sleep(config.PHOTO_FLASH_POST_MS / 1000.0)
+
         if self.sim_mode:
-            print("[SIM] Camera: using latest live frame")
-        # brief hold so the flash registers visually
-        time.sleep(0.15)
+            print(f"[SIM] Camera: captured illuminated frame "
+                  f"({config.PHOTO_FLASH_PRE_MS + config.PHOTO_FLASH_POST_MS}ms flash)")
         return frame
 
     def _do_ai_wait(self, frame):
@@ -235,6 +269,143 @@ class MagicMirror:
         # return the dim live silhouette for the fade-out to consume
         return self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
 
+    def _capture_with_flash(self):
+        """Run the same illumination flash as a single-shot capture and
+        return the captured frame. Sets strip back to 'thinking' after."""
+        self.strip.set_mode("capture_flash")
+        white = Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT),
+                          (255, 255, 255))
+        self.matrix.draw(white)
+        time.sleep(config.PHOTO_FLASH_PRE_MS / 1000.0)
+        try:
+            frame = self.camera.capture_frame()
+        except Exception as e:
+            print(f"[CAPTURE] direct grab failed: {e}")
+            frame = self._latest_frame
+        time.sleep(config.PHOTO_FLASH_POST_MS / 1000.0)
+        return frame
+
+    def _booth_display_strip(self, strip_image):
+        """Show the booth strip scaled to fit the matrix for BOOTH_DISPLAY_SEC.
+        Aspect is preserved; height-bound to TOTAL_HEIGHT so the photos read."""
+        import numpy as np
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        src = strip_image.convert("L")
+        # height-bound scaling — photo strips are far taller than they are wide
+        scale = H / src.height
+        new_w = max(1, int(round(src.width * scale)))
+        new_h = H
+        if new_w > W:
+            scale = W / src.width
+            new_w = W
+            new_h = int(round(src.height * scale))
+        thumb = src.resize((new_w, new_h), Image.LANCZOS)
+        # invert so dark print pixels show as lit panel pixels
+        thumb = ImageOps.invert(thumb)
+        # convert to RGB on a black canvas, centred
+        canvas = Image.new("RGB", (W, H), (0, 0, 0))
+        x = (W - new_w) // 2
+        y = (H - new_h) // 2
+        canvas.paste(thumb.convert("RGB"), (x, y))
+        # subtle outline frame around the strip area
+        d = ImageDraw.Draw(canvas)
+        d.rectangle([x - 1, y - 1, x + new_w, y + new_h],
+                    outline=(255, 200, 80))
+        end = time.monotonic() + config.BOOTH_DISPLAY_SEC
+        while time.monotonic() < end and not self._stop.is_set():
+            self.matrix.draw(canvas)
+            time.sleep(0.08)
+
+    def _show_booth_prompt(self, text: str, seconds: float):
+        """Display a pose direction big on the matrix for `seconds`."""
+        import textwrap
+        from display.text_renderer import _FONT, _text_size
+        from PIL import ImageDraw as _ImageDraw
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+
+        # measure character width to pick a sensible wrap column
+        probe = Image.new("RGB", (W, H))
+        d = _ImageDraw.Draw(probe)
+        char_w, _ = _text_size(d, "M")
+        cols = max(8, W // max(1, char_w))
+        lines = textwrap.wrap(text, width=cols) or [text]
+
+        canvas = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
+        d = _ImageDraw.Draw(canvas)
+        line_h = _text_size(d, "Ag")[1] + 2
+        total_h = line_h * len(lines)
+        y0 = max(0, (H - total_h) // 2)
+        for i, line in enumerate(lines):
+            tw, _ = _text_size(d, line)
+            d.text(((W - tw) // 2, y0 + i * line_h),
+                   line, fill=config.TEXT_COLOUR, font=_FONT)
+
+        end = time.monotonic() + seconds
+        while time.monotonic() < end and not self._stop.is_set():
+            self.matrix.draw(canvas)
+            time.sleep(0.08)
+
+    def run_booth_cycle(self):
+        from printer import render_booth_pil
+        import ai_client
+        try:
+            self._set_state(State.BOOTH)
+            self.strip.set_mode("countdown")
+            self._flash_white(config.TRIGGER_FLASH_MS)
+
+            # ask GPT for direction prompts (with fallback)
+            prompts = ai_client.get_booth_prompts(config.BOOTH_PHOTO_COUNT)
+
+            frames = []
+            for i in range(config.BOOTH_PHOTO_COUNT):
+                prompt_text = prompts[i] if i < len(prompts) else ""
+                if prompt_text:
+                    print(f"[BOOTH] prompt {i + 1}: {prompt_text}")
+                    self._show_booth_prompt(prompt_text,
+                                            config.BOOTH_PROMPT_HOLD_SEC)
+                # short countdown per shot
+                self._do_countdown(config.BOOTH_PER_PHOTO_COUNTDOWN)
+                frame = self._capture_with_flash()
+                if frame is not None:
+                    frames.append(frame)
+                print(f"[BOOTH] captured photo {i + 1}/{config.BOOTH_PHOTO_COUNT}")
+                # tiny breath between shots so people can re-pose
+                if i < config.BOOTH_PHOTO_COUNT - 1:
+                    self.strip.set_mode("countdown")
+                    time.sleep(config.BOOTH_INTER_PHOTO_PAUSE_MS / 1000.0)
+
+            if not frames:
+                print("[BOOTH] no frames captured; aborting cycle")
+                return
+
+            # compose, print, upload, and display — captions = the prompts
+            strip_image = render_booth_pil(frames, label="PHOTOBOOTH",
+                                           prompts=prompts[:len(frames)])
+            try:
+                self.printer.print_strip(strip_image)
+            except Exception as e:
+                print(f"[BOOTH] print failed: {e}")
+            try:
+                import cloud_uploader
+                cloud_uploader.upload_booth_async(strip_image)
+            except Exception as e:
+                print(f"[BOOTH] drive upload skip: {e}")
+
+            self.strip.set_mode("displaying")
+            self._booth_display_strip(strip_image)
+
+            self._set_state(State.FADE_OUT)
+            self.strip.set_mode("fading")
+            # fade from the strip view back to bare silhouette
+            fade_base = Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT),
+                                  (0, 0, 0))
+            self._fade_out(fade_base, config.FADE_OUT_SEC)
+        except Exception as e:
+            print(f"[BOOTH] cycle failed: {e}")
+        finally:
+            self._set_state(State.IDLE)
+            self.strip.set_mode("idle")
+
     def run_cycle(self):
         try:
             frame = self._do_trigger_capture()
@@ -273,10 +444,13 @@ class MagicMirror:
         self._set_state(State.IDLE)
         self.strip.set_mode("idle")
         while not self._stop.is_set():
-            self._run_idle_until_trigger()
+            kind = self._run_idle_until_trigger()
             if self._stop.is_set():
                 break
-            self.run_cycle()
+            if kind == "long":
+                self.run_booth_cycle()
+            else:
+                self.run_cycle()
 
     def shutdown(self):
         self._stop.set()
@@ -313,7 +487,8 @@ def main(argv=None):
         import led_strip, printer as printer_mod
         strip = led_strip.create_strip(sim_matrix=matrix)
         printer = printer_mod.create_printer()
-        mirror = MagicMirror(matrix, camera, lambda cb: ButtonMock(cb),
+        mirror = MagicMirror(matrix, camera,
+                             lambda short, long_: ButtonMock(short, long_),
                              strip=strip, printer=printer,
                              sim_mode=True, no_api=args.no_api)
 
@@ -335,6 +510,10 @@ def main(argv=None):
                             matrix.toggle_grid()
                         else:
                             mirror.button.handle_event(event)
+                    elif event.type == pygame.KEYUP:
+                        # forward releases so the button can distinguish
+                        # short vs long press
+                        mirror.button.handle_event(event)
                 matrix.tick()
                 clock.tick(60)
         except KeyboardInterrupt:
@@ -353,7 +532,8 @@ def main(argv=None):
     import led_strip, printer as printer_mod
     strip = led_strip.create_strip()
     printer = printer_mod.create_printer()
-    mirror = MagicMirror(matrix, camera, lambda cb: GPIOButton(cb),
+    mirror = MagicMirror(matrix, camera,
+                         lambda short, long_: GPIOButton(short, long_),
                          strip=strip, printer=printer,
                          sim_mode=False, no_api=args.no_api)
 

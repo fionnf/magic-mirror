@@ -122,9 +122,8 @@ def get_booth_prompts(n: int = 3) -> list[str]:
         prompts = future.result(timeout=config.AI_TIMEOUT_SEC + 2)
         if len(prompts) < n:
             # top up from the fallback bank if the model gave fewer than asked
-            extras = random.sample(
-                [p for p in config.BOOTH_FALLBACK_PROMPTS if p not in prompts],
-                k=n - len(prompts))
+            pool = [p for p in config.BOOTH_FALLBACK_PROMPTS if p not in prompts]
+            extras = random.sample(pool, k=min(n - len(prompts), len(pool)))
             prompts = prompts + extras
         print(f"[AI] booth prompts ({time.monotonic() - start:.2f}s): "
               f"{prompts}")

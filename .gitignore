@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+token.json
+gcp-credentials.json
+oauth_client.json
+usage.log
+tests/sim_receipts/

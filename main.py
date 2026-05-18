@@ -184,7 +184,7 @@ class MagicMirror:
             frame = self.camera.capture_frame()
         except Exception as e:
             print(f"[CAPTURE] direct grab failed, falling back: {e}")
-            frame = self._latest_frame or None
+            frame = self._latest_frame
         if self.sim_mode:
             print("[SIM] Camera: captured frame (no flash)")
         return frame
@@ -204,14 +204,16 @@ class MagicMirror:
         min_show_until = time.monotonic() + config.SILHOUETTE_DISPLAY_SEC
         hard_deadline = time.monotonic() + config.AI_TIMEOUT_SEC + 2.0
         interval = 1.0 / config.IDLE_ANIMATION_FPS
-        # pulsing thinking dots overlaid on the live silhouette
-        dots_gen = animations.thinking_dots(base=self._silhouette())
+        import numpy as np
+        # Single persistent generator so its internal t counter advances each
+        # frame and the dots actually pulse. Composite with the live silhouette
+        # via per-channel max so the background tracks the person.
+        dots_gen = animations.thinking_dots()
         while t.is_alive() or time.monotonic() < min_show_until:
-            # rebuild dot generator each frame against fresh silhouette so the
-            # background tracks the person as they move
             base = self._silhouette()
-            dots_gen = animations.thinking_dots(base=base)
-            self.matrix.draw(next(dots_gen))
+            a = np.asarray(base, dtype=np.uint8)
+            b = np.asarray(next(dots_gen), dtype=np.uint8)
+            self.matrix.draw(Image.fromarray(np.maximum(a, b), "RGB"))
             if time.monotonic() > hard_deadline:
                 break
             time.sleep(interval)

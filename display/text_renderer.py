@@ -56,7 +56,6 @@ def scroll_text_frames(text: str, colour=config.TEXT_COLOUR,
     total_px = width + tw
     duration = total_px / max(1, speed)
     start = time.monotonic()
-    last_yield = -1
     while True:
         t = time.monotonic() - start
         progress = min(1.0, t / duration)

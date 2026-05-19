@@ -174,7 +174,7 @@ class MagicMirror:
                 last_departures_fetch = now
 
             # Display silhouette with departures overlay at bottom
-            canvas = self._silhouette(dim=0.3)
+            canvas = self._silhouette()
             if departures:
                 try:
                     from display.text_renderer import _FONT, _text_size

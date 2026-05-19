@@ -107,7 +107,7 @@ def get_departures(stop_name: str = "Rennweg", limit: int = 3,
             return departures
 
     except Exception as e:
-        print(f"[ZVV] HAFAS API failed ({type(e).__name__}), trying alternative...")
+        print(f"[ZVV] HAFAS API failed ({type(e).__name__}: {e}), trying alternative...")
 
     # Endpoint 2: Search.ch JSON API (backup)
     try:
@@ -116,7 +116,7 @@ def get_departures(stop_name: str = "Rennweg", limit: int = 3,
                      f"limit={limit}")
 
         req_search = urllib.request.Request(url_search, headers={
-            'User-Agent': 'Mozilla/5.0 (compatible; MagicMirror/1.0)'
+            'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36'
         })
         with urllib.request.urlopen(req_search, timeout=timeout) as response:
             data = json.loads(response.read().decode('utf-8'))
@@ -140,7 +140,7 @@ def get_departures(stop_name: str = "Rennweg", limit: int = 3,
             return departures
 
     except Exception as e:
-        print(f"[ZVV] Search.ch API failed ({type(e).__name__}), using fallback...")
+        print(f"[ZVV] Search.ch API failed ({type(e).__name__}: {e}), using fallback...")
 
     # Fallback: return mock departures for simulator or API unavailability
     import datetime

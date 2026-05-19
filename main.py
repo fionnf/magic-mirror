@@ -147,14 +147,8 @@ class MagicMirror:
             time.sleep(interval)
 
     def _run_idle_until_trigger(self) -> str:
-        """Block until short or long press. Returns 'short' or 'long'.
-
-        Displays tram departures at the bottom in dim mode.
-        """
+        """Block until short or long press. Returns 'short' or 'long'."""
         interval = 1.0 / config.IDLE_ANIMATION_FPS
-        last_departures_fetch = 0
-        departures = None
-
         while not self._stop.is_set():
             if self._booth_event.is_set():
                 self._booth_event.clear()
@@ -162,38 +156,7 @@ class MagicMirror:
             if self._trigger_event.is_set():
                 self._trigger_event.clear()
                 return "short"
-
-            # Fetch departures every 30 seconds (cache TTL)
-            now = time.time()
-            if now - last_departures_fetch > 30:
-                try:
-                    import zvv_client
-                    departures = zvv_client.get_departures_cached("Rennweg", limit=3)
-                except Exception:
-                    departures = None
-                last_departures_fetch = now
-
-            # Display silhouette with departures overlay at bottom
-            canvas = self._silhouette()
-            if departures:
-                try:
-                    from display.text_renderer import _FONT, _text_size
-                    from PIL import ImageDraw
-                    draw = ImageDraw.Draw(canvas)
-
-                    # Format departures string
-                    dep_text = "  •  ".join([f"{d.line} {d.departure_time}"
-                                            for d in departures])
-
-                    # Render at bottom in dim mode
-                    w, h = _text_size(draw, dep_text)
-                    x = max(0, (canvas.width - w) // 2)
-                    y = max(0, canvas.height - h - 4)
-                    draw.text((x, y), dep_text, fill=(100, 100, 100), font=_FONT)
-                except Exception:
-                    pass
-
-            self.matrix.draw(canvas)
+            self.matrix.draw(self._silhouette())
             time.sleep(interval)
         return "short"
 

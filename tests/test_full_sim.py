@@ -3,6 +3,9 @@
 When --receipts is set (default), each cycle also drops a PNG preview of the
 receipt that would have been printed into tests/sim_receipts/, named with the
 cycle timestamp. Open the folder to flip through them while the sim runs.
+
+Tram departures from Rennweg are displayed on the mirror during idle mode
+and logged to the console.
 """
 import argparse
 import datetime
@@ -18,6 +21,7 @@ load_dotenv()
 import main as mirror_main
 from tests.test_printer import render_preview
 import config
+import zvv_client
 
 
 class SimPrinter:
@@ -93,6 +97,8 @@ def run():
     p = argparse.ArgumentParser()
     p.add_argument("--camera", default="webcam", choices=["webcam", "static"])
     p.add_argument("--no-api", action="store_true")
+    p.add_argument("--no-departures", action="store_true",
+                   help="disable tram departures display")
     p.add_argument("--loop", type=int, default=0,
                    help="auto-press the button N times then exit")
     p.add_argument("--no-receipts", action="store_true",
@@ -100,6 +106,17 @@ def run():
     p.add_argument("--show-receipts", action="store_true",
                    help="auto-open each receipt PNG in the default viewer")
     args = p.parse_args()
+
+    # Display ZVV departures on startup
+    if not args.no_departures:
+        print("[SIM] Fetching tram departures from Rennweg...")
+        departures = zvv_client.get_departures("Rennweg", limit=3, timeout=5)
+        if departures:
+            print("[SIM] Departures that will be shown during idle:")
+            for dep in departures:
+                print(f"      {dep}")
+        else:
+            print("[SIM] No departures available")
 
     from simulator.led_simulator import LEDSimulator
     from simulator.camera_mock import CameraMock

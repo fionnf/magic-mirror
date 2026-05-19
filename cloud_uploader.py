@@ -1,254 +1,212 @@
-"""Async Google Drive uploader for captured mirror frames.
+"""Async Google Drive uploader.
 
-Uses a service account (gcp-credentials.json) and uploads each frame as a
-JPEG into the folder identified by GOOGLE_DRIVE_FOLDER_ID. The AI response
-text is stored in the file's `description` field for later browsing.
+Auth modes (tried in order)
+---------------------------
+1. OAuth user token  — GOOGLE_OAUTH_TOKEN_PATH  (token.json)
+2. Service account   — GOOGLE_CREDENTIALS_PATH  (gcp-credentials.json)
+
+If no auth file is found every upload call returns silently.
+The target Drive folder is read from the GOOGLE_DRIVE_FOLDER_ID env var;
+leave it unset to disable uploads while keeping the rest of the app running.
+
+All uploads are fire-and-forget: each public function submits work to a small
+thread pool and returns immediately.  create_booth_session_folder() is the
+only blocking call (main needs the folder ID before the first shot).
 """
+import concurrent.futures
+import datetime
 import io
 import os
-import time
-import datetime
-import concurrent.futures
-import numpy as np
+from typing import Optional, Tuple
+
 import cv2
+import numpy as np
 from PIL import Image
+
 import config
 
+_executor = concurrent.futures.ThreadPoolExecutor(
+    max_workers=2, thread_name_prefix="drive-upload")
 
-# single worker so the two uploads queue instead of racing on the same
-# httplib2 connection (which isn't thread-safe and trips SSL record-layer
-# failures when two threads hit it simultaneously)
-_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-_service = None
-_service_lock_failed = False  # cached failure to avoid hammering on bad config
+_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 
-SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
 
+def _build_service():
+    """Return an authenticated Drive v3 service, or None."""
+    creds = None
 
-def _enabled() -> bool:
-    """At least one destination folder configured AND an auth file present."""
-    has_dest = bool(os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
-                    or os.environ.get("GOOGLE_DRIVE_RECEIPTS_FOLDER_ID"))
-    has_auth = (os.path.exists(config.GOOGLE_OAUTH_TOKEN_PATH)
-                or os.path.exists(config.GOOGLE_CREDENTIALS_PATH))
-    return has_dest and has_auth
-
-
-def _load_credentials():
-    """Prefer OAuth user creds (token.json); fall back to a service account."""
-    # OAuth user credentials path
+    # 1 — OAuth user token (generated once by tools/auth_drive.py)
     if os.path.exists(config.GOOGLE_OAUTH_TOKEN_PATH):
-        from google.oauth2.credentials import Credentials
-        from google.auth.transport.requests import Request
-        creds = Credentials.from_authorized_user_file(
-            config.GOOGLE_OAUTH_TOKEN_PATH, SCOPES)
-        # auto-refresh if expired and we have a refresh token
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-                # persist the refreshed token so next boot doesn't need to
-                with open(config.GOOGLE_OAUTH_TOKEN_PATH, "w") as f:
-                    f.write(creds.to_json())
-            except Exception as e:
-                print(f"[DRIVE] token refresh failed: {e}")
-                return None
-        return creds
+        try:
+            from google.oauth2.credentials import Credentials
+            creds = Credentials.from_authorized_user_file(
+                config.GOOGLE_OAUTH_TOKEN_PATH, _SCOPES)
+        except Exception as e:
+            print(f"[DRIVE] OAuth token load failed: {e}")
 
-    # Service-account fallback
-    if os.path.exists(config.GOOGLE_CREDENTIALS_PATH):
-        from google.oauth2 import service_account
-        return service_account.Credentials.from_service_account_file(
-            config.GOOGLE_CREDENTIALS_PATH, scopes=SCOPES)
+    # 2 — Service account key JSON
+    if creds is None and os.path.exists(config.GOOGLE_CREDENTIALS_PATH):
+        try:
+            from google.oauth2 import service_account
+            creds = service_account.Credentials.from_service_account_file(
+                config.GOOGLE_CREDENTIALS_PATH, scopes=_SCOPES)
+        except Exception as e:
+            print(f"[DRIVE] service account load failed: {e}")
 
-    return None
-
-
-def _get_service():
-    global _service, _service_lock_failed
-    if _service is not None:
-        return _service
-    if _service_lock_failed:
-        return None
-    try:
-        from googleapiclient.discovery import build
-        creds = _load_credentials()
-        if creds is None:
-            _service_lock_failed = True
-            return None
-        _service = build("drive", "v3", credentials=creds,
-                         cache_discovery=False)
-        return _service
-    except Exception as e:
-        print(f"[DRIVE] init failed: {e}")
-        _service_lock_failed = True
+    if creds is None:
         return None
 
+    from googleapiclient.discovery import build
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def _parent_folder_id() -> Optional[str]:
+    return os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or None
+
+
+# ---------------------------------------------------------------------------
+# Upload helpers
+# ---------------------------------------------------------------------------
 
 def _frame_to_jpeg_bytes(frame: np.ndarray) -> bytes:
-    if frame.ndim == 3 and frame.shape[2] == 3:
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    else:
-        rgb = frame
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     img = Image.fromarray(rgb)
+    img.thumbnail((1024, 1024))
     buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=88)
+    img.save(buf, format="JPEG", quality=85)
     return buf.getvalue()
 
 
-def _pil_to_png_bytes(img: "Image.Image") -> bytes:
+def _pil_to_jpeg_bytes(image: Image.Image) -> bytes:
     buf = io.BytesIO()
-    img.save(buf, format="PNG", optimize=True)
+    image.convert("RGB").save(buf, format="JPEG", quality=85)
     return buf.getvalue()
 
 
-def _upload_bytes(data: bytes, mime: str, name: str, folder_id: str,
-                  description: str = "") -> str | None:
-    svc = _get_service()
-    if svc is None:
-        return None
+def _upload_jpeg(service, name: str, jpeg_bytes: bytes,
+                 parent_id: Optional[str], description: str = "") -> Optional[str]:
+    """Upload JPEG bytes to Drive and return the file ID."""
     from googleapiclient.http import MediaIoBaseUpload
-    media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime,
-                              resumable=False)
-    metadata = {
-        "name": name,
-        "parents": [folder_id],
-        "description": description,
+    meta = {"name": name, "description": description}
+    if parent_id:
+        meta["parents"] = [parent_id]
+    media = MediaIoBaseUpload(io.BytesIO(jpeg_bytes), mimetype="image/jpeg")
+    f = service.files().create(body=meta, media_body=media,
+                               fields="id").execute()
+    return f.get("id")
+
+
+# ---------------------------------------------------------------------------
+# Sync workers (run inside the thread pool)
+# ---------------------------------------------------------------------------
+
+def _do_upload(frame: np.ndarray, text: str) -> None:
+    service = _build_service()
+    if service is None:
+        return
+    folder_id = _parent_folder_id()
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    fid = _upload_jpeg(service, f"mirror_{ts}.jpg",
+                       _frame_to_jpeg_bytes(frame), folder_id,
+                       description=text)
+    print(f"[DRIVE] uploaded mirror_{ts}.jpg (id={fid})")
+
+
+def _do_upload_photo(frame: np.ndarray, desc: str,
+                     folder_id: Optional[str] = None) -> None:
+    service = _build_service()
+    if service is None:
+        return
+    if folder_id is None:
+        folder_id = _parent_folder_id()
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    fid = _upload_jpeg(service, f"photo_{ts}.jpg",
+                       _frame_to_jpeg_bytes(frame), folder_id,
+                       description=desc)
+    print(f"[DRIVE] uploaded photo_{ts}.jpg -> {folder_id} (id={fid})")
+
+
+def _do_upload_booth(strip_image: Image.Image) -> None:
+    service = _build_service()
+    if service is None:
+        return
+    receipts_id = (os.environ.get("GOOGLE_DRIVE_RECEIPTS_FOLDER_ID")
+                   or _parent_folder_id())
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    fid = _upload_jpeg(service, f"booth_strip_{ts}.jpg",
+                       _pil_to_jpeg_bytes(strip_image), receipts_id,
+                       description="Photobooth strip")
+    print(f"[DRIVE] uploaded booth_strip_{ts}.jpg (id={fid})")
+
+
+def _do_create_session_folder() -> Optional[Tuple[str, str]]:
+    service = _build_service()
+    parent_id = _parent_folder_id()
+    if service is None or not parent_id:
+        return None
+    ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    meta = {
+        "name": f"booth_{ts}",
+        "mimeType": "application/vnd.google-apps.folder",
+        "parents": [parent_id],
     }
-    try:
-        f = svc.files().create(body=metadata, media_body=media,
-                               fields="id,webViewLink").execute()
-        link = f.get("webViewLink")
-        print(f"[DRIVE] uploaded {name} -> {link}")
-        return link
-    except Exception as e:
-        print(f"[DRIVE] upload failed: {e}")
-        return None
+    folder = service.files().create(body=meta, fields="id").execute()
+    folder_id: str = folder["id"]
+    # make publicly readable so the QR code link works without sign-in
+    service.permissions().create(
+        fileId=folder_id,
+        body={"role": "reader", "type": "anyone"},
+    ).execute()
+    url = f"https://drive.google.com/drive/folders/{folder_id}"
+    print(f"[DRIVE] created session folder: {url}")
+    return folder_id, url
 
 
-def _do_upload_photo(frame: np.ndarray, response_text: str,
-                     folder_id: str) -> str | None:
-    ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return _upload_bytes(_frame_to_jpeg_bytes(frame), "image/jpeg",
-                         f"mirror_{ts}.jpg", folder_id,
-                         description=response_text or "")
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
-
-def _do_upload_receipt(frame: np.ndarray, response_text: str,
-                       folder_id: str) -> str | None:
-    # rendered here in the worker thread so the caller never blocks
-    from printer import render_receipt_pil
-    img = render_receipt_pil(frame, response_text)
-    ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return _upload_bytes(_pil_to_png_bytes(img), "image/png",
-                         f"receipt_{ts}.png", folder_id,
-                         description=response_text or "")
-
-
-def create_booth_session_folder(name: str = None) -> "tuple[str, str] | None":
-    """Create a subfolder inside GOOGLE_DRIVE_FOLDER_ID and make it
-    'anyone with the link can view' so the QR code on the printed strip
-    actually resolves for whoever scans it.
-
-    Returns (folder_id, web_view_link) or None on failure / no auth.
-    This blocks for ~1 round-trip; call from the booth cycle before
-    queuing the photo uploads.
-    """
-    parent = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
-    if not parent:
-        return None
-    svc = _get_service()
-    if svc is None:
-        return None
-    if not name:
-        name = "Booth " + datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-    try:
-        folder = svc.files().create(
-            body={
-                "name": name,
-                "mimeType": "application/vnd.google-apps.folder",
-                "parents": [parent],
-            },
-            fields="id,webViewLink",
-        ).execute()
-        # make publicly readable by anyone with the link
-        svc.permissions().create(
-            fileId=folder["id"],
-            body={"role": "reader", "type": "anyone"},
-        ).execute()
-        print(f"[DRIVE] booth folder -> {folder.get('webViewLink')}")
-        return folder["id"], folder.get("webViewLink", "")
-    except Exception as e:
-        print(f"[DRIVE] booth folder create failed: {e}")
-        return None
-
-
-def upload_photo_to_folder_async(frame: np.ndarray, folder_id: str,
-                                 description: str = "") -> None:
-    """Upload one frame to a specific Drive folder ID, e.g. a booth session
-    subfolder created by `create_booth_session_folder`."""
-    if frame is None or not folder_id:
-        return
-    if _get_service() is None:
-        return
-    snapshot = frame.copy()
-    _executor.submit(_do_upload_photo, snapshot, description, folder_id)
-
-
-def upload_photo_only_async(frame: np.ndarray, description: str = "") -> None:
-    """Upload a single raw frame to the photos folder. Used by booth mode
-    to archive each shot (the strip goes to the receipts folder separately)."""
-    photos_folder = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
-    if not photos_folder or frame is None:
-        return
-    if _get_service() is None:
-        return
-    snapshot = frame.copy()
-    _executor.submit(_do_upload_photo, snapshot, description, photos_folder)
-
-
-def upload_booth_async(strip_image, label: str = "Photobooth strip") -> None:
-    """Upload a pre-composed booth strip PNG to the receipts folder."""
-    if strip_image is None:
-        print("[DRIVE] booth strip upload skipped: no image")
-        return
-    receipts_folder = os.environ.get("GOOGLE_DRIVE_RECEIPTS_FOLDER_ID")
-    if not receipts_folder:
-        print("[DRIVE] booth strip upload skipped: "
-              "GOOGLE_DRIVE_RECEIPTS_FOLDER_ID not set")
-        return
-    if _get_service() is None:
-        print("[DRIVE] booth strip upload skipped: no auth")
-        return
-    img_copy = strip_image.copy()
-
-    def _do():
-        ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        _upload_bytes(_pil_to_png_bytes(img_copy), "image/png",
-                      f"booth_{ts}.png", receipts_folder,
-                      description=label)
-    print("[DRIVE] booth strip upload queued")
-    _executor.submit(_do)
-
-
-def upload_async(frame: np.ndarray, response_text: str) -> None:
-    """Fire both archive uploads in the background:
-      - the raw captured photo into GOOGLE_DRIVE_FOLDER_ID
-      - a rendered receipt PNG into GOOGLE_DRIVE_RECEIPTS_FOLDER_ID
-    Either is skipped if its env var is unset.
-    """
+def upload_async(frame: np.ndarray, text: str) -> None:
+    """Fire-and-forget: upload a single mirror frame + AI caption."""
     if frame is None:
         return
-    photos_folder = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
-    receipts_folder = os.environ.get("GOOGLE_DRIVE_RECEIPTS_FOLDER_ID")
-    if not (photos_folder or receipts_folder):
+    _executor.submit(_do_upload, frame, text)
+
+
+def upload_photo_only_async(frame: np.ndarray, desc: str) -> None:
+    """Fire-and-forget: upload a single frame with a description."""
+    if frame is None:
         return
-    if _get_service() is None:
-        return  # auth missing/broken — already logged
-    snapshot = frame.copy()
-    if photos_folder:
-        _executor.submit(_do_upload_photo, snapshot, response_text,
-                         photos_folder)
-    if receipts_folder:
-        _executor.submit(_do_upload_receipt, snapshot, response_text,
-                         receipts_folder)
+    _executor.submit(_do_upload_photo, frame, desc)
+
+
+def upload_photo_to_folder_async(frame: np.ndarray,
+                                 folder_id: str, desc: str) -> None:
+    """Fire-and-forget: upload a frame into a specific Drive folder."""
+    if frame is None:
+        return
+    _executor.submit(_do_upload_photo, frame, desc, folder_id)
+
+
+def upload_booth_async(strip_image: Image.Image) -> None:
+    """Fire-and-forget: upload the composed photobooth strip PIL image."""
+    if strip_image is None:
+        return
+    _executor.submit(_do_upload_booth, strip_image)
+
+
+def create_booth_session_folder() -> Optional[Tuple[str, str]]:
+    """Blocking — create a Drive subfolder before the photobooth shots begin.
+
+    Returns (folder_id, public_url) on success, or None if Drive is not
+    configured / available.
+    """
+    try:
+        return _do_create_session_folder()
+    except Exception as e:
+        print(f"[DRIVE] create_booth_session_folder failed: {e}")
+        return None

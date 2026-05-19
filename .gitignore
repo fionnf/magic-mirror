@@ -1,15 +1,9 @@
-.env
-.venv/
 __pycache__/
-*.pyc
-.build/
-usage.log
+*.py[cod]
+*.pyo
+.env
+token.json
 gcp-credentials.json
 oauth_client.json
-token.json
-
-# generated test artefacts
-tests/silhouette_test_output.jpg
+usage.log
 tests/sim_receipts/
-tests/printer_preview*.png
-tests/usage.log

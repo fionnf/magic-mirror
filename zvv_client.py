@@ -111,6 +111,7 @@ def get_departures(stop_name: str = "Rennweg", limit: int = 3,
 
     # Endpoint 2: Search.ch JSON API (backup)
     try:
+        print(f"[ZVV] trying Search.ch API...")
         url_search = (f"https://fahrplan.search.ch/api/stationboard.json?"
                      f"station={urllib.parse.quote(stop_name)}&"
                      f"limit={limit}")

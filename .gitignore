@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.build/
+usage.log
+gcp-credentials.json
+oauth_client.json
+token.json
+
+# generated test artefacts
+tests/silhouette_test_output.jpg
+tests/sim_receipts/
+tests/printer_preview*.png
+tests/usage.log

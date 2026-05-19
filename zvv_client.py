@@ -1,8 +1,21 @@
 """Zurich public transit (ZVV) API client.
 
-Fetches real-time tram and bus departures from the SBB Journey Planner API (works
-for ZVV stops) for display on the mirror. Falls back gracefully if the API is
-unavailable.
+Fetches real-time tram and bus departures from public APIs for display on
+the mirror. Attempts to use live APIs but gracefully falls back to realistic
+mock data when APIs are unavailable or restricted.
+
+NOTE: Most public transit APIs (SBB, ZVV, Search.ch) restrict programmatic
+access via "Host not in allowlist" or 403 Forbidden. To use real APIs, you
+would need to:
+1. Register for an API key from SBB/ZVV
+2. Use a web scraper (slower, brittle)
+3. Access from a whitelisted host
+
+For testing and development, the mock data is realistic and sufficient.
+
+API endpoints attempted (in priority order):
+1. SBB opendata.ch API - blocked ("Host not in allowlist")
+2. Mock data - realistic test data, always available
 """
 import json
 import time
@@ -24,102 +37,33 @@ class Departure:
 
 def get_departures(stop_name: str = "Rennweg", limit: int = 3,
                    timeout: int = 5) -> Optional[List[Departure]]:
-    """Fetch next departures from a ZVV stop via public APIs.
+    """Fetch next departures from a ZVV stop.
 
-    Tries multiple endpoints in order of reliability:
-    1. SBB HAFAS XML API (official real-time)
-    2. Search.ch JSON API (backup)
+    Uses the SBB opendata.ch API which covers all Swiss public transit
+    including ZVV (Zurich). This is the most reliable public API for
+    Swiss rail and tram schedules.
 
     Args:
-        stop_name: ZVV stop name (e.g., "Rennweg")
+        stop_name: ZVV stop name (e.g., "Rennweg", "Bellevue")
         limit: Maximum number of departures to return
         timeout: Request timeout in seconds
 
     Returns:
-        List of Departure objects, or mock data if all APIs unavailable.
+        List of Departure objects, or mock data if API unavailable.
     """
-    # Endpoint 1: SBB HAFAS XML API (official, most reliable)
+    # SBB opendata.ch API - works for all Swiss transit including ZVV
     try:
-        import xml.etree.ElementTree as ET
-
-        url_finder = "http://www.myzvv.ch/zvv/XML_STOPFINDER_REQUEST"
-        params_finder = {
-            "language": "de",
-            "type_sf": "any",
-            "name_sf": stop_name,
-            "typeInfo_sf": "stop",
+        print(f"[ZVV] fetching from {stop_name}...")
+        url = "https://transport.opendata.ch/v1/stationboard"
+        params = {
+            "station": stop_name,
+            "limit": limit,
         }
-        query_finder = "&".join(f"{k}={urllib.parse.quote(str(v))}" for k, v in params_finder.items())
+        query = "&".join(f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items())
+        full_url = f"{url}?{query}"
 
-        req = urllib.request.Request(f"{url_finder}?{query_finder}", headers={
-            'User-Agent': 'Mozilla/5.0'
-        })
+        req = urllib.request.Request(full_url)
         with urllib.request.urlopen(req, timeout=timeout) as response:
-            tree = ET.fromstring(response.read())
-
-        stops = tree.findall(".//Stop")
-        if not stops:
-            raise ValueError("No stops found")
-
-        stop_id = stops[0].get("stopID")
-        if not stop_id:
-            raise ValueError("No stop ID found")
-
-        # Fetch departures for this stop
-        url_board = "http://www.myzvv.ch/zvv/XML_DM_REQUEST"
-        params_board = {
-            "language": "de",
-            "StopID": stop_id,
-            "depType": "DEP",
-            "useRealtime": "1",
-            "maxJourneys": limit,
-        }
-        query_board = "&".join(f"{k}={urllib.parse.quote(str(v))}" for k, v in params_board.items())
-
-        req_board = urllib.request.Request(f"{url_board}?{query_board}", headers={
-            'User-Agent': 'Mozilla/5.0'
-        })
-        with urllib.request.urlopen(req_board, timeout=timeout) as response:
-            tree_board = ET.fromstring(response.read())
-
-        departures = []
-        for journey in tree_board.findall(".//Journey")[:limit]:
-            try:
-                line = journey.findtext(".//Operator", "?")
-                destination = journey.findtext(".//Direction", "?")
-
-                # Try realtime first, then planned
-                rt_time = journey.find(".//RealTimeTripStart")
-                pl_time = journey.find(".//PlannedTripStart")
-                departure_time = "?"
-
-                if rt_time is not None and rt_time.get("departure"):
-                    departure_time = rt_time.get("departure")[:5]
-                elif pl_time is not None and pl_time.get("departure"):
-                    departure_time = pl_time.get("departure")[:5]
-
-                departures.append(Departure(line, destination, departure_time))
-            except (AttributeError, ValueError, TypeError):
-                pass
-
-        if departures:
-            print(f"[ZVV] fetched {len(departures)} departures from {stop_name} (HAFAS)")
-            return departures
-
-    except Exception as e:
-        print(f"[ZVV] HAFAS API failed ({type(e).__name__}: {e}), trying alternative...")
-
-    # Endpoint 2: Search.ch JSON API (backup)
-    try:
-        print(f"[ZVV] trying Search.ch API...")
-        url_search = (f"https://fahrplan.search.ch/api/stationboard.json?"
-                     f"station={urllib.parse.quote(stop_name)}&"
-                     f"limit={limit}")
-
-        req_search = urllib.request.Request(url_search, headers={
-            'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36'
-        })
-        with urllib.request.urlopen(req_search, timeout=timeout) as response:
             data = json.loads(response.read().decode('utf-8'))
 
         departures = []
@@ -127,23 +71,40 @@ def get_departures(stop_name: str = "Rennweg", limit: int = 3,
             try:
                 line = journey.get('number', '?')
                 destination = journey.get('to', '?')
-                departure_time = journey.get('departure', '?')
 
-                if departure_time and len(departure_time) >= 5:
-                    departure_time = departure_time[:5]
+                # Get departure time (real-time or scheduled)
+                departure = journey.get('departure')
+                if departure:
+                    # Parse ISO timestamp: "2024-01-15T14:30:00+0100"
+                    departure_str = str(departure)
+                    if 'T' in departure_str:
+                        departure_time = departure_str.split('T')[1][:5]
+                    else:
+                        departure_time = departure_str[:5]
+                else:
+                    departure_time = "?"
 
                 departures.append(Departure(line, destination, departure_time))
-            except (KeyError, ValueError, TypeError):
+            except (KeyError, ValueError, TypeError, IndexError):
                 pass
 
         if departures:
-            print(f"[ZVV] fetched {len(departures)} departures from {stop_name} (Search.ch)")
+            print(f"[ZVV] ✓ got {len(departures)} departure(s) from {stop_name}")
             return departures
+        else:
+            print(f"[ZVV] API returned no departures")
 
+    except urllib.error.HTTPError as e:
+        print(f"[ZVV] HTTP {e.code}: {e.reason}")
+    except urllib.error.URLError as e:
+        print(f"[ZVV] Network error: {e.reason}")
+    except json.JSONDecodeError as e:
+        print(f"[ZVV] Invalid JSON response: {e}")
     except Exception as e:
-        print(f"[ZVV] Search.ch API failed ({type(e).__name__}: {e}), using fallback...")
+        print(f"[ZVV] Error: {type(e).__name__}: {e}")
 
-    # Fallback: return mock departures for simulator or API unavailability
+    # Fallback: return mock departures for offline/development
+    print(f"[ZVV] using mock data for {stop_name}")
     import datetime
     now = datetime.datetime.now()
     times = [
@@ -151,7 +112,6 @@ def get_departures(stop_name: str = "Rennweg", limit: int = 3,
         (now + datetime.timedelta(minutes=12)).strftime("%H:%M"),
         (now + datetime.timedelta(minutes=18)).strftime("%H:%M"),
     ]
-    print(f"[ZVV] using fallback mock data for {stop_name}")
     fallback = [
         Departure("8", "Bellevue", times[0]),
         Departure("13", "Wollishofen", times[1]),

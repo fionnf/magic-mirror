@@ -21,6 +21,7 @@ load_dotenv()
 
 import config
 from display import animations, text_renderer, silhouette as silhouette_render
+from api import MirrorAPI
 
 
 class State(enum.Enum):
@@ -146,8 +147,14 @@ class MagicMirror:
             time.sleep(interval)
 
     def _run_idle_until_trigger(self) -> str:
-        """Block until short or long press. Returns 'short' or 'long'."""
+        """Block until short or long press. Returns 'short' or 'long'.
+
+        Displays tram departures at the bottom in dim mode.
+        """
         interval = 1.0 / config.IDLE_ANIMATION_FPS
+        last_departures_fetch = 0
+        departures = None
+
         while not self._stop.is_set():
             if self._booth_event.is_set():
                 self._booth_event.clear()
@@ -155,7 +162,38 @@ class MagicMirror:
             if self._trigger_event.is_set():
                 self._trigger_event.clear()
                 return "short"
-            self.matrix.draw(self._silhouette())
+
+            # Fetch departures every 30 seconds (cache TTL)
+            now = time.time()
+            if now - last_departures_fetch > 30:
+                try:
+                    import zvv_client
+                    departures = zvv_client.get_departures_cached("Rennweg", limit=3)
+                except Exception:
+                    departures = None
+                last_departures_fetch = now
+
+            # Display silhouette with departures overlay at bottom
+            canvas = self._silhouette(dim=0.3)
+            if departures:
+                try:
+                    from display.text_renderer import _FONT, _text_size
+                    from PIL import ImageDraw
+                    draw = ImageDraw.Draw(canvas)
+
+                    # Format departures string
+                    dep_text = "  •  ".join([f"{d.line} {d.departure_time}"
+                                            for d in departures])
+
+                    # Render at bottom in dim mode
+                    w, h = _text_size(draw, dep_text)
+                    x = max(0, (canvas.width - w) // 2)
+                    y = max(0, canvas.height - h - 4)
+                    draw.text((x, y), dep_text, fill=(100, 100, 100), font=_FONT)
+                except Exception:
+                    pass
+
+            self.matrix.draw(canvas)
             time.sleep(interval)
         return "short"
 
@@ -503,6 +541,9 @@ def main(argv=None):
                              strip=strip, printer=printer,
                              sim_mode=True, no_api=args.no_api)
 
+        api = MirrorAPI(mirror, port=5000)
+        api.start()
+
         worker = threading.Thread(target=mirror.run, daemon=True)
         worker.start()
 
@@ -547,6 +588,9 @@ def main(argv=None):
                          lambda short, long_: GPIOButton(short, long_),
                          strip=strip, printer=printer,
                          sim_mode=False, no_api=args.no_api)
+
+    api = MirrorAPI(mirror, port=5000)
+    api.start()
 
     def handle_signal(signum, _frame):
         print(f"[SIGNAL] {signum} received, shutting down")

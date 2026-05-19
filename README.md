@@ -1,33 +1,46 @@
 # Magic Mirror
 
-Raspberry Pi-driven smart mirror: a camera + capacitive touch trigger captures
-the person standing in front of a one-way acrylic sheet, sends the image to
-OpenAI (`gpt-4o-mini`, vision), and renders the response as animated text on a
-128×64 HUB75 LED matrix (2×2 P5 panels) hidden behind the glass.
+A Raspberry Pi-driven smart mirror: a Pi Camera + capacitive touch sensor captures whoever is standing in front of a one-way acrylic panel, sends the image to OpenAI (`gpt-4o-mini` vision), and scrolls the response as animated text on a **128 × 192** HUB75 LED matrix hidden behind the glass.
 
-A live silhouette of whoever is in frame is rendered continuously as the
-background of every state — idle, thinking, and speaking — so the mirror
-always "sees" you.
+A live silhouette of the subject is rendered continuously as the background of every state — idle, thinking, and speaking — so the mirror always "sees" you. An optional SK6812 RGBWW LED strip around the frame breathes and shifts colour to follow the person. A 56 mm thermal receipt printer can hand out a physical keepsake. A long-press activates **photobooth mode**: three posed shots → AI pose directions → composited strip with a QR code → print + Drive upload.
+
+---
 
 ## Hardware
 
-- Raspberry Pi 4 (2GB+)
-- Adafruit RGB Matrix HAT (#2345)
-- 6× HUB75E **64×64** panels, arranged 2 wide × 3 tall (**portrait**, total
-  canvas 128 × 192). Chain serpentine: HAT → top-left → top-right →
-  middle-right → middle-left → bottom-left → bottom-right.
-  - Default `PIXEL_MAPPER = "U-mapper"` in [`config.py`](config.py) — if your
-    image is mirrored, flipped, or split, try `"U-mapper;Rotate:180"`,
-    `"V-mapper"`, or re-wire. The mapper has to match your physical chain.
-  - Confirm scan rate from the sticker; most 64×64 panels are 1/32, which is
-    the new default (`SCAN_RATE = 32`).
-- 5V 40A PSU **direct to panels**. Share **GND only** with the Pi. Never feed
-  panel +5V through the Pi.
-- Pi Camera Module v3 (or v2)
-- Capacitive touch sensor (e.g. TTP223 breakout): `VCC` → 3V3, `GND` → GND,
-  `SIG` → GPIO 25. Default config assumes active-HIGH output with no pull
-  resistor. If your module's jumper is set to active-LOW, flip
-  `TOUCH_ACTIVE_HIGH` and `TOUCH_PULL` in [`config.py`](config.py).
+| Part | Notes |
+|---|---|
+| Raspberry Pi 4 (2 GB+) | Tested on 4 GB |
+| Adafruit RGB Matrix HAT (#2345) | Stack directly on the Pi |
+| 6× HUB75E 64×64 panels | 2 wide × 3 tall portrait — total canvas **128 × 192 px** |
+| 5 V / 40 A PSU | Direct to panels. Share **GND only** with the Pi |
+| Pi Camera Module v3 (or v2) | |
+| Capacitive touch sensor (e.g. TTP223) | `SIG` → GPIO 25, `VCC` → 3V3, `GND` → GND |
+| SK6812 RGBWW strip (optional) | Data → GPIO 10 (SPI MOSI) via 330 Ω resistor |
+| 56 mm ESC/POS thermal printer (optional) | USB, `0x0416:0x5011` default |
+
+### Panel chain
+
+Serpentine: HAT → top-left → top-right → middle-right → middle-left → bottom-left → bottom-right.
+Default `PIXEL_MAPPER = "U-mapper"`. If the image is mirrored or split, try `"U-mapper;Rotate:180"` or `"V-mapper"`.
+Confirm scan rate from the sticker — most 64×64 panels are **1/32** (`SCAN_RATE = 32`).
+
+### LED strip — avoid the GPIO 18 conflict
+
+The RGB Matrix HAT uses **GPIO 18 / PWM** for panel OE. `rpi_ws281x` defaults to the same pin.
+Drive the strip over **SPI (GPIO 10 / MOSI)** instead — set in [`config.py`](config.py) as `LED_STRIP_PIN = 10`.
+
+1. Enable SPI: `sudo raspi-config` → Interface Options → SPI → Enable
+2. Pin SPI frequency in `/boot/firmware/config.txt`:
+   ```
+   core_freq=250
+   core_freq_min=250
+   ```
+3. Reboot.
+
+Strip wiring: **VCC** → panel PSU 5V · **GND** → common ground · **DI** → GPIO 10 via 330 Ω resistor (optionally via a 74AHCT125 level shifter for reliability).
+
+---
 
 ## Install on the Pi
 
@@ -39,271 +52,219 @@ sudo reboot
 sudo systemctl start magic-mirror.service
 ```
 
-`install.sh` will:
+`install.sh`:
+1. `apt`-installs build deps + `picamera2` + OpenCV.
+2. Clones and builds [`rpi-rgb-led-matrix`](https://github.com/hzeller/rpi-rgb-led-matrix) Python bindings.
+3. Installs pip requirements.
+4. Copies `.env.example` → `.env` and prompts for `OPENAI_API_KEY`.
+5. Disables onboard audio (`dtparam=audio=off`) — the audio PWM conflicts with the HUB75 clock pin.
+6. Installs and enables a `systemd` service that auto-starts on boot.
 
-1. apt-install build deps + `picamera2` + OpenCV.
-2. Clone & build [`rpi-rgb-led-matrix`](https://github.com/hzeller/rpi-rgb-led-matrix)
-   Python bindings.
-3. Install pip requirements.
-4. Copy `.env.example` → `.env` and prompt for your `OPENAI_API_KEY`.
-5. Disable Pi onboard audio (`dtparam=audio=off`) — required, the audio PWM
-   conflicts with the HUB75 clock pin.
-6. Install and enable a `systemd` service that auto-starts on boot.
-
-## SK6812 RGBWW LED strip around the frame (optional)
-
-The mirror can drive an addressable RGBWW strip (e.g. SK6812 60 LEDs/m)
-wrapped around the perimeter. It's **fully optional** — if the strip isn't
-wired up or the library isn't installed, the project runs unchanged with
-no strip behaviour. The strip is also rendered in the simulator window as
-a border around the matrix preview, so you can see it without the hardware.
-
-### Behaviours
-
-| State | Strip |
-|---|---|
-| Idle / displaying / fading | Warm white base with a slow-drifting hue band that *follows the silhouette horizontally* — the colour bloom tracks where you're standing. |
-| Countdown (3-2-1) | Breathes on/off in sync with the on-screen countdown. |
-| Photo capture moment | Solid bright white (uses the dedicated W channel). |
-| Thinking (AI in flight) | Hue band pulses gently. |
-
-### Wiring — **important, has a real conflict**
-
-The Adafruit RGB Matrix HAT uses **GPIO 18 / PWM** for panel OE. `rpi_ws281x`
-defaults to the same pin. They will fight and the strip will glitch or the
-panels will flicker.
-
-**Solution: drive the strip over SPI (GPIO 10 / MOSI) instead.** This is the
-default in [`config.py`](config.py) (`LED_STRIP_PIN = 10`). It needs three
-things on the Pi:
-
-1. Enable SPI:
-   ```bash
-   sudo raspi-config   # Interface Options → SPI → Enable
-   ```
-2. Pin SPI frequency for stable timing — append to `/boot/firmware/config.txt`
-   (or `/boot/config.txt` on older OSes):
-   ```
-   core_freq=250
-   core_freq_min=250
-   ```
-   then reboot.
-3. The `rpi_ws281x` user must be able to access `/dev/spidev0.0`. The
-   systemd unit runs as root, so this is already fine.
-
-### Strip wiring
-
-- **VCC** → 5V (use the panel PSU — the strip can pull 60mA × LEDs × 3 channels;
-  a 60-LED strip at full white can draw ~3A. Don't power from the Pi.)
-- **GND** → common ground (Pi + PSU + strip all share GND)
-- **DI (data in)** → Pi **GPIO 10** via a 330Ω series resistor
-- Optionally a level shifter (74AHCT125) for reliability — the Pi's 3.3V
-  signal is sometimes marginal for 5V WS/SK strips. Most short runs work
-  without one.
-
-### Configuration
-
-In [`config.py`](config.py):
-
-```python
-LED_STRIP_COUNT = 60        # how many LEDs you actually have
-LED_STRIP_PIN = 10          # leave at 10 (SPI MOSI) to avoid HAT conflict
-LED_STRIP_BRIGHTNESS = 180  # 0-255
-LED_STRIP_BAND_FRACTION = 0.25  # width of the hue band as % of strip length
-LED_STRIP_HUE_SPEED = 0.05  # how fast the colour drifts; Hz-ish
-LED_STRIP_WARM_LEVEL = 60   # warm-white base brightness (W channel, 0-255)
-```
-
-If `rpi_ws281x` isn't installed or the strip fails to init, the project logs
-`[STRIP] not available, disabling: …` and runs without it.
-
-## Thermal receipt printer (optional)
-
-A 56 mm ESC/POS thermal receipt printer connected via USB can print a
-**physical keepsake** after every cycle: header, portrait-cropped photo,
-and the AI's response in chunky double-size bold underneath. Same printer
-family as your existing Slack `/ptsk` setup — `Usb(0x0416, 0x5011)` is the
-default.
-
-### Wiring & permissions
-
-1. Plug the printer into a free USB port on the Pi. It needs **its own
-   power** — these printers pull 1.5–2 A peaks, more than the Pi can
-   safely supply.
-2. Find its USB IDs (in case you have a different model):
-   ```bash
-   lsusb
-   # Bus 001 Device 005: ID 0416:5011 Winbond Electronics ...
-   ```
-   Update `PRINTER_VENDOR_ID` / `PRINTER_PRODUCT_ID` in [`config.py`](config.py)
-   if they differ.
-3. Grant non-root USB access (the `systemd` unit runs as root anyway, so
-   this is only needed if you run `main.py` manually as a user). Create
-   `/etc/udev/rules.d/99-thermalprinter.rules`:
-   ```
-   SUBSYSTEM=="usb", ATTRS{idVendor}=="0416", ATTRS{idProduct}=="5011", MODE="0666"
-   ```
-   Then `sudo udevadm control --reload-rules && sudo udevadm trigger`.
-
-### What gets printed
-
-```
-        MAGIC MIRROR
-       2026-05-12  19:04
-
-      [portrait photo —
-       384 dots wide,
-       3:4 aspect,
-       autocontrasted]
-
-  YOUR EYES HOLD
-   THE WEIGHT OF
-   FORGOTTEN STARS
-
-         (cut)
-```
-
-### Tuning
-
-In [`config.py`](config.py):
-
-- `PRINTER_WIDTH_DOTS = 384` — drop to 360 if the right edge wraps.
-- `PRINTER_TEXT_COLS = 16` — chars per line at 2×2 font size.
-- `PRINTER_IMAGE_ASPECT = 0.75` — width/height. Lower = taller image.
-
-### Graceful disable
-
-If the printer is unplugged or python-escpos isn't installed, the mirror
-logs `[PRINTER] not connected; skipping receipt` and runs unchanged. To
-disable entirely, just keep the printer disconnected — there's no flag
-to flip.
-
-## Google Drive archive (optional)
-
-Every time the mirror takes a photo and gets an AI response, the JPEG can be
-uploaded to a Google Drive folder you own, with the AI's response stored in
-the file's `description` field so you can browse the archive later.
-
-The integration is **fully optional** — leave `GOOGLE_DRIVE_FOLDER_ID` blank
-or omit `gcp-credentials.json` and the mirror runs exactly the same, it just
-won't upload.
-
-### One-time Google Cloud setup
-
-You'll do this once, in a browser, on any machine. It takes ~5 minutes.
-
-#### 1. Create (or pick) a Google Cloud project
-
-1. Go to https://console.cloud.google.com
-2. Top bar → project dropdown → **New Project**.
-3. Name it e.g. `magic-mirror`. No org needed. Click **Create**.
-4. Wait for it to finish, then make sure the new project is selected in the
-   top bar.
-
-#### 2. Enable the Drive API
-
-1. Left nav → **APIs & Services** → **Library**.
-2. Search "Google Drive API" → click it → **Enable**.
-
-#### 3. Create a service account
-
-A service account is a robot Google identity that the Pi will use — no
-browser-based login required, which is what we want on a headless device.
-
-1. Left nav → **IAM & Admin** → **Service Accounts** → **+ Create service
-   account**.
-2. **Name**: `magic-mirror-uploader` (anything works). Click **Create and
-   continue**.
-3. Skip the optional "Grant access" step — click **Continue**, then **Done**.
-4. You're back on the service-accounts list. **Copy its email address** —
-   it looks like `magic-mirror-uploader@magic-mirror.iam.gserviceaccount.com`.
-   You'll need it in step 5.
-
-#### 4. Generate a JSON key
-
-1. Click the service account row.
-2. **Keys** tab → **Add key** → **Create new key** → **JSON** → **Create**.
-3. Your browser downloads a `.json` file. **This is a secret — treat it
-   like a password.**
-4. Rename the file to `gcp-credentials.json` and drop it in the project root,
-   next to `main.py`. (`.gitignore` already excludes it.)
-
-If you're setting up the Pi from a Mac, the simplest transfer is:
-
-```bash
-scp ~/Downloads/<that-long-name>.json pi@<pi-hostname>:~/magic-mirror/gcp-credentials.json
-```
-
-#### 5. Create a Drive folder and share it with the service account
-
-1. Go to https://drive.google.com → **New** → **Folder** → name it
-   "Magic Mirror" (anything).
-2. Right-click the folder → **Share** → paste the service-account email
-   from step 3 → set role to **Editor** → **Send**. Google may warn that
-   "this address can't receive notifications" — that's expected, the
-   service account doesn't have an inbox. Click **Share anyway**.
-3. Open the folder. Look at the URL: it ends in
-   `…/folders/<FOLDER_ID>?…`. Copy `<FOLDER_ID>`.
-
-#### 6. Tell the mirror where to upload
-
-Edit `.env` and add:
-
-```env
-GOOGLE_DRIVE_FOLDER_ID=<paste the folder ID here>
-```
-
-That's it. The next mirror cycle will upload its frame to that folder. On
-first upload, the console prints e.g.:
-
-```
-[DRIVE] uploaded mirror_2026-05-12_19-04-31.jpg -> https://drive.google.com/file/d/…/view
-```
-
-### What gets stored
-
-- **Filename**: `mirror_YYYY-MM-DD_HH-MM-SS.jpg`
-- **Image**: the exact frame that was sent to OpenAI (full camera resolution,
-  JPEG quality 88).
-- **Description field**: the AI's response text. Visible in Drive's right-hand
-  details pane and searchable.
-
-### Troubleshooting
-
-- **`[DRIVE] init failed: …file not found`** — `gcp-credentials.json` isn't
-  where the code expects. Make sure it's in the project root and the working
-  directory is correct (the `systemd` unit sets `WorkingDirectory`).
-- **`[DRIVE] upload failed: … 404 … File not found`** — the folder ID is
-  wrong, or you forgot to share the folder with the service account. Recheck
-  step 5.
-- **`[DRIVE] upload failed: … 403 … insufficientPermissions`** — the service
-  account has only Viewer access. Re-share as **Editor**.
-- **Nothing happens, no `[DRIVE]` log lines** — either `GOOGLE_DRIVE_FOLDER_ID`
-  is empty in `.env` or `gcp-credentials.json` is missing. Both must be
-  present for uploads to fire.
-- **Storage quota**: uploads count against the service account's 15GB free
-  Drive quota by default, not yours. If you'd rather they count against your
-  personal account, set the service account as the *file owner's delegate* —
-  or just sweep the folder periodically; mirror JPEGs are ~100KB each.
-
-### Disabling later
-
-Comment out or blank the `GOOGLE_DRIVE_FOLDER_ID` line in `.env` and restart
-the service. Or delete `gcp-credentials.json`. Either is enough.
-
-## Tuning the panels
-
-1. **Scan rate**: read the sticker on the panel (1/16 or 1/32) and set
-   `SCAN_RATE` in [`config.py`](config.py).
-2. **Display glitches / scrambled output**: raise `GPIO_SLOWDOWN` (try 3, 4, 5).
-3. **Brightness**: `matrix.set_brightness(0–100)` or edit the default in
-   `led_matrix.py`.
+---
 
 ## Running manually
 
 ```bash
+# Real hardware:
 python3 main.py
+
+# Simulator on Mac/Linux (no Pi required):
+python3 main.py --sim --no-api
 ```
+
+---
+
+## Simulator / pre-hardware testing
+
+Run the full system on your laptop. A pygame window replaces the LED panels, your webcam (or a static JPEG) replaces the camera, and the keyboard replaces the physical button.
+
+```bash
+pip install -r requirements-dev.txt
+
+# Full state machine, real OpenAI API:
+python3 tests/test_full_sim.py --camera webcam
+
+# Skip API calls (free, canned response):
+python3 tests/test_full_sim.py --camera webcam --no-api
+
+# No webcam:
+python3 tests/test_full_sim.py --camera static
+```
+
+### Sim keyboard controls
+
+| Key | Action |
+|---|---|
+| `SPACE` / `ENTER` | Short press (single fortune cycle) |
+| Hold `SPACE` 2 s | Long press → photobooth mode |
+| `Q` | Quit |
+| `G` | Toggle panel boundary grid |
+
+The window title bar shows the current state name.
+
+### Individual test scripts
+
+| Script | What it tests |
+|---|---|
+| `tests/test_ai.py [--image foo.jpg]` | One OpenAI vision call — prints response + token count |
+| `tests/test_silhouette.py` | Live webcam silhouette preview + 128×192 mask. `S` saves snapshot |
+| `tests/test_animations.py` | Starfield + ripple animation cycle in sim window |
+| `tests/test_text.py` | Static text, scroll, multi-line, colour cycle |
+| `tests/test_printer.py [--booth] [--show]` | Renders receipt or booth strip as PNG (no printer needed) |
+| `tests/test_printer_live.py` | Sends a real print job if a printer is connected |
+| `tests/test_full_sim.py` | Full state machine in sim mode |
+
+---
+
+## State machine
+
+```
+IDLE ──(short press)──► TRIGGERED ──(3-2-1)──► CAPTURING ──► AI_WAITING
+                                                                    │
+                                         FADE_OUT ◄── DISPLAYING ◄─┘
+                                             │
+                                           IDLE
+
+IDLE ──(long press 2 s)──► BOOTH ──(per-shot: prompt → 3-2-1 → flash capture × 3)
+                                ──► render strip + QR ──► print ──► display ──► FADE_OUT ──► IDLE
+```
+
+**LED strip modes per state:**
+
+| State | Strip behaviour |
+|---|---|
+| Idle / displaying / fading | Warm white base + slow-drifting hue band that tracks the silhouette horizontally |
+| Countdown (3-2-1) | Breathes in sync |
+| Capture flash | Solid bright white (W channel) |
+| AI thinking | Hue band pulses gently |
+
+All I/O (camera, OpenAI, Drive uploads) runs off the display thread. Exceptions are caught and logged; the mirror returns to `IDLE` rather than crashing.
+
+---
+
+## Best-of-3 capture
+
+On every shot (normal and booth), the camera grabs **3 frames in quick succession** and automatically keeps the sharpest one, measured by Laplacian variance. Console output:
+
+```
+[CAPTURE] burst 1/3 sharpness=312.4
+[CAPTURE] burst 2/3 sharpness=489.1  ← winner
+[CAPTURE] burst 3/3 sharpness=401.7
+```
+
+Tune in [`config.py`](config.py):
+```python
+CAPTURE_BURST_COUNT = 3         # frames per shot (1 = off)
+CAPTURE_BURST_INTERVAL_MS = 80  # gap between bursts
+```
+
+---
+
+## Photobooth mode
+
+Long-press the touch sensor (≥ 2 s) from IDLE to start a photobooth session:
+
+1. GPT is asked for 3 short, playful pose directions (falls back to `BOOTH_FALLBACK_PROMPTS` on API failure).
+2. Each prompt is shown on the matrix for 2 s, followed by a 3-2-1 countdown.
+3. The matrix + strip flash white as the camera grabs the best-of-3 frame.
+4. A Drive subfolder is created for the session and shared as "anyone with link can view".
+5. The three photos are uploaded to the subfolder; a composited strip PNG (photos + prompts + QR code pointing to the subfolder) goes to `GOOGLE_DRIVE_RECEIPTS_FOLDER_ID`.
+6. The strip is printed on the thermal printer.
+7. The strip is displayed on the matrix for a few seconds, then fades out.
+
+---
+
+## Thermal receipt printer
+
+Optional 56 mm ESC/POS USB printer. Default IDs: `0x0416:0x5011`. Find yours with `lsusb`.
+
+**Normal cycle** receipt:
+```
+      FORTUNAGASSE 24
+     2026-05-12  19:04
+
+    [portrait photo, 384 px wide, 3:4 aspect, Floyd-Steinberg dithered]
+
+  YOUR EYES HOLD THE
+   WEIGHT OF FORGOTTEN
+        STARS
+```
+
+**Photobooth strip**: three photos stacked vertically, prompts alongside each, QR code at the bottom.
+
+If the printer is unplugged or `python-escpos` isn't installed, the mirror logs `[PRINTER] not connected; skipping` and continues.
+
+Tune in [`config.py`](config.py): `PRINTER_WIDTH_DOTS`, `PRINTER_IMAGE_ASPECT`, `PRINTER_HEADER`, `PRINTER_IMAGE_GAMMA`.
+
+---
+
+## Google Drive archive
+
+Every cycle can archive the raw JPEG to `GOOGLE_DRIVE_FOLDER_ID` and the rendered receipt PNG to `GOOGLE_DRIVE_RECEIPTS_FOLDER_ID`. Both are optional and independent.
+
+### One-time setup (OAuth — works on Workspace accounts)
+
+1. [Google Cloud Console](https://console.cloud.google.com) → new project → enable **Google Drive API**.
+2. **APIs & Services → Credentials → Create Credentials → OAuth client ID** → Desktop App → download JSON → save as `oauth_client.json` in the project root.
+3. On your laptop (needs a browser):
+   ```bash
+   python3 tools/auth_drive.py
+   ```
+   Completes the OAuth flow and writes `token.json`. Copy both files to the Pi.
+4. Create a Drive folder, open it, copy the folder ID from the URL, add to `.env`:
+   ```env
+   GOOGLE_DRIVE_FOLDER_ID=1abc...xyz
+   GOOGLE_DRIVE_RECEIPTS_FOLDER_ID=1def...uvw   # optional
+   ```
+
+The uploader auto-refreshes the OAuth token on expiry. It also accepts a service-account JSON at `gcp-credentials.json` as a fallback (for personal Gmail accounts).
+
+### End-of-night timelapse
+
+After an event, build an MP4 from all photos taken that day and upload it back to Drive:
+
+```bash
+python3 tools/timelapse.py                    # today
+python3 tools/timelapse.py --date 2025-07-04  # specific date
+python3 tools/timelapse.py --min 1 --fps 2    # dev / low photo count
+python3 tools/timelapse.py --out /tmp/tl.mp4 --no-upload --keep
+```
+
+Requires ≥ 10 photos by default — silently skips quiet nights. To run automatically at 4 AM:
+
+```bash
+# crontab -e
+0 4 * * * cd /home/pi/magic-mirror && python3 tools/timelapse.py >> logs/timelapse.log 2>&1
+```
+
+---
+
+## Google Drive auth — tools/auth_drive.py
+
+```bash
+python3 tools/auth_drive.py
+```
+
+Opens a browser OAuth flow once. Writes `token.json` which the mirror uses on every run (auto-refreshed).
+
+---
+
+## Configuration
+
+Every tunable lives in [`config.py`](config.py) — no magic numbers elsewhere. Key sections:
+
+| Section | Key constants |
+|---|---|
+| Panel hardware | `PANEL_ROWS/COLS`, `CHAIN_LENGTH`, `PIXEL_MAPPER`, `SCAN_RATE` |
+| Camera | `FRAME_WIDTH/HEIGHT`, `LIVE_SILHOUETTE_FPS` |
+| Capture | `CAPTURE_BURST_COUNT`, `CAPTURE_BURST_INTERVAL_MS` |
+| AI | `AI_MODEL`, `AI_MAX_TOKENS`, `MIRROR_PERSONA` |
+| Photobooth | `BOOTH_PHOTO_COUNT`, `BOOTH_PROMPT_HOLD_SEC`, `LONG_PRESS_MS` |
+| Printer | `PRINTER_WIDTH_DOTS`, `PRINTER_IMAGE_GAMMA`, `PRINTER_HEADER` |
+| LED strip | `LED_STRIP_COUNT`, `LED_STRIP_PIN`, `LED_STRIP_HUE_SPEED` |
+| Display timing | `MESSAGE_SCROLL_SPEED`, `FADE_OUT_SEC`, `SILHOUETTE_DIM_FACTOR` |
+
+---
 
 ## Usage log
 
@@ -313,67 +274,43 @@ Every API call appends `timestamp\ttokens_in\ttokens_out` to `usage.log`:
 cat usage.log
 ```
 
-## Simulator / pre-hardware testing
+---
 
-Run everything on your Mac/Windows/Linux laptop before the Pi or panels arrive.
-A pygame window replaces the LED panels, your webcam (or a static JPEG)
-replaces the Pi camera, and the SPACE bar replaces the physical button.
-
-```bash
-pip install -r requirements-dev.txt
-
-# Full end-to-end run, identical state machine, real OpenAI API:
-python tests/test_full_sim.py --camera webcam
-
-# Same but skip API calls (free, canned response):
-python tests/test_full_sim.py --camera webcam --no-api
-
-# No webcam? Use a static image:
-python tests/test_full_sim.py --camera static
-
-# Or run main.py directly:
-python main.py --sim --no-api
-```
-
-### Individual tests
-
-| Script | What it does |
-|---|---|
-| `tests/test_ai.py [--image foo.jpg]` | One OpenAI vision call, prints response + tokens. |
-| `tests/test_silhouette.py` | Live webcam preview with contour overlay + 128×64 mask. `S` saves snapshot. |
-| `tests/test_animations.py` | Cycles starfield + ripple in sim window. `N` skips. |
-| `tests/test_text.py` | Static text, scroll, multi-line, colour cycle. |
-| `tests/test_full_sim.py` | Full state machine in sim mode. `--loop N` stress-tests. |
-
-### Sim window controls
-
-- `SPACE` / `ENTER` — press the (virtual) button
-- `Q` — quit
-- `G` — toggle 64×32 panel boundary grid
-
-The window title bar always shows the current state name
-(e.g. `Magic Mirror Simulator — SILHOUETTE`).
-
-## State machine
+## Project structure
 
 ```
-IDLE → TRIGGERED → (3-2-1 countdown) → CAPTURING → AI_WAITING
-                                                       ↓
-                              DISPLAYING (scrolls 2x) ← (response or timeout)
-                                                       ↓
-                                                    FADE_OUT → IDLE
-
-Strip:  idle  →  countdown (breathing)  →  capture_flash (white)
-                  ↓
-                  thinking (hue pulse)  →  displaying  →  fading  →  idle
+magic-mirror/
+├── main.py                  # State machine — entry point
+├── config.py                # All constants (no magic numbers elsewhere)
+├── ai_client.py             # OpenAI vision API + booth prompt generation
+├── camera.py                # Pi Camera / background / silhouette extraction
+├── led_matrix.py            # rpi-rgb-led-matrix wrapper
+├── led_strip.py             # SK6812 RGBWW strip animation
+├── gpio_button.py           # Capacitive touch + long-press detection
+├── printer.py               # ESC/POS thermal printer + receipt/strip rendering
+├── cloud_uploader.py        # Async Google Drive upload
+├── display/
+│   ├── animations.py        # Thinking dots, starfield, ripple
+│   ├── silhouette.py        # Silhouette → PIL image
+│   └── text_renderer.py     # Scroll + static text on PIL canvas
+├── simulator/
+│   ├── led_simulator.py     # pygame LED matrix + strip window
+│   ├── camera_mock.py       # Webcam / static image camera stand-in
+│   └── button_mock.py       # Keyboard short/long-press emulation
+├── tools/
+│   ├── auth_drive.py        # One-shot OAuth browser flow → token.json
+│   └── timelapse.py         # End-of-night MP4 stitcher + Drive upload
+├── tests/
+│   ├── test_full_sim.py     # Full state machine in sim mode
+│   ├── test_printer.py      # Receipt / booth strip PNG preview
+│   ├── test_printer_live.py # Live printer test
+│   ├── test_ai.py           # Single OpenAI vision call
+│   ├── test_silhouette.py   # Live silhouette webcam preview
+│   ├── test_animations.py   # Animation cycle
+│   └── test_text.py         # Text rendering
+├── assets/fonts/            # BDF bitmap fonts
+├── requirements.txt         # Pi + Mac dependencies
+├── requirements-dev.txt     # Simulator-only extras (pygame)
+├── install.sh               # Pi setup script
+└── .env.example             # Environment variable template
 ```
-
-The live silhouette runs in its own thread and is composited as the background
-of every state — even during fade-out the person stays visible. All I/O
-(camera, OpenAI, Drive upload) runs off the display thread. Any exception in
-a cycle is caught and logged; the mirror returns to `IDLE` rather than
-crashing.
-
-## Configuration
-
-Every tunable lives in [`config.py`](config.py) — no magic numbers elsewhere.

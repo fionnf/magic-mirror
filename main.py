@@ -21,6 +21,7 @@ load_dotenv()
 
 import config
 from display import animations, text_renderer, silhouette as silhouette_render
+from api import MirrorAPI
 
 
 class State(enum.Enum):
@@ -503,6 +504,9 @@ def main(argv=None):
                              strip=strip, printer=printer,
                              sim_mode=True, no_api=args.no_api)
 
+        api = MirrorAPI(mirror, port=5000)
+        api.start()
+
         worker = threading.Thread(target=mirror.run, daemon=True)
         worker.start()
 
@@ -547,6 +551,9 @@ def main(argv=None):
                          lambda short, long_: GPIOButton(short, long_),
                          strip=strip, printer=printer,
                          sim_mode=False, no_api=args.no_api)
+
+    api = MirrorAPI(mirror, port=5000)
+    api.start()
 
     def handle_signal(signum, _frame):
         print(f"[SIGNAL] {signum} received, shutting down")

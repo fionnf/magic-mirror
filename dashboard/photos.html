@@ -110,7 +110,7 @@ function setNfcUrl() {
   const base = apiBase();
   const url  = base ? base + '/gallery' : window.location.href;
   document.getElementById('nfc-url').textContent = url;
-  document.getElementById('back-link').href = base ? base + '/' : '/';
+  document.getElementById('back-link').href = base ? base + '/' : 'index.html';
 }
 
 async function loadPhotos() {

@@ -140,7 +140,7 @@ label.field-label:first-child { margin-top:0; }
         <button class="btn btn-success" id="btn-power-on" disabled>Power On</button>
         <button class="btn btn-danger" id="btn-power-off" disabled>Power Off</button>
       </div>
-      <a class="gallery-link" id="gallery-link" href="/gallery">📸 Photo Gallery →</a>
+      <a class="gallery-link" id="gallery-link" href="photos.html">📸 Photo Gallery →</a>
     </div>
   </div>
 
@@ -252,9 +252,7 @@ mirrorIpInput.addEventListener('change', () => {
 
 function updateGalleryLink() {
   const base = apiBase();
-  if (base) {
-    galleryLink.href = base + '/gallery';
-  }
+  galleryLink.href = base ? base + '/gallery' : 'photos.html';
 }
 
 // ---------------------------------------------------------------- url helpers

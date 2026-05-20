@@ -141,6 +141,16 @@ PRINTER_IMAGE_SHARPEN = True     # subtle unsharp pass before dithering
 # Logging
 USAGE_LOG = "usage.log"
 
+# MQTT broker — runs on the Pi alongside the mirror process.
+# Browsers connect via WebSocket on MQTT_WS_PORT; the mirror uses MQTT_PORT.
+# Mosquitto config needed:
+#   listener 1883
+#   listener 9001
+#   protocol websockets
+MQTT_HOST   = "localhost"
+MQTT_PORT   = 1883
+MQTT_WS_PORT = 9001   # WebSocket port for browser access
+
 # Addressable LED strip (SK6812 RGBWW) around the mirror frame — optional.
 # Driven by rpi_ws281x. If the library is missing or the strip won't init,
 # the rest of the project keeps running with no strip behaviour at all.

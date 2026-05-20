@@ -22,6 +22,7 @@ load_dotenv()
 import config
 from display import animations, text_renderer, silhouette as silhouette_render
 from api import MirrorAPI
+from mqtt_bridge import MQTTBridge
 
 
 class State(enum.Enum):
@@ -52,6 +53,8 @@ class MagicMirror:
         self._live_silhouette: Optional[Image.Image] = None  # PIL RGB, full canvas
         self._silhouette_lock = threading.Lock()
         self._capture_thread: Optional[threading.Thread] = None
+        self._overlay_text: Optional[str] = None   # pushed from dashboard
+        self._overlay_image: Optional[Image.Image] = None
 
     # ---- button ----
 
@@ -156,7 +159,18 @@ class MagicMirror:
             if self._trigger_event.is_set():
                 self._trigger_event.clear()
                 return "short"
-            self.matrix.draw(self._silhouette())
+            canvas = self._silhouette()
+            if self._overlay_image is not None:
+                try:
+                    canvas.paste(self._overlay_image, (0, 0))
+                except Exception:
+                    pass
+            elif self._overlay_text is not None:
+                try:
+                    text_renderer.render_static_text(canvas, self._overlay_text)
+                except Exception:
+                    pass
+            self.matrix.draw(canvas)
             time.sleep(interval)
         return "short"
 
@@ -330,6 +344,8 @@ class MagicMirror:
             time.sleep(0.08)
 
     def run_booth_cycle(self):
+        self._overlay_text = None
+        self._overlay_image = None
         from printer import render_booth_pil
         import ai_client
         try:
@@ -402,6 +418,11 @@ class MagicMirror:
                 cloud_uploader.upload_booth_async(strip_image)
             except Exception as e:
                 print(f"[BOOTH] drive upload skip: {e}")
+            try:
+                import photo_store
+                photo_store.save_strip(strip_image, frames, prompts[:len(frames)])
+            except Exception as e:
+                print(f"[PHOTOS] skip: {e}")
 
             self.strip.set_mode("displaying")
             self._booth_display_strip(strip_image)
@@ -419,6 +440,8 @@ class MagicMirror:
             self.strip.set_mode("idle")
 
     def run_cycle(self):
+        self._overlay_text = None
+        self._overlay_image = None
         try:
             frame = self._do_trigger_capture()
             text = self._do_ai_wait(frame)
@@ -427,6 +450,11 @@ class MagicMirror:
                 cloud_uploader.upload_async(frame, text)
             except Exception as e:
                 print(f"[DRIVE] skip: {e}")
+            try:
+                import photo_store
+                photo_store.save_receipt(frame, text)
+            except Exception as e:
+                print(f"[PHOTOS] skip: {e}")
             try:
                 self.printer.print_receipt(frame, text)
             except Exception as e:
@@ -484,6 +512,7 @@ def build_args():
     p.add_argument("--camera", default="webcam", choices=["webcam", "static"],
                    help="Sim camera source")
     p.add_argument("--no-api", action="store_true", help="Skip API call (canned reply)")
+    p.add_argument("--no-mqtt", action="store_true", help="Disable MQTT bridge")
     return p
 
 
@@ -506,6 +535,10 @@ def main(argv=None):
 
         api = MirrorAPI(mirror, port=5000)
         api.start()
+
+        if not args.no_mqtt:
+            bridge = MQTTBridge(mirror, host=config.MQTT_HOST, port=config.MQTT_PORT)
+            bridge.start()
 
         worker = threading.Thread(target=mirror.run, daemon=True)
         worker.start()
@@ -554,6 +587,10 @@ def main(argv=None):
 
     api = MirrorAPI(mirror, port=5000)
     api.start()
+
+    if not args.no_mqtt:
+        bridge = MQTTBridge(mirror, host=config.MQTT_HOST, port=config.MQTT_PORT)
+        bridge.start()
 
     def handle_signal(signum, _frame):
         print(f"[SIGNAL] {signum} received, shutting down")

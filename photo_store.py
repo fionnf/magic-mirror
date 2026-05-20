@@ -78,18 +78,38 @@ def list_recent(hours: int = 24) -> List[Dict]:
             img_path = os.path.join(d, f"{stem}.jpg")
             if not os.path.exists(img_path):
                 continue
-            out.append({
+            entry = {
                 "id":      stem,
                 "type":    meta.get("type", "receipt"),
                 "text":    meta.get("text", ""),
                 "prompts": meta.get("prompts", []),
                 "ts":      meta["ts"],
                 "url":     f"/photos/{stem}.jpg",
-            })
+            }
+            if "drive_id" in meta:
+                entry["drive_url"] = (
+                    f"https://drive.google.com/uc?export=view&id={meta['drive_id']}"
+                )
+            out.append(entry)
         except Exception:
             pass
     out.sort(key=lambda x: x["ts"], reverse=True)
     return out
+
+
+def set_drive_id(stem: str, drive_id: str) -> None:
+    """Persist a Drive file ID into the sidecar JSON after async upload."""
+    path = os.path.join(PHOTOS_DIR, f"{stem}.json")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path) as f:
+            meta = json.load(f)
+        meta["drive_id"] = drive_id
+        with open(path, "w") as f:
+            json.dump(meta, f)
+    except Exception as e:
+        print(f"[PHOTOS] set_drive_id failed for {stem}: {e}")
 
 
 def get_meta(stem: str) -> Optional[Dict]:

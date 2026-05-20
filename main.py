@@ -398,9 +398,15 @@ class MagicMirror:
                 self.printer.print_strip(strip_image)
             except Exception as e:
                 print(f"[BOOTH] print failed: {e}")
+            strip_stem = None
+            try:
+                import photo_store
+                strip_stem = photo_store.save_strip(
+                    strip_image, frames, prompts[:len(frames)])
+            except Exception as e:
+                print(f"[PHOTOS] skip: {e}")
             try:
                 if booth_folder_id:
-                    # photos go into the session subfolder
                     for i, f in enumerate(frames):
                         prompt = prompts[i] if i < len(prompts) else ""
                         desc = (f"Photobooth {i + 1}/{len(frames)}"
@@ -408,21 +414,14 @@ class MagicMirror:
                         cloud_uploader.upload_photo_to_folder_async(
                             f, booth_folder_id, desc)
                 else:
-                    # no folder (Drive disabled) — fall back to flat upload
                     for i, f in enumerate(frames):
                         prompt = prompts[i] if i < len(prompts) else ""
                         desc = (f"Photobooth {i + 1}/{len(frames)}"
                                 + (f" — {prompt}" if prompt else ""))
                         cloud_uploader.upload_photo_only_async(f, desc)
-                # composed strip still goes to the receipts folder
-                cloud_uploader.upload_booth_async(strip_image)
+                cloud_uploader.upload_booth_async(strip_image, stem=strip_stem)
             except Exception as e:
                 print(f"[BOOTH] drive upload skip: {e}")
-            try:
-                import photo_store
-                photo_store.save_strip(strip_image, frames, prompts[:len(frames)])
-            except Exception as e:
-                print(f"[PHOTOS] skip: {e}")
 
             self.strip.set_mode("displaying")
             self._booth_display_strip(strip_image)
@@ -445,16 +444,17 @@ class MagicMirror:
         try:
             frame = self._do_trigger_capture()
             text = self._do_ai_wait(frame)
-            try:
-                import cloud_uploader
-                cloud_uploader.upload_async(frame, text)
-            except Exception as e:
-                print(f"[DRIVE] skip: {e}")
+            stem = None
             try:
                 import photo_store
-                photo_store.save_receipt(frame, text)
+                stem = photo_store.save_receipt(frame, text)
             except Exception as e:
                 print(f"[PHOTOS] skip: {e}")
+            try:
+                import cloud_uploader
+                cloud_uploader.upload_async(frame, text, stem=stem)
+            except Exception as e:
+                print(f"[DRIVE] skip: {e}")
             try:
                 self.printer.print_receipt(frame, text)
             except Exception as e:

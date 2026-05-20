@@ -116,20 +116,30 @@ function setNfcUrl() {
 async function loadPhotos() {
   const hours = document.getElementById('hours-select').value;
   const base  = apiBase();
-  if (!base) {
-    document.getElementById('grid').innerHTML =
-      '<div class="empty"><div style="font-size:2rem">⚙️</div><p>Configure mirror IP in the control panel first.</p></div>';
-    return;
+  if (base) {
+    try {
+      const r = await fetch(`${base}/api/photos?hours=${hours}`, {signal: AbortSignal.timeout(5000)});
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const photos = await r.json();
+      localStorage.setItem('mirror-photos-cache', JSON.stringify(photos));
+      renderPhotos(photos, base);
+      document.getElementById('photo-count').textContent = photos.length + ' photo' + (photos.length !== 1 ? 's' : '');
+      return;
+    } catch(e) {
+      console.warn('Mirror offline, falling back to cache:', e.message);
+    }
   }
-  try {
-    const r = await fetch(`${base}/api/photos?hours=${hours}`, {signal: AbortSignal.timeout(5000)});
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const photos = await r.json();
-    renderPhotos(photos, base);
-    document.getElementById('photo-count').textContent = photos.length + ' photo' + (photos.length !== 1 ? 's' : '');
-  } catch(e) {
+  // Offline or no IP — show cached Drive photos
+  const cached = localStorage.getItem('mirror-photos-cache');
+  if (cached) {
+    const photos = JSON.parse(cached).filter(p => p.drive_url);
+    renderPhotos(photos, null);
+    const count = photos.length;
+    document.getElementById('photo-count').textContent =
+      count + ' photo' + (count !== 1 ? 's' : '') + ' (cached)';
+  } else {
     document.getElementById('grid').innerHTML =
-      `<div class="empty"><div style="font-size:2rem">⚠️</div><p>Could not load photos: ${e.message}</p></div>`;
+      '<div class="empty"><div style="font-size:2rem">⚙️</div><p>Mirror offline. Configure the IP in the control panel to load photos.</p></div>';
   }
 }
 
@@ -140,22 +150,29 @@ function renderPhotos(photos, base) {
     return;
   }
   grid.innerHTML = photos.map(p => {
-    const src    = base + p.url;
+    // Prefer public Drive URL so page works without the Pi being online
+    const imgSrc = p.drive_url || (base ? base + p.url : null);
+    if (!imgSrc) return '';
+    const dlSrc  = p.drive_url
+      ? p.drive_url.replace('export=view', 'export=download')
+      : imgSrc;
     const label  = p.type === 'strip' ? 'Photobooth' : 'Receipt';
     const tsStr  = new Date(p.ts).toLocaleString();
     const caption = p.type === 'strip'
       ? (p.prompts || []).join(' · ') || ''
       : p.text || '';
+    const reprintBtn = base
+      ? `<button class="btn btn-amber" onclick="reprint('${p.id}')">🖨 Reprint</button>` : '';
     return `
       <div class="photo-card">
-        <img class="photo-thumb" src="${src}" alt="${label}" loading="lazy">
+        <img class="photo-thumb" src="${imgSrc}" alt="${label}" loading="lazy">
         <div class="photo-info">
           <div class="photo-type">${label}</div>
           ${caption ? `<div class="photo-text">${escHtml(caption)}</div>` : ''}
           <div class="photo-ts">${tsStr}</div>
           <div class="photo-btns">
-            <a class="btn btn-dl" href="${src}" download="${p.id}.jpg">⬇ Download</a>
-            <button class="btn btn-amber" onclick="reprint('${p.id}')">🖨 Reprint</button>
+            <a class="btn btn-dl" href="${dlSrc}" download="${p.id}.jpg">⬇ Download</a>
+            ${reprintBtn}
           </div>
         </div>
       </div>`;

@@ -88,8 +88,9 @@ def _pil_to_jpeg_bytes(image: Image.Image) -> bytes:
 
 
 def _upload_jpeg(service, name: str, jpeg_bytes: bytes,
-                 parent_id: Optional[str], description: str = "") -> Optional[str]:
-    """Upload JPEG bytes to Drive and return the file ID."""
+                 parent_id: Optional[str], description: str = "",
+                 make_public: bool = False) -> Optional[str]:
+    """Upload JPEG bytes to Drive, optionally make public, return the file ID."""
     from googleapiclient.http import MediaIoBaseUpload
     meta = {"name": name, "description": description}
     if parent_id:
@@ -97,14 +98,21 @@ def _upload_jpeg(service, name: str, jpeg_bytes: bytes,
     media = MediaIoBaseUpload(io.BytesIO(jpeg_bytes), mimetype="image/jpeg")
     f = service.files().create(body=meta, media_body=media,
                                fields="id").execute()
-    return f.get("id")
+    fid = f.get("id")
+    if fid and make_public:
+        service.permissions().create(
+            fileId=fid,
+            body={"role": "reader", "type": "anyone"},
+        ).execute()
+    return fid
 
 
 # ---------------------------------------------------------------------------
 # Sync workers (run inside the thread pool)
 # ---------------------------------------------------------------------------
 
-def _do_upload(frame: np.ndarray, text: str) -> None:
+def _do_upload(frame: np.ndarray, text: str,
+               stem: Optional[str] = None) -> None:
     service = _build_service()
     if service is None:
         return
@@ -112,8 +120,14 @@ def _do_upload(frame: np.ndarray, text: str) -> None:
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     fid = _upload_jpeg(service, f"mirror_{ts}.jpg",
                        _frame_to_jpeg_bytes(frame), folder_id,
-                       description=text)
+                       description=text, make_public=True)
     print(f"[DRIVE] uploaded mirror_{ts}.jpg (id={fid})")
+    if fid and stem:
+        try:
+            import photo_store
+            photo_store.set_drive_id(stem, fid)
+        except Exception as e:
+            print(f"[DRIVE] set_drive_id failed: {e}")
 
 
 def _do_upload_photo(frame: np.ndarray, desc: str,
@@ -130,7 +144,8 @@ def _do_upload_photo(frame: np.ndarray, desc: str,
     print(f"[DRIVE] uploaded photo_{ts}.jpg -> {folder_id} (id={fid})")
 
 
-def _do_upload_booth(strip_image: Image.Image) -> None:
+def _do_upload_booth(strip_image: Image.Image,
+                     stem: Optional[str] = None) -> None:
     service = _build_service()
     if service is None:
         return
@@ -139,8 +154,14 @@ def _do_upload_booth(strip_image: Image.Image) -> None:
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     fid = _upload_jpeg(service, f"booth_strip_{ts}.jpg",
                        _pil_to_jpeg_bytes(strip_image), receipts_id,
-                       description="Photobooth strip")
+                       description="Photobooth strip", make_public=True)
     print(f"[DRIVE] uploaded booth_strip_{ts}.jpg (id={fid})")
+    if fid and stem:
+        try:
+            import photo_store
+            photo_store.set_drive_id(stem, fid)
+        except Exception as e:
+            print(f"[DRIVE] set_drive_id failed: {e}")
 
 
 def _do_create_session_folder() -> Optional[Tuple[str, str]]:
@@ -170,11 +191,12 @@ def _do_create_session_folder() -> Optional[Tuple[str, str]]:
 # Public API
 # ---------------------------------------------------------------------------
 
-def upload_async(frame: np.ndarray, text: str) -> None:
+def upload_async(frame: np.ndarray, text: str,
+                 stem: Optional[str] = None) -> None:
     """Fire-and-forget: upload a single mirror frame + AI caption."""
     if frame is None:
         return
-    _executor.submit(_do_upload, frame, text)
+    _executor.submit(_do_upload, frame, text, stem)
 
 
 def upload_photo_only_async(frame: np.ndarray, desc: str) -> None:
@@ -192,11 +214,12 @@ def upload_photo_to_folder_async(frame: np.ndarray,
     _executor.submit(_do_upload_photo, frame, desc, folder_id)
 
 
-def upload_booth_async(strip_image: Image.Image) -> None:
+def upload_booth_async(strip_image: Image.Image,
+                       stem: Optional[str] = None) -> None:
     """Fire-and-forget: upload the composed photobooth strip PIL image."""
     if strip_image is None:
         return
-    _executor.submit(_do_upload_booth, strip_image)
+    _executor.submit(_do_upload_booth, strip_image, stem)
 
 
 def create_booth_session_folder() -> Optional[Tuple[str, str]]:

@@ -4,6 +4,16 @@ A Raspberry Pi smart mirror: Pi Camera + capacitive touch button captures whoeve
 
 ---
 
+- [Hardware](#hardware)
+- [Install](#install)
+- [Run](#run)
+- [Dashboard](#dashboard)
+- [Configuration](#configuration)
+- [Google Drive](#google-drive)
+- [Project structure](#project-structure)
+
+---
+
 ## Hardware
 
 | Part | Notes |

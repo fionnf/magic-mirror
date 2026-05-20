@@ -93,6 +93,7 @@ def run():
     p = argparse.ArgumentParser()
     p.add_argument("--camera", default="webcam", choices=["webcam", "static"])
     p.add_argument("--no-api", action="store_true")
+    p.add_argument("--no-mqtt", action="store_true", help="disable MQTT bridge")
     p.add_argument("--loop", type=int, default=0,
                    help="auto-press the button N times then exit")
     p.add_argument("--no-receipts", action="store_true",
@@ -139,6 +140,18 @@ def run():
                                      lambda short, long_: ButtonMock(short, long_),
                                      strip=strip, printer=printer,
                                      sim_mode=True, no_api=args.no_api)
+
+    from api import MirrorAPI
+    api = MirrorAPI(mirror, port=5000)
+    api.start()
+
+    if not args.no_mqtt:
+        from mqtt_bridge import MQTTBridge
+        bridge = MQTTBridge(mirror, host=config.MQTT_HOST, port=config.MQTT_PORT)
+        bridge.start()
+
+    print("[SIM] dashboard → http://localhost:5000")
+    print("[SIM] gallery   → http://localhost:5000/gallery")
 
     worker = threading.Thread(target=mirror.run, daemon=True)
     worker.start()

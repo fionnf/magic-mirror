@@ -71,8 +71,8 @@ def _receipt_image(frame: np.ndarray, text: str) -> Image.Image:
         header_lines.append(config.PRINTER_HEADER)
     header_lines.append(datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
 
-    wrapped = textwrap.fill(text, width=config.PRINTER_TEXT_COLS)
-    text_lines = wrapped.splitlines() or [text]
+    wrapped = textwrap.fill(text.upper(), width=config.PRINTER_TEXT_COLS)
+    text_lines = wrapped.splitlines() or [text.upper()]
 
     total_h = (
         len(header_lines) * line_h + 6
@@ -94,7 +94,8 @@ def _receipt_image(frame: np.ndarray, text: str) -> Image.Image:
     y += photo_h + 4
 
     for line in text_lines:
-        draw.text((4, y), line, fill=0, font=font)
+        x = max(0, (W - len(line) * char_w) // 2)
+        draw.text((x, y), line, fill=0, font=font)
         y += line_h
 
     return out

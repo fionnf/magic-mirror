@@ -10,6 +10,8 @@ import os
 import threading
 from typing import Any, Dict
 
+_DASHBOARD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard")
+
 try:
     from flask import Flask, jsonify, request, send_from_directory
     from flask_cors import CORS
@@ -197,15 +199,17 @@ class MirrorAPI:
 
         @self.app.route("/", methods=["GET"])
         def index():
-            if os.path.exists("dashboard/index.html"):
-                with open("dashboard/index.html") as f:
+            p = os.path.join(_DASHBOARD, "index.html")
+            if os.path.exists(p):
+                with open(p) as f:
                     return f.read(), 200, {"Content-Type": "text/html"}
             return jsonify({"api": "magic-mirror", "ready": True})
 
         @self.app.route("/gallery", methods=["GET"])
         def gallery():
-            if os.path.exists("dashboard/photos.html"):
-                with open("dashboard/photos.html") as f:
+            p = os.path.join(_DASHBOARD, "photos.html")
+            if os.path.exists(p):
+                with open(p) as f:
                     return f.read(), 200, {"Content-Type": "text/html"}
             return jsonify({"error": "photos page not found"}), 404
 

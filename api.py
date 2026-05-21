@@ -212,6 +212,14 @@ class MirrorAPI:
     def start(self) -> None:
         if not self.app:
             return
+        import socket
+        port = self.port
+        for _ in range(10):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if s.connect_ex(("127.0.0.1", port)) != 0:
+                    break
+            port += 1
+        self.port = port
         thread = threading.Thread(
             target=lambda: self.app.run(host="0.0.0.0", port=self.port,
                                         debug=False, use_reloader=False),

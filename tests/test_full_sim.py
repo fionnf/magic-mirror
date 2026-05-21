@@ -150,8 +150,8 @@ def run():
         bridge = MQTTBridge(mirror, host=config.MQTT_HOST, port=config.MQTT_PORT)
         bridge.start()
 
-    print("[SIM] dashboard → http://localhost:5000")
-    print("[SIM] gallery   → http://localhost:5000/gallery")
+    print(f"[SIM] dashboard → http://localhost:{api.port}")
+    print(f"[SIM] gallery   → http://localhost:{api.port}/gallery")
 
     worker = threading.Thread(target=mirror.run, daemon=True)
     worker.start()

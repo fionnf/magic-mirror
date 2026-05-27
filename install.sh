@@ -18,10 +18,9 @@ sudo apt-get install -y \
 echo "==> Building rpi-rgb-led-matrix Python bindings"
 WORK="${PROJECT_DIR}/.build"
 mkdir -p "$WORK"
-if [ ! -d "$WORK/rpi-rgb-led-matrix" ]; then
-    git clone https://github.com/hzeller/rpi-rgb-led-matrix "$WORK/rpi-rgb-led-matrix"
-fi
-pip3 install --break-system-packages "$WORK/rpi-rgb-led-matrix/bindings/python"
+rm -rf "$WORK/rpi-rgb-led-matrix"
+git clone --depth=1 https://github.com/hzeller/rpi-rgb-led-matrix "$WORK/rpi-rgb-led-matrix"
+sudo pip3 install --break-system-packages "$WORK/rpi-rgb-led-matrix/bindings/python"
 
 echo "==> Installing Python requirements"
 pip3 install --break-system-packages -r "${PROJECT_DIR}/requirements.txt"

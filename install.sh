@@ -23,7 +23,7 @@ git clone --depth=1 https://github.com/hzeller/rpi-rgb-led-matrix "$WORK/rpi-rgb
 sudo pip3 install --break-system-packages "$WORK/rpi-rgb-led-matrix"
 
 echo "==> Installing Python requirements"
-pip3 install --break-system-packages -r "${PROJECT_DIR}/requirements.txt"
+sudo pip3 install --break-system-packages -r "${PROJECT_DIR}/requirements.txt"
 
 echo "==> Setting up .env"
 if [ ! -f "${PROJECT_DIR}/.env" ]; then

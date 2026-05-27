@@ -5,7 +5,7 @@ page, you approve, and the resulting credentials are written to
 `token.json` in the project root. Copy that file to the Pi alongside
 `main.py` and the uploader will use it automatically — refreshing in the
 background as long as you keep using it occasionally (~6 months of
-inactivity will force a re-run).
+inactivity will force a re-run)..
 
 Requires `oauth_client.json` in the project root — see README for the
 3-step "OAuth client ID" download from Google Cloud Console.

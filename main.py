@@ -152,6 +152,7 @@ class MagicMirror:
     def _run_idle_until_trigger(self) -> str:
         """Block until short or long press. Returns 'short' or 'long'."""
         interval = 1.0 / config.IDLE_ANIMATION_FPS
+
         while not self._stop.is_set():
             if self._booth_event.is_set():
                 self._booth_event.clear()
@@ -159,6 +160,7 @@ class MagicMirror:
             if self._trigger_event.is_set():
                 self._trigger_event.clear()
                 return "short"
+
             canvas = self._silhouette()
             if self._overlay_image is not None:
                 try:

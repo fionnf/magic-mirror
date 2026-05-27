@@ -21,10 +21,7 @@ mkdir -p "$WORK"
 if [ ! -d "$WORK/rpi-rgb-led-matrix" ]; then
     git clone https://github.com/hzeller/rpi-rgb-led-matrix "$WORK/rpi-rgb-led-matrix"
 fi
-pushd "$WORK/rpi-rgb-led-matrix" >/dev/null
-make build-python PYTHON=$(command -v python3)
-sudo make install-python PYTHON=$(command -v python3)
-popd >/dev/null
+pip3 install --break-system-packages "$WORK/rpi-rgb-led-matrix/bindings/python"
 
 echo "==> Installing Python requirements"
 pip3 install --break-system-packages -r "${PROJECT_DIR}/requirements.txt"

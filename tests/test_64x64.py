@@ -44,7 +44,7 @@ _IS_PI = platform.machine() in ("armv7l", "aarch64")
 
 def run():
     p = argparse.ArgumentParser()
-    p.add_argument("--camera", default="webcam", choices=["webcam", "static"])
+    p.add_argument("--camera", default="static", choices=["webcam", "static"])
     p.add_argument("--hardware", action="store_true",
                    help="use real rpi-rgb-led-matrix instead of pygame sim "
                         "(auto-enabled on Pi)")

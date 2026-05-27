@@ -1,9 +1,13 @@
 """Simple panel hardware test — fills the display with solid colours.
 
 Usage:
-    sudo python3 tests/test_panel.py          # white, then colour cycle
-    sudo python3 tests/test_panel.py --colour red
-    sudo python3 tests/test_panel.py --rows 64 --cols 64
+    sudo python3 tests/test_panel.py                    # white → red → green → blue
+    sudo python3 tests/test_panel.py --colour white     # hold white
+    sudo python3 tests/test_panel.py --mapping regular  # try different HAT wiring
+    sudo python3 tests/test_panel.py --multiplexing 1   # try stripe multiplexing
+
+Common --mapping values: adafruit-hat (default), regular, adafruit-hat-pwm
+Common --multiplexing values: 0 (default), 1 (stripe), 2 (checker), 4 (z-stripe)
 """
 import argparse
 import sys
@@ -31,10 +35,14 @@ def fill(matrix, colour, rows, cols):
 
 def run():
     p = argparse.ArgumentParser()
-    p.add_argument("--rows",    type=int, default=64)
-    p.add_argument("--cols",    type=int, default=64)
-    p.add_argument("--colour",  default=None, choices=list(COLOURS))
-    p.add_argument("--brightness", type=int, default=50)
+    p.add_argument("--rows",         type=int, default=64)
+    p.add_argument("--cols",         type=int, default=64)
+    p.add_argument("--colour",       default=None, choices=list(COLOURS))
+    p.add_argument("--brightness",   type=int, default=50)
+    p.add_argument("--mapping",      default=None,
+                   help="hardware_mapping override (e.g. regular, adafruit-hat)")
+    p.add_argument("--multiplexing", type=int, default=None,
+                   help="multiplexing override (0=default, 1=stripe, 2=checker)")
     args = p.parse_args()
 
     config.PANEL_ROWS    = args.rows
@@ -43,9 +51,14 @@ def run():
     config.TOTAL_WIDTH   = args.cols
     config.TOTAL_HEIGHT  = args.rows
     config.PIXEL_MAPPER  = ""
+    if args.mapping:
+        config.HARDWARE_MAPPING = args.mapping
 
     from led_matrix import LedMatrix
     matrix = LedMatrix()
+    if args.multiplexing is not None:
+        matrix.matrix.multiplexing = args.multiplexing
+    print(f"[TEST] mapping={config.HARDWARE_MAPPING}  multiplexing={args.multiplexing if args.multiplexing is not None else 0}")
     matrix.set_brightness(args.brightness)
 
     if args.colour:

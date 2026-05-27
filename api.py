@@ -22,12 +22,12 @@ except ImportError:
 
 class MirrorAPI:
     def __init__(self, mirror, port: int = 5000):
+        self.port = port
         if not HAS_FLASK:
             self.app = None
             return
 
         self.mirror = mirror
-        self.port   = port
         self.app    = Flask(__name__)
         CORS(self.app)
         self._register_routes()

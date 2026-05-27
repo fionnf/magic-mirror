@@ -1,5 +1,7 @@
 # Magic Mirror
 
+**[Control Panel](https://fionnf.github.io/magic-mirror/)** · **[Photo Gallery](https://fionnf.github.io/magic-mirror/photos.html)**
+
 A Raspberry Pi smart mirror: Pi Camera + capacitive touch button captures whoever stands in front of a one-way acrylic panel, sends the image to OpenAI (`gpt-4o-mini` vision), and scrolls the response on a **128 × 192** HUB75 LED matrix hidden behind the glass. A live silhouette renders continuously as the background. An SK6812 LED strip around the frame breathes and shifts colour. A thermal receipt printer hands out a keepsake. Long-press activates **photobooth mode**: three posed shots with AI-generated prompts, composited strip, and print.
 
 ---

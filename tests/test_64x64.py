@@ -10,7 +10,7 @@ Usage
     python3 tests/test_64x64.py --camera webcam
 
     # Pi with real panel (no pygame window):
-    python3 tests/test_64x64.py --camera webcam --hardware
+    python3 tests/test_64x64.py --hardware
 
 Keyboard (sim mode): SPACE/ENTER = short press · hold SPACE 2 s = long press
                      Q = quit · G = toggle grid
@@ -44,7 +44,7 @@ _IS_PI = platform.machine() in ("armv7l", "aarch64")
 
 def run():
     p = argparse.ArgumentParser()
-    p.add_argument("--camera", default="webcam", choices=["webcam", "static"])
+    p.add_argument("--camera", default="static", choices=["webcam", "static"])
     p.add_argument("--hardware", action="store_true",
                    help="use real rpi-rgb-led-matrix instead of pygame sim "
                         "(auto-enabled on Pi)")

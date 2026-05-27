@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Magic Mirror installer — Raspberry Pi OS Bookworm or later.
+# Magic Mirror installer — Raspberry Pi OS Bookworm / Trixie or later.
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -13,7 +13,7 @@ echo "==> Installing system deps"
 sudo apt-get install -y \
     git build-essential python3-pip python3-dev python3-venv \
     python3-picamera2 libopencv-dev cython3 \
-    libatlas-base-dev
+    libopenblas-dev
 
 echo "==> Building rpi-rgb-led-matrix Python bindings"
 WORK="${PROJECT_DIR}/.build"

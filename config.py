@@ -12,7 +12,7 @@ PARALLEL = 1
 PIXEL_MAPPER = "U-mapper"
 SCAN_RATE = 32  # most 64x64 panels are 1/32 scan — confirm from sticker
 HARDWARE_MAPPING = "adafruit-hat"
-GPIO_SLOWDOWN = 4
+GPIO_SLOWDOWN = 1  # Pi 5 (RP1) needs 1; Pi 4 needs 4
 
 # Total canvas: 2 panels wide x 3 panels tall = 128 wide x 192 tall (portrait)
 TOTAL_WIDTH = 128

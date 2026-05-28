@@ -47,6 +47,8 @@ def run():
                    help="multiplexing override (0=default, 1=stripe, 2=checker)")
     p.add_argument("--row-addr-type", type=int, default=None, dest="row_addr_type",
                    help="row address type (0=default, 1=AB-addressed, 2=direct, 3=ABC-shift)")
+    p.add_argument("--slowdown",      type=int, default=None,
+                   help="GPIO slowdown (Pi 5 needs 1, Pi 4 needs 4)")
     args = p.parse_args()
 
     config.PANEL_ROWS    = args.rows
@@ -65,7 +67,7 @@ def run():
     opts.chain_length     = 1
     opts.parallel         = 1
     opts.hardware_mapping = config.HARDWARE_MAPPING
-    opts.gpio_slowdown    = config.GPIO_SLOWDOWN
+    opts.gpio_slowdown    = args.slowdown if args.slowdown is not None else config.GPIO_SLOWDOWN
     opts.brightness       = args.brightness
     opts.drop_privileges  = False
     opts.multiplexing     = args.multiplexing if args.multiplexing is not None else 0
@@ -75,7 +77,7 @@ def run():
     matrix = RGBMatrix(options=opts)
     canvas = matrix.CreateFrameCanvas()
 
-    print(f"[TEST] mapping={config.HARDWARE_MAPPING}  multiplexing={opts.multiplexing}  row_addr_type={opts.row_address_type}")
+    print(f"[TEST] mapping={config.HARDWARE_MAPPING}  multiplexing={opts.multiplexing}  row_addr_type={opts.row_address_type}  slowdown={opts.gpio_slowdown}")
 
     def draw_fill(colour):
         from PIL import Image

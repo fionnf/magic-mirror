@@ -1,13 +1,15 @@
 """Simple panel hardware test — fills the display with solid colours.
 
 Usage:
-    sudo python3 tests/test_panel.py                    # white → red → green → blue
-    sudo python3 tests/test_panel.py --colour white     # hold white
-    sudo python3 tests/test_panel.py --mapping regular  # try different HAT wiring
-    sudo python3 tests/test_panel.py --multiplexing 1   # try stripe multiplexing
+    sudo python3 tests/test_panel.py                        # white → red → green → blue
+    sudo python3 tests/test_panel.py --colour white         # hold white
+    sudo python3 tests/test_panel.py --mapping regular      # try different HAT wiring
+    sudo python3 tests/test_panel.py --multiplexing 1       # try stripe multiplexing
+    sudo python3 tests/test_panel.py --row-addr-type 1      # try alternate row addressing
 
-Common --mapping values: adafruit-hat (default), regular, adafruit-hat-pwm
+Common --mapping values:      adafruit-hat (default), regular, adafruit-hat-pwm
 Common --multiplexing values: 0 (default), 1 (stripe), 2 (checker), 4 (z-stripe)
+Common --row-addr-type:       0 (default), 1 (AB-addressed), 2 (direct), 3 (ABC-shift)
 """
 import argparse
 import sys
@@ -35,14 +37,16 @@ def fill(matrix, colour, rows, cols):
 
 def run():
     p = argparse.ArgumentParser()
-    p.add_argument("--rows",         type=int, default=64)
-    p.add_argument("--cols",         type=int, default=64)
-    p.add_argument("--colour",       default=None, choices=list(COLOURS))
-    p.add_argument("--brightness",   type=int, default=50)
-    p.add_argument("--mapping",      default=None,
+    p.add_argument("--rows",          type=int, default=64)
+    p.add_argument("--cols",          type=int, default=64)
+    p.add_argument("--colour",        default=None, choices=list(COLOURS))
+    p.add_argument("--brightness",    type=int, default=50)
+    p.add_argument("--mapping",       default=None,
                    help="hardware_mapping override (e.g. regular, adafruit-hat)")
-    p.add_argument("--multiplexing", type=int, default=None,
+    p.add_argument("--multiplexing",  type=int, default=None,
                    help="multiplexing override (0=default, 1=stripe, 2=checker)")
+    p.add_argument("--row-addr-type", type=int, default=None, dest="row_addr_type",
+                   help="row address type (0=default, 1=AB-addressed, 2=direct, 3=ABC-shift)")
     args = p.parse_args()
 
     config.PANEL_ROWS    = args.rows
@@ -54,15 +58,34 @@ def run():
     if args.mapping:
         config.HARDWARE_MAPPING = args.mapping
 
-    from led_matrix import LedMatrix
-    matrix = LedMatrix()
-    if args.multiplexing is not None:
-        matrix.matrix.multiplexing = args.multiplexing
-    print(f"[TEST] mapping={config.HARDWARE_MAPPING}  multiplexing={args.multiplexing if args.multiplexing is not None else 0}")
+    from rgbmatrix import RGBMatrix, RGBMatrixOptions
+    opts = RGBMatrixOptions()
+    opts.rows             = config.PANEL_ROWS
+    opts.cols             = config.PANEL_COLS
+    opts.chain_length     = 1
+    opts.parallel         = 1
+    opts.hardware_mapping = config.HARDWARE_MAPPING
+    opts.gpio_slowdown    = config.GPIO_SLOWDOWN
+    opts.brightness       = args.brightness
+    opts.drop_privileges  = False
+    opts.multiplexing     = args.multiplexing if args.multiplexing is not None else 0
+    opts.row_address_type = args.row_addr_type if args.row_addr_type is not None else 0
+
+    from rgbmatrix import RGBMatrix
+    matrix = RGBMatrix(options=opts)
+    canvas = matrix.CreateFrameCanvas()
+
+    print(f"[TEST] mapping={config.HARDWARE_MAPPING}  multiplexing={opts.multiplexing}  row_addr_type={opts.row_address_type}")
+
+    def draw_fill(colour):
+        from PIL import Image
+        img = Image.new("RGB", (args.cols, args.rows), colour)
+        canvas.SetImage(img)
+        matrix.SwapOnVSync(canvas)
 
     if args.colour:
         print(f"[TEST] solid {args.colour} — Ctrl-C to quit")
-        fill(matrix, COLOURS[args.colour], args.rows, args.cols)
+        draw_fill(COLOURS[args.colour])
         try:
             while True:
                 time.sleep(1)
@@ -73,10 +96,10 @@ def run():
             if name == "black":
                 continue
             print(f"[TEST] {name}")
-            fill(matrix, rgb, args.rows, args.cols)
+            draw_fill(rgb)
             time.sleep(2)
 
-    matrix.clear()
+    draw_fill((0, 0, 0))
     print("[TEST] done")
 
 

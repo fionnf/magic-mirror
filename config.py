@@ -11,8 +11,12 @@ PARALLEL = 1
 # `"V-mapper"`, or wire the panels differently.
 PIXEL_MAPPER = "U-mapper"
 SCAN_RATE = 32  # most 64x64 panels are 1/32 scan — confirm from sticker
-HARDWARE_MAPPING = "adafruit-hat"
-GPIO_SLOWDOWN = 1  # Pi 5 (RP1) needs 1; Pi 4 needs 4
+# Confirmed working on Pi 4B + P3 64x64 FM6124 panel + regular wiring:
+#   hardware_mapping = "regular", gpio_slowdown = 3, panel_type = FM6126A, pwm_bits = 7
+HARDWARE_MAPPING = "regular"
+GPIO_SLOWDOWN = 3  # Pi 4B needs 3 with P3/FM6124 panel; Pi 5 (RP1) needs 1
+PANEL_TYPE = "FM6126A"  # FM6124 panels respond to FM6126A init sequence
+PWM_BITS = 7            # reduces edge flicker on FM6124
 
 # Total canvas: 2 panels wide x 3 panels tall = 128 wide x 192 tall (portrait)
 TOTAL_WIDTH = 128

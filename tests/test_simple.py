@@ -9,7 +9,7 @@ opts.rows = 64
 opts.cols = 64
 opts.chain_length = 1
 opts.parallel = 1
-opts.hardware_mapping = "regular"
+opts.hardware_mapping = "adafruit-hat"
 opts.gpio_slowdown = 4
 opts.brightness = 50
 

@@ -7,3 +7,8 @@ gcp-credentials.json
 oauth_client.json
 usage.log
 tests/sim_receipts/
+.idea/
+.vscode/
+.DS_Store
+venv/
+.venv/

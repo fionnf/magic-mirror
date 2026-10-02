@@ -13,6 +13,7 @@ A Raspberry Pi smart mirror: Pi Camera + capacitive touch button captures whoeve
 - [Configuration](#configuration)
 - [Google Drive](#google-drive)
 - [Project structure](#project-structure)
+- [LED wall frame (3D-printable)](hardware/led-wall-frame/README.md)
 
 ---
 
@@ -150,15 +151,21 @@ magic-mirror/
 │   └── timelapse.py     # End-of-night MP4 + Drive upload
 ├── tests/
 │   ├── test_full_sim.py     # Full state machine sim
+│   ├── test_64x64.py        # State machine on a single 64×64 panel
+│   ├── test_panel.py        # Solid-colour panel hardware check
+│   ├── test_simple.py       # Minimal known-good panel config
 │   ├── test_printer.py      # Receipt/strip PNG preview
 │   ├── test_printer_live.py # Live printer test
 │   ├── test_ai.py           # Single vision API call
 │   ├── test_silhouette.py   # Live silhouette preview
 │   ├── test_animations.py   # Animation cycle
 │   └── test_text.py         # Text rendering
+├── hardware/
+│   └── led-wall-frame/  # 3D-printable frame: OpenSCAD, STLs, renders, GLB
 ├── dashboard/
 │   ├── index.html       # Control panel
 │   └── photos.html      # Public photo gallery (GitHub Pages / NFC)
+├── .github/workflows/   # GitHub Pages deploy
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── install.sh

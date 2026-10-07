@@ -37,5 +37,6 @@ Nice=-5
 WantedBy=multi-user.target
 UNITEOF
 sudo systemctl daemon-reload
-sudo systemctl enable --now wall-art.service
+sudo systemctl enable wall-art.service
+sudo systemctl restart wall-art.service      # pick up the new animation now
 echo "autostart installed: $ANIM (status: sudo systemctl status wall-art)"

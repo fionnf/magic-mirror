@@ -130,7 +130,10 @@ class LedMatrix:
         return np.ascontiguousarray(
             sel.transpose(1, 0, 2, 3).reshape(pr, len(self._tile_idx) * pc, 3))
 
-    def draw(self, image: Image.Image) -> None:
+    def draw(self, image: Image.Image, frame_fraction: int = 1) -> bool:
+        """Show a frame. frame_fraction=N holds it for exactly N panel refreshes
+        (the library paces it on vsync - smooth motion with no timer drift).
+        Returns False if the frame was identical and nothing was sent."""
         if image.size != (config.TOTAL_WIDTH, config.TOTAL_HEIGHT):
             image = image.resize((config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
         if image.mode != "RGB":
@@ -139,11 +142,12 @@ class LedMatrix:
         # Static content (idle text, held frames) costs nothing: skip the
         # upload when nothing changed — the panels keep showing the last frame.
         if self._prev is not None and np.array_equal(strip, self._prev):
-            return
+            return False
         self._prev = strip
         with self._lock:
             self.canvas.SetImage(Image.fromarray(strip, "RGB"))
-            self.canvas = self.matrix.SwapOnVSync(self.canvas)
+            self.canvas = self.matrix.SwapOnVSync(self.canvas, max(1, int(frame_fraction)))
+        return True
 
     def clear(self) -> None:
         black = Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT), (0, 0, 0))

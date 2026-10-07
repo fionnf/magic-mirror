@@ -122,6 +122,7 @@
       <div class="row" style="justify-content:space-between;margin-bottom:6px">
         <b>🎵 Music art</b><span class="sub" id="musicNow">—</span>
       </div>
+      <div class="row" style="margin-bottom:8px;gap:6px"><b id="musicScene" style="font-size:16px"></b><span id="musicSw"></span></div>
       <p>Soft art that breathes with the music. On <b>Auto (AI)</b> the AI listens and designs the whole look (style, colours, vibe, speed, size, number of shapes); pick something to fix it. Changes apply live.</p>
       <div class="row" style="margin-bottom:10px">
         <label class="sub">Art style<br><select id="mStyle" onchange="musicSet()"></select></label>
@@ -235,9 +236,12 @@ async function musicLoad(first) {
       $('mStyle').value = m.settings.style; $('mPal').value = m.settings.palette; $('mVibe').value = m.settings.vibe;
     }
     const n = m.now;
+    $('musicScene').textContent = n && n.scene && !n.silent ? '“' + n.scene + '”' : '';
+    $('musicSw').innerHTML = n && n.colors ? n.colors.map(c =>
+      `<span style="display:inline-block;width:16px;height:16px;border-radius:4px;background:${c};margin-right:3px;vertical-align:middle"></span>`).join('') : '';
     $('musicNow').textContent = !n ? (STATUS.current === 'music' ? 'listening…' : 'not playing') :
       (n.silent ? `quiet room · ${n.style} + ${n.palette}` :
-       `${n.genre ? 'AI hears ' + n.genre + (n.mood ? ' · ' + n.mood : '') + ' → ' : ''}${n.style} + ${n.palette}${n.vibe ? ' · ' + n.vibe : ''}`);
+       `${n.genre ? 'AI hears ' + n.genre + (n.mood ? ' · ' + n.mood : '') + ' → ' : ''}${n.style}${n.layer && n.layer !== 'none' ? ' + ' + n.layer : ''} · ${n.palette}${n.vibe ? ' · ' + n.vibe : ''}`);
   } catch (e) {}
 }
 function musicSet(start) {

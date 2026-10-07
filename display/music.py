@@ -33,8 +33,8 @@ from display.art import _palette, _lut, Coral
 
 SR = 22050
 WIN, HOP = 1024, 256
-AI_EVERY = 40.0
-AI_CLIP = 8.0
+AI_EVERY = 30.0
+AI_CLIP = 10.0
 STYLES = ["glow", "aurora", "lava", "ripples", "coral", "ink"]
 PALETTES = {
     "dusk":   [(15, 8, 30), (80, 30, 90), (220, 120, 120), (255, 200, 150)],
@@ -48,19 +48,90 @@ PALETTES = {
 VIBES = {"chill": ("chill and tranquil", 1.0), "dreamy": ("dreamy and floaty", 0.75),
          "warm": ("warm and cosy", 1.0), "lively": ("lively but still gentle", 1.4)}
 AI_PROMPT = (
-    "You are the VJ for an LED art wall in the hallway of a cosy flatshare. The vibe of the "
-    "space is chill and tranquil and the residents love SOFT GLOWS most: prefer 'glow', then "
-    "'aurora' or 'lava'; use the others rarely. Listen to this clip and choose visuals. Prefer "
-    "calm, slow, dreamy looks; for upbeat music pick a warmer, livelier but still gentle look - never "
-    f"harsh or strobing. Styles: {', '.join(STYLES)}. Palettes: {', '.join(PALETTES)}. "
-    "You may redesign the whole look: also choose a vibe (" + ", ".join(VIBES) + "), a drift "
-    "speed (0.5 slow - 1.5 faster), a size for the light shapes (0.7 small - 1.4 big) and how "
-    "many shapes (3-8). "
-    "Reply ONLY with JSON: {\"genre\": str, \"mood\": str (one word), \"energy\": number 0-1, "
-    "\"style\": one of the styles, \"palette\": one of the palettes, \"vibe\": one of the vibes, "
-    "\"speed\": number, \"scale\": number, \"count\": integer, "
-    "\"caption\": max 3 lowercase words}"
+    "You are the resident VJ and light designer of an LED art wall in the hallway of House "
+    "Fortuna, a cosy gay flatshare in Zürich. The vibe of the space is chill and tranquil and the "
+    "residents love SOFT GLOWS most. Each time you hear a clip you design a complete light scene "
+    "for the wall: never harsh, never strobing, always soft and beautiful. "
+    f"Base styles: {', '.join(STYLES)} (prefer glow, aurora, lava). Optionally add ONE second "
+    "layer on top for depth (glow, aurora or ripples - or none) with opacity 0-0.6. "
+    f"Colours: either a preset ({', '.join(PALETTES)}) or invent your own palette of 4 hex colours "
+    "from deep shadow to soft highlight that matches the music. "
+    "Also set vibe (" + ", ".join(VIBES) + "), drift speed 0.5-1.5, shape size 0.7-1.4, number of "
+    "shapes 3-8 and softness 0.7 (crisper) - 1.5 (dreamier). "
+    "Let the scenes evolve as a coherent set over the evening - vary them but let them belong "
+    "together - and match the music's mood and energy. "
+    "Reply ONLY with JSON: {\"scene\": short evocative name, \"genre\": str, \"mood\": one word, "
+    "\"energy\": 0-1, \"style\": base style, \"layer\": style or \"none\", "
+    "\"layer_opacity\": number, \"palette\": preset name or \"custom\", "
+    "\"colors\": [4 hex strings, when custom], \"vibe\": str, \"speed\": number, "
+    "\"scale\": number, \"count\": integer, \"softness\": number}"
 )
+LAYERS = ("glow", "aurora", "ripples")
+DEFAULT_CHOICE = {"scene": "", "genre": "", "mood": "", "style": "glow", "layer": "none",
+                  "layer_opacity": 0.0, "palkey": "dusk", "palette_desc": "dusk",
+                  "vibe": "chill", "speed": 1.0, "scale": 1.0, "count": 6, "softness": 1.0}
+
+
+def _hex_rgb(h):
+    h = str(h).strip().lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    if len(h) != 6:
+        raise ValueError(h)
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _soften(cols):
+    """Keep an AI palette soft: darkest stays a deep shadow, brightest a soft highlight."""
+    lum = lambda c: 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    cols = sorted(cols, key=lum)
+    d = cols[0]
+    if lum(d) > 45:
+        k = 45 / lum(d)
+        cols[0] = tuple(int(v * k) for v in d)
+    b = cols[-1]
+    if lum(b) < 140 and lum(b) > 0:
+        k = min(255 / max(b), 140 / lum(b))
+        cols[-1] = tuple(min(255, int(v * k)) for v in b)
+    return cols
+
+
+def _validate(j):
+    """Clamp an AI scene to safe values; None if unusable."""
+    if not isinstance(j, dict) or j.get("style") not in STYLES:
+        return None
+    num = lambda v, lo, hi, d: max(lo, min(hi, float(v))) if isinstance(v, (int, float)) else d
+    out = dict(DEFAULT_CHOICE)
+    out.update({k: str(j.get(k, ""))[:40] for k in ("scene", "genre", "mood")})
+    out["style"] = j["style"]
+    layer = j.get("layer", "none")
+    out["layer"] = layer if layer in LAYERS and layer != j["style"] else "none"
+    out["layer_opacity"] = num(j.get("layer_opacity"), 0.0, 0.6, 0.3) if out["layer"] != "none" else 0.0
+    pal = j.get("palette")
+    if pal in PALETTES:
+        out["palkey"] = out["palette_desc"] = pal
+    else:
+        try:
+            cols = _soften([_hex_rgb(c) for c in j.get("colors", [])][:4])
+            if len(cols) != 4:
+                raise ValueError
+            out["palkey"] = "custom:" + ",".join("%02x%02x%02x" % c for c in cols)
+            out["palette_desc"] = "custom " + " ".join("#%02x%02x%02x" % c for c in cols)
+        except Exception:
+            out["palkey"] = out["palette_desc"] = "dusk"
+    out["vibe"] = j.get("vibe") if j.get("vibe") in VIBES else "chill"
+    out["speed"] = num(j.get("speed"), 0.5, 1.5, 1.0)
+    out["scale"] = num(j.get("scale"), 0.7, 1.4, 1.0)
+    out["count"] = num(j.get("count"), 3, 8, 6)
+    out["softness"] = num(j.get("softness"), 0.7, 1.5, 1.0)
+    out["scene"] = out["scene"] or out["mood"] or "untitled"
+    return out
+
+
+def _scene_key(c):
+    return (c["style"], c["palkey"], c["layer"])
+
+
 AI_MODELS = ["gpt-audio"]
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # written by the app
@@ -203,11 +274,13 @@ class Listener:
 # --------------------------------------------------------------- AI VJ ---
 
 class VJ:
+    """The AI light designer: listens every AI_EVERY s and designs a whole scene."""
+
     def __init__(self, listener, vibe=lambda: "chill"):
         self.l = listener
         self.vibe = vibe
-        self.choice = {"style": "glow", "palette": "dusk", "caption": "", "mood": "", "genre": "",
-                       "vibe": "chill", "speed": 1.0, "scale": 1.0, "count": 6}
+        self.choice = dict(DEFAULT_CHOICE)
+        self.history = []
         self.changed = 0.0
         self.source = "default"
         threading.Thread(target=self._loop, daemon=True).start()
@@ -222,46 +295,50 @@ class VJ:
             w.writeframes(pcm)
         return base64.b64encode(b.getvalue()).decode()
 
+    def _context(self):
+        lt = time.localtime()
+        h = lt.tm_hour
+        part = ("night" if h < 6 or h >= 22 else "morning" if h < 11 else
+                "afternoon" if h < 17 else "evening")
+        f = self.l.f
+        hist = "; ".join(f"\"{s['scene']}\" ({s['style']}"
+                         + (f" + {s['layer']}" if s["layer"] != "none" else "")
+                         + f", {s['palette']})" for s in self.history[-4:]) or "none yet"
+        return (f"Here is a {AI_CLIP:.0f}-second clip of what is playing in the hallway now. "
+                f"Local time {lt.tm_hour:02d}:{lt.tm_min:02d} ({part}). Measured energy "
+                f"{f['energy']:.2f}, tempo roughly {f['bpm_hint']:.0f} bpm. Your recent scenes: "
+                f"{hist}. Design the next scene. Reply with the JSON only.")
+
     def _ask_ai(self, clip):
         try:
             from dotenv import load_dotenv
-            load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                     ".env"))
+            load_dotenv(os.path.join(_HERE, ".env"))
             from openai import OpenAI
-            client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=30)
+            client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=40)
         except Exception as e:
             print(f"[VJ] no AI client: {e}")
             return None
         b64 = self._wav_b64(clip)
+        vibe = self.vibe()
+        system = AI_PROMPT.replace("chill and tranquil",
+                                   VIBES[vibe][0] if vibe in VIBES
+                                   else "chill and tranquil by default (you pick the vibe)")
         for model in AI_MODELS:
             try:
                 r = client.chat.completions.create(
-                    model=model, modalities=["text"], max_tokens=200,
-                    messages=[
-                        {"role": "system",
-                         "content": AI_PROMPT.replace(
-                             "chill and tranquil",
-                             VIBES[self.vibe()][0] if self.vibe() in VIBES
-                             else "chill and tranquil by default (pick the vibe yourself)")},
-                        {"role": "user", "content": [
-                            {"type": "text", "text": "Here is an 8-second clip of what is playing "
-                                                     "in the hallway right now. Reply with the "
-                                                     "JSON only."},
-                            {"type": "input_audio",
-                             "input_audio": {"data": b64, "format": "wav"}}]}])
+                    model=model, modalities=["text"], max_tokens=350,
+                    messages=[{"role": "system", "content": system},
+                              {"role": "user", "content": [
+                                  {"type": "text", "text": self._context()},
+                                  {"type": "input_audio",
+                                   "input_audio": {"data": b64, "format": "wav"}}]}])
                 txt = r.choices[0].message.content or ""
                 if "{" not in txt:
                     print(f"[VJ] {model} replied without JSON: {txt[:160]!r}", flush=True)
                     continue
-                j = json.loads(txt[txt.index("{"): txt.rindex("}") + 1])
-                if j.get("style") in STYLES and j.get("palette") in PALETTES:
+                j = _validate(json.loads(txt[txt.index("{"): txt.rindex("}") + 1]))
+                if j:
                     j["model"] = model
-                    clamp = lambda v, lo, hi, d: max(lo, min(hi, float(v))) if isinstance(v, (int, float)) else d
-                    j["speed"] = clamp(j.get("speed"), 0.5, 1.5, 1.0)
-                    j["scale"] = clamp(j.get("scale"), 0.7, 1.4, 1.0)
-                    j["count"] = clamp(j.get("count"), 3, 8, 6)
-                    if j.get("vibe") not in VIBES:
-                        j["vibe"] = "chill"
                     return j
             except Exception as e:
                 print(f"[VJ] {model}: {str(e)[:120]}")
@@ -269,18 +346,14 @@ class VJ:
 
     def _fallback(self):
         f = self.l.f
-        e, bpm = f["energy"], f["bpm_hint"]
-        if e < 0.25:
-            style, pal = random.choice([("lava", "dusk"), ("coral", "ocean"), ("ink", "moon")])
-        elif bpm > 110 or e > 0.6:
-            style, pal = random.choice([("ripples", "ember"), ("aurora", "blush"), ("lava", "gold")])
-        else:
-            style, pal = random.choice([("aurora", "forest"), ("ink", "ocean"), ("coral", "blush")])
-        return {"style": style, "palette": pal, "caption": "", "mood": "", "genre": "",
-                "vibe": "chill", "speed": 1.0, "scale": 1.0, "count": 6}
+        e = f["energy"]
+        style, pal = random.choice([("glow", "dusk"), ("aurora", "ocean"), ("lava", "ember")]
+                                   if e < 0.5 else
+                                   [("glow", "blush"), ("aurora", "forest"), ("ripples", "gold")])
+        return _validate({"scene": "", "style": style, "palette": pal, "layer": "none"})
 
     def _loop(self):
-        time.sleep(10)
+        time.sleep(8)
         while True:
             clip = self.l.recent(AI_CLIP)
             level = float(np.sqrt(np.mean(clip * clip)))
@@ -289,18 +362,24 @@ class VJ:
                 j = self._ask_ai(clip * min(8.0, 0.25 / max(level, 1e-4)))
                 if j:
                     self.source = j.get("model", "ai")
-                    print(f"[VJ] {j.get('genre')} / {j.get('mood')} / energy {j.get('energy')} "
-                          f"-> {j['style']} + {j['palette']}, {j['vibe']}, speed {j['speed']:.2f}, "
-                          f"size {j['scale']:.2f}, {int(j['count'])} shapes", flush=True)
+                    print(f"[VJ] \"{j['scene']}\" - {j.get('genre')} / {j.get('mood')}: "
+                          f"{j['style']}" + (f" + {j['layer']} {j['layer_opacity']:.0%}"
+                                             if j["layer"] != "none" else "")
+                          + f", {j['palette_desc']}, {j['vibe']}, speed {j['speed']:.2f}, size "
+                          f"{j['scale']:.2f}, {int(j['count'])} shapes, soft {j['softness']:.2f}",
+                          flush=True)
+                    self.history = (self.history + [{"scene": j["scene"], "style": j["style"],
+                                                     "layer": j["layer"],
+                                                     "palette": j["palette_desc"]}])[-6:]
                 else:
                     j = self._fallback()
                     self.source = "fallback"
-                    print(f"[VJ] fallback -> {j['style']} + {j['palette']}", flush=True)
-                if (j["style"], j["palette"]) != (self.choice["style"], self.choice["palette"]):
+                    print(f"[VJ] fallback -> {j['style']} + {j['palkey']}", flush=True)
+                if _scene_key(j) != _scene_key(self.choice):
                     self.choice, self.changed = j, time.time()
                 else:
-                    self.choice.update({k: j[k] for k in ("caption", "mood", "genre", "vibe", "speed",
-                                                          "scale", "count") if k in j})
+                    self.choice.update({k: v for k, v in j.items()
+                                        if k not in ("style", "palkey", "layer")})
             time.sleep(AI_EVERY)
 
 
@@ -319,9 +398,10 @@ class Visuals:
         self.ripples = []
 
     def step(self, f, dt):
-        speed = ((0.35 + 0.6 * f["energy"] + 0.3 * f["kick"]) * f.get("vibe_speed", 1.0)
-                 * f.get("d_speed", 1.0))
-        self.phase += dt * speed
+        # drift speed follows the music only slowly - no speeding up on every bass note
+        target = (0.35 + 0.6 * f["energy"]) * f.get("vibe_speed", 1.0) * f.get("d_speed", 1.0)
+        self.speed = _ema(getattr(self, "speed", target), target, dt, 3.0)
+        self.phase += dt * self.speed
         if f["beat"] and (not self.ripples or time.time() - self.ripples[-1][2] > 1.2):
             rs = random.random
             self.ripples.append([rs() * self.W, rs() * self.H * 0.9, time.time()])
@@ -383,7 +463,7 @@ class Visuals:
         for k in range(3):
             band = (H * (0.3 + 0.15 * k) + np.sin(self.x / (24 - 4 * k) + p * (0.8 + k * 0.3)) *
                     (8 + 10 * f["kick"]) + np.sin(self.x / 9 - p * 1.3 + k) * 3)
-            width = 110 + 120 * f["mid"]
+            width = (110 + 120 * f["mid"]) * f.get("d_soft", 1.0) ** 2
             out += np.exp(-((self.y - band) ** 2) / width) * (0.35 + 0.35 * f["energy"] + 0.3 * f["kick"]) * \
                 (0.6 + 0.4 * np.sin(self.x / 14 + p * 2 + k))
         rs = np.random.default_rng(int(p * 4))
@@ -406,7 +486,7 @@ class Visuals:
             s = 0.05 + i * 0.012
             cx = W * (0.5 + 0.42 * math.sin(p * s * 2.2 + i * 2.1))
             cy = H * (0.5 + 0.42 * math.sin(p * s * 1.7 + i * 1.3))
-            sig = (26 + 10 * math.sin(p * 0.2 + i * 1.7)) * breathe
+            sig = (26 + 10 * math.sin(p * 0.2 + i * 1.7)) * breathe * f.get("d_soft", 1.0)
             g = np.exp(-((self.x - cx) ** 2 + (self.y - cy) ** 2) / (2 * sig * sig))
             col = lut[int(150 + 100 * ((i * 0.37) % 1))]
             out += g[..., None] * col * (0.55 + 0.25 * math.sin(p * 0.5 + i)) * w
@@ -442,8 +522,8 @@ class Visuals:
 # ---------------------------------------------------------------- show ---
 
 class MusicShow:
-    XFADE = 15.0       # slow fade between patterns
-    HOLD = 180.0       # a pattern stays at least this long
+    XFADE = 15.0       # slow fade between scenes
+    HOLD = 180.0       # a scene stays at least this long
 
     def __init__(self):
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
@@ -456,11 +536,22 @@ class MusicShow:
         self.vis = Visuals(W, H)
         self.luts = {k: _palette(v) for k, v in PALETTES.items()}
         self.prev = None
-        self.cur = ("glow", "dusk")
+        self.cur = ("glow", "dusk", "none")
         self.switched = 0.0
         self.last_t = None
         self.silent_since = None
         self.pulse = 0.0
+        self.layer_op = 0.0
+        self.design = {"d_speed": 1.0, "d_scale": 1.0, "d_count": 6.0, "d_soft": 1.0}
+
+    def _lut(self, key):
+        if key not in self.luts:
+            try:
+                cols = [_hex_rgb(h) for h in key.split(":", 1)[1].split(",")]
+                self.luts[key] = _palette(cols)
+            except Exception:
+                return self.luts["dusk"]
+        return self.luts[key]
 
     def _poll_settings(self):
         now = time.time()
@@ -472,34 +563,47 @@ class MusicShow:
         except OSError:
             m = None
         if m != self.settings_mtime:
-            first = self.settings_mtime is None and m is not None and self.last_t is None
             self.settings_mtime = m
             self.settings = load_settings()
-            if not first:
-                self.force = True                          # the app changed something: go now
+            self.force = True                              # the app changed something: go now
 
     def _target(self):
         f = self.l.f
         now = time.time()
-        st = self.settings
-        style = st["style"] if st["style"] != "auto" else self.vj.choice["style"]
-        pal = st["palette"] if st["palette"] != "auto" else self.vj.choice["palette"]
+        st, c = self.settings, self.vj.choice
+        auto_style = st["style"] == "auto"
+        style = c["style"] if auto_style else st["style"]
+        pal = c["palkey"] if st["palette"] == "auto" else st["palette"]
+        layer = c["layer"] if auto_style else "none"
         if f["silent"]:
             self.silent_since = self.silent_since or now
             if now - self.silent_since > 30:               # quiet room: soft dusk glow
-                return (style if st["style"] != "auto" else "glow",
-                        pal if st["palette"] != "auto" else "dusk")
+                return ("glow" if auto_style else style,
+                        "dusk" if st["palette"] == "auto" else pal, "none")
         else:
             self.silent_since = None
-        return (style, pal)
+        return (style, pal, layer)
 
     def _publish(self):
         c = self.vj.choice
-        _write_json(NOW_FILE, {"style": self.cur[0], "palette": self.cur[1],
-                               "vibe": c.get("vibe", ""), "design": getattr(self, "design", {}),
+        lut = self._lut(self.cur[1])
+        swatch = ["#%02x%02x%02x" % tuple(int(v) for v in lut[i]) for i in (20, 100, 180, 250)]
+        _write_json(NOW_FILE, {"scene": c.get("scene", ""), "style": self.cur[0],
+                               "layer": self.cur[2], "palette": self.cur[1].split(":")[0],
+                               "colors": swatch, "vibe": c.get("vibe", ""),
+                               "design": self.design, "layer_opacity": round(self.layer_op, 2),
                                "genre": c.get("genre", ""), "mood": c.get("mood", ""),
                                "source": self.vj.source, "settings": self.settings,
                                "silent": self.l.f["silent"], "time": time.time()})
+
+    def _render(self, key, f, dt, beat, op):
+        style, palkey, layer = key
+        lut = self._lut(palkey)
+        img = self.vis.render(style, f, lut, dt, beat)
+        if layer != "none" and op > 0.01:                  # second layer, screen-blended
+            top = self.vis.render(layer, f, lut, dt, False) * op
+            img = 255.0 - (255.0 - img) * (255.0 - top) / 255.0
+        return img
 
     def __call__(self, t):
         dt = 0.033 if self.last_t is None else max(0.0, min(0.2, t - self.last_t))
@@ -507,17 +611,21 @@ class MusicShow:
         f = dict(self.l.f)
         beat = f["beat"]
         self.l.f["beat"] = False
+        # visuals breathe with a ~0.6 s average of the bass, so nothing twitches
+        self.ks = _ema(getattr(self, "ks", 0.0), f["kick"], dt, 0.6)
+        f["kick"] = self.ks
         self._poll_settings()
         c = self.vj.choice
         vibe = self.settings["vibe"] if self.settings["vibe"] != "auto" else c.get("vibe", "chill")
         f["vibe_speed"] = VIBES.get(vibe, VIBES["chill"])[1]
         auto = self.settings["style"] == "auto"
-        self.design = getattr(self, "design", {"d_speed": 1.0, "d_scale": 1.0, "d_count": 6.0})
-        for key, src in (("d_speed", "speed"), ("d_scale", "scale"), ("d_count", "count")):
-            tgt_v = float(c.get(src, 1.0 if src != "count" else 6)) if auto else \
-                (6.0 if src == "count" else 1.0)
+        for key, src, dflt in (("d_speed", "speed", 1.0), ("d_scale", "scale", 1.0),
+                               ("d_count", "count", 6.0), ("d_soft", "softness", 1.0)):
+            tgt_v = float(c.get(src, dflt)) if auto else dflt
             self.design[key] = _ema(self.design[key], tgt_v, dt, 5.0)   # redesigns blend in slowly
             f[key] = self.design[key]
+        self.layer_op = _ema(self.layer_op, float(c.get("layer_opacity", 0.0)) if auto else 0.0,
+                             dt, 5.0)
         self.vis.step(f, dt)
         tgt = self._target()
         held = time.time() - self.switched
@@ -528,18 +636,14 @@ class MusicShow:
         if time.time() - getattr(self, "_published", 0) > 3:
             self._published = time.time()
             self._publish()
-        img = self.vis.render(self.cur[0], f, self.luts[self.cur[1]], dt, beat)
+        img = self._render(self.cur, f, dt, beat, self.layer_op)
         k = (time.time() - self.switched) / self.xfade
         if self.prev and k < 1:
-            old = self.vis.render(self.prev[0], f, self.luts[self.prev[1]], dt, False)
+            old = self._render(self.prev, f, dt, False, self.layer_op)
             k = k * k * (3 - 2 * k)
             img = old * (1 - k) + img * k
-        # soft brightness swell on every beat, fading within ~0.25 s
-        self.pulse = 1.0 if beat else self.pulse * math.exp(-dt / 0.22)
-        img = img * (0.9 + 0.15 * f["kick"])                     # gently rides the bass
-        out = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
-        # no text on the wall: the AI picks patterns silently
-        return out
+        img = img * (0.93 + 0.1 * f["kick"])                     # gently rides the (smoothed) bass
+        return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
 
 
 _show = None

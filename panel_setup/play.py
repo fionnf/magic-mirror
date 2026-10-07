@@ -70,8 +70,10 @@ def main():
             t = time.monotonic() - t0
             if a.seconds and t > a.seconds:
                 break
-            matrix.draw(frame_fn(t))
-            time.sleep(max(0.0, interval - (time.monotonic() - t0 - t)))
+            # each frame held for exactly 2 refreshes (58 Hz -> 29 fps), paced by the
+            # panels' own vsync instead of a sleep timer that drifts against it
+            if not matrix.draw(frame_fn(t), frame_fraction=2):
+                time.sleep(interval)                    # unchanged frame: nothing to pace
     except KeyboardInterrupt:
         pass
     matrix.clear()

@@ -7,6 +7,11 @@ gcp-credentials.json
 oauth_client.json
 usage.log
 tests/sim_receipts/
+.idea/
+.vscode/
+.DS_Store
+venv/
+.venv/
 panel_setup/monitor.csv
 # personal / generated — never publish (public repo)
 photos/

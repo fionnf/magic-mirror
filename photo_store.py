@@ -1,10 +1,12 @@
 """Local photo storage — receipts and booth strips saved to disk.
 
 Photos are stored in PHOTOS_DIR as:
-  receipt_YYYYMMDD_HHMMSS.jpg   — raw camera frame
-  receipt_YYYYMMDD_HHMMSS.json  — {type, text, ts}
-  strip_YYYYMMDD_HHMMSS.jpg     — composed booth strip
-  strip_YYYYMMDD_HHMMSS.json    — {type, prompts, ts}
+  receipt_YYYYMMDD_HHMMSS_ffffff.jpg   — raw camera frame
+  receipt_YYYYMMDD_HHMMSS_ffffff.json  — {type, text, ts}
+  strip_YYYYMMDD_HHMMSS_ffffff.jpg     — composed booth strip
+  strip_YYYYMMDD_HHMMSS_ffffff.json    — {type, prompts, ts}
+
+(ffffff = microseconds for uniqueness)
 """
 import datetime
 import io
@@ -28,7 +30,7 @@ def save_receipt(frame: np.ndarray, text: str) -> str:
     """Save a single-trigger capture. Returns the base filename stem."""
     d   = _dir()
     ts  = datetime.datetime.now()
-    stem = ts.strftime("receipt_%Y%m%d_%H%M%S")
+    stem = ts.strftime("receipt_%Y%m%d_%H%M%S_%f")
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     img = Image.fromarray(rgb)
     img.thumbnail((1024, 1024))
@@ -44,7 +46,7 @@ def save_strip(strip_image: Image.Image, frames: List[np.ndarray],
     """Save a photobooth strip. Returns the base filename stem."""
     d    = _dir()
     ts   = datetime.datetime.now()
-    stem = ts.strftime("strip_%Y%m%d_%H%M%S")
+    stem = ts.strftime("strip_%Y%m%d_%H%M%S_%f")
     strip_image.save(os.path.join(d, f"{stem}.jpg"), format="JPEG", quality=90)
     # save representative frame for reprinting
     if frames:

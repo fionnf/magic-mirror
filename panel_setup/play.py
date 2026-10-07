@@ -23,7 +23,8 @@ import config
 
 
 def _anims():
-    from display import welcome, pride_show, cards, maeva_story, dewa_story, art, departures
+    from display import (welcome, pride_show, cards, maeva_story, dewa_story, art,
+                         departures)
     return {
         "trams":   (departures.frame, 60.0),
         "ambient": (departures.ambient_frame, 600.0),

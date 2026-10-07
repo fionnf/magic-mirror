@@ -34,7 +34,7 @@ GPIO_SLOWDOWN = 6   # measured with a webcam: 3 streaky, 4 better, 5 good, 6 cle
                     # 8 = ~57 Hz banding returns. 6-bit at slowdown 6 = ~77 Hz but colour banding.
 MATRIX_PANEL_TYPE = "FM6126A"
 # Long chain => low refresh rate. These are the main tuning knobs:
-MATRIX_BRIGHTNESS = 40         # 0-100. Keep low until PSU capacity is known.
+MATRIX_BRIGHTNESS = int(__import__("os").environ.get("WALL_BRIGHTNESS", 40))  # 0-100; the web panel sets WALL_BRIGHTNESS
 # Power budget. PSU is 40 A @ 5 V; keep headroom for the Pi and wiring losses.
 # The driver estimates current per frame from pixel values x brightness and
 # scales the frame down if it would exceed MATRIX_MAX_AMPS.

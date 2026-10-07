@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>House Fortuna · Wall</title>
+<style>
+  :root {
+    --bg: #0f0a17; --panel: #1a1226; --panel2: #231833; --line: #34264a;
+    --text: #f3ecfb; --muted: #a596bd; --gold: #ffd75a; --pink: #ff8fc8; --ok: #49d17d; --bad: #ff5d6c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 18px 16px 6px; }
+  h1 { margin: 0; font-size: 22px; letter-spacing: .5px; }
+  h1 span { background: linear-gradient(90deg,#e40303,#ff8c00,#ffed00,#008026,#24408e,#732982);
+            -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--muted); font-size: 13px; }
+  main { padding: 0 16px 40px; max-width: 860px; margin: 0 auto; }
+  section { margin-top: 22px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0 0 10px; }
+  .now { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px;
+         display: grid; grid-template-columns: 72px 1fr auto; gap: 12px; align-items: center; }
+  .now img { width: 72px; height: 72px; border-radius: 10px; image-rendering: pixelated; background:#000; }
+  .now .title { font-weight: 700; font-size: 17px; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background: var(--ok); margin-right:6px; }
+  .dot.off { background: var(--muted); } .dot.err { background: var(--bad); }
+  .err { color: var(--bad); font-size: 12px; margin-top: 4px; word-break: break-word; }
+  button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+           border-radius: 12px; padding: 10px 14px; cursor: pointer; }
+  button.primary { background: linear-gradient(135deg,#ff5fa2,#8a5cff); border: 0; font-weight: 700; }
+  button.gold { background: var(--gold); color: #241600; border: 0; font-weight: 700; }
+  button:active { transform: scale(.98); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .slider { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; margin-top: 10px; }
+  input[type=range] { width: 100%; accent-color: var(--pink); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+          cursor: pointer; transition: border-color .15s, transform .15s; position: relative; }
+  .card:hover { border-color: var(--pink); }
+  .card.active { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold) inset; }
+  .card img { width: 100%; aspect-ratio: 1; display: block; image-rendering: pixelated; background: #000; }
+  .card .t { padding: 8px 10px 2px; font-weight: 700; }
+  .card .d { padding: 0 10px 10px; color: var(--muted); font-size: 12px; }
+  .card .pick { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; accent-color: var(--gold); display: none; }
+  body.picking .card .pick { display: block; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+  .box p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+  select, input[type=text], input[type=number] { font: inherit; color: var(--text); background: var(--panel2);
+          border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; }
+  input[type=text] { flex: 1; min-width: 180px; }
+  .big { font-size: 22px; padding: 18px; width: 100%; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #000c;
+           padding: 10px 16px; border-radius: 12px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 560px) { .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>HOUSE FORTUNA</span> · wall</h1>
+  <div class="sub">Fortunagasse — pick what the mirror wall shows</div>
+</header>
+<main>
+  <section>
+    <h2>Now playing</h2>
+    <div class="now">
+      <img id="nowImg" alt="">
+      <div>
+        <div class="title" id="nowTitle">…</div>
+        <div class="sub" id="nowSub"></div>
+        <div class="err" id="nowErr"></div>
+      </div>
+      <button onclick="post('/api/off').then(refresh)">Off</button>
+    </div>
+    <div class="slider">
+      <div class="row" style="justify-content:space-between"><span>Brightness</span><b id="bVal">40%</b></div>
+      <input type="range" id="bright" min="5" max="100" step="5">
+    </div>
+  </section>
+
+  <section>
+    <h2>Interactive</h2>
+    <div class="two">
+      <div class="box">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <b>🎡 Wheel of Fortuna</b>
+          <label class="sub"><input type="checkbox" id="wheelPrint" checked> print verdict</label>
+        </div>
+        <p>The AI writes 8 fates for Fionn &amp; Dewa, the wheel decides. Returns to the current show afterwards.</p>
+        <button class="gold big" onclick="spin()">Spin</button>
+      </div>
+      <div class="box">
+        <b>🪞 Mirror mode</b>
+        <p>Live silhouette, countdown, AI one-liner and a printed receipt.</p>
+        <div class="row" style="margin-bottom:8px">
+          <select id="cam">
+            <option value="stream">Laptop webcam stream</option>
+            <option value="static">Demo (no camera)</option>
+            <option value="pi">Pi camera</option>
+          </select>
+          <select id="auto">
+            <option value="0">trigger by hand</option>
+            <option value="20">auto every 20 s</option>
+            <option value="60">auto every 60 s</option>
+          </select>
+        </div>
+        <div class="row" style="margin-bottom:8px"><input type="text" id="camUrl" placeholder="stream URL"></div>
+        <div class="row">
+          <button class="primary" onclick="startMirror()">Start mirror</button>
+          <button id="photoBtn" onclick="photo()">📸 Take photo</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="library"></div>
+
+  <section>
+    <h2>Playlist</h2>
+    <div class="box">
+      <p>Rotate through several shows. Tap “Choose”, tick the cards above, then start.</p>
+      <div class="row">
+        <button onclick="togglePick()" id="pickBtn">Choose</button>
+        <select id="mins">
+          <option value="2">every 2 min</option><option value="5" selected>every 5 min</option>
+          <option value="10">every 10 min</option><option value="30">every 30 min</option>
+        </select>
+        <button class="primary" onclick="startPlaylist()">Start playlist</button>
+      </div>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+<script>
+let MODES = [], STATUS = {};
+const $ = id => document.getElementById(id);
+const toast = (m) => { const t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2200); };
+async function post(url, body) {
+  const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function titleOf(id) {
+  if (id === 'mirror') return 'Mirror mode'; if (id === 'wheel') return 'Wheel of Fortuna';
+  if (id === 'off' || !id) return 'Off';
+  const m = MODES.find(m => m.id === id); return m ? m.title : id;
+}
+function render() {
+  const cats = {};
+  MODES.forEach(m => (cats[m.cat] = cats[m.cat] || []).push(m));
+  $('library').innerHTML = Object.entries(cats).map(([cat, ms]) => `
+    <section><h2>${cat}</h2><div class="grid">${ms.map(m => `
+      <div class="card" data-id="${m.id}" onclick="cardClick(event,'${m.id}')">
+        <input type="checkbox" class="pick" value="${m.id}" onclick="event.stopPropagation()">
+        <img src="/thumbs/${m.id}.png" onerror="this.style.visibility='hidden'" alt="">
+        <div class="t">${m.title}</div><div class="d">${m.desc}</div>
+      </div>`).join('')}</div></section>`).join('');
+}
+function cardClick(e, id) {
+  if (document.body.classList.contains('picking')) {
+    const cb = e.currentTarget.querySelector('.pick'); cb.checked = !cb.checked; return;
+  }
+  post('/api/play', {mode: id}).then(s => { toast('▶ ' + titleOf(id)); show(s); }).catch(e => toast(e.message));
+}
+function show(s) {
+  STATUS = s;
+  const cur = s.current || 'off';
+  $('nowTitle').textContent = titleOf(cur) + (s.saved === 'playlist' && !['mirror','wheel'].includes(cur) ? '  ·  playlist' : '');
+  $('nowImg').src = cur === 'off' ? '' : `/thumbs/${cur}.png`;
+  const mins = Math.round((Date.now()/1000 - s.since) / 60);
+  $('nowSub').innerHTML = `<span class="dot ${cur === 'off' ? 'off' : (s.running ? '' : 'err')}"></span>` +
+     (cur === 'off' ? 'wall is off' : `running for ${mins} min`);
+  $('nowErr').textContent = s.error || '';
+  if (document.activeElement !== $('bright')) { $('bright').value = s.brightness; $('bVal').textContent = s.brightness + '%'; }
+  document.querySelectorAll('.card').forEach(c => c.classList.toggle('active', c.dataset.id === cur));
+  $('photoBtn').disabled = cur !== 'mirror';
+  if (!$('camUrl').value) $('camUrl').value = s.camera_url || '';
+  if (!show.init) { $('cam').value = s.camera || 'stream'; $('auto').value = String(s.mirror_auto || 0);
+                    $('wheelPrint').checked = s.wheel_print !== false; show.init = true; }
+}
+async function refresh() { try { show(await (await fetch('/api/status')).json()); } catch (e) {} }
+let bTimer;
+$('bright').addEventListener('input', e => {
+  $('bVal').textContent = e.target.value + '%';
+  clearTimeout(bTimer);
+  bTimer = setTimeout(() => post('/api/brightness', {value: +e.target.value}).then(show), 400);
+});
+function spin() { post('/api/wheel', {print: $('wheelPrint').checked}).then(s => { toast('🎡 Spinning!'); show(s); }).catch(e => toast(e.message)); }
+function startMirror() {
+  post('/api/mirror', {camera: $('cam').value, camera_url: $('camUrl').value, auto: +$('auto').value})
+    .then(s => { toast('🪞 Mirror starting… step out of view for 5 s'); show(s); }).catch(e => toast(e.message));
+}
+function photo() { post('/api/mirror/photo').then(() => toast('📸 3… 2… 1…')).catch(e => toast(e.message)); }
+function togglePick() {
+  document.body.classList.toggle('picking');
+  $('pickBtn').textContent = document.body.classList.contains('picking') ? 'Done choosing' : 'Choose';
+}
+function startPlaylist() {
+  const ids = [...document.querySelectorAll('.pick:checked')].map(c => c.value);
+  if (!ids.length) { toast('Tick at least one show first'); if (!document.body.classList.contains('picking')) togglePick(); return; }
+  post('/api/playlist', {ids, minutes: +$('mins').value}).then(s => {
+    toast(`▶ Playlist: ${ids.length} shows`); show(s);
+    if (document.body.classList.contains('picking')) togglePick();
+  }).catch(e => toast(e.message));
+}
+(async () => {
+  MODES = await (await fetch('/api/modes')).json();
+  render(); refresh(); setInterval(refresh, 3000);
+})();
+</script>
+</body>
+</html>

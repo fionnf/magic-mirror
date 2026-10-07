@@ -269,10 +269,8 @@ class Visuals:
         self.ripples = []
 
     def step(self, f, dt):
-        # drift speed follows the music only slowly - no speeding up on every bass note
-        target = 0.35 + 0.6 * f["energy"]
-        self.speed = _ema(getattr(self, "speed", target), target, dt, 3.0)
-        self.phase += dt * self.speed
+        speed = 0.35 + 0.6 * f["energy"] + 0.3 * f["kick"]
+        self.phase += dt * speed
         if f["beat"] and (not self.ripples or time.time() - self.ripples[-1][2] > 1.2):
             rs = random.random
             self.ripples.append([rs() * self.W, rs() * self.H * 0.9, time.time()])
@@ -281,7 +279,7 @@ class Visuals:
     def lava(self, f, lut):
         p, W, H = self.phase, self.W, self.H
         fld = np.zeros((H, W), np.float32)
-        swell = 1 + 0.25 * f["kick"]
+        swell = 1 + 0.45 * f["kick"]
         for i in range(6):
             s = 0.11 + i * 0.025
             cx = W * (0.5 + 0.33 * math.sin(p * s * 3 + i * 1.7))
@@ -305,7 +303,7 @@ class Visuals:
             c.B += 0.1 * Coral._lap(c.B) + AB2 - (k + F) * c.B
             np.clip(c.A, 0, 1, out=c.A)
             np.clip(c.B, 0, 1, out=c.B)
-        img = _lut(np.clip(c.B * 2.6, 0, 1), lut)
+        img = _lut(np.clip(c.B * 2.6, 0, 1), lut) * (0.85 + 0.3 * f["kick"])  # breathes with bass
         return np.repeat(np.repeat(img, c.s, 0), c.s, 1)[:self.H, :self.W]
 
     def ink(self, f, lut, dt):
@@ -321,7 +319,7 @@ class Visuals:
         self.ink_p[:, 1] = (y + vy / n * step) % H
         self.ink_acc *= 0.985 ** (dt * 25)
         np.add.at(self.ink_acc, (self.ink_p[:, 1].astype(int), self.ink_p[:, 0].astype(int)),
-                  0.2)
+                  0.12 + 0.35 * f["treble"] + 0.3 * f["kick"])
         return _lut(1 - np.exp(-self.ink_acc * 1.2), lut)
 
     def aurora(self, f, lut):
@@ -331,7 +329,7 @@ class Visuals:
             band = (H * (0.3 + 0.15 * k) + np.sin(self.x / (24 - 4 * k) + p * (0.8 + k * 0.3)) *
                     (8 + 10 * f["kick"]) + np.sin(self.x / 9 - p * 1.3 + k) * 3)
             width = 110 + 120 * f["mid"]
-            out += np.exp(-((self.y - band) ** 2) / width) * 0.6 * \
+            out += np.exp(-((self.y - band) ** 2) / width) * (0.35 + 0.35 * f["energy"] + 0.3 * f["kick"]) * \
                 (0.6 + 0.4 * np.sin(self.x / 14 + p * 2 + k))
         rs = np.random.default_rng(int(p * 4))
         stars = rs.random((H, W)) > 0.997
@@ -344,7 +342,7 @@ class Visuals:
         if not hasattr(self, "_glow_pal"):
             self._glow_pal = None
         out = np.zeros((H, W, 3), np.float32)
-        breathe = 1 + 0.18 * f["kick"]
+        breathe = 1 + 0.35 * f["kick"]
         for i in range(6):
             s = 0.05 + i * 0.012
             cx = W * (0.5 + 0.42 * math.sin(p * s * 2.2 + i * 2.1))
@@ -419,14 +417,6 @@ class MusicShow:
         f = dict(self.l.f)
         beat = f["beat"]
         self.l.f["beat"] = False
-        # second, gentler smoothing for the visuals: the light breathes, never twitches
-        self.ks = _ema(getattr(self, "ks", 0.0), f["kick"], dt, 1.2)     # ~1 s average
-        f["kick"] = self.ks
-        f["bass"] = self.ks
-        f["mid"] = _ema(getattr(self, "ms", 0.0), f["mid"], dt, 1.5)
-        self.ms = f["mid"]
-        f["treble"] = _ema(getattr(self, "ts", 0.0), f["treble"], dt, 1.5)
-        self.ts = f["treble"]
         self.vis.step(f, dt)
         tgt = self._target()
         held = time.time() - self.switched
@@ -440,7 +430,7 @@ class MusicShow:
             img = old * (1 - k) + img * k
         # soft brightness swell on every beat, fading within ~0.25 s
         self.pulse = 1.0 if beat else self.pulse * math.exp(-dt / 0.22)
-        # brightness never follows the music (that reads as flicker on a light wall)
+        img = img * (0.9 + 0.15 * f["kick"])                     # gently rides the bass
         out = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
         cap = self.vj.choice.get("caption") or ""
         age = time.time() - self.vj.changed

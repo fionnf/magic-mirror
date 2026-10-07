@@ -45,7 +45,7 @@ MODES = [
 MODE_IDS = {m[0] for m in MODES}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",
-                 "mirror_auto": 0, "mode_brightness": {"music": 100}}
+                 "mirror_auto": 0}
 
 
 # ------------------------------------------------------------------ state ---
@@ -122,16 +122,12 @@ class Runner:
         cmd = self._cmd(what)
         if cmd is None:                                 # "off"
             return
-        env = dict(os.environ, WALL_BRIGHTNESS=str(self._brightness_for(what)),
+        env = dict(os.environ, WALL_BRIGHTNESS=str(int(self.state.get("brightness", 40))),
                    PYTHONUNBUFFERED="1")
         log = open(os.path.join(LOG_DIR, f"{what}.log"), "ab")
         log.write(f"\n==== {time.ctime()} {' '.join(cmd)}\n".encode())
         self.proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
                                      stdin=subprocess.DEVNULL, start_new_session=True)
-
-    def _brightness_for(self, what):
-        per = self.state.get("mode_brightness") or {}
-        return int(per.get(what, self.state.get("brightness", 40)))
 
     # -- public API
     def play(self, what, remember=True):
@@ -163,12 +159,7 @@ class Runner:
 
     def set_brightness(self, value):
         with self.lock:
-            value = max(5, min(100, int(value)))
-            per = self.state.setdefault("mode_brightness", {})
-            if self.current in per:                     # this mode has its own level
-                per[self.current] = value
-            else:
-                self.state["brightness"] = value
+            self.state["brightness"] = max(5, min(100, int(value)))
             save_state(self.state)
             if self.current not in (None, "off") and self.oneshot_resume is None:
                 self._start(self.current)               # brightness applies at start
@@ -188,7 +179,7 @@ class Runner:
             pl = self.state.get("playlist")
             return {"current": self.current, "saved": self.state.get("mode"),
                     "since": self.since, "running": alive or self.current == "off",
-                    "brightness": self._brightness_for(self.current), "playlist": pl,
+                    "brightness": self.state.get("brightness"), "playlist": pl,
                     "playlist_next": self.playlist_next if pl else None,
                     "camera": self.state.get("camera"), "camera_url": self.state.get("camera_url"),
                     "mirror_auto": self.state.get("mirror_auto", 0),

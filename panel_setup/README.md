@@ -100,3 +100,13 @@ Without `--auto`, trigger from the dashboard (`http://<pi-ip>:5000`) or
 `curl -X POST http://<pi-ip>:5000/api/trigger/short` (`/long` = photobooth).
 Drop `--mock-camera static` once the Pi camera is attached (`--mock-camera webcam`
 for a USB webcam). The LED strip and printer are optional and skipped if absent.
+
+## Autostart on boot
+```bash
+./panel_setup/install_autostart.sh            # lava & coral gallery at every boot
+./panel_setup/install_autostart.sh art        # or any play.py animation
+./panel_setup/install_autostart.sh --remove   # turn it off
+sudo systemctl stop wall-art                  # stop it for now (e.g. to run tests)
+```
+Installs `wall-art.service` (restarts on crash) and disables `magic-mirror.service`
+so only one program drives the panels. Stop it before running other panel tools.

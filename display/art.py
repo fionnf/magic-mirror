@@ -237,3 +237,157 @@ def frame(t):
     if _gallery is None:
         _gallery = Gallery()
     return _gallery(t)
+
+
+# ================================================== Lava & Coral gallery ===
+
+class LavaPlus:
+    """Metaball variations: style = glow | lamp | contour | chrome."""
+
+    def __init__(self, W, H, name, style, lut=None, n=6, speed=1.0):
+        self.W, self.H, self.name, self.style = W, H, name, style
+        self.lut, self.n, self.speed = lut, n, speed
+        self.x, self.y = _grid(W, H)
+
+    def reset(self):
+        pass
+
+    def _field(self, t):
+        W, H = self.W, self.H
+        f = np.zeros((H, W), np.float32)
+        ts = t * self.speed
+        for i in range(self.n):
+            if self.style == "lamp":                             # rise and sink in lanes
+                cx = W * (0.2 + 0.6 * ((i * 0.37) % 1)) + 6 * math.sin(ts * 0.3 + i)
+                cy = H * (0.5 + 0.42 * math.sin(ts * (0.06 + i * 0.011) + i * 2.1))
+                r = (13 + 4 * math.sin(ts * 0.2 + i * 1.3)) ** 2
+                sx, sy = 1.0, 0.8                                # slightly tall blobs
+            else:
+                s = 0.05 + i * 0.013
+                cx = W * (0.5 + 0.33 * math.sin(ts * s + i * 1.7))
+                cy = H * (0.5 + 0.38 * math.sin(ts * s * 0.8 + i * 2.9))
+                r = (14 + 5 * math.sin(ts * 0.1 + i)) ** 2
+                sx = sy = 1.0
+            f += r / (((self.x - cx) * sx) ** 2 + ((self.y - cy) * sy) ** 2 + 1.0)
+        if self.style == "lamp":                                 # hot puddle + cap
+            f += 260 / ((self.y - (H + 4)) ** 2 + 1.0) * (1 + 0.15 * math.sin(ts * 0.4))
+            f += 160 / ((self.y + 4) ** 2 + 1.0)
+        return f
+
+    def render(self, dt, t):
+        W, H = self.W, self.H
+        f = self._field(t)
+        if self.style == "lamp":                                 # distinct blobs in purple glass
+            v = np.clip((f - 1.0) / 1.4, 0, 1) ** 0.7
+            halo = np.clip((f - 0.55) / 0.45, 0, 1)[..., None] * 0.35
+            bg = _palette([(40, 10, 70), (95, 25, 120)])[
+                np.clip((self.y / H * 255).astype(int), 0, 255)]
+            blob = _lut(v, self.lut)
+            a = np.clip(v * 4, 0, 1)[..., None]
+            glow = np.array([255, 90, 40], np.float32)
+            return (bg * (1 - halo) + glow * halo) * (1 - a) + blob * a
+        if self.style == "glow":
+            v = np.clip((f - 0.35) / 1.6, 0, 1) ** 0.8
+            return _lut(v, self.lut)
+        if self.style == "contour":                              # neon topography
+            lv = np.log1p(f) * 5.0
+            line = np.clip(1 - np.abs(lv - np.round(lv)) / 0.12, 0, 1) ** 1.5
+            hue = (np.round(lv) * 0.09 + t * 0.01) % 1.0
+            col = np.stack([0.5 + 0.5 * np.sin(6.283 * hue),
+                            0.5 + 0.5 * np.sin(6.283 * (hue + 0.33)),
+                            0.5 + 0.5 * np.sin(6.283 * (hue + 0.66))], -1)
+            inside = np.clip((f - 1.0) / 2.0, 0, 1)[..., None] * 0.18
+            return (col * line[..., None] * 255 + col * inside * 255)
+        # chrome: normal from the field gradient, fake environment reflection
+        g = np.log1p(f)
+        gy, gx = np.gradient(g)
+        inside = np.clip((f - 1.0) * 3, 0, 1)
+        nz = 1.0 / np.sqrt(gx * gx * 60 + gy * gy * 60 + 1)
+        ny = gy * np.sqrt(60) * nz
+        env = 0.5 + 0.5 * np.tanh(-ny * 2.5)                      # sky above, floor below
+        spec = np.clip(nz * 0.6 - 0.6 * gx * np.sqrt(60) * nz - 0.5 * ny, 0, 1) ** 12
+        steel = (np.array([60, 70, 90], np.float32) * (1 - env[..., None])
+                 + np.array([210, 220, 240], np.float32) * env[..., None])
+        img = steel + 255 * spec[..., None]
+        bg = np.array([8, 10, 18], np.float32)
+        return bg + (img - bg) * inside[..., None]
+
+
+class CoralPlus:
+    """Gray-Scott variations: params, palette, seeding and optional relief light."""
+
+    def __init__(self, W, H, name, F, k, lut, seed="random", relief=False, scale=2,
+                 steps_per_sec=110):
+        self.W, self.H, self.name = W, H, name
+        self.F, self.k, self.lut, self.seed = F, k, lut, seed
+        self.relief, self.s, self.sps = relief, scale, steps_per_sec
+        self.reset()
+
+    def reset(self):
+        h, w = self.H // self.s, self.W // self.s
+        self.A = np.ones((h, w), np.float32)
+        self.B = np.zeros((h, w), np.float32)
+        rs = np.random.default_rng(abs(hash(self.name)) % 1000)
+        if self.seed == "centre":
+            cy, cx = h // 2, w // 2
+            self.B[cy - 4:cy + 4, cx - 4:cx + 4] = 1.0
+            self.B += (rs.random((h, w)) < 0.0015).astype(np.float32)   # a few spores
+        else:
+            for _ in range(10):
+                cy, cx = rs.integers(8, h - 8), rs.integers(8, w - 8)
+                self.B[cy - 3:cy + 3, cx - 3:cx + 3] = 1.0
+
+    def render(self, dt, t):
+        lap = Coral._lap
+        for _ in range(max(1, int(round(dt * self.sps)))):
+            AB2 = self.A * self.B * self.B
+            self.A += 0.2 * lap(self.A) - AB2 + self.F * (1 - self.A)
+            self.B += 0.1 * lap(self.B) + AB2 - (self.k + self.F) * self.B
+            np.clip(self.A, 0.0, 1.0, out=self.A)                # keep the sim bounded
+            np.clip(self.B, 0.0, 1.0, out=self.B)
+        v = np.clip(self.B * 2.6, 0, 1)
+        img = _lut(v, self.lut)
+        if self.relief:                                          # carved, lit from top-left
+            gy, gx = np.gradient(v)
+            nx, ny, nz = -gx * 6, -gy * 6, np.ones_like(v)
+            n = np.sqrt(nx * nx + ny * ny + nz * nz)
+            light = np.clip((-0.55 * nx - 0.6 * ny + 0.58 * nz) / n, 0, 1)
+            img = img * (0.35 + 0.95 * light[..., None])
+        return np.repeat(np.repeat(img, self.s, 0), self.s, 1)[:self.H, :self.W]
+
+
+class LavaCoralGallery(Gallery):
+    def __init__(self):
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        lava_lut = Lava.LUT
+        bio = _palette([(0, 5, 20), (0, 50, 90), (0, 160, 170), (120, 255, 200), (230, 255, 250)])
+        lamp = _palette([(40, 10, 70), (200, 30, 40), (255, 110, 30), (255, 200, 90)])
+        brain = _palette([(5, 20, 10), (20, 110, 60), (90, 200, 120), (220, 255, 200)])
+        pink = _palette([(15, 5, 20), (120, 20, 80), (255, 110, 170), (255, 230, 240)])
+        gold = _palette([(5, 3, 0), (90, 50, 0), (230, 170, 50), (255, 240, 180)])
+        bloom = _palette([(5, 10, 30), (40, 30, 110), (230, 90, 140), (255, 210, 160)])
+        self.pieces = [
+            LavaPlus(W, H, "Lava Lamp", "lamp", lamp, n=6, speed=1.0),
+            CoralPlus(W, H, "3D Brain Coral", 0.0545, 0.062, brain, relief=True),
+            LavaPlus(W, H, "Neon Topography", "contour", n=6, speed=0.8),
+            CoralPlus(W, H, "Bloom", 0.0545, 0.062, bloom, seed="centre", relief=True),
+            LavaPlus(W, H, "Mercury", "chrome", n=6, speed=0.9),
+            CoralPlus(W, H, "Mitosis", 0.0367, 0.0649, pink),
+            LavaPlus(W, H, "Bioluminescence", "glow", bio, n=7, speed=0.7),
+            CoralPlus(W, H, "Gold Labyrinth", 0.029, 0.057, gold, relief=True),
+            Lava(W, H),
+            Coral(W, H),
+        ]
+        self.last_t = None
+        self.current = -1
+
+
+LAVA_CORAL_LOOP_SEC = PIECE_SEC * 10
+_lc_gallery = None
+
+
+def frame_lava_coral(t):
+    global _lc_gallery
+    if _lc_gallery is None:
+        _lc_gallery = LavaCoralGallery()
+    return _lc_gallery(t)

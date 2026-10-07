@@ -21,3 +21,5 @@ tests/silhouette_test_output.jpg
 panel_setup/wall_state.json
 panel_setup/web/thumbs/
 panel_setup/logs/
+panel_setup/music_settings.json
+panel_setup/music_now.json

@@ -30,7 +30,8 @@ SCAN_RATE = 32  # most 64x64 panels are 1/32 scan — confirm from sticker
 #   hardware_mapping "regular", gpio_slowdown 3, panel_type FM6126A, pwm_bits 7
 # (FM6124 panels need the FM6126A init sequence, otherwise they stay dark/garbled.)
 HARDWARE_MAPPING = "regular"
-GPIO_SLOWDOWN = 6   # measured with a webcam: 3 streaky, 4 better, 5 good, 6 cleanest (~67 Hz at 7 bit),
+GPIO_SLOWDOWN = 7   # 7 = cleanest first panel (fewer data errors); refresh ~59.6 Hz max, locked at 58
+                    # history: 3 streaky, 4 better, 5 good, 6 clean (~67 Hz), 8 = ~57 Hz banding returns
                     # 8 = ~57 Hz banding returns. 6-bit at slowdown 6 = ~77 Hz but colour banding.
 MATRIX_PANEL_TYPE = "FM6126A"
 # Long chain => low refresh rate. These are the main tuning knobs:
@@ -45,7 +46,7 @@ MATRIX_AMPS_PER_PANEL = 4.0
 MATRIX_PWM_BITS = 7            # 1-11; fewer bits = much higher refresh
 MATRIX_PWM_DITHER_BITS = 0      # 0-2: smoother gradients at low pwm_bits, costs refresh
 MATRIX_PWM_LSB_NS = 130        # lower = faster refresh (try 100-300)
-MATRIX_REFRESH_LIMIT_HZ = 60   # lock refresh: animations at 30 fps = exactly 2 refreshes per frame (no judder)
+MATRIX_REFRESH_LIMIT_HZ = 58   # lock refresh: animations at 29 fps = exactly 2 refreshes per frame (no judder)
 MATRIX_MULTIPLEXING = 0        # change if the image looks striped/scrambled
 MATRIX_ROW_ADDRESS_TYPE = 0    # 64x64 panels with ABCDE addressing: usually 0
 MATRIX_SHOW_REFRESH = False    # print refresh rate to stdout

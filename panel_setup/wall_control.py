@@ -86,7 +86,7 @@ class Runner:
     # -- commands
     def _cmd(self, what):
         if what in MODE_IDS:
-            return [PY, "panel_setup/play.py", what, "--fps", "30"]
+            return [PY, "panel_setup/play.py", what, "--fps", "29"]
         if what == "mirror":
             cmd = [PY, "-u", "main.py", "--no-touch", "--no-mqtt"]
             if self.state.get("camera") == "stream" and self.state.get("camera_url"):
@@ -345,6 +345,33 @@ def make_app(runner):
         runner.state["mirror_auto"] = int(d.get("auto", 0) or 0)
         runner.play("mirror")
         return jsonify(runner.status())
+
+    @app.get("/api/music")
+    def music_get():
+        from display import music as mu
+        try:
+            with open(mu.NOW_FILE) as fh:
+                now = json.load(fh)
+            if time.time() - now.get("time", 0) > 15 or runner.current != "music":
+                now = None
+        except Exception:
+            now = None
+        return jsonify({"settings": mu.load_settings(), "now": now,
+                        "styles": mu.STYLES, "palettes": list(mu.PALETTES),
+                        "vibes": list(mu.VIBES)})
+
+    @app.post("/api/music")
+    def music_set():
+        from display import music as mu
+        d = request.get_json(force=True, silent=True) or {}
+        st = mu.load_settings()
+        for k in ("style", "palette", "vibe"):
+            if k in d:
+                st[k] = d[k]
+        mu._write_json(mu.SETTINGS_FILE, st)
+        if d.get("start") and runner.current != "music":
+            runner.play("music")
+        return jsonify({"settings": mu.load_settings(), "status": runner.status()})
 
     @app.post("/api/mirror/photo")
     def photo():

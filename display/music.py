@@ -45,17 +45,52 @@ PALETTES = {
     "ember":  [(10, 3, 2), (80, 20, 10), (200, 80, 30), (255, 180, 90)],
     "gold":   [(8, 5, 0), (70, 45, 10), (200, 150, 60), (255, 235, 170)],
 }
+VIBES = {"chill": ("chill and tranquil", 1.0), "dreamy": ("dreamy and floaty", 0.75),
+         "warm": ("warm and cosy", 1.0), "lively": ("lively but still gentle", 1.4)}
 AI_PROMPT = (
     "You are the VJ for an LED art wall in the hallway of a cosy flatshare. The vibe of the "
     "space is chill and tranquil and the residents love SOFT GLOWS most: prefer 'glow', then "
     "'aurora' or 'lava'; use the others rarely. Listen to this clip and choose visuals. Prefer "
     "calm, slow, dreamy looks; for upbeat music pick a warmer, livelier but still gentle look - never "
     f"harsh or strobing. Styles: {', '.join(STYLES)}. Palettes: {', '.join(PALETTES)}. "
+    "You may redesign the whole look: also choose a vibe (" + ", ".join(VIBES) + "), a drift "
+    "speed (0.5 slow - 1.5 faster), a size for the light shapes (0.7 small - 1.4 big) and how "
+    "many shapes (3-8). "
     "Reply ONLY with JSON: {\"genre\": str, \"mood\": str (one word), \"energy\": number 0-1, "
-    "\"style\": one of the styles, \"palette\": one of the palettes, "
+    "\"style\": one of the styles, \"palette\": one of the palettes, \"vibe\": one of the vibes, "
+    "\"speed\": number, \"scale\": number, \"count\": integer, "
     "\"caption\": max 3 lowercase words}"
 )
-AI_MODELS = ["gpt-audio", "gpt-4o-audio-preview"]
+AI_MODELS = ["gpt-audio"]
+_HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # written by the app
+NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # read by the app
+DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto"}
+
+
+def load_settings():
+    try:
+        with open(SETTINGS_FILE) as fh:
+            s = {**DEFAULT_SETTINGS, **json.load(fh)}
+    except Exception:
+        s = dict(DEFAULT_SETTINGS)
+    if s["style"] != "auto" and s["style"] not in STYLES:
+        s["style"] = "auto"
+    if s["palette"] != "auto" and s["palette"] not in PALETTES:
+        s["palette"] = "auto"
+    if s["vibe"] != "auto" and s["vibe"] not in VIBES:
+        s["vibe"] = "auto"
+    return s
+
+
+def _write_json(path, data):
+    try:
+        tmp = path + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(data, fh)
+        os.replace(tmp, path)
+    except Exception:
+        pass
 
 
 def _ema(old, new, dt, tau):
@@ -168,9 +203,11 @@ class Listener:
 # --------------------------------------------------------------- AI VJ ---
 
 class VJ:
-    def __init__(self, listener):
+    def __init__(self, listener, vibe=lambda: "chill"):
         self.l = listener
-        self.choice = {"style": "glow", "palette": "dusk", "caption": "", "mood": "", "genre": ""}
+        self.vibe = vibe
+        self.choice = {"style": "glow", "palette": "dusk", "caption": "", "mood": "", "genre": "",
+                       "vibe": "chill", "speed": 1.0, "scale": 1.0, "count": 6}
         self.changed = 0.0
         self.source = "default"
         threading.Thread(target=self._loop, daemon=True).start()
@@ -201,7 +238,11 @@ class VJ:
                 r = client.chat.completions.create(
                     model=model, modalities=["text"], max_tokens=200,
                     messages=[
-                        {"role": "system", "content": AI_PROMPT},
+                        {"role": "system",
+                         "content": AI_PROMPT.replace(
+                             "chill and tranquil",
+                             VIBES[self.vibe()][0] if self.vibe() in VIBES
+                             else "chill and tranquil by default (pick the vibe yourself)")},
                         {"role": "user", "content": [
                             {"type": "text", "text": "Here is an 8-second clip of what is playing "
                                                      "in the hallway right now. Reply with the "
@@ -215,6 +256,12 @@ class VJ:
                 j = json.loads(txt[txt.index("{"): txt.rindex("}") + 1])
                 if j.get("style") in STYLES and j.get("palette") in PALETTES:
                     j["model"] = model
+                    clamp = lambda v, lo, hi, d: max(lo, min(hi, float(v))) if isinstance(v, (int, float)) else d
+                    j["speed"] = clamp(j.get("speed"), 0.5, 1.5, 1.0)
+                    j["scale"] = clamp(j.get("scale"), 0.7, 1.4, 1.0)
+                    j["count"] = clamp(j.get("count"), 3, 8, 6)
+                    if j.get("vibe") not in VIBES:
+                        j["vibe"] = "chill"
                     return j
             except Exception as e:
                 print(f"[VJ] {model}: {str(e)[:120]}")
@@ -229,7 +276,8 @@ class VJ:
             style, pal = random.choice([("ripples", "ember"), ("aurora", "blush"), ("lava", "gold")])
         else:
             style, pal = random.choice([("aurora", "forest"), ("ink", "ocean"), ("coral", "blush")])
-        return {"style": style, "palette": pal, "caption": "", "mood": "", "genre": ""}
+        return {"style": style, "palette": pal, "caption": "", "mood": "", "genre": "",
+                "vibe": "chill", "speed": 1.0, "scale": 1.0, "count": 6}
 
     def _loop(self):
         time.sleep(10)
@@ -242,7 +290,8 @@ class VJ:
                 if j:
                     self.source = j.get("model", "ai")
                     print(f"[VJ] {j.get('genre')} / {j.get('mood')} / energy {j.get('energy')} "
-                          f"-> {j['style']} + {j['palette']}  \"{j.get('caption', '')}\"", flush=True)
+                          f"-> {j['style']} + {j['palette']}, {j['vibe']}, speed {j['speed']:.2f}, "
+                          f"size {j['scale']:.2f}, {int(j['count'])} shapes", flush=True)
                 else:
                     j = self._fallback()
                     self.source = "fallback"
@@ -250,7 +299,8 @@ class VJ:
                 if (j["style"], j["palette"]) != (self.choice["style"], self.choice["palette"]):
                     self.choice, self.changed = j, time.time()
                 else:
-                    self.choice.update({k: j.get(k, "") for k in ("caption", "mood", "genre")})
+                    self.choice.update({k: j[k] for k in ("caption", "mood", "genre", "vibe", "speed",
+                                                          "scale", "count") if k in j})
             time.sleep(AI_EVERY)
 
 
@@ -269,7 +319,8 @@ class Visuals:
         self.ripples = []
 
     def step(self, f, dt):
-        speed = 0.35 + 0.6 * f["energy"] + 0.3 * f["kick"]
+        speed = ((0.35 + 0.6 * f["energy"] + 0.3 * f["kick"]) * f.get("vibe_speed", 1.0)
+                 * f.get("d_speed", 1.0))
         self.phase += dt * speed
         if f["beat"] and (not self.ripples or time.time() - self.ripples[-1][2] > 1.2):
             rs = random.random
@@ -279,13 +330,17 @@ class Visuals:
     def lava(self, f, lut):
         p, W, H = self.phase, self.W, self.H
         fld = np.zeros((H, W), np.float32)
-        swell = 1 + 0.45 * f["kick"]
-        for i in range(6):
+        swell = (1 + 0.45 * f["kick"]) * f.get("d_scale", 1.0)
+        n = f.get("d_count", 6.0)
+        for i in range(8):
+            w = max(0.0, min(1.0, n - i))
+            if w <= 0:
+                continue
             s = 0.11 + i * 0.025
             cx = W * (0.5 + 0.33 * math.sin(p * s * 3 + i * 1.7))
             cy = H * (0.5 + 0.38 * math.sin(p * s * 2.4 + i * 2.9))
             r = ((14 + 5 * math.sin(p * 0.4 + i)) * swell) ** 2
-            fld += r / ((self.x - cx) ** 2 + (self.y - cy) ** 2 + 1.0)
+            fld += w * r / ((self.x - cx) ** 2 + (self.y - cy) ** 2 + 1.0)
         v = np.clip((fld - 0.35) / 1.6, 0, 1) ** 0.8
         return _lut(v, lut)
 
@@ -342,15 +397,19 @@ class Visuals:
         if not hasattr(self, "_glow_pal"):
             self._glow_pal = None
         out = np.zeros((H, W, 3), np.float32)
-        breathe = 1 + 0.35 * f["kick"]
-        for i in range(6):
+        breathe = (1 + 0.35 * f["kick"]) * f.get("d_scale", 1.0)
+        n = f.get("d_count", 6.0)
+        for i in range(8):
+            w = max(0.0, min(1.0, n - i))                  # orbs fade in/out, never pop
+            if w <= 0:
+                continue
             s = 0.05 + i * 0.012
             cx = W * (0.5 + 0.42 * math.sin(p * s * 2.2 + i * 2.1))
             cy = H * (0.5 + 0.42 * math.sin(p * s * 1.7 + i * 1.3))
             sig = (26 + 10 * math.sin(p * 0.2 + i * 1.7)) * breathe
             g = np.exp(-((self.x - cx) ** 2 + (self.y - cy) ** 2) / (2 * sig * sig))
             col = lut[int(150 + 100 * ((i * 0.37) % 1))]
-            out += g[..., None] * col * (0.55 + 0.25 * math.sin(p * 0.5 + i))
+            out += g[..., None] * col * (0.55 + 0.25 * math.sin(p * 0.5 + i)) * w
         base = lut[18][None, None, :] * 0.6
         return np.clip(base + out, 0, 255)
 
@@ -390,7 +449,10 @@ class MusicShow:
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
         self.W, self.H = W, H
         self.l = Listener()
-        self.vj = VJ(self.l)
+        self.settings, self.settings_mtime, self.settings_checked = load_settings(), None, 0.0
+        self.force = False
+        self.xfade = self.XFADE
+        self.vj = VJ(self.l, vibe=lambda: self.settings["vibe"])
         self.vis = Visuals(W, H)
         self.luts = {k: _palette(v) for k, v in PALETTES.items()}
         self.prev = None
@@ -400,16 +462,44 @@ class MusicShow:
         self.silent_since = None
         self.pulse = 0.0
 
+    def _poll_settings(self):
+        now = time.time()
+        if now - self.settings_checked < 2.0:
+            return
+        self.settings_checked = now
+        try:
+            m = os.path.getmtime(SETTINGS_FILE)
+        except OSError:
+            m = None
+        if m != self.settings_mtime:
+            first = self.settings_mtime is None and m is not None and self.last_t is None
+            self.settings_mtime = m
+            self.settings = load_settings()
+            if not first:
+                self.force = True                          # the app changed something: go now
+
     def _target(self):
         f = self.l.f
         now = time.time()
+        st = self.settings
+        style = st["style"] if st["style"] != "auto" else self.vj.choice["style"]
+        pal = st["palette"] if st["palette"] != "auto" else self.vj.choice["palette"]
         if f["silent"]:
             self.silent_since = self.silent_since or now
-            if now - self.silent_since > 30:
-                return ("glow", "dusk")                   # quiet room: soft dusk glow
+            if now - self.silent_since > 30:               # quiet room: soft dusk glow
+                return (style if st["style"] != "auto" else "glow",
+                        pal if st["palette"] != "auto" else "dusk")
         else:
             self.silent_since = None
-        return (self.vj.choice["style"], self.vj.choice["palette"])
+        return (style, pal)
+
+    def _publish(self):
+        c = self.vj.choice
+        _write_json(NOW_FILE, {"style": self.cur[0], "palette": self.cur[1],
+                               "vibe": c.get("vibe", ""), "design": getattr(self, "design", {}),
+                               "genre": c.get("genre", ""), "mood": c.get("mood", ""),
+                               "source": self.vj.source, "settings": self.settings,
+                               "silent": self.l.f["silent"], "time": time.time()})
 
     def __call__(self, t):
         dt = 0.033 if self.last_t is None else max(0.0, min(0.2, t - self.last_t))
@@ -417,13 +507,29 @@ class MusicShow:
         f = dict(self.l.f)
         beat = f["beat"]
         self.l.f["beat"] = False
+        self._poll_settings()
+        c = self.vj.choice
+        vibe = self.settings["vibe"] if self.settings["vibe"] != "auto" else c.get("vibe", "chill")
+        f["vibe_speed"] = VIBES.get(vibe, VIBES["chill"])[1]
+        auto = self.settings["style"] == "auto"
+        self.design = getattr(self, "design", {"d_speed": 1.0, "d_scale": 1.0, "d_count": 6.0})
+        for key, src in (("d_speed", "speed"), ("d_scale", "scale"), ("d_count", "count")):
+            tgt_v = float(c.get(src, 1.0 if src != "count" else 6)) if auto else \
+                (6.0 if src == "count" else 1.0)
+            self.design[key] = _ema(self.design[key], tgt_v, dt, 5.0)   # redesigns blend in slowly
+            f[key] = self.design[key]
         self.vis.step(f, dt)
         tgt = self._target()
         held = time.time() - self.switched
-        if tgt != self.cur and held >= self.HOLD:          # stay with a pattern, then drift on
+        if tgt != self.cur and (held >= self.HOLD or self.force):   # hold, unless the app asks
+            self.xfade = 4.0 if self.force else self.XFADE
             self.prev, self.cur, self.switched = self.cur, tgt, time.time()
+        self.force = False
+        if time.time() - getattr(self, "_published", 0) > 3:
+            self._published = time.time()
+            self._publish()
         img = self.vis.render(self.cur[0], f, self.luts[self.cur[1]], dt, beat)
-        k = (time.time() - self.switched) / self.XFADE
+        k = (time.time() - self.switched) / self.xfade
         if self.prev and k < 1:
             old = self.vis.render(self.prev[0], f, self.luts[self.prev[1]], dt, False)
             k = k * k * (3 - 2 * k)
@@ -432,14 +538,7 @@ class MusicShow:
         self.pulse = 1.0 if beat else self.pulse * math.exp(-dt / 0.22)
         img = img * (0.9 + 0.15 * f["kick"])                     # gently rides the bass
         out = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
-        cap = self.vj.choice.get("caption") or ""
-        age = time.time() - self.vj.changed
-        if cap and age < 10 and not f["silent"] and time.time() - self.switched < 25:
-            a = min(1.0, age / 2.0, (10 - age) / 3.0)
-            d = ImageDraw.Draw(out)
-            from display.maeva_story import _text
-            col = tuple(int(c * a) for c in (235, 230, 220))
-            _text(d, (6, self.H - 14), f"♪ {cap}", 10, col, stroke=1)
+        # no text on the wall: the AI picks patterns silently
         return out
 
 

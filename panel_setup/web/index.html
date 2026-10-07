@@ -116,6 +116,23 @@
     </div>
   </section>
 
+  <section>
+    <h2>Music</h2>
+    <div class="box">
+      <div class="row" style="justify-content:space-between;margin-bottom:6px">
+        <b>🎵 Music art</b><span class="sub" id="musicNow">—</span>
+      </div>
+      <p>Soft art that breathes with the music. On <b>Auto (AI)</b> the AI listens and designs the whole look (style, colours, vibe, speed, size, number of shapes); pick something to fix it. Changes apply live.</p>
+      <div class="row" style="margin-bottom:10px">
+        <label class="sub">Art style<br><select id="mStyle" onchange="musicSet()"></select></label>
+        <label class="sub">Colours<br><select id="mPal" onchange="musicSet()"></select></label>
+        <label class="sub">Vibe<br><select id="mVibe" onchange="musicSet()"></select></label>
+      </div>
+      <button class="primary big" onclick="musicSet(true)">▶ Play music art</button>
+      <p style="margin:8px 0 0">Needs the Mac mic stream (<code>./panel_setup/stream_mic.sh</code>) until a USB sound card is on the Pi.</p>
+    </div>
+  </section>
+
   <div id="library"></div>
 
   <section>
@@ -207,7 +224,29 @@ function startPlaylist() {
     if (document.body.classList.contains('picking')) togglePick();
   }).catch(e => toast(e.message));
 }
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+async function musicLoad(first) {
+  try {
+    const m = await (await fetch('/api/music')).json();
+    if (first) {
+      const fill = (id, arr, auto) => { $(id).innerHTML = (auto ? '<option value="auto">Auto (AI)</option>' : '') +
+                                        arr.map(v => `<option value="${v}">${cap(v)}</option>`).join(''); };
+      fill('mStyle', m.styles, true); fill('mPal', m.palettes, true); fill('mVibe', m.vibes, true);
+      $('mStyle').value = m.settings.style; $('mPal').value = m.settings.palette; $('mVibe').value = m.settings.vibe;
+    }
+    const n = m.now;
+    $('musicNow').textContent = !n ? (STATUS.current === 'music' ? 'listening…' : 'not playing') :
+      (n.silent ? `quiet room · ${n.style} + ${n.palette}` :
+       `${n.genre ? 'AI hears ' + n.genre + (n.mood ? ' · ' + n.mood : '') + ' → ' : ''}${n.style} + ${n.palette}${n.vibe ? ' · ' + n.vibe : ''}`);
+  } catch (e) {}
+}
+function musicSet(start) {
+  post('/api/music', {style: $('mStyle').value, palette: $('mPal').value, vibe: $('mVibe').value, start: !!start})
+    .then(r => { if (start) toast('🎵 Music art on'); else toast('Updated'); show(r.status); musicLoad(); })
+    .catch(e => toast(e.message));
+}
 (async () => {
+  musicLoad(true); setInterval(musicLoad, 5000);
   MODES = await (await fetch('/api/modes')).json();
   render(); refresh(); setInterval(refresh, 3000);
 })();

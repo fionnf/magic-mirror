@@ -27,6 +27,7 @@ def _anims():
     return {
         "trams":   (departures.frame, 60.0),
         "ambient": (departures.ambient_frame, 600.0),
+        "tickerdemo": (departures.demo_frame, 45.0),
         "art":     (art.frame, art.LOOP_SEC),
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),

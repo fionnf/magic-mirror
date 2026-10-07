@@ -6,9 +6,10 @@ plays live at any frame rate.
 Scenes (s):
    0 -  6  disco ball drops in, rainbow beams sweep, glitter
    6 - 13  waving progress-pride flag, HOUSE / FORTUNA in moving pride stripes
-  13 - 25  "people nearby" grid: one fictional profile per panel, pixel
-           avatars, names, distances counting down, a message pops up,
-           then the reveal: YOU, 0 m, closest match
+  13 - 25  "people nearby" grid: a fresh random cast every loop (typical
+           dating-app screen names + emoji, pixel avatars, live distances),
+           taps, two random DMs, a fake PREMIUM upsell, then the reveal:
+           YOU, 0 m, closest match
   25 - 31  QR code to grindr.com
   31 - 37  rainbow vortex, SLAY / SERVE / GAY!! zoom out of it
   37 - 41  beating pride heart, WELCOME HOME, fade, loop
@@ -229,26 +230,141 @@ def _title(t, W, H):
 
 # ------------------------------------------------------- people nearby -----
 
-PROFILES = [
-    # name,      metres, hair,     hair colour,     skin,           shirt,          extra
-    ("GymBoi",   42.0, "short",  (40, 30, 20),   (230, 180, 140), (220, 40, 40),  "tank"),
-    ("Otter",    27.0, "curly",  (110, 70, 30),  (210, 160, 120), (40, 120, 200), "stubble"),
-    ("BearHug",  61.0, "cap",    (60, 40, 25),   (225, 170, 130), (90, 60, 40),   "beard"),
-    ("Twink",    14.0, "swoop",  (250, 220, 90), (245, 200, 170), (255, 120, 190), ""),
-    ("???",       0.5, "hidden", (0, 0, 0),      (90, 90, 90),    (70, 70, 70),   ""),
-    ("DragQ",    33.0, "wig",    (170, 60, 230), (240, 190, 160), (255, 40, 160), "drag"),
-    ("Neighb",    9.0, "short",  (20, 20, 20),   (150, 100, 70),  (40, 170, 90),  "glasses"),
-    ("Your Ex",   4.0, "short",  (90, 50, 20),   (230, 185, 150), (30, 30, 30),   "shades"),
-    ("Fridge",    2.0, "fridge", (0, 0, 0),      (230, 230, 235), (0, 0, 0),      ""),
-    ("Pup",      18.0, "pup",    (30, 30, 30),   (220, 175, 140), (20, 20, 20),   ""),
-    ("Daddy",    55.0, "short",  (170, 170, 170), (225, 180, 145), (30, 60, 120), "beard"),
-    ("Cutie",    21.0, "swoop",  (200, 60, 40),  (240, 200, 175), (120, 220, 200), ""),
+EMOJI_FONTS = [("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf", 109),
+               ("/System/Library/Fonts/Apple Color Emoji.ttc", 160)]
+_emoji_font = []
+
+
+def _emoji(ch, px):
+    """Colour emoji as a small RGBA image (cached). None if no emoji font."""
+    key = ("emoji", ch, px)
+    if key in _cache:
+        return _cache[key]
+    img = None
+    if not _emoji_font:
+        import os
+        from PIL import ImageFont
+        for path, size in EMOJI_FONTS:
+            if os.path.exists(path):
+                try:
+                    _emoji_font.append(ImageFont.truetype(path, size))
+                    break
+                except Exception:
+                    pass
+        if not _emoji_font:
+            _emoji_font.append(None)
+    f = _emoji_font[0]
+    if f is not None:
+        try:
+            big = Image.new("RGBA", (220, 220), (0, 0, 0, 0))
+            ImageDraw.Draw(big).text((10, 10), ch, font=f, embedded_color=True)
+            bb = big.getbbox()
+            if bb:
+                big = big.crop(bb)
+                h = px
+                w = max(1, int(big.width * h / big.height))
+                img = big.resize((w, h), Image.LANCZOS)
+        except Exception:
+            img = None
+    _cache[key] = img
+    return img
+
+
+def _paste_emoji(img, ch, x, y, px):
+    e = _emoji(ch, px)
+    if e is not None:
+        img.paste(e, (int(x), int(y)), e)
+        return e.width
+    return 0
+
+
+SKINS = [(245, 205, 175), (230, 180, 140), (210, 160, 120), (175, 120, 85),
+         (140, 95, 65), (100, 65, 45)]
+HAIRS = [(30, 25, 20), (90, 50, 20), (160, 110, 50), (240, 210, 110), (200, 70, 40),
+         (170, 170, 170), (230, 90, 180), (60, 160, 255)]
+
+# name, emoji, look, distance (metres, or a joke string), looking-for line
+POOL = [
+    ("Gym Rat", "💪", "tank", 41, "Looking: a spot"),
+    ("Vers Bear", "🐻", "beard", 58, "Looking: honey"),
+    ("Otter", "🦦", "stubble", 27, "Looking: fish"),
+    ("Discreet", "🤫", "shades", 12, "Looking: away"),
+    ("Headless Torso", "", "torso", 9, "Looking: for my head"),
+    ("No Pic No Chat", "", "blank", 33, "Looking: ironic"),
+    ("Twink", "✨", "swoop", 14, "Looking: iced coffee"),
+    ("DragQ", "👑", "wig", 23, "Looking: SICKENING"),
+    ("Daddy", "🧔", "beard", 66, "Looking: for his glasses"),
+    ("Pup", "🐶", "pup", 18, "Looking: treats"),
+    ("New in Town", "✈️", "cap", 870, "Looking: the U-Bahn"),
+    ("Just Chatting", "💬", "glasses", 51, "Looking: (lying)"),
+    ("Your Landlord", "🏠", "glasses", 6, "Looking: rent"),
+    ("Your Ex", "🚩", "shades", 3, "Looking: trouble"),
+    ("Fridge", "🧊", "fridge", 1, "Looking: to be opened"),
+    ("Netflix & Chill", "🍿", "curly", 37, "Looking: remote"),
+    ("Gay Agenda", "📅", "short", 19, "Looking: item 1"),
+    ("Top", "🔝", "short", 44, "Looking: bottom"),
+    ("Bottom", "🍑", "swoop", 45, "Looking: top"),
+    ("Hung", "🍆", "short", 29, "Looking: (clothes)"),
+    ("Sourdough Dad", "🍞", "beard", 72, "Looking: starter"),
+    ("Into Fitness", "🏋️", "tank", 15, "Fitness whole pizza"),
+    ("Masked", "😷", "mask", 22, "Looking: plague"),
+    ("Mr Wall", "🧱", "short", "in ur walls", "Looking: in"),
+    ("Behind You", "👀", "hidden", "behind u", "Looking: at you"),
+    ("Clown", "🤡", "clown", 31, "Looking: circus"),
 ]
-YOU = ("YOU", 0.0, "crown", (250, 210, 60), (240, 195, 165), None, "you")
+MESSAGES = ["hey 👋", "sup", "pics? 📸", "u up? 🌙", "nice mirror 🪞",
+            "ur fridge is hot 🧊", "are we neighbours?? 🏠", "into?",
+            "hey stranger 😏", "rate my outfit 1-10", "wanna go to DM? 💅",
+            "can i borrow sugar 🧂", "why is ur wall glowing"]
+TAPS = ["🔥", "😈", "👋"]
+YOU = ("YOU", "💅", "crown", 0.0, "Looking: at yourself")
+
+
+def _look(rs, look):
+    """Random colours for a look; returns the avatar tuple _avatar() expects."""
+    skin = rs.choice(SKINS)
+    hair_col = rs.choice(HAIRS)
+    shirt = _hsv(rs.random(), 0.6, 0.9)
+    hair = {"tank": "short", "beard": rs.choice(["short", "cap"]), "stubble": "curly",
+            "shades": "short", "glasses": "short", "cap": "cap", "torso": "torso",
+            "blank": "blank", "fridge": "fridge", "pup": "pup", "wig": "wig",
+            "swoop": "swoop", "curly": "curly", "short": rs.choice(["short", "curly", "swoop"]),
+            "mask": "short", "hidden": "hidden", "clown": "clown", "crown": "crown"}[look]
+    extra = {"tank": "tank", "beard": "beard", "stubble": "stubble", "shades": "shades",
+             "glasses": "glasses", "wig": "drag", "mask": "mask", "clown": "clown",
+             "crown": "you"}.get(look, "")
+    if look == "wig":
+        hair_col = rs.choice([(170, 60, 230), (255, 120, 200), (250, 230, 120), (240, 60, 60)])
+    if look == "fridge":
+        skin = (230, 230, 235)
+    if look in ("hidden", "blank"):
+        skin = (95, 95, 100) if look == "hidden" else (240, 170, 60)
+    return (look, 0, hair, hair_col, skin, shirt, extra)
+
+
+def _cast(loop):
+    """A fresh random set of profiles for this loop of the show."""
+    key = ("cast", loop)
+    if key not in _cache:
+        rs = random.Random(1000 + loop * 7919)
+        picks = rs.sample(POOL, 11)
+        cast = []
+        for name, emo, look, dist, looking in picks:
+            if isinstance(dist, (int, float)):
+                dist = max(1.0, dist * rs.uniform(0.6, 1.5))
+            cast.append({"name": name, "emoji": emo, "av": _look(rs, look),
+                         "dist": dist, "looking": looking,
+                         "online": rs.random() < 0.8})
+        msgs = rs.sample(MESSAGES, 2)
+        _cache[key] = (cast, msgs, rs.sample(range(8), 2), [rs.choice(TAPS) for _ in range(2)])
+        if len(_cache) > 40:                                  # don't grow forever
+            for k in [k for k in _cache if isinstance(k, tuple) and k[0] == "cast"][:10]:
+                _cache.pop(k, None)
+    return _cache[key]
 
 
 def _avatar(d, p, ox, oy, t):
-    name, _, hair, hc, skin, shirt, extra = p
+    _, _, hair, hc, skin, shirt, extra = p
     if hair == "fridge":                                  # the fridge, obviously
         d.rounded_rectangle([ox + 12, oy + 2, ox + 36, oy + 42], 3, fill=skin,
                             outline=(160, 160, 170))
@@ -256,33 +372,39 @@ def _avatar(d, p, ox, oy, t):
         d.rectangle([ox + 31, oy + 6, ox + 33, oy + 13], fill=(120, 120, 130))
         d.rectangle([ox + 31, oy + 20, ox + 33, oy + 32], fill=(120, 120, 130))
         return
-    if hair == "hidden":                                  # mystery silhouette
+    if hair in ("hidden", "blank"):                       # default / mystery silhouette
         d.ellipse([ox + 13, oy + 6, ox + 35, oy + 30], fill=skin)
         d.rounded_rectangle([ox + 7, oy + 30, ox + 41, oy + 44], 8, fill=skin)
-        _text(d, (ox + 24, oy + 18), "?", 16, (230, 230, 230), stroke=1, anchor="mm")
+        if hair == "hidden":
+            _text(d, (ox + 24, oy + 18), "?", 16, (230, 230, 230), stroke=1, anchor="mm")
         return
-    # shoulders / shirt
-    sh = shirt if shirt else None
+    if hair == "torso":                                   # the classic headless torso
+        d.rounded_rectangle([ox + 4, oy + 4, ox + 44, oy + 44], 10, fill=skin)
+        sh = tuple(max(0, c - 40) for c in skin)
+        d.arc([ox + 9, oy + 8, ox + 24, oy + 22], 20, 160, fill=sh, width=2)   # pecs
+        d.arc([ox + 24, oy + 8, ox + 39, oy + 22], 20, 160, fill=sh, width=2)
+        for r in range(3):                                                     # abs
+            d.rectangle([ox + 19, oy + 25 + r * 6, ox + 22, oy + 28 + r * 6], fill=sh)
+            d.rectangle([ox + 26, oy + 25 + r * 6, ox + 29, oy + 28 + r * 6], fill=sh)
+        return
     if extra == "you":
         for i in range(6):                                # rainbow shirt
             d.rectangle([ox + 7, oy + 33 + i * 2, ox + 41, oy + 34 + i * 2],
                         fill=tuple(int(v) for v in PRIDE[i]))
     elif extra == "tank":
         d.rounded_rectangle([ox + 5, oy + 32, ox + 43, oy + 44], 6, fill=skin)
-        d.rectangle([ox + 14, oy + 33, ox + 34, oy + 44], fill=sh)
+        d.rectangle([ox + 14, oy + 33, ox + 34, oy + 44], fill=shirt)
     else:
-        d.rounded_rectangle([ox + 6, oy + 32, ox + 42, oy + 44], 7, fill=sh)
-    # head
-    d.ellipse([ox + 13, oy + 7, ox + 35, oy + 33], fill=skin)
-    # hair styles
+        d.rounded_rectangle([ox + 6, oy + 32, ox + 42, oy + 44], 7, fill=shirt)
+    d.ellipse([ox + 13, oy + 7, ox + 35, oy + 33], fill=(250, 250, 250) if extra == "clown" else skin)
     if hair == "short":
         d.chord([ox + 12, oy + 5, ox + 36, oy + 26], 180, 360, fill=hc)
     elif hair == "curly":
         for cx in range(ox + 14, ox + 36, 5):
             d.ellipse([cx - 4, oy + 4, cx + 4, oy + 13], fill=hc)
     elif hair == "cap":
-        d.chord([ox + 12, oy + 4, ox + 36, oy + 24], 180, 360, fill=(200, 40, 40))
-        d.rectangle([ox + 26, oy + 13, ox + 42, oy + 15], fill=(170, 30, 30))
+        d.chord([ox + 12, oy + 4, ox + 36, oy + 24], 180, 360, fill=shirt)
+        d.rectangle([ox + 26, oy + 13, ox + 42, oy + 15], fill=shirt)
     elif hair == "swoop":
         d.chord([ox + 11, oy + 4, ox + 37, oy + 26], 180, 360, fill=hc)
         d.polygon([(ox + 13, oy + 12), (ox + 30, oy + 8), (ox + 20, oy + 19)], fill=hc)
@@ -296,12 +418,15 @@ def _avatar(d, p, ox, oy, t):
         d.polygon([(ox + 13, oy + 12), (ox + 9, oy + 0), (ox + 19, oy + 7)], fill=(25, 25, 25))
         d.polygon([(ox + 35, oy + 12), (ox + 39, oy + 0), (ox + 29, oy + 7)], fill=(25, 25, 25))
         d.ellipse([ox + 18, oy + 21, ox + 30, oy + 32], fill=skin)
+    elif hair == "clown":
+        d.ellipse([ox + 7, oy + 6, ox + 17, oy + 18], fill=(255, 80, 40))
+        d.ellipse([ox + 31, oy + 6, ox + 41, oy + 18], fill=(255, 80, 40))
+        d.ellipse([ox + 21, oy + 19, ox + 27, oy + 25], fill=(230, 20, 30))
     elif hair == "crown":
         d.polygon([(ox + 13, oy + 11), (ox + 15, oy + 0), (ox + 19, oy + 7), (ox + 24, oy - 2),
                    (ox + 29, oy + 7), (ox + 33, oy + 0), (ox + 35, oy + 11)], fill=hc)
         tw = 0.5 + 0.5 * math.sin(t * 8)
         d.point((ox + 24, oy + 1), fill=(255, 255, int(200 + 55 * tw)))
-    # face details
     if extra == "beard":
         d.chord([ox + 12, oy + 14, ox + 36, oy + 38], 0, 180, fill=hc)
     if extra == "stubble":
@@ -318,8 +443,6 @@ def _avatar(d, p, ox, oy, t):
             d.ellipse([ox + 15, eye_y - 3, ox + 22, eye_y + 4], outline=(30, 30, 30))
             d.ellipse([ox + 26, eye_y - 3, ox + 33, eye_y + 4], outline=(30, 30, 30))
         if extra == "drag":
-            d.line([ox + 16, eye_y - 3, ox + 21, eye_y - 2], fill=(20, 20, 20))
-            d.line([ox + 27, eye_y - 2, ox + 32, eye_y - 3], fill=(20, 20, 20))
             d.rectangle([ox + 16, eye_y - 2, ox + 21, eye_y - 1], fill=(80, 200, 255))
             d.rectangle([ox + 27, eye_y - 2, ox + 32, eye_y - 1], fill=(80, 200, 255))
             d.point((ox + 13, oy + 27), fill=(255, 215, 0))
@@ -327,110 +450,131 @@ def _avatar(d, p, ox, oy, t):
     if extra == "you":
         d.ellipse([ox + 15, oy + 23, ox + 19, oy + 26], fill=(255, 140, 170))
         d.ellipse([ox + 29, oy + 23, ox + 33, oy + 26], fill=(255, 140, 170))
-    mouth = (230, 30, 70) if extra == "drag" else (150, 50, 50)
+    if extra == "mask":
+        d.rounded_rectangle([ox + 15, oy + 22, ox + 33, oy + 31], 3, fill=(170, 220, 255))
+        return
+    mouth = (230, 30, 70) if extra in ("drag", "clown") else (150, 50, 50)
     if extra == "shades":
-        d.line([ox + 20, oy + 28, ox + 28, oy + 27], fill=mouth)        # unbothered
+        d.line([ox + 20, oy + 28, ox + 28, oy + 27], fill=mouth)         # unbothered
     else:
         d.arc([ox + 19, oy + 23, ox + 29, oy + 30], 15, 165, fill=mouth, width=2)
 
 
 def _dist(m):
-    return f"{m * 100:.0f} cm" if m < 1 else f"{m:.0f} m"
+    if isinstance(m, str):
+        return m
+    return f"{m * 100:.0f} cm" if m < 1 else (f"{m / 1000:.1f} km" if m >= 1000 else f"{m:.0f} m")
 
 
-def _tile(p, u, t, dimmed=0.0, tapped=False):
+def _tile(p, u, t, dimmed=0.0, tap=None):
     pw, ph = config.PANEL_COLS, config.PANEL_ROWS
     img = Image.new("RGB", (pw, ph), (18, 18, 22))
     d = ImageDraw.Draw(img)
-    online = p[0] not in ("Fridge", "Your Ex") or int(t * 2) % 2 == 0
-    d.rectangle([0, 0, pw - 1, ph - 1], outline=YELLOW if p[6] == "you" else (55, 55, 60))
-    _avatar(d, p, (pw - 48) // 2, 3, t)
-    name = p[0]
-    _text(d, (3, ph - 20), name, _fit(name, pw - 6, 10), (255, 255, 255), stroke=1)
-    if p[6] == "you":
-        metres = 0.0
-    else:
-        metres = max(0.3 if p[0] == "???" else 1.0, p[1] * (1 - 0.55 * _clamp(u / 7.5)))
-    if online:
+    you = p["av"][6] == "you"
+    d.rectangle([0, 0, pw - 1, ph - 1], outline=YELLOW if you else (55, 55, 60))
+    _avatar(d, p["av"], (pw - 48) // 2, 3, t)
+    name = p["name"]
+    nsize = _fit(name, pw - (16 if p["emoji"] else 6), 10)
+    _text(d, (3, ph - 20), name, nsize, (255, 255, 255), stroke=1)
+    if p["emoji"]:
+        nx = 3 + _font(nsize).getlength(name) + 2
+        _paste_emoji(img, p["emoji"], min(nx, pw - 12), ph - 21, 11)
+    dist = p["dist"]
+    if not isinstance(dist, str) and not you:
+        dist = max(1.0, dist * (1 - 0.55 * _clamp(u / 9.0)))
+    if p["online"] or you:
         d.ellipse([3, ph - 7, 7, ph - 3], fill=(0, 220, 90))
-    _text(d, (10, ph - 10), _dist(metres), 9, (200, 200, 210), stroke=1)
-    if tapped:
-        s = 1 + 0.25 * math.sin(t * 10)
-        cx, cy = pw - 10, 9
-        r = 4 * s
-        d.ellipse([cx - r - 2, cy - r, cx, cy + r * 0.3], fill=(255, 60, 120))
-        d.ellipse([cx - 1, cy - r, cx + r + 1, cy + r * 0.3], fill=(255, 60, 120))
-        d.polygon([(cx - r - 2, cy - 0.5), (cx + r + 1, cy - 0.5), (cx, cy + r + 3)],
-                  fill=(255, 60, 120))
+    _text(d, (10, ph - 10), "0 m" if you else _dist(dist), 9, (200, 200, 210), stroke=1)
+    if tap:
+        s = 1 + 0.2 * math.sin(t * 10)
+        _paste_emoji(img, tap, pw - 15, 2, int(12 * s))
     if dimmed > 0:
         a = np.asarray(img, np.float32) * (1 - 0.8 * dimmed)
         img = Image.fromarray(a.astype(np.uint8), "RGB")
     return img
 
 
-def _nearby(u, t, W, H):
+def _bubble(img, d, W, y, text, size=12):
+    """Yellow notification bar; text may end in an emoji."""
+    d.rounded_rectangle([5, y, W - 5, y + 22], 6, fill=YELLOW, outline=(0, 0, 0))
+    emo = ""
+    if text and ord(text[-1]) > 0x2000:
+        text, emo = text.rsplit(" ", 1) if " " in text else ("", text)
+    sz = _fit(text, W - (34 if emo else 18), size)
+    _text(d, (11, y + 11), text, sz, (15, 15, 15), stroke=0, anchor="lm")
+    if emo:
+        _paste_emoji(img, emo, 13 + _font(sz).getlength(text) + 2, y + 4, 14)
+
+
+def _nearby(u, t, W, H, loop=0):
     pw, ph = config.PANEL_COLS, config.PANEL_ROWS
     cols, rows = W // pw, H // ph
+    cast, msgs, tap_idx, tap_emo = _cast(loop)
     img = Image.new("RGB", (W, H), (0, 0, 0))
     centre = (cols // 2, rows // 2)
-    reveal = _clamp((u - 8.0) / 0.8)
+    reveal = _clamp((u - 9.0) / 0.8)
     tiles = [(c, r) for r in range(rows) for c in range(cols)]
-    others = [p for p in PROFILES if p[0] != "???"]
+    mystery = {"name": "???", "emoji": "", "av": _look(random.Random(loop), "hidden"),
+               "dist": 0.4, "looking": "", "online": True}
+    you = {"name": "YOU", "emoji": "💅", "av": _look(random.Random(loop), "crown"),
+           "dist": 0.0, "looking": "", "online": True}
     k = 0
     for i, (c, r) in enumerate(tiles):
         appear = _clamp((u - 0.12 * i) / 0.35)
         if appear <= 0:
             continue
         if (c, r) == centre:
-            p = YOU if reveal >= 0.5 else PROFILES[4]
-            dim = 0.0
+            p, dim, tap = (you if reveal >= 0.5 else mystery), 0.0, None
         else:
-            p = others[k % len(others)]
+            p = cast[k % len(cast)]
+            tap = tap_emo[tap_idx.index(k)] if (k in tap_idx and 2.5 < u < 8.6) else None
             k += 1
             dim = reveal
-        tapped = p[0] == "Twink" and 3.0 < u < 7.5
-        tile = _tile(p, u, t, dimmed=dim, tapped=tapped)
+        tile = _tile(p, u, t, dimmed=dim, tap=tap)
         if appear < 1:                                    # flip in
             h = max(1, int(ph * appear))
-            tile = tile.resize((pw, h))
-            img.paste(tile, (c * pw, r * ph + (ph - h) // 2))
+            img.paste(tile.resize((pw, h)), (c * pw, r * ph + (ph - h) // 2))
         else:
             img.paste(tile, (c * pw, r * ph))
     d = ImageDraw.Draw(img)
-    # banner
-    if u < 2.4:
+    if u < 2.4:                                           # banner
         a = 1 - _clamp((u - 1.9) / 0.5)
         y = H / 2
         d.rectangle([0, y - 13, W, y + 13], fill=tuple(int(v * a) for v in YELLOW))
         _text(d, (W / 2, y), "PEOPLE NEARBY", _fit("PEOPLE NEARBY", W - 8, 18),
               tuple(int(v * a) for v in (20, 20, 20)), stroke=0, anchor="mm")
-    # incoming message
-    if 4.6 < u < 7.6:
-        k2 = _clamp((u - 4.6) / 0.4) - _clamp((u - 7.2) / 0.4)
-        y = -24 + 30 * _back(_clamp(k2))
-        d.rounded_rectangle([6, y, W - 6, y + 22], 6, fill=YELLOW, outline=(0, 0, 0))
-        _text(d, (12, y + 11), "GymBoi: hey ;) u up?", _fit("GymBoi: hey ;) u up?", W - 26, 13),
-              (15, 15, 15), stroke=0, anchor="lm")
-    # reveal
+    # two random messages from random people in this loop's cast
+    for n, (start, msg) in enumerate(((3.0, msgs[0]), (5.4, msgs[1]))):
+        if start < u < start + 2.2:
+            k2 = _clamp((u - start) / 0.35) - _clamp((u - start - 1.85) / 0.35)
+            y = -24 + 28 * _back(_clamp(k2)) + n * 0
+            sender = cast[(n * 3 + 1) % len(cast)]["name"].split()[0]
+            _bubble(img, d, W, y, f"{sender}: {msg}")
+    if 7.7 < u < 9.1:                                     # fake upsell
+        k3 = _clamp((u - 7.7) / 0.3) - _clamp((u - 8.8) / 0.3)
+        y = H - 30 * _back(_clamp(k3))
+        d.rounded_rectangle([4, y, W - 4, y + 26], 6, fill=(20, 20, 20), outline=YELLOW)
+        txt = "unlock PREMIUM to see who's in ur walls"
+        _text(d, (24, y + 13), txt, _fit(txt, W - 32, 11), YELLOW, stroke=0, anchor="lm")
+        _paste_emoji(img, "👑", 8, y + 6, 13)
     if reveal > 0:
         cx, cy = (centre[0] + 0.5) * pw, (centre[1] + 0.5) * ph
-        rs = random.Random(5)
+        rs = random.Random(5 + loop)
         for _ in range(26):                               # heart burst
             a = rs.random() * 6.283
-            sp = 20 + rs.random() * 70
-            rr = sp * _clamp((u - 8.4) / 2.0)
+            rr = (20 + rs.random() * 70) * _clamp((u - 9.4) / 2.0)
             if rr <= 1:
                 continue
             x, y = cx + rr * math.cos(a), cy + rr * math.sin(a)
             col = tuple(int(v) for v in PRIDE[rs.randrange(6)])
             d.ellipse([x - 2, y - 2, x + 2, y + 2], fill=col)
-        if u > 8.6:
-            ky = _back(_clamp((u - 8.6) / 0.5))
+        if u > 9.6:
+            ky = _back(_clamp((u - 9.6) / 0.5))
             d.rectangle([0, 2, W, 2 + 22 * ky], fill=YELLOW)
             _text(d, (W / 2, 2 + 11 * ky), "CLOSEST MATCH", _fit("CLOSEST MATCH", W - 8, 16),
                   (15, 15, 15), stroke=0, anchor="mm")
-            _text(d, (W / 2, H - 12), "it's you, babe", _fit("it's you, babe", W - 8, 15),
-                  (255, 120, 190), anchor="mm")
+            line = "Looking: at yourself"
+            _text(d, (W / 2, H - 12), line, _fit(line, W - 24, 14), (255, 120, 190), anchor="mm")
     return img
 
 
@@ -527,6 +671,7 @@ def _heart(u, t, W, H):
 
 def frame(t: float) -> Image.Image:
     W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+    loop = int(t // LOOP_SEC)
     t = t % LOOP_SEC
     for name, a, b in SCENES:
         if a <= t < b:
@@ -536,7 +681,7 @@ def frame(t: float) -> Image.Image:
             elif name == "title":
                 img = _title(u, W, H)
             elif name == "nearby":
-                img = _nearby(u, t, W, H)
+                img = _nearby(u, t, W, H, loop)
             elif name == "qr":
                 img = _qr(u, t, W, H)
             elif name == "vortex":

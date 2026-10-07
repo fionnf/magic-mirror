@@ -2,6 +2,7 @@
 
     sudo python3 panel_setup/play.py pride               # HOUSE FORTUNA pride show
     sudo python3 panel_setup/play.py welcome             # the first welcome animation
+    sudo python3 panel_setup/play.py maeva               # Maeva in Zürich, a little story
     sudo python3 panel_setup/play.py cow                 # "Dewa is a cow" card
     sudo python3 panel_setup/play.py pride --seconds 60
     python3 panel_setup/play.py pride --gif preview.gif  # offline preview, no hardware
@@ -17,8 +18,9 @@ import config
 
 
 def _anims():
-    from display import welcome, pride_show, cards
+    from display import welcome, pride_show, cards, maeva_story
     return {
+        "maeva":   (maeva_story.frame, maeva_story.LOOP_SEC),
         "pride":   (pride_show.frame, pride_show.LOOP_SEC),
         "welcome": (welcome.welcome_frame, welcome.LOOP_SEC),
         "cow":     (cards.cow_card, 1.0),
@@ -27,7 +29,7 @@ def _anims():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("anim", nargs="?", default="pride", help="pride | welcome | cow")
+    ap.add_argument("anim", nargs="?", default="pride", help="pride | maeva | welcome | cow")
     ap.add_argument("--seconds", type=float, default=0, help="stop after N s (0 = forever)")
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--gif", help="write one loop to this GIF instead of the wall")

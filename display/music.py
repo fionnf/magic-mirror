@@ -32,7 +32,7 @@ import config
 from display.art import _palette, _lut, Coral
 
 SR = 22050
-WIN, HOP = 2048, 512
+WIN, HOP = 1024, 256
 AI_EVERY = 40.0
 AI_CLIP = 8.0
 STYLES = ["lava", "coral", "ink", "aurora", "ripples"]
@@ -73,7 +73,7 @@ class Listener:
         self.w = 0
         self.lock = threading.Lock()
         self.last_audio = 0.0
-        self.f = {"energy": 0.0, "bass": 0.0, "mid": 0.0, "treble": 0.0,
+        self.f = {"energy": 0.0, "bass": 0.0, "kick": 0.0, "mid": 0.0, "treble": 0.0,
                   "beat": False, "beat_t": 0.0, "bpm_hint": 0.0, "silent": True}
         self.peak = 1e-3
         self.bpeak = {}
@@ -124,7 +124,8 @@ class Listener:
     def _analyse(self):
         win = np.hanning(WIN).astype(np.float32)
         freqs = np.fft.rfftfreq(WIN, 1 / SR)
-        bands = {"bass": (freqs >= 35) & (freqs < 160), "mid": (freqs >= 160) & (freqs < 2000),
+        bands = {"kickband": (freqs >= 40) & (freqs < 120),
+                 "bass": (freqs >= 35) & (freqs < 160), "mid": (freqs >= 160) & (freqs < 2000),
                  "treble": (freqs >= 2000) & (freqs < 8000)}
         last = time.time()
         while True:
@@ -141,15 +142,19 @@ class Listener:
             silent = rms < 0.004 or now - self.last_audio > 1.5
             f = self.f
             norm = lambda k: min(1.0, raw[k] / self.bpeak[k])
-            f["energy"] = _ema(f["energy"], 0 if silent else min(1.0, rms / self.peak), dt, 1.6)
-            f["bass"] = _ema(f["bass"], 0 if silent else norm("bass"), dt, 0.35)
-            f["mid"] = _ema(f["mid"], 0 if silent else norm("mid"), dt, 0.8)
-            f["treble"] = _ema(f["treble"], 0 if silent else norm("treble"), dt, 0.8)
+            f["energy"] = _ema(f["energy"], 0 if silent else min(1.0, rms / self.peak), dt, 0.5)
+            f["bass"] = _ema(f["bass"], 0 if silent else norm("bass"), dt, 0.12)
+            kin = 0.0 if silent else norm("kickband") ** 1.5          # emphasise the hits
+            k0 = f.get("kick", 0.0)
+            f["kick"] = _ema(k0, kin, dt, 0.015 if kin > k0 else 0.15)   # snap up, relax
+            f["mid"] = _ema(f["mid"], 0 if silent else norm("mid"), dt, 0.25)
+            f["treble"] = _ema(f["treble"], 0 if silent else norm("treble"), dt, 0.25)
             # gentle beat detection: bass well above its recent average, refractory 0.35 s
-            self.bass_hist = (self.bass_hist + [raw["bass"]])[-43:]
+            self.bass_hist = (self.bass_hist + [raw["kickband"]])[-86:]
             avg = sum(self.bass_hist) / len(self.bass_hist)
-            beat = (not silent and raw["bass"] > avg * 1.45 and raw["bass"] > self.bpeak["bass"] * 0.35
-                    and now - f["beat_t"] > 0.35)
+            beat = (not silent and raw["kickband"] > avg * 1.3
+                    and raw["kickband"] > self.bpeak["kickband"] * 0.3
+                    and now - f["beat_t"] > 0.22)
             if beat:
                 f["beat_t"] = now
                 self.beats = [b for b in self.beats if now - b < 8] + [now]
@@ -263,17 +268,17 @@ class Visuals:
         self.ripples = []
 
     def step(self, f, dt):
-        speed = 0.45 + 0.9 * f["energy"]
+        speed = 0.4 + 1.6 * f["energy"] + 0.8 * f["kick"]
         self.phase += dt * speed
         if f["beat"]:
             rs = random.random
             self.ripples.append([rs() * self.W, rs() * self.H * 0.9, time.time()])
-            self.ripples = self.ripples[-12:]
+            self.ripples = self.ripples[-16:]
 
     def lava(self, f, lut):
         p, W, H = self.phase, self.W, self.H
         fld = np.zeros((H, W), np.float32)
-        swell = 1 + 0.35 * f["bass"]
+        swell = 1 + 1.2 * f["kick"] + 0.2 * f["bass"]
         for i in range(6):
             s = 0.11 + i * 0.025
             cx = W * (0.5 + 0.33 * math.sin(p * s * 3 + i * 1.7))
@@ -288,8 +293,8 @@ class Visuals:
         if beat:                                           # a beat plants new growth
             h, w = c.B.shape
             cy, cx = random.randrange(4, h - 4), random.randrange(4, w - 4)
-            c.B[cy - 2:cy + 2, cx - 2:cx + 2] = 0.9
-        steps = max(1, int(round(dt * (50 + 150 * f["energy"]))))
+            c.B[cy - 4:cy + 4, cx - 4:cx + 4] = 1.0
+        steps = max(1, int(round(dt * (50 + 260 * f["energy"] + 120 * f["kick"]))))
         F, k = 0.0545, 0.062
         for _ in range(steps):
             AB2 = c.A * c.B * c.B
@@ -297,7 +302,7 @@ class Visuals:
             c.B += 0.1 * Coral._lap(c.B) + AB2 - (k + F) * c.B
             np.clip(c.A, 0, 1, out=c.A)
             np.clip(c.B, 0, 1, out=c.B)
-        img = _lut(np.clip(c.B * 2.6, 0, 1), lut)
+        img = _lut(np.clip(c.B * 2.6, 0, 1), lut) * (0.7 + 0.7 * f["kick"])   # throbs with bass
         return np.repeat(np.repeat(img, c.s, 0), c.s, 1)[:self.H, :self.W]
 
     def ink(self, f, lut, dt):
@@ -308,12 +313,12 @@ class Visuals:
         dpy = -b1 * np.sin(x * a1 + p * 0.3) * np.sin(y * b1 - p * 0.25)
         vx, vy = dpy, -dpx
         n = np.sqrt(vx * vx + vy * vy) + 1e-6
-        step = (8 + 22 * f["energy"]) * dt
+        step = (8 + 45 * f["energy"] + 30 * f["kick"]) * dt
         self.ink_p[:, 0] = (x + vx / n * step) % W
         self.ink_p[:, 1] = (y + vy / n * step) % H
         self.ink_acc *= 0.985 ** (dt * 25)
         np.add.at(self.ink_acc, (self.ink_p[:, 1].astype(int), self.ink_p[:, 0].astype(int)),
-                  0.12 + 0.2 * f["treble"])
+                  0.12 + 0.35 * f["treble"] + 0.3 * f["kick"])
         return _lut(1 - np.exp(-self.ink_acc * 1.2), lut)
 
     def aurora(self, f, lut):
@@ -321,9 +326,9 @@ class Visuals:
         out = np.zeros((H, W), np.float32)
         for k in range(3):
             band = (H * (0.3 + 0.15 * k) + np.sin(self.x / (24 - 4 * k) + p * (0.8 + k * 0.3)) *
-                    (8 + 14 * f["bass"]) + np.sin(self.x / 9 - p * 1.3 + k) * 3)
-            width = 90 + 140 * f["mid"]
-            out += np.exp(-((self.y - band) ** 2) / width) * (0.45 + 0.4 * f["energy"]) * \
+                    (8 + 30 * f["kick"]) + np.sin(self.x / 9 - p * 1.3 + k) * 3)
+            width = 90 + 260 * f["mid"]
+            out += np.exp(-((self.y - band) ** 2) / width) * (0.3 + 0.4 * f["energy"] + 0.6 * f["kick"]) * \
                 (0.6 + 0.4 * np.sin(self.x / 14 + p * 2 + k))
         rs = np.random.default_rng(int(p * 4))
         stars = rs.random((H, W)) > 0.997
@@ -339,7 +344,7 @@ class Visuals:
                 continue
             r = age * 26
             d = np.sqrt((self.x - cx) ** 2 + (self.y - cy) ** 2)
-            v = v + np.exp(-((d - r) ** 2) / 10) * (1 - age / 6) * 0.7
+            v = v + np.exp(-((d - r) ** 2) / 14) * (1 - age / 6) * 0.9
         return _lut(np.clip(v, 0, 1), lut)
 
     def render(self, style, f, lut, dt, beat):
@@ -371,6 +376,7 @@ class MusicShow:
         self.switched = 0.0
         self.last_t = None
         self.silent_since = None
+        self.pulse = 0.0
 
     def _target(self):
         f = self.l.f
@@ -399,6 +405,9 @@ class MusicShow:
             old = self.vis.render(self.prev[0], f, self.luts[self.prev[1]], dt, False)
             k = k * k * (3 - 2 * k)
             img = old * (1 - k) + img * k
+        # soft brightness swell on every beat, fading within ~0.25 s
+        self.pulse = 1.0 if beat else self.pulse * math.exp(-dt / 0.22)
+        img = img * (0.8 + 0.35 * f["kick"] + 0.3 * self.pulse)    # rides the bass
         out = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
         cap = self.vj.choice.get("caption") or ""
         age = time.time() - self.vj.changed

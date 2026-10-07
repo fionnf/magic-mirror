@@ -10,7 +10,8 @@ PORT="${PORT:-9099}"
 MIC="${MIC:-MacBook Pro Microphone}"
 echo "==> streaming \"$MIC\" to udp://$PI:$PORT  (Ctrl-C to stop)"
 while true; do
-    ffmpeg -hide_banner -loglevel error -f avfoundation -i ":$MIC" \
-        -ac 1 -ar 22050 -f s16le "udp://$PI:$PORT?pkt_size=1024" || true
+    ffmpeg -hide_banner -loglevel error -fflags nobuffer -flags low_delay \
+        -f avfoundation -i ":$MIC" \
+        -ac 1 -ar 22050 -flush_packets 1 -f s16le "udp://$PI:$PORT?pkt_size=512" || true
     sleep 1
 done

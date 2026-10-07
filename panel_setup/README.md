@@ -103,7 +103,8 @@ for a USB webcam). The LED strip and printer are optional and skipped if absent.
 
 ## Autostart on boot
 ```bash
-./panel_setup/install_autostart.sh            # lava & coral gallery at every boot
+./panel_setup/install_autostart.sh ambient    # art + tram ticker at every boot (current)
+./panel_setup/install_autostart.sh            # lava & coral gallery only
 ./panel_setup/install_autostart.sh art        # or any play.py animation
 ./panel_setup/install_autostart.sh --remove   # turn it off
 sudo systemctl stop wall-art                  # stop it for now (e.g. to run tests)

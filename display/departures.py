@@ -182,3 +182,58 @@ def frame(t):
     if _board is None:
         _board = Board()
     return _board.frame(t)
+
+
+# ------------------------------------------------- subtle ambient overlay ---
+
+def _bold(size):
+    for p in ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+              "/Library/Fonts/Arial Bold.ttf"):
+        try:
+            return ImageFont.truetype(p, size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+
+def draw_ticker(board, img, t, n=4, band=17, darken=0.42):
+    """Quiet strip along the bottom of `img`: next n trams as small chips."""
+    import numpy as np
+    W, H = img.size
+    a = np.asarray(img, np.float32).copy()
+    a[H - band:] *= darken                                  # translucent dark band
+    a[H - band] = a[H - band] * 0.6 + 40                    # faint top edge
+    img = Image.fromarray(a.clip(0, 255).astype(np.uint8), "RGB")
+    d = ImageDraw.Draw(img)
+    f_num, f_min = _bold(8), _bold(9)
+    rows = board._rows()[:n]
+    slot = W / n
+    y = H - band + (band - 10) // 2
+    for i, (line, dest, mins, delay) in enumerate(rows):
+        x = int(i * slot + 4)
+        bg, fg = LINE_COLOURS.get(line, ((90, 90, 100), (255, 255, 255)))
+        bg = tuple(int(c * 0.8) for c in bg)
+        d.rounded_rectangle([x, y, x + 15, y + 10], 2, fill=bg,
+                            outline=(110, 110, 110) if sum(bg) < 80 else None)
+        d.text((x + 8, y + 5), line, font=f_num, fill=fg, anchor="mm")
+        txt = "now" if mins == 0 else f"{mins}'"
+        col = (225, 150, 70) if delay > 0 else (215, 210, 195)
+        if mins == 0:                                       # gentle breathing, no blink
+            k = 0.6 + 0.4 * (0.5 + 0.5 * np.sin(t * 2.5))
+            col = tuple(int(c * k) for c in col)
+        d.text((x + 18, y + 5), txt, font=f_min, fill=col, anchor="lm")
+    if not board.ok:
+        d.ellipse([W - 5, H - band + 2, W - 2, H - band + 5], fill=(150, 50, 50))
+    return img
+
+
+_ambient_board = None
+
+
+def ambient_frame(t):
+    """Lava & Coral art with the tram ticker along the bottom."""
+    global _ambient_board
+    from display import art
+    if _ambient_board is None:
+        _ambient_board = Board()
+    return draw_ticker(_ambient_board, art.frame_lava_coral(t), t)

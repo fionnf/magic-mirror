@@ -25,7 +25,7 @@ After=multi-user.target
 [Service]
 Type=simple
 WorkingDirectory=$ROOT
-ExecStart=/usr/bin/python3 $ROOT/panel_setup/play.py $ANIM --fps 25
+ExecStart=/usr/bin/python3 $ROOT/panel_setup/play.py $ANIM --fps 30
 Restart=always
 RestartSec=5
 KillSignal=SIGINT

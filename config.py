@@ -45,7 +45,7 @@ MATRIX_AMPS_PER_PANEL = 4.0
 MATRIX_PWM_BITS = 7            # 1-11; fewer bits = much higher refresh
 MATRIX_PWM_DITHER_BITS = 0      # 0-2: smoother gradients at low pwm_bits, costs refresh
 MATRIX_PWM_LSB_NS = 130        # lower = faster refresh (try 100-300)
-MATRIX_REFRESH_LIMIT_HZ = 0    # 0 = unlimited; set ~100 to steady flicker
+MATRIX_REFRESH_LIMIT_HZ = 60   # lock refresh: animations at 30 fps = exactly 2 refreshes per frame (no judder)
 MATRIX_MULTIPLEXING = 0        # change if the image looks striped/scrambled
 MATRIX_ROW_ADDRESS_TYPE = 0    # 64x64 panels with ABCDE addressing: usually 0
 MATRIX_SHOW_REFRESH = False    # print refresh rate to stdout

@@ -23,7 +23,8 @@ class Camera:
 
     def capture_frame(self) -> np.ndarray:
         rgb = self.cam.capture_array()
-        return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        return vision.crop_to_aspect(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR),
+                                     config.CAMERA_ASPECT)
 
     def get_background_frame(self) -> np.ndarray:
         self._background = self.capture_frame()

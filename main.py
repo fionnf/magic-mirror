@@ -48,11 +48,18 @@ class NullButton:
         pass
 
 
-def start_auto_trigger(mirror, every_sec: float, booth_every: int = 0):
-    """Press the 'button' every N seconds while idle (hands-free testing)."""
+def start_auto_trigger(mirror, every_sec: float, booth_every: int = 0,
+                       count: int = 0):
+    """Press the 'button' every N seconds while idle (hands-free testing).
+    count > 0 stops after that many presses; the mirror then stays idle."""
     def loop():
         n = 0
         while not mirror._stop.wait(every_sec):
+            if count and n >= count:
+                if mirror.state == State.IDLE:
+                    print(f"[AUTO] done: {count} cycles")
+                    return
+                continue
             if mirror.state == State.IDLE:
                 n += 1
                 if booth_every and n % booth_every == 0:
@@ -155,7 +162,17 @@ class MagicMirror:
             time.sleep(1.0)
             return "The mirror dreams of electric sheep."
         import ai_client
-        return ai_client.get_mirror_message(frame)
+        return self._shorten(ai_client.get_mirror_message(frame))
+
+    @staticmethod
+    def _shorten(text):
+        """Safety net: strip quotes and cap the reply at AI_MAX_WORDS words."""
+        if not text:
+            return text
+        words = text.strip().strip('"\u201c\u201d').split()
+        if len(words) <= config.AI_MAX_WORDS:
+            return " ".join(words)
+        return " ".join(words[:config.AI_MAX_WORDS]).rstrip(",;:-") + "..."
 
     def _flash_white(self, ms: int):
         # short white flash on top of the silhouette as touch feedback
@@ -283,18 +300,14 @@ class MagicMirror:
             print("[SIM] Scrolling text...")
 
         interval = 1.0 / config.IDLE_ANIMATION_FPS
-        import numpy as np
-        # The scroll generator renders text over a (now-stale) silhouette
-        # snapshot. We composite each produced frame with the *current* live
-        # silhouette via per-channel max — text stays bright, the live
-        # silhouette tracks the person underneath. Single scroll pass.
-        gen = text_renderer.scroll_text_frames(
-            text, background=self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR))
+        # Text frames are transparent except for the outlined message; paste
+        # them over the *current* (dimmed) live silhouette so the person stays
+        # visible underneath while the outline keeps the text readable.
+        gen = text_renderer.scroll_text_frames(text, rgba=True)
         for text_frame, finished in gen:
-            live_dim = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
-            a = np.asarray(text_frame, dtype=np.uint8)
-            b = np.asarray(live_dim, dtype=np.uint8)
-            self.matrix.draw(Image.fromarray(np.maximum(a, b), "RGB"))
+            canvas = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
+            canvas.paste(text_frame, (0, 0), text_frame)
+            self.matrix.draw(canvas)
             if finished:
                 break
             time.sleep(interval)
@@ -554,8 +567,13 @@ def build_args():
                    help="No touch sensor wired: trigger via dashboard/API or --auto")
     p.add_argument("--mock-camera", choices=["webcam", "static"], default=None,
                    help="Use the mock camera on hardware (no Pi camera attached)")
+    p.add_argument("--camera-url", default=None, metavar="URL",
+                   help="Use a network camera stream (e.g. laptop webcam via "
+                        "panel_setup/stream_webcam.sh) instead of the Pi camera")
     p.add_argument("--auto", type=float, default=0, metavar="SEC",
                    help="Auto-trigger a cycle every SEC seconds while idle")
+    p.add_argument("--auto-count", type=int, default=0, metavar="N",
+                   help="With --auto, stop after N cycles (0 = keep going)")
     p.add_argument("--auto-booth-every", type=int, default=0, metavar="N",
                    help="With --auto, every Nth trigger is a photobooth run")
     p.add_argument("--no-mqtt", action="store_true", help="Disable MQTT bridge")
@@ -620,7 +638,10 @@ def main(argv=None):
     # real hardware
     from led_matrix import LedMatrix
     matrix = LedMatrix()
-    if args.mock_camera:
+    if args.camera_url:
+        from simulator.camera_mock import CameraMock
+        camera = CameraMock(mode="stream", source=args.camera_url)
+    elif args.mock_camera:
         from simulator.camera_mock import CameraMock
         camera = CameraMock(mode=args.mock_camera)
     else:
@@ -638,7 +659,7 @@ def main(argv=None):
                          strip=strip, printer=printer,
                          sim_mode=False, no_api=args.no_api)
     if args.auto > 0:
-        start_auto_trigger(mirror, args.auto, args.auto_booth_every)
+        start_auto_trigger(mirror, args.auto, args.auto_booth_every, args.auto_count)
 
     api = MirrorAPI(mirror, port=5000)
     api.start()

@@ -74,11 +74,14 @@ TOUCH_PULL = "down"
 CAMERA_WARMUP_SEC = 2
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
+# Every captured frame is centre-cropped to this width/height ratio, so the AI,
+# the receipt and the silhouette all see the same portrait picture.
+CAMERA_ASPECT = 3 / 4
 
 # Silhouette
 BG_HISTORY = 500
 BG_THRESHOLD = 50
-SILHOUETTE_COLOUR = (0, 100, 255)
+SILHOUETTE_COLOUR = (0, 210, 110)   # green (was blue (0, 100, 255))
 # Live silhouette is continuously rendered as the always-on background of the
 # mirror. Refresh rate (Hz) for the capture/extract loop:
 LIVE_SILHOUETTE_FPS = 10
@@ -86,26 +89,32 @@ LIVE_SILHOUETTE_FPS = 10
 SILHOUETTE_DIFF_THRESHOLD = 30
 # Silhouette maths runs on this small size (w, h), not the full frame.
 SILHOUETTE_PROC_SIZE = (160, 120)
+# Flip the live silhouette left-right so the wall acts like a mirror. Only the
+# display is flipped; photos for the AI / receipts stay as the camera saw them.
+SILHOUETTE_MIRROR = True
 # Dim factor applied to the live silhouette while text is overlaid.
-SILHOUETTE_DIM_FACTOR = 0.3
+SILHOUETTE_DIM_FACTOR = 0.2
 
 # AI (OpenAI Chat Completions, vision-capable model)
 AI_MODEL = "gpt-4o-mini"
-AI_MAX_TOKENS = 80
+AI_MAX_TOKENS = 30
 AI_TIMEOUT_SEC = 10
 MIRROR_PERSONA = (
-    "You are mirror. In a flatshare entrance of a fun gay flatshare."
+    "You are the mirror in the entrance of a fun gay flatshare. "
     "The person in the image is standing before you. "
-    "Respond with a single short sentence (max 12 words) — "
-    "It can be critical, motivational, but always specific to what you see. Make them very creative and sometimes htought provoking. Look especially at expressions. They can be a bit gay or naughty."
-    "No quotation marks. No preamble."
+    "Reply with ONE very short line of 3 to 7 words. "
+    "It can be critical, motivational, cheeky or thought-provoking, but always "
+    "specific to what you see - look especially at expressions, outfit and pose. "
+    "It can be a bit gay or naughty. Vary your openings; never start with "
+    "'Embrace'. No quotation marks. No preamble."
 )
+AI_MAX_WORDS = 8   # hard cap applied after the reply comes back
 AI_FALLBACK_MESSAGE = "The mirror sees all, but speaks slowly tonight."
 
 # Display timing
 IDLE_ANIMATION_FPS = 24
 SILHOUETTE_DISPLAY_SEC = 1.5
-MESSAGE_SCROLL_SPEED = 40  # pixels per second
+MESSAGE_SCROLL_SPEED = 85  # pixels per second (bigger font = longer line)
 MESSAGE_HOLD_SEC = 4
 FADE_OUT_SEC = 1.0
 TRIGGER_FLASH_MS = 50
@@ -149,8 +158,16 @@ BOOTH_FALLBACK_PROMPTS = [
 ]
 
 # Text rendering
-TEXT_COLOUR = (255, 160, 50)
-FONT_PATH = "assets/fonts/6x10.bdf"  # fallback to PIL default if missing
+# Warm white with a black outline: readable over the live silhouette.
+TEXT_COLOUR = (255, 235, 170)
+TEXT_FONT_SIZE = 30                 # px; the wall is 192 px tall
+TEXT_FONT_PATHS = [                 # first one that exists is used
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/Library/Fonts/Arial Bold.ttf",
+]
+TEXT_STROKE_WIDTH = 2               # black outline around letters (0 = off)
+TEXT_STROKE_COLOUR = (0, 0, 0)
+FONT_PATH = "assets/fonts/6x10.bdf"  # legacy fallback
 
 # Simulator (the window is now 192 x 256 logical px; scale 4 keeps it
 # comfortably on a laptop screen at 576 x 768 + strip border)
@@ -168,8 +185,10 @@ PRINTER_PRODUCT_ID = 0x5011
 PRINTER_WIDTH_DOTS = 384
 # Text wrap column at the chosen size. AI line printed at 1x bold = ~32 cols.
 PRINTER_TEXT_COLS = 32
+PRINTER_MESSAGE_FONT_SIZE = 34   # AI message on the receipt (px at 203 dpi)
+PRINTER_HEADER_FONT_SIZE = 20
 # width / height of the printed image. <1 = portrait; 0.75 = classic 3:4.
-PRINTER_IMAGE_ASPECT = 0.75
+PRINTER_IMAGE_ASPECT = 0.75   # width/height of the printed photo (0.75 = 3:4 portrait)
 PRINTER_TIMEOUT_MS = 0  # 0 = libusb default
 # Bold header line printed above the timestamp. Empty string to omit.
 PRINTER_HEADER = "FORTUNAGASSE 24"

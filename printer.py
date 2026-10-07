@@ -55,49 +55,92 @@ def _frame_to_pil(frame: np.ndarray) -> Image.Image:
 # Receipt layout (single-shot)
 # ---------------------------------------------------------------------------
 
+def _ttf(size: int):
+    """Bold TrueType font at `size` px; falls back to Pillow's scalable default."""
+    for path in getattr(config, "TEXT_FONT_PATHS", []):
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                pass
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def _wrap_px(draw: ImageDraw.ImageDraw, text: str, font, max_w: int) -> List[str]:
+    """Greedy word wrap by rendered pixel width."""
+    lines, cur = [], ""
+    for word in text.split():
+        trial = f"{cur} {word}".strip()
+        if draw.textlength(trial, font=font) <= max_w or not cur:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = word
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _crop_portrait(photo: Image.Image, w: int, h: int) -> Image.Image:
+    """Crop (never stretch) to w:h, keeping a bit more of the top, then resize."""
+    target = w / h
+    src = photo.width / photo.height
+    if src > target:
+        nw = int(photo.height * target)
+        x0 = (photo.width - nw) // 2
+        photo = photo.crop((x0, 0, x0 + nw, photo.height))
+    elif src < target:
+        nh = int(photo.width / target)
+        y0 = (photo.height - nh) // 3
+        photo = photo.crop((0, y0, photo.width, y0 + nh))
+    return photo.resize((w, h), Image.LANCZOS)
+
+
 def _receipt_image(frame: np.ndarray, text: str) -> Image.Image:
-    """Build a printable greyscale PIL Image for a single-shot receipt."""
+    """Build a printable greyscale PIL Image for a single-shot receipt:
+    header + timestamp, portrait photo, then the AI message in large type."""
     W = config.PRINTER_WIDTH_DOTS
-    photo_h = int(W * config.PRINTER_IMAGE_ASPECT)
+    photo_h = int(round(W / config.PRINTER_IMAGE_ASPECT))     # portrait
+    processed = _preprocess(_crop_portrait(_frame_to_pil(frame), W, photo_h))
 
-    pil_photo = _frame_to_pil(frame).resize((W, photo_h), Image.LANCZOS)
-    processed = _preprocess(pil_photo)
-
-    font = ImageFont.load_default()
-    char_w, line_h = 6, 12
+    head_font = _ttf(config.PRINTER_HEADER_FONT_SIZE)
+    msg_font = _ttf(config.PRINTER_MESSAGE_FONT_SIZE)
+    probe = ImageDraw.Draw(Image.new("L", (1, 1)))
+    margin = 8
 
     header_lines: List[str] = []
     if config.PRINTER_HEADER:
         header_lines.append(config.PRINTER_HEADER)
-    header_lines.append(datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
+    header_lines.append(datetime.datetime.now().strftime("%Y-%m-%d  %H:%M"))
+    msg_lines = _wrap_px(probe, text.upper(), msg_font, W - 2 * margin) or [text.upper()]
 
-    wrapped = textwrap.fill(text.upper(), width=config.PRINTER_TEXT_COLS)
-    text_lines = wrapped.splitlines() or [text.upper()]
+    def line_h(font):
+        l, t, r, b = probe.textbbox((0, 0), "AgÄ", font=font)
+        return (b - t) + 6
 
-    total_h = (
-        len(header_lines) * line_h + 6
-        + photo_h + 4
-        + len(text_lines) * line_h + 8
-    )
+    hh, mh = line_h(head_font), line_h(msg_font)
+    total_h = 6 + len(header_lines) * hh + 6 + photo_h + 12 + len(msg_lines) * mh + 10
 
     out = Image.new("L", (W, total_h), 255)
     draw = ImageDraw.Draw(out)
 
-    y = 4
+    def centred(y, line, font):
+        w = draw.textlength(line, font=font)
+        draw.text(((W - w) // 2, y), line, fill=0, font=font)
+
+    y = 6
     for line in header_lines:
-        x = max(0, (W - len(line) * char_w) // 2)
-        draw.text((x, y), line, fill=0, font=font)
-        y += line_h
-    y += 2
-
+        centred(y, line, head_font)
+        y += hh
+    y += 6
     out.paste(processed, (0, y))
-    y += photo_h + 4
-
-    for line in text_lines:
-        x = max(0, (W - len(line) * char_w) // 2)
-        draw.text((x, y), line, fill=0, font=font)
-        y += line_h
-
+    y += photo_h + 12
+    for line in msg_lines:
+        centred(y, line, msg_font)
+        y += mh
     return out
 
 

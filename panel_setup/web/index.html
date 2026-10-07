@@ -51,6 +51,9 @@
           border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; }
   input[type=text] { flex: 1; min-width: 180px; }
   .big { font-size: 22px; padding: 18px; width: 100%; }
+  .toggles { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; }
+  .toggles label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .toggles input { width: 18px; height: 18px; accent-color: var(--pink); }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .seg button { border: 0; border-radius: 0; background: var(--panel2); }
   .seg button.on { background: var(--gold); color: #241600; font-weight: 700; }
@@ -132,6 +135,11 @@
         <label class="sub">Art style<br><select id="mStyle" onchange="musicSet()"></select></label>
         <label class="sub">Colours<br><select id="mPal" onchange="musicSet()"></select></label>
         <label class="sub">Vibe<br><select id="mVibe" onchange="musicSet()"></select></label>
+      </div>
+      <div class="toggles">
+        <label><input type="checkbox" id="tAi" onchange="toggleSet('ai', this.checked)"> 🤖 AI designer</label>
+        <label><input type="checkbox" id="tShz" onchange="toggleSet('shazam', this.checked)"> 🎵 Recognise songs</label>
+        <label><input type="checkbox" id="tWall" onchange="toggleSet('song_on_wall', this.checked)"> Song title on the wall</label>
       </div>
       <div class="row" style="margin-bottom:10px;justify-content:space-between">
         <span class="sub">Listen with</span>
@@ -249,6 +257,8 @@ async function musicLoad(first) {
       $('mStyle').value = m.settings.style; $('mPal').value = m.settings.palette; $('mVibe').value = m.settings.vibe;
       $('sens').value = m.settings.sensitivity; $('sensVal').textContent = m.settings.sensitivity;
     }
+    $('tAi').checked = !!m.settings.ai; $('tShz').checked = !!m.settings.shazam;
+    $('tWall').checked = !!m.settings.song_on_wall;
     $('srcMac').classList.toggle('on', m.settings.source === 'mac');
     $('srcPi').classList.toggle('on', m.settings.source === 'pi');
     const a = m.now && m.now.audio;
@@ -257,13 +267,18 @@ async function musicLoad(first) {
                    : (a.source === 'pi' ? 'Pi mic: no sound yet' : 'Mac stream: nothing arriving — is stream_mic.sh running?'));
     const n = m.now;
     $('musicScene').textContent = n && n.scene && !n.silent ? '“' + n.scene + '”' : '';
-    $('musicSong').textContent = n && n.song && !n.silent ? '♪ ' + n.song + (n.artist ? ' — ' + n.artist : '') : '';
+    $('musicSong').textContent = n && n.song && !n.silent ? '♪ ' + n.song + (n.artist ? ' — ' + n.artist : '') :
+      (n && n.shazam && m.settings.shazam && !n.silent ? 'Shazam: ' + n.shazam : '');
     $('musicSw').innerHTML = n && n.colors ? n.colors.map(c =>
       `<span style="display:inline-block;width:16px;height:16px;border-radius:4px;background:${c};margin-right:3px;vertical-align:middle"></span>`).join('') : '';
     $('musicNow').textContent = !n ? (STATUS.current === 'music' ? 'listening…' : 'not playing') :
       (n.silent ? `quiet room · ${n.style} + ${n.palette}` :
        `${n.genre ? 'AI hears ' + n.genre + (n.mood ? ' · ' + n.mood : '') + ' → ' : ''}${n.style}${n.layer && n.layer !== 'none' ? ' + ' + n.layer : ''} · ${n.palette}${n.vibe ? ' · ' + n.vibe : ''}`);
   } catch (e) {}
+}
+function toggleSet(key, on) {
+  post('/api/music', {[key]: on}).then(() => { toast(`${key === 'ai' ? '🤖 AI designer' : key === 'shazam' ? '🎵 Song recognition' : 'Song on wall'} ${on ? 'on' : 'off'}`); musicLoad(); })
+    .catch(e => toast(e.message));
 }
 function setSource(src) {
   post('/api/music', {source: src}).then(r => { toast(src === 'pi' ? '🎙 Listening with the Pi' : '🎙 Listening with the Mac'); musicLoad(); })

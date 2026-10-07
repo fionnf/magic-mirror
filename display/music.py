@@ -143,7 +143,7 @@ _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # written by the app
 NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # read by the app
 DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "mac",
-                    "sensitivity": 50}
+                    "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True}
 
 
 def load_settings():
@@ -160,6 +160,8 @@ def load_settings():
         s["vibe"] = "auto"
     if s["source"] not in ("mac", "pi"):
         s["source"] = "mac"
+    for k in ("ai", "shazam", "song_on_wall"):
+        s[k] = bool(s.get(k, True))
     try:
         s["sensitivity"] = max(0, min(100, int(s["sensitivity"])))
     except (TypeError, ValueError):
@@ -198,6 +200,18 @@ def _write_json(path, data):
         os.replace(tmp, path)
     except Exception:
         pass
+
+
+def wav_bytes(x):
+    """float32 mono samples -> WAV file bytes (16-bit, SR Hz)."""
+    pcm = (np.clip(x, -1, 1) * 32767).astype("<i2").tobytes()
+    b = io.BytesIO()
+    with wave.open(b, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(pcm)
+    return b.getvalue()
 
 
 def _ema(old, new, dt, tau):
@@ -325,14 +339,85 @@ class Listener:
             f["silent"] = silent
 
 
+# ------------------------------------------------------- song recognition ---
+
+class Recognizer:
+    """Names the playing song with Shazam (unofficial shazamio library)."""
+    EVERY_MISS, EVERY_HIT = 45.0, 100.0
+
+    def __init__(self, listener, enabled=lambda: True):
+        self.l, self.enabled = listener, enabled
+        self.song = None                    # {"title", "artist", "at", "seen"}
+        self.status = "idle"
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def current(self, max_age=300.0):
+        s = self.song
+        if s and time.time() - s["seen"] < max_age and not self.l.f["silent"]:
+            return s
+        return None
+
+    @staticmethod
+    def _recognize(clip):
+        import asyncio
+        from shazamio import Shazam
+        wav = wav_bytes(clip)
+
+        async def go():
+            return await Shazam().recognize(wav)
+        track = (asyncio.run(go()) or {}).get("track")
+        if track and track.get("title"):
+            return track["title"], track.get("subtitle", "")
+        return None
+
+    def _loop(self):
+        time.sleep(15)
+        wait = self.EVERY_MISS
+        while True:
+            time.sleep(wait)
+            wait = self.EVERY_MISS
+            if not self.enabled():
+                self.status = "off"
+                continue
+            if self.l.f["silent"] or time.time() - self.l.last_audio > 2:
+                self.status = "waiting for music"
+                continue
+            clip = self.l.recent(10.0)
+            level = float(np.sqrt(np.mean(clip * clip)))
+            if level < 0.003:
+                continue
+            self.status = "listening"
+            try:
+                r = self._recognize(clip * min(8.0, 0.25 / max(level, 1e-4)))
+            except Exception as e:
+                self.status = f"error: {str(e)[:60]}"
+                print(f"[SHAZAM] {str(e)[:120]}", flush=True)
+                continue
+            now = time.time()
+            if r:
+                title, artist = r
+                if self.song and self.song["title"] == title:
+                    self.song["seen"] = now
+                else:
+                    self.song = {"title": title, "artist": artist, "at": now, "seen": now}
+                    print(f"[SHAZAM] {title} - {artist}", flush=True)
+                self.status = "found"
+                wait = self.EVERY_HIT
+            else:
+                self.status = "no match"
+                print("[SHAZAM] no match", flush=True)
+
+
 # --------------------------------------------------------------- AI VJ ---
 
 class VJ:
     """The AI light designer: listens every AI_EVERY s and designs a whole scene."""
 
-    def __init__(self, listener, vibe=lambda: "chill"):
+    def __init__(self, listener, vibe=lambda: "chill", enabled=lambda: True, song=lambda: None):
         self.l = listener
         self.vibe = vibe
+        self.enabled = enabled
+        self.song = song
         self.choice = dict(DEFAULT_CHOICE)
         self.history = []
         self.changed = 0.0
@@ -340,14 +425,7 @@ class VJ:
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _wav_b64(self, x):
-        pcm = (np.clip(x, -1, 1) * 32767).astype("<i2").tobytes()
-        b = io.BytesIO()
-        with wave.open(b, "wb") as w:
-            w.setnchannels(1)
-            w.setsampwidth(2)
-            w.setframerate(SR)
-            w.writeframes(pcm)
-        return base64.b64encode(b.getvalue()).decode()
+        return base64.b64encode(wav_bytes(x)).decode()
 
     def _context(self):
         lt = time.localtime()
@@ -361,7 +439,15 @@ class VJ:
         return (f"Here is a {AI_CLIP:.0f}-second clip of what is playing in the hallway now. "
                 f"Local time {lt.tm_hour:02d}:{lt.tm_min:02d} ({part}). Measured energy "
                 f"{f['energy']:.2f}, tempo roughly {f['bpm_hint']:.0f} bpm. Your recent scenes: "
-                f"{hist}. Design the next scene. Reply with the JSON only.")
+                f"{hist}. {self._song_line()}Design the next scene. Reply with the JSON only.")
+
+    def _song_line(self):
+        sg = self.song()
+        if not sg:
+            return ""
+        return (f"Shazam has identified the song as \"{sg['title']}\" by {sg['artist']} - treat "
+                f"that as fact and let the song itself (its mood, era, lyrics, cover art) inspire "
+                f"the scene; set \"song\" and \"artist\" accordingly. ")
 
     def _ask_ai(self, clip):
         try:
@@ -413,7 +499,8 @@ class VJ:
             level = float(np.sqrt(np.mean(clip * clip)))
             if not self.l.f["silent"] and time.time() - self.l.last_audio < 2 and level > 0.003:
                 # normalise the clip so quiet rooms still give the model something to hear
-                j = self._ask_ai(clip * min(8.0, 0.25 / max(level, 1e-4)))
+                j = (self._ask_ai(clip * min(8.0, 0.25 / max(level, 1e-4)))
+                     if self.enabled() else None)
                 if j:
                     self.source = j.get("model", "ai")
                     if j.get("song"):
@@ -429,8 +516,8 @@ class VJ:
                                                      "palette": j["palette_desc"]}])[-6:]
                 else:
                     j = self._fallback()
-                    self.source = "fallback"
-                    print(f"[VJ] fallback -> {j['style']} + {j['palkey']}", flush=True)
+                    self.source = "rules" if not self.enabled() else "fallback"
+                    print(f"[VJ] {self.source} -> {j['style']} + {j['palkey']}", flush=True)
                 if _scene_key(j) != _scene_key(self.choice):
                     self.choice, self.changed = j, time.time()
                 else:
@@ -589,7 +676,9 @@ class MusicShow:
         self.settings, self.settings_mtime, self.settings_checked = load_settings(), None, 0.0
         self.force = False
         self.xfade = self.XFADE
-        self.vj = VJ(self.l, vibe=lambda: self.settings["vibe"])
+        self.rec = Recognizer(self.l, enabled=lambda: self.settings["shazam"])
+        self.vj = VJ(self.l, vibe=lambda: self.settings["vibe"],
+                     enabled=lambda: self.settings["ai"], song=self.rec.current)
         self.vis = Visuals(W, H)
         self.luts = {k: _palette(v) for k, v in PALETTES.items()}
         self.prev = None
@@ -650,7 +739,9 @@ class MusicShow:
                                "colors": swatch, "vibe": c.get("vibe", ""),
                                "design": self.design, "layer_opacity": round(self.layer_op, 2),
                                "genre": c.get("genre", ""), "mood": c.get("mood", ""),
-                               "song": c.get("song", ""), "artist": c.get("artist", ""),
+                               "song": (self.rec.current() or {}).get("title") or c.get("song", ""),
+                               "artist": (self.rec.current() or {}).get("artist") or c.get("artist", ""),
+                               "shazam": self.rec.status,
                                "source": self.vj.source, "settings": self.settings,
                                "audio": {"source": self.settings.get("source", "mac"),
                                          "spec": self.l.spec, "error": self.l.error,
@@ -708,7 +799,38 @@ class MusicShow:
             k = k * k * (3 - 2 * k)
             img = old * (1 - k) + img * k
         img = img * (0.93 + 0.1 * f["kick"])                     # gently rides the (smoothed) bass
-        return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
+        out = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
+        return self._song_overlay(out)
+
+    SONG_SHOW = 12.0        # seconds a newly recognised song stays on the wall
+
+    def _song_overlay(self, out):
+        """Small, soft song title in the bottom-left, only when a song is first recognised."""
+        sg = self.rec.current(600.0)
+        if not (sg and self.settings.get("song_on_wall", True)):
+            return out
+        age = time.time() - sg["at"]
+        if age > self.SONG_SHOW:
+            return out
+        a = min(1.0, age / 1.5, (self.SONG_SHOW - age) / 2.0)
+        from display.maeva_story import _font
+        W, H = out.size
+        f1, f2 = _font(9), _font(8)
+
+        def fit(text, font):
+            while text and font.getlength(text) > W - 14:
+                text = text[:-2].rstrip() + "…" if len(text) > 2 else ""
+            return text
+        title, artist = fit("♪ " + sg["title"], f1), fit(sg["artist"], f2)
+        layer = Image.new("RGBA", out.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(layer)
+        y = H - 24 if artist else H - 14
+        d.text((6, y), title, font=f1, fill=(240, 235, 225, int(235 * a)), stroke_width=1,
+               stroke_fill=(0, 0, 0, int(200 * a)))
+        if artist:
+            d.text((6, y + 11), artist, font=f2, fill=(205, 200, 195, int(210 * a)),
+                   stroke_width=1, stroke_fill=(0, 0, 0, int(180 * a)))
+        return Image.alpha_composite(out.convert("RGBA"), layer).convert("RGB")
 
 
 _show = None

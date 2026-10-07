@@ -371,7 +371,8 @@ def make_app(runner):
         d = request.get_json(force=True, silent=True) or {}
         st = mu.load_settings()
         old_source = st.get("source")
-        for k in ("style", "palette", "vibe", "source", "sensitivity"):
+        for k in ("style", "palette", "vibe", "source", "sensitivity", "ai", "shazam",
+                  "song_on_wall"):
             if k in d:
                 st[k] = d[k]
         mu._write_json(mu.SETTINGS_FILE, st)

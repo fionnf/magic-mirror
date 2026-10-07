@@ -157,6 +157,11 @@ class Runner:
             self._start(what)
             self.oneshot_resume = resume
 
+    def restart_current(self):
+        with self.lock:
+            if self.current not in (None, "off"):
+                self._start(self.current)
+
     def set_brightness(self, value):
         with self.lock:
             self.state["brightness"] = max(5, min(100, int(value)))
@@ -365,12 +370,15 @@ def make_app(runner):
         from display import music as mu
         d = request.get_json(force=True, silent=True) or {}
         st = mu.load_settings()
-        for k in ("style", "palette", "vibe"):
+        old_source = st.get("source")
+        for k in ("style", "palette", "vibe", "source", "sensitivity"):
             if k in d:
                 st[k] = d[k]
         mu._write_json(mu.SETTINGS_FILE, st)
         if d.get("start") and runner.current != "music":
             runner.play("music")
+        elif runner.current == "music" and mu.load_settings()["source"] != old_source:
+            runner.restart_current()                      # new microphone: restart listening
         return jsonify({"settings": mu.load_settings(), "status": runner.status()})
 
     @app.post("/api/mirror/photo")

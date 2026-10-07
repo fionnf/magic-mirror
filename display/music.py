@@ -60,14 +60,17 @@ AI_PROMPT = (
     "shapes 3-8 and softness 0.7 (crisper) - 1.5 (dreamier). "
     "Let the scenes evolve as a coherent set over the evening - vary them but let them belong "
     "together - and match the music's mood and energy. "
-    "Reply ONLY with JSON: {\"scene\": short evocative name, \"genre\": str, \"mood\": one word, "
+    "If - and only if - you genuinely recognise the song, name it and its artist and let the song "
+    "itself inspire the scene (its mood, its era, its artwork); never guess. "
+    "Reply ONLY with JSON: {\"song\": \"title\" or null, \"artist\": \"name\" or null, "
+    "\"scene\": short evocative name, \"genre\": str, \"mood\": one word, "
     "\"energy\": 0-1, \"style\": base style, \"layer\": style or \"none\", "
     "\"layer_opacity\": number, \"palette\": preset name or \"custom\", "
     "\"colors\": [4 hex strings, when custom], \"vibe\": str, \"speed\": number, "
     "\"scale\": number, \"count\": integer, \"softness\": number}"
 )
 LAYERS = ("glow", "aurora", "ripples")
-DEFAULT_CHOICE = {"scene": "", "genre": "", "mood": "", "style": "glow", "layer": "none",
+DEFAULT_CHOICE = {"scene": "", "genre": "", "mood": "", "song": "", "artist": "", "style": "glow", "layer": "none",
                   "layer_opacity": 0.0, "palkey": "dusk", "palette_desc": "dusk",
                   "vibe": "chill", "speed": 1.0, "scale": 1.0, "count": 6, "softness": 1.0}
 
@@ -103,6 +106,9 @@ def _validate(j):
     num = lambda v, lo, hi, d: max(lo, min(hi, float(v))) if isinstance(v, (int, float)) else d
     out = dict(DEFAULT_CHOICE)
     out.update({k: str(j.get(k, ""))[:40] for k in ("scene", "genre", "mood")})
+    for k in ("song", "artist"):                      # only when the AI really recognised it
+        v = j.get(k)
+        out[k] = str(v)[:60] if v and str(v).strip().lower() not in ("null", "none", "unknown", "") else ""
     out["style"] = j["style"]
     layer = j.get("layer", "none")
     out["layer"] = layer if layer in LAYERS and layer != j["style"] else "none"
@@ -136,7 +142,8 @@ AI_MODELS = ["gpt-audio"]
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # written by the app
 NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # read by the app
-DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto"}
+DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "mac",
+                    "sensitivity": 50}
 
 
 def load_settings():
@@ -151,7 +158,36 @@ def load_settings():
         s["palette"] = "auto"
     if s["vibe"] != "auto" and s["vibe"] not in VIBES:
         s["vibe"] = "auto"
+    if s["source"] not in ("mac", "pi"):
+        s["source"] = "mac"
+    try:
+        s["sensitivity"] = max(0, min(100, int(s["sensitivity"])))
+    except (TypeError, ValueError):
+        s["sensitivity"] = 50
     return s
+
+
+def reactivity(sensitivity):
+    """Slider 0..100 -> reaction strength 0.3..2.0 (50 = 1.0, the tuned default)."""
+    v = max(0, min(100, sensitivity)) / 50.0 - 1.0
+    return 2.0 ** (v * (1.0 if v > 0 else 1.74))
+
+
+def find_pi_mic():
+    """First ALSA capture device (USB sound card / USB mic) as 'plughw:N,0', or None."""
+    try:
+        out = subprocess.run(["arecord", "-l"], capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return None
+    for line in out.splitlines():
+        if line.startswith("card ") and "device" in line:
+            try:
+                card = int(line.split()[1].rstrip(":"))
+                dev = int(line.split("device")[1].split(":")[0])
+                return f"plughw:{card},{dev}"
+            except (ValueError, IndexError):
+                continue
+    return None
 
 
 def _write_json(path, data):
@@ -175,7 +211,19 @@ class Listener:
     """Reads audio into a ring buffer and computes smoothed features."""
 
     def __init__(self, spec=None):
-        spec = spec or os.environ.get("WALL_AUDIO", "udp:9099")
+        self.error = ""
+        self.react = 1.0
+        if spec is None:
+            spec = os.environ.get("WALL_AUDIO")
+        if spec is None:
+            if load_settings()["source"] == "pi":
+                dev = find_pi_mic()
+                spec = f"alsa:{dev}" if dev else "none:"
+                if not dev:
+                    self.error = "no microphone found on the Pi (needs a USB sound card or USB mic)"
+            else:
+                spec = "udp:9099"
+        self.spec = spec
         self.buf = np.zeros(SR * 12, np.float32)          # last 12 s
         self.w = 0
         self.lock = threading.Lock()
@@ -187,8 +235,9 @@ class Listener:
         self.bass_hist = []
         self.beats = []
         kind, _, arg = spec.partition(":")
-        target = self._udp if kind == "udp" else self._alsa
-        threading.Thread(target=target, args=(arg,), daemon=True).start()
+        if kind in ("udp", "alsa"):
+            target = self._udp if kind == "udp" else self._alsa
+            threading.Thread(target=target, args=(arg,), daemon=True).start()
         threading.Thread(target=self._analyse, daemon=True).start()
 
     def _push(self, samples):
@@ -212,14 +261,19 @@ class Listener:
                            / 32768.0)
 
     def _alsa(self, dev):
-        p = subprocess.Popen(["arecord", "-q", "-D", dev or "default", "-f", "S16_LE", "-r",
-                              str(SR), "-c", "1", "-t", "raw"], stdout=subprocess.PIPE)
         while True:
-            data = p.stdout.read(HOP * 2)
-            if not data:
-                time.sleep(1)
-                continue
-            self._push(np.frombuffer(data, "<i2").astype(np.float32) / 32768.0)
+            p = subprocess.Popen(["arecord", "-q", "-D", dev or "default", "-f", "S16_LE", "-r",
+                                  str(SR), "-c", "1", "-t", "raw"], stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+            while True:
+                data = p.stdout.read(HOP * 2)
+                if not data:
+                    break
+                self.error = ""
+                self._push(np.frombuffer(data, "<i2").astype(np.float32) / 32768.0)
+            err = (p.stderr.read() or b"").decode(errors="replace").strip()
+            self.error = f"Pi microphone stopped: {err[:120]}" if err else "Pi microphone stopped"
+            time.sleep(2)
 
     def recent(self, seconds):
         n = int(SR * seconds)
@@ -246,7 +300,7 @@ class Listener:
             self.peak = max(self.peak * (1 - 0.15 * dt), rms, 1e-3)      # slow auto-gain
             for k, v in raw.items():                                      # per-band auto-gain
                 self.bpeak[k] = max(self.bpeak.get(k, 1e-6) * (1 - 0.15 * dt), v, 1e-6)
-            silent = rms < 0.004 or now - self.last_audio > 1.5
+            silent = rms < 0.004 / self.react or now - self.last_audio > 1.5
             f = self.f
             norm = lambda k: min(1.0, raw[k] / self.bpeak[k])
             f["energy"] = _ema(f["energy"], 0 if silent else min(1.0, rms / self.peak), dt, 2.0)
@@ -362,6 +416,8 @@ class VJ:
                 j = self._ask_ai(clip * min(8.0, 0.25 / max(level, 1e-4)))
                 if j:
                     self.source = j.get("model", "ai")
+                    if j.get("song"):
+                        print(f"[VJ] song: {j['song']} - {j.get('artist') or '?'}", flush=True)
                     print(f"[VJ] \"{j['scene']}\" - {j.get('genre')} / {j.get('mood')}: "
                           f"{j['style']}" + (f" + {j['layer']} {j['layer_opacity']:.0%}"
                                              if j["layer"] != "none" else "")
@@ -380,6 +436,7 @@ class VJ:
                 else:
                     self.choice.update({k: v for k, v in j.items()
                                         if k not in ("style", "palkey", "layer")})
+                self.choice["song"], self.choice["artist"] = j.get("song", ""), j.get("artist", "")
             time.sleep(AI_EVERY)
 
 
@@ -593,7 +650,11 @@ class MusicShow:
                                "colors": swatch, "vibe": c.get("vibe", ""),
                                "design": self.design, "layer_opacity": round(self.layer_op, 2),
                                "genre": c.get("genre", ""), "mood": c.get("mood", ""),
+                               "song": c.get("song", ""), "artist": c.get("artist", ""),
                                "source": self.vj.source, "settings": self.settings,
+                               "audio": {"source": self.settings.get("source", "mac"),
+                                         "spec": self.l.spec, "error": self.l.error,
+                                         "receiving": time.time() - self.l.last_audio < 2},
                                "silent": self.l.f["silent"], "time": time.time()})
 
     def _render(self, key, f, dt, beat, op):
@@ -611,6 +672,10 @@ class MusicShow:
         f = dict(self.l.f)
         beat = f["beat"]
         self.l.f["beat"] = False
+        react = reactivity(self.settings.get("sensitivity", 50))      # live from the app
+        self.l.react = react
+        for key in ("energy", "bass", "kick", "mid", "treble"):
+            f[key] = min(1.0, f[key] * react)
         # visuals breathe with a ~0.6 s average of the bass, so nothing twitches
         self.ks = _ema(getattr(self, "ks", 0.0), f["kick"], dt, 0.6)
         f["kick"] = self.ks

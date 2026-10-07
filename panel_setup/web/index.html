@@ -51,6 +51,9 @@
           border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; }
   input[type=text] { flex: 1; min-width: 180px; }
   .big { font-size: 22px; padding: 18px; width: 100%; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; background: var(--panel2); }
+  .seg button.on { background: var(--gold); color: #241600; font-weight: 700; }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #000c;
            padding: 10px 16px; border-radius: 12px; opacity: 0; transition: opacity .25s; pointer-events: none; }
   #toast.show { opacity: 1; }
@@ -123,14 +126,24 @@
         <b>🎵 Music art</b><span class="sub" id="musicNow">—</span>
       </div>
       <div class="row" style="margin-bottom:8px;gap:6px"><b id="musicScene" style="font-size:16px"></b><span id="musicSw"></span></div>
+      <div id="musicSong" style="margin:-2px 0 8px;color:var(--pink);font-weight:600"></div>
       <p>Soft art that breathes with the music. On <b>Auto (AI)</b> the AI listens and designs the whole look (style, colours, vibe, speed, size, number of shapes); pick something to fix it. Changes apply live.</p>
       <div class="row" style="margin-bottom:10px">
         <label class="sub">Art style<br><select id="mStyle" onchange="musicSet()"></select></label>
         <label class="sub">Colours<br><select id="mPal" onchange="musicSet()"></select></label>
         <label class="sub">Vibe<br><select id="mVibe" onchange="musicSet()"></select></label>
       </div>
+      <div class="row" style="margin-bottom:10px;justify-content:space-between">
+        <span class="sub">Listen with</span>
+        <span class="seg">
+          <button id="srcMac" onclick="setSource('mac')">🎙 Mac</button><button id="srcPi" onclick="setSource('pi')">🎙 Pi</button>
+        </span>
+      </div>
+      <div class="sub" id="audioStatus" style="margin:-4px 0 10px"></div>
+      <div class="row" style="justify-content:space-between"><span class="sub">Sensitivity</span><b id="sensVal">50</b></div>
+      <input type="range" id="sens" min="0" max="100" step="5" style="margin-bottom:12px">
       <button class="primary big" onclick="musicSet(true)">▶ Play music art</button>
-      <p style="margin:8px 0 0">Needs the Mac mic stream (<code>./panel_setup/stream_mic.sh</code>) until a USB sound card is on the Pi.</p>
+      <p style="margin:8px 0 0">Mac: run <code>./panel_setup/stream_mic.sh</code> on the laptop. Pi: needs a USB sound card or USB mic on the Pi.</p>
     </div>
   </section>
 
@@ -234,9 +247,17 @@ async function musicLoad(first) {
                                         arr.map(v => `<option value="${v}">${cap(v)}</option>`).join(''); };
       fill('mStyle', m.styles, true); fill('mPal', m.palettes, true); fill('mVibe', m.vibes, true);
       $('mStyle').value = m.settings.style; $('mPal').value = m.settings.palette; $('mVibe').value = m.settings.vibe;
+      $('sens').value = m.settings.sensitivity; $('sensVal').textContent = m.settings.sensitivity;
     }
+    $('srcMac').classList.toggle('on', m.settings.source === 'mac');
+    $('srcPi').classList.toggle('on', m.settings.source === 'pi');
+    const a = m.now && m.now.audio;
+    $('audioStatus').textContent = !a ? '' : a.error ? '⚠️ ' + a.error :
+      (a.receiving ? (a.source === 'pi' ? 'Pi mic: listening ✓' : 'Mac stream: receiving ✓')
+                   : (a.source === 'pi' ? 'Pi mic: no sound yet' : 'Mac stream: nothing arriving — is stream_mic.sh running?'));
     const n = m.now;
     $('musicScene').textContent = n && n.scene && !n.silent ? '“' + n.scene + '”' : '';
+    $('musicSong').textContent = n && n.song && !n.silent ? '♪ ' + n.song + (n.artist ? ' — ' + n.artist : '') : '';
     $('musicSw').innerHTML = n && n.colors ? n.colors.map(c =>
       `<span style="display:inline-block;width:16px;height:16px;border-radius:4px;background:${c};margin-right:3px;vertical-align:middle"></span>`).join('') : '';
     $('musicNow').textContent = !n ? (STATUS.current === 'music' ? 'listening…' : 'not playing') :
@@ -244,6 +265,16 @@ async function musicLoad(first) {
        `${n.genre ? 'AI hears ' + n.genre + (n.mood ? ' · ' + n.mood : '') + ' → ' : ''}${n.style}${n.layer && n.layer !== 'none' ? ' + ' + n.layer : ''} · ${n.palette}${n.vibe ? ' · ' + n.vibe : ''}`);
   } catch (e) {}
 }
+function setSource(src) {
+  post('/api/music', {source: src}).then(r => { toast(src === 'pi' ? '🎙 Listening with the Pi' : '🎙 Listening with the Mac'); musicLoad(); })
+    .catch(e => toast(e.message));
+}
+let sTimer;
+$('sens').addEventListener('input', e => {
+  $('sensVal').textContent = e.target.value;
+  clearTimeout(sTimer);
+  sTimer = setTimeout(() => post('/api/music', {sensitivity: +e.target.value}).then(() => musicLoad()), 300);
+});
 function musicSet(start) {
   post('/api/music', {style: $('mStyle').value, palette: $('mPal').value, vibe: $('mVibe').value, start: !!start})
     .then(r => { if (start) toast('🎵 Music art on'); else toast('Updated'); show(r.status); musicLoad(); })

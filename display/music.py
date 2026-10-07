@@ -35,7 +35,7 @@ SR = 22050
 WIN, HOP = 1024, 256
 AI_EVERY = 40.0
 AI_CLIP = 8.0
-STYLES = ["lava", "coral", "ink", "aurora", "ripples"]
+STYLES = ["glow", "aurora", "lava", "ripples", "coral", "ink"]
 PALETTES = {
     "dusk":   [(15, 8, 30), (80, 30, 90), (220, 120, 120), (255, 200, 150)],
     "ocean":  [(2, 8, 25), (10, 50, 90), (30, 140, 160), (170, 230, 230)],
@@ -47,8 +47,9 @@ PALETTES = {
 }
 AI_PROMPT = (
     "You are the VJ for an LED art wall in the hallway of a cosy flatshare. The vibe of the "
-    "space is chill and tranquil. Listen to this clip and choose visuals. Prefer calm, slow, "
-    "dreamy looks; for upbeat music pick a warmer, livelier but still gentle look - never "
+    "space is chill and tranquil and the residents love SOFT GLOWS most: prefer 'glow', then "
+    "'aurora' or 'lava'; use the others rarely. Listen to this clip and choose visuals. Prefer "
+    "calm, slow, dreamy looks; for upbeat music pick a warmer, livelier but still gentle look - never "
     f"harsh or strobing. Styles: {', '.join(STYLES)}. Palettes: {', '.join(PALETTES)}. "
     "Reply ONLY with JSON: {\"genre\": str, \"mood\": str (one word), \"energy\": number 0-1, "
     "\"style\": one of the styles, \"palette\": one of the palettes, "
@@ -142,11 +143,11 @@ class Listener:
             silent = rms < 0.004 or now - self.last_audio > 1.5
             f = self.f
             norm = lambda k: min(1.0, raw[k] / self.bpeak[k])
-            f["energy"] = _ema(f["energy"], 0 if silent else min(1.0, rms / self.peak), dt, 0.5)
+            f["energy"] = _ema(f["energy"], 0 if silent else min(1.0, rms / self.peak), dt, 2.0)
             f["bass"] = _ema(f["bass"], 0 if silent else norm("bass"), dt, 0.12)
-            kin = 0.0 if silent else norm("kickband") ** 1.5          # emphasise the hits
+            kin = 0.0 if silent else norm("kickband") ** 1.2
             k0 = f.get("kick", 0.0)
-            f["kick"] = _ema(k0, kin, dt, 0.015 if kin > k0 else 0.15)   # snap up, relax
+            f["kick"] = _ema(k0, kin, dt, 0.09 if kin > k0 else 0.6)     # ease in, slow fade
             f["mid"] = _ema(f["mid"], 0 if silent else norm("mid"), dt, 0.25)
             f["treble"] = _ema(f["treble"], 0 if silent else norm("treble"), dt, 0.25)
             # gentle beat detection: bass well above its recent average, refractory 0.35 s
@@ -169,7 +170,7 @@ class Listener:
 class VJ:
     def __init__(self, listener):
         self.l = listener
-        self.choice = {"style": "lava", "palette": "dusk", "caption": "", "mood": "", "genre": ""}
+        self.choice = {"style": "glow", "palette": "dusk", "caption": "", "mood": "", "genre": ""}
         self.changed = 0.0
         self.source = "default"
         threading.Thread(target=self._loop, daemon=True).start()
@@ -268,9 +269,9 @@ class Visuals:
         self.ripples = []
 
     def step(self, f, dt):
-        speed = 0.4 + 1.6 * f["energy"] + 0.8 * f["kick"]
+        speed = 0.35 + 0.6 * f["energy"] + 0.3 * f["kick"]
         self.phase += dt * speed
-        if f["beat"]:
+        if f["beat"] and (not self.ripples or time.time() - self.ripples[-1][2] > 1.2):
             rs = random.random
             self.ripples.append([rs() * self.W, rs() * self.H * 0.9, time.time()])
             self.ripples = self.ripples[-16:]
@@ -278,7 +279,7 @@ class Visuals:
     def lava(self, f, lut):
         p, W, H = self.phase, self.W, self.H
         fld = np.zeros((H, W), np.float32)
-        swell = 1 + 1.2 * f["kick"] + 0.2 * f["bass"]
+        swell = 1 + 0.45 * f["kick"]
         for i in range(6):
             s = 0.11 + i * 0.025
             cx = W * (0.5 + 0.33 * math.sin(p * s * 3 + i * 1.7))
@@ -294,7 +295,7 @@ class Visuals:
             h, w = c.B.shape
             cy, cx = random.randrange(4, h - 4), random.randrange(4, w - 4)
             c.B[cy - 4:cy + 4, cx - 4:cx + 4] = 1.0
-        steps = max(1, int(round(dt * (50 + 260 * f["energy"] + 120 * f["kick"]))))
+        steps = max(1, int(round(dt * (50 + 90 * f["energy"] + 40 * f["kick"]))))
         F, k = 0.0545, 0.062
         for _ in range(steps):
             AB2 = c.A * c.B * c.B
@@ -302,7 +303,7 @@ class Visuals:
             c.B += 0.1 * Coral._lap(c.B) + AB2 - (k + F) * c.B
             np.clip(c.A, 0, 1, out=c.A)
             np.clip(c.B, 0, 1, out=c.B)
-        img = _lut(np.clip(c.B * 2.6, 0, 1), lut) * (0.7 + 0.7 * f["kick"])   # throbs with bass
+        img = _lut(np.clip(c.B * 2.6, 0, 1), lut) * (0.85 + 0.3 * f["kick"])  # breathes with bass
         return np.repeat(np.repeat(img, c.s, 0), c.s, 1)[:self.H, :self.W]
 
     def ink(self, f, lut, dt):
@@ -313,7 +314,7 @@ class Visuals:
         dpy = -b1 * np.sin(x * a1 + p * 0.3) * np.sin(y * b1 - p * 0.25)
         vx, vy = dpy, -dpx
         n = np.sqrt(vx * vx + vy * vy) + 1e-6
-        step = (8 + 45 * f["energy"] + 30 * f["kick"]) * dt
+        step = (8 + 16 * f["energy"] + 8 * f["kick"]) * dt
         self.ink_p[:, 0] = (x + vx / n * step) % W
         self.ink_p[:, 1] = (y + vy / n * step) % H
         self.ink_acc *= 0.985 ** (dt * 25)
@@ -326,14 +327,32 @@ class Visuals:
         out = np.zeros((H, W), np.float32)
         for k in range(3):
             band = (H * (0.3 + 0.15 * k) + np.sin(self.x / (24 - 4 * k) + p * (0.8 + k * 0.3)) *
-                    (8 + 30 * f["kick"]) + np.sin(self.x / 9 - p * 1.3 + k) * 3)
-            width = 90 + 260 * f["mid"]
-            out += np.exp(-((self.y - band) ** 2) / width) * (0.3 + 0.4 * f["energy"] + 0.6 * f["kick"]) * \
+                    (8 + 10 * f["kick"]) + np.sin(self.x / 9 - p * 1.3 + k) * 3)
+            width = 110 + 120 * f["mid"]
+            out += np.exp(-((self.y - band) ** 2) / width) * (0.35 + 0.35 * f["energy"] + 0.3 * f["kick"]) * \
                 (0.6 + 0.4 * np.sin(self.x / 14 + p * 2 + k))
         rs = np.random.default_rng(int(p * 4))
         stars = rs.random((H, W)) > 0.997
         out[stars] = np.maximum(out[stars], 0.5)
         return _lut(np.clip(out, 0, 1), lut)
+
+    def glow(self, f, lut):
+        """Soft orbs of light drifting slowly, breathing with the bass."""
+        p, W, H = self.phase, self.W, self.H
+        if not hasattr(self, "_glow_pal"):
+            self._glow_pal = None
+        out = np.zeros((H, W, 3), np.float32)
+        breathe = 1 + 0.35 * f["kick"]
+        for i in range(6):
+            s = 0.05 + i * 0.012
+            cx = W * (0.5 + 0.42 * math.sin(p * s * 2.2 + i * 2.1))
+            cy = H * (0.5 + 0.42 * math.sin(p * s * 1.7 + i * 1.3))
+            sig = (26 + 10 * math.sin(p * 0.2 + i * 1.7)) * breathe
+            g = np.exp(-((self.x - cx) ** 2 + (self.y - cy) ** 2) / (2 * sig * sig))
+            col = lut[int(150 + 100 * ((i * 0.37) % 1))]
+            out += g[..., None] * col * (0.55 + 0.25 * math.sin(p * 0.5 + i))
+        base = lut[18][None, None, :] * 0.6
+        return np.clip(base + out, 0, 255)
 
     def ripples_(self, f, lut):
         W, H, now = self.W, self.H, time.time()
@@ -344,7 +363,7 @@ class Visuals:
                 continue
             r = age * 26
             d = np.sqrt((self.x - cx) ** 2 + (self.y - cy) ** 2)
-            v = v + np.exp(-((d - r) ** 2) / 14) * (1 - age / 6) * 0.9
+            v = v + np.exp(-((d - r) ** 2) / 30) * (1 - age / 6) * 0.45
         return _lut(np.clip(v, 0, 1), lut)
 
     def render(self, style, f, lut, dt, beat):
@@ -356,13 +375,16 @@ class Visuals:
             return self.aurora(f, lut)
         if style == "ripples":
             return self.ripples_(f, lut)
+        if style == "glow":
+            return self.glow(f, lut)
         return self.lava(f, lut)
 
 
 # ---------------------------------------------------------------- show ---
 
 class MusicShow:
-    XFADE = 3.0
+    XFADE = 15.0       # slow fade between patterns
+    HOLD = 180.0       # a pattern stays at least this long
 
     def __init__(self):
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
@@ -372,7 +394,7 @@ class MusicShow:
         self.vis = Visuals(W, H)
         self.luts = {k: _palette(v) for k, v in PALETTES.items()}
         self.prev = None
-        self.cur = ("lava", "dusk")
+        self.cur = ("glow", "dusk")
         self.switched = 0.0
         self.last_t = None
         self.silent_since = None
@@ -383,8 +405,8 @@ class MusicShow:
         now = time.time()
         if f["silent"]:
             self.silent_since = self.silent_since or now
-            if now - self.silent_since > 5:
-                return ("lava", "dusk")                   # quiet room: slow dusk lava
+            if now - self.silent_since > 30:
+                return ("glow", "dusk")                   # quiet room: soft dusk glow
         else:
             self.silent_since = None
         return (self.vj.choice["style"], self.vj.choice["palette"])
@@ -397,7 +419,8 @@ class MusicShow:
         self.l.f["beat"] = False
         self.vis.step(f, dt)
         tgt = self._target()
-        if tgt != self.cur:
+        held = time.time() - self.switched
+        if tgt != self.cur and held >= self.HOLD:          # stay with a pattern, then drift on
             self.prev, self.cur, self.switched = self.cur, tgt, time.time()
         img = self.vis.render(self.cur[0], f, self.luts[self.cur[1]], dt, beat)
         k = (time.time() - self.switched) / self.XFADE
@@ -407,12 +430,12 @@ class MusicShow:
             img = old * (1 - k) + img * k
         # soft brightness swell on every beat, fading within ~0.25 s
         self.pulse = 1.0 if beat else self.pulse * math.exp(-dt / 0.22)
-        img = img * (0.8 + 0.35 * f["kick"] + 0.3 * self.pulse)    # rides the bass
+        img = img * (0.9 + 0.15 * f["kick"])                     # gently rides the bass
         out = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
         cap = self.vj.choice.get("caption") or ""
         age = time.time() - self.vj.changed
-        if cap and age < 8 and not f["silent"]:
-            a = min(1.0, age / 1.0, (8 - age) / 1.5)
+        if cap and age < 10 and not f["silent"] and time.time() - self.switched < 25:
+            a = min(1.0, age / 2.0, (10 - age) / 3.0)
             d = ImageDraw.Draw(out)
             from display.maeva_story import _text
             col = tuple(int(c * a) for c in (235, 230, 220))

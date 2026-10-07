@@ -141,6 +141,13 @@
         <label><input type="checkbox" id="tShz" onchange="toggleSet('shazam', this.checked)"> 🎵 Recognise songs</label>
         <label><input type="checkbox" id="tWall" onchange="toggleSet('song_on_wall', this.checked)"> Song title on the wall</label>
       </div>
+      <div class="row" style="margin-bottom:4px;justify-content:space-between">
+        <span class="sub">Designer brain</span>
+        <span class="seg">
+          <button id="brOpenai" onclick="setBrain('openai')">OpenAI · hears</button><button id="brClaude" onclick="setBrain('claude')">Claude · text</button>
+        </span>
+      </div>
+      <div class="sub" id="brainStatus" style="margin:0 0 10px"></div>
       <div class="row" style="margin-bottom:10px;justify-content:space-between">
         <span class="sub">Listen with</span>
         <span class="seg">
@@ -259,6 +266,10 @@ async function musicLoad(first) {
     }
     $('tAi').checked = !!m.settings.ai; $('tShz').checked = !!m.settings.shazam;
     $('tWall').checked = !!m.settings.song_on_wall;
+    $('brOpenai').classList.toggle('on', m.settings.brain !== 'claude');
+    $('brClaude').classList.toggle('on', m.settings.brain === 'claude');
+    $('brainStatus').textContent = !m.settings.ai ? 'AI designer is off — simple built-in rules' :
+      (m.now && m.now.brain_status ? (m.now.brain_status.includes('ok') ? '✓ ' : '⚠️ ') + m.now.brain_status : '');
     $('srcMac').classList.toggle('on', m.settings.source === 'mac');
     $('srcPi').classList.toggle('on', m.settings.source === 'pi');
     const a = m.now && m.now.audio;
@@ -278,6 +289,10 @@ async function musicLoad(first) {
 }
 function toggleSet(key, on) {
   post('/api/music', {[key]: on}).then(() => { toast(`${key === 'ai' ? '🤖 AI designer' : key === 'shazam' ? '🎵 Song recognition' : 'Song on wall'} ${on ? 'on' : 'off'}`); musicLoad(); })
+    .catch(e => toast(e.message));
+}
+function setBrain(b) {
+  post('/api/music', {brain: b}).then(() => { toast(b === 'claude' ? '🧠 Claude designs (text only)' : '🧠 OpenAI designs (hears the music)'); musicLoad(); })
     .catch(e => toast(e.message));
 }
 function setSource(src) {

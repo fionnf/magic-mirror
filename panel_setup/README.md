@@ -111,3 +111,20 @@ sudo systemctl stop wall-art                  # stop it for now (e.g. to run tes
 ```
 Installs `wall-art.service` (restarts on crash) and disables `magic-mirror.service`
 so only one program drives the panels. Stop it before running other panel tools.
+
+## Music "designer brain": OpenAI or Claude
+The Music card on the website has a **Designer brain** switch:
+- **OpenAI · hears** (default): `gpt-audio` listens to a 10 s clip every 30 s and designs the scene.
+- **Claude · text**: Claude Code (Haiku) designs from text only - the Shazam song title, bass/mid/treble
+  levels, energy, tempo, time of day and its last scenes - every 60 s. It cannot hear audio.
+
+If Claude is selected but not set up, the app says what is missing and the wall carries on
+with the built-in rules. To set it up (steps per Anthropic's docs - verify them, and check the
+usage terms for always-on automated use of a *subscription* before relying on it; an API key is
+the other option):
+1. On the Pi: `curl -fsSL https://claude.ai/install.sh | bash` (installs to `~/.local/bin/claude`)
+2. On your laptop: `claude setup-token` -> copy the token it prints
+3. On the Pi, add to `~/magic-mirror/.env` (never commit it):
+   `CLAUDE_CODE_OAUTH_TOKEN=<token>`   (or `ANTHROPIC_API_KEY=<key>`), optional `CLAUDE_MODEL=haiku`
+4. `sudo systemctl restart wall-control`, then pick "Claude · text" in the app.
+Test the CLI alone first: `claude -p "say hi" --model haiku` on the Pi.

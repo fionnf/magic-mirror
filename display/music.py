@@ -35,7 +35,7 @@ SR = 22050
 WIN, HOP = 1024, 256
 AI_EVERY = 30.0
 AI_CLIP = 10.0
-STYLES = ["glow", "aurora", "lava", "ripples", "coral", "ink"]
+STYLES = ["aurora", "lava", "ripples", "coral", "ink"]      # "glow" retired (Visuals.glow kept)
 PALETTES = {
     "dusk":   [(15, 8, 30), (80, 30, 90), (220, 120, 120), (255, 200, 150)],
     "ocean":  [(2, 8, 25), (10, 50, 90), (30, 140, 160), (170, 230, 230)],
@@ -50,10 +50,10 @@ VIBES = {"chill": ("chill and tranquil", 1.0), "dreamy": ("dreamy and floaty", 0
 AI_PROMPT = (
     "You are the resident VJ and light designer of an LED art wall in the hallway of House "
     "Fortuna, a cosy gay flatshare in Zürich. The vibe of the space is chill and tranquil and the "
-    "residents love SOFT GLOWS most. Each time you hear a clip you design a complete light scene "
+    "residents love calm, dreamy, slow-moving light. Each time you hear a clip you design a complete light scene "
     "for the wall: never harsh, never strobing, always soft and beautiful. "
-    f"Base styles: {', '.join(STYLES)} (prefer glow, aurora, lava). Optionally add ONE second "
-    "layer on top for depth (glow, aurora or ripples - or none) with opacity 0-0.6. "
+    f"Base styles: {', '.join(STYLES)} (prefer aurora and lava). Optionally add ONE second "
+    "layer on top for depth (aurora or ripples - or none) with opacity 0-0.6. "
     f"Colours: either a preset ({', '.join(PALETTES)}) or invent your own palette of 4 hex colours "
     "from deep shadow to soft highlight that matches the music. "
     "Also set vibe (" + ", ".join(VIBES) + "), drift speed 0.5-1.5, shape size 0.7-1.4, number of "
@@ -69,8 +69,8 @@ AI_PROMPT = (
     "\"colors\": [4 hex strings, when custom], \"vibe\": str, \"speed\": number, "
     "\"scale\": number, \"count\": integer, \"softness\": number}"
 )
-LAYERS = ("glow", "aurora", "ripples")
-DEFAULT_CHOICE = {"scene": "", "genre": "", "mood": "", "song": "", "artist": "", "style": "glow", "layer": "none",
+LAYERS = ("aurora", "ripples")
+DEFAULT_CHOICE = {"scene": "", "genre": "", "mood": "", "song": "", "artist": "", "style": "aurora", "layer": "none",
                   "layer_opacity": 0.0, "palkey": "dusk", "palette_desc": "dusk",
                   "vibe": "chill", "speed": 1.0, "scale": 1.0, "count": 6, "softness": 1.0}
 
@@ -101,6 +101,10 @@ def _soften(cols):
 
 def _validate(j):
     """Clamp an AI scene to safe values; None if unusable."""
+    if isinstance(j, dict) and j.get("style") == "glow":
+        j = {**j, "style": "aurora"}                      # retired style -> nearest calm one
+    if isinstance(j, dict) and j.get("layer") == "glow":
+        j = {**j, "layer": "none"}
     if not isinstance(j, dict) or j.get("style") not in STYLES:
         return None
     num = lambda v, lo, hi, d: max(lo, min(hi, float(v))) if isinstance(v, (int, float)) else d
@@ -143,7 +147,8 @@ _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # written by the app
 NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # read by the app
 DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "mac",
-                    "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True}
+                    "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
+                    "brain": "openai"}
 
 
 def load_settings():
@@ -162,6 +167,8 @@ def load_settings():
         s["source"] = "mac"
     for k in ("ai", "shazam", "song_on_wall"):
         s[k] = bool(s.get(k, True))
+    if s.get("brain") not in ("openai", "claude"):
+        s["brain"] = "openai"
     try:
         s["sensitivity"] = max(0, min(100, int(s["sensitivity"])))
     except (TypeError, ValueError):
@@ -408,16 +415,65 @@ class Recognizer:
                 print("[SHAZAM] no match", flush=True)
 
 
+# ------------------------------------------------------ Claude CLI brain ---
+
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "haiku")       # alias; any model the plan allows
+CLAUDE_TIMEOUT = 90
+CLAUDE_EVERY = 60.0                                          # go easy on the plan
+
+
+def find_claude():
+    """Path of the Claude Code CLI, or None."""
+    import shutil
+    cands = [os.environ.get("CLAUDE_BIN"), shutil.which("claude"),
+             "/home/pi/.local/bin/claude", os.path.expanduser("~/.local/bin/claude"),
+             "/usr/local/bin/claude"]
+    for c in cands:
+        if c and os.path.exists(c) and os.access(c, os.X_OK):
+            return c
+    return None
+
+
+def claude_credentials():
+    return bool(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY"))
+
+
+def claude_json(stdout):
+    """Pull the scene JSON out of `claude -p --output-format json` output."""
+    text = stdout
+    try:
+        outer = json.loads(stdout)
+        if isinstance(outer, dict) and "result" not in outer and "style" in outer:
+            return outer                                      # the scene itself, not wrapped
+        if isinstance(outer, dict):
+            if outer.get("is_error"):
+                raise RuntimeError(str(outer.get("result") or outer.get("error") or "claude error")[:160])
+            text = outer.get("result", "") or ""
+        elif isinstance(outer, list):                         # stream-style: last result item
+            for item in reversed(outer):
+                if isinstance(item, dict) and item.get("type") == "result":
+                    text = item.get("result", "") or ""
+                    break
+    except json.JSONDecodeError:
+        pass
+    if "{" not in text:
+        raise RuntimeError(f"no JSON in reply: {text[:100]!r}")
+    return json.loads(text[text.index("{"): text.rindex("}") + 1])
+
+
 # --------------------------------------------------------------- AI VJ ---
 
 class VJ:
     """The AI light designer: listens every AI_EVERY s and designs a whole scene."""
 
-    def __init__(self, listener, vibe=lambda: "chill", enabled=lambda: True, song=lambda: None):
+    def __init__(self, listener, vibe=lambda: "chill", enabled=lambda: True, song=lambda: None,
+                 brain=lambda: "openai"):
         self.l = listener
         self.vibe = vibe
         self.enabled = enabled
         self.song = song
+        self.brain = brain
+        self.brain_status = ""
         self.choice = dict(DEFAULT_CHOICE)
         self.history = []
         self.changed = 0.0
@@ -484,12 +540,61 @@ class VJ:
                 print(f"[VJ] {model}: {str(e)[:120]}")
         return None
 
+    def _ask_claude(self):
+        """Text-only designer: the Claude Code CLI (Haiku) sees the song + measurements, not audio."""
+        import subprocess
+        exe = find_claude()
+        if not exe:
+            self.brain_status = "Claude CLI is not installed on the Pi (see panel_setup/README.md)"
+            return None
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(os.path.join(_HERE, ".env"))
+        except Exception:
+            pass
+        if not claude_credentials():
+            self.brain_status = "no CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY in the Pi's .env"
+            return None
+        f = self.l.f
+        vibe = self.vibe()
+        system = AI_PROMPT.replace("chill and tranquil",
+                                   VIBES[vibe][0] if vibe in VIBES
+                                   else "chill and tranquil by default (you pick the vibe)")
+        ctx = self._context().replace(
+            f"Here is a {AI_CLIP:.0f}-second clip of what is playing in the hallway now. ",
+            "You cannot hear the music (you are text only); here is what the hallway sensors "
+            f"measure: bass {f['bass']:.2f}, mids {f['mid']:.2f}, treble {f['treble']:.2f} (0-1). ")
+        prompt = (system + "\n\n" + ctx + "\nIf no song is given, do not invent one: use null.")
+        import tempfile
+        wd = os.path.join(tempfile.gettempdir(), "wall_claude_cwd")
+        os.makedirs(wd, exist_ok=True)                 # empty dir: no project files to load
+        t0 = time.time()
+        try:
+            r = subprocess.run([exe, "-p", prompt, "--model", CLAUDE_MODEL,
+                                "--output-format", "json"],
+                               capture_output=True, text=True, timeout=CLAUDE_TIMEOUT, cwd=wd,
+                               env=dict(os.environ))
+            if r.returncode != 0 and not r.stdout.strip():
+                raise RuntimeError((r.stderr or "claude exited with an error").strip()[:160])
+            j = _validate(claude_json(r.stdout))
+            if not j:
+                raise RuntimeError("scene was not valid")
+            j["model"] = f"claude-{CLAUDE_MODEL}"
+            self.brain_status = f"Claude ({CLAUDE_MODEL}) ok - {time.time() - t0:.0f} s"
+            return j
+        except subprocess.TimeoutExpired:
+            self.brain_status = f"Claude timed out after {CLAUDE_TIMEOUT} s"
+        except Exception as e:
+            self.brain_status = f"Claude error: {str(e)[:120]}"
+        print(f"[VJ] {self.brain_status}", flush=True)
+        return None
+
     def _fallback(self):
         f = self.l.f
         e = f["energy"]
-        style, pal = random.choice([("glow", "dusk"), ("aurora", "ocean"), ("lava", "ember")]
+        style, pal = random.choice([("aurora", "dusk"), ("aurora", "ocean"), ("lava", "ember")]
                                    if e < 0.5 else
-                                   [("glow", "blush"), ("aurora", "forest"), ("ripples", "gold")])
+                                   [("lava", "blush"), ("aurora", "forest"), ("ripples", "gold")])
         return _validate({"scene": "", "style": style, "palette": pal, "layer": "none"})
 
     def _loop(self):
@@ -499,8 +604,13 @@ class VJ:
             level = float(np.sqrt(np.mean(clip * clip)))
             if not self.l.f["silent"] and time.time() - self.l.last_audio < 2 and level > 0.003:
                 # normalise the clip so quiet rooms still give the model something to hear
-                j = (self._ask_ai(clip * min(8.0, 0.25 / max(level, 1e-4)))
-                     if self.enabled() else None)
+                if not self.enabled():
+                    j = None
+                elif self.brain() == "claude":
+                    j = self._ask_claude()
+                else:
+                    j = self._ask_ai(clip * min(8.0, 0.25 / max(level, 1e-4)))
+                    self.brain_status = "OpenAI ok" if j else "OpenAI did not answer"
                 if j:
                     self.source = j.get("model", "ai")
                     if j.get("song"):
@@ -524,7 +634,7 @@ class VJ:
                     self.choice.update({k: v for k, v in j.items()
                                         if k not in ("style", "palkey", "layer")})
                 self.choice["song"], self.choice["artist"] = j.get("song", ""), j.get("artist", "")
-            time.sleep(AI_EVERY)
+            time.sleep(CLAUDE_EVERY if (self.enabled() and self.brain() == "claude") else AI_EVERY)
 
 
 # ------------------------------------------------------------- visuals ---
@@ -678,11 +788,12 @@ class MusicShow:
         self.xfade = self.XFADE
         self.rec = Recognizer(self.l, enabled=lambda: self.settings["shazam"])
         self.vj = VJ(self.l, vibe=lambda: self.settings["vibe"],
-                     enabled=lambda: self.settings["ai"], song=self.rec.current)
+                     enabled=lambda: self.settings["ai"], song=self.rec.current,
+                     brain=lambda: self.settings["brain"])
         self.vis = Visuals(W, H)
         self.luts = {k: _palette(v) for k, v in PALETTES.items()}
         self.prev = None
-        self.cur = ("glow", "dusk", "none")
+        self.cur = ("aurora", "dusk", "none")
         self.switched = 0.0
         self.last_t = None
         self.silent_since = None
@@ -724,7 +835,7 @@ class MusicShow:
         if f["silent"]:
             self.silent_since = self.silent_since or now
             if now - self.silent_since > 30:               # quiet room: soft dusk glow
-                return ("glow" if auto_style else style,
+                return ("aurora" if auto_style else style,
                         "dusk" if st["palette"] == "auto" else pal, "none")
         else:
             self.silent_since = None
@@ -741,7 +852,7 @@ class MusicShow:
                                "genre": c.get("genre", ""), "mood": c.get("mood", ""),
                                "song": (self.rec.current() or {}).get("title") or c.get("song", ""),
                                "artist": (self.rec.current() or {}).get("artist") or c.get("artist", ""),
-                               "shazam": self.rec.status,
+                               "shazam": self.rec.status, "brain_status": self.vj.brain_status,
                                "source": self.vj.source, "settings": self.settings,
                                "audio": {"source": self.settings.get("source", "mac"),
                                          "spec": self.l.spec, "error": self.l.error,

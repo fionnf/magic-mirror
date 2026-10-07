@@ -24,8 +24,9 @@ import config
 
 def _anims():
     from display import (welcome, pride_show, cards, maeva_story, dewa_story, art,
-                         departures)
+                         departures, music)
     return {
+        "music":   (music.frame, 600.0),
         "trams":   (departures.frame, 60.0),
         "ambient": (departures.ambient_frame, 600.0),
         "tickerdemo": (departures.demo_frame, 45.0),
@@ -41,7 +42,7 @@ def _anims():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("anim", nargs="?", default="pride", help="ambient | trams | lava | art | pride | maeva | dewa | welcome | cow")
+    ap.add_argument("anim", nargs="?", default="pride", help="music | ambient | trams | lava | art | pride | maeva | dewa | welcome | cow")
     ap.add_argument("--seconds", type=float, default=0, help="stop after N s (0 = forever)")
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--gif", help="write one loop to this GIF instead of the wall")

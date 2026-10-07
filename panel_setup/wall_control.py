@@ -38,6 +38,7 @@ MODES = [
     ("maeva", "Shows", "Maeva in Zürich", "Tram at 8:00:00, the Limmat, Sprüngli, sledging"),
     ("welcome", "Shows", "Welcome", "Welcome to HOUSE FORTUNA, wheel of fortune"),
     ("cow", "Shows", "Dewa is a cow", "A message card"),
+    ("music", "Live", "Music", "Chill art that breathes with the music; an AI VJ picks the vibe (Mac mic for now)"),
     ("ambient", "Live", "Art + trams", "Lava & Coral with a small Rennweg tram strip"),
     ("trams", "Live", "Tram board", "Live departures from Rennweg, split-flap style"),
 ]
@@ -265,6 +266,7 @@ def make_thumbs():
             "cow": lambda: cards.cow_card(),
             "ambient": lambda: seq(art.LavaCoralGallery(), 4.0),
             "trams": lambda: icon("🚋", (0, 45, 110), "Rennweg"),
+            "music": lambda: icon("🎵", (20, 10, 40), "listening"),
             "mirror": lambda: icon("🪞", (10, 40, 30), "silhouette"),
             "wheel": lambda: icon("🎡", (40, 10, 50), "spin"),
         }

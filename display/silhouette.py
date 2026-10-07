@@ -7,11 +7,9 @@ import config
 def render_silhouette(mask: np.ndarray, colour=config.SILHOUETTE_COLOUR,
                       brightness: float = 1.0) -> Image.Image:
     """mask: 2D uint8 (0 or 255), size TOTAL_WIDTH x TOTAL_HEIGHT."""
-    h, w = mask.shape[:2]
-    rgb = np.zeros((h, w, 3), dtype=np.uint8)
-    on = mask > 127
-    c = np.array(colour, dtype=np.float32) * float(max(0.0, min(1.0, brightness)))
-    rgb[on] = c.astype(np.uint8)
+    c = (np.array(colour, dtype=np.float32)
+         * float(max(0.0, min(1.0, brightness)))).astype(np.uint8)
+    rgb = (mask > 127)[:, :, None] * c            # (h, w, 3) uint8, no fancy-index write
     return Image.fromarray(rgb, "RGB")
 
 

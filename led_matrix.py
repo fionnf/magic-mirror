@@ -1,8 +1,19 @@
-"""Real HUB75 LED matrix driver. Requires rpi-rgb-led-matrix Python bindings."""
+"""Real HUB75 LED matrix driver. Requires rpi-rgb-led-matrix Python bindings.
+
+The panels form one long chain. The driver exposes a logical canvas of
+TOTAL_WIDTH x TOTAL_HEIGHT and remaps it onto the flat chain strip
+(CHAIN_LENGTH * PANEL_COLS wide, PANEL_ROWS tall) following
+config.PANEL_CHAIN_ORDER, so any wiring layout works without pixel mappers.
+"""
+import json
+import os
 import threading
 import numpy as np
 from PIL import Image
 import config
+
+
+_CH = np.arange(3)
 
 
 class LedMatrix:
@@ -16,21 +27,122 @@ class LedMatrix:
         opts.hardware_mapping = config.HARDWARE_MAPPING
         opts.pixel_mapper_config = config.PIXEL_MAPPER
         opts.gpio_slowdown = config.GPIO_SLOWDOWN
-        opts.multiplexing = 0
-        opts.brightness = 80
+        if config.MATRIX_PANEL_TYPE:
+            opts.panel_type = config.MATRIX_PANEL_TYPE
+        opts.multiplexing = config.MATRIX_MULTIPLEXING
+        opts.row_address_type = config.MATRIX_ROW_ADDRESS_TYPE
+        opts.pwm_bits = config.MATRIX_PWM_BITS
+        opts.pwm_dither_bits = config.MATRIX_PWM_DITHER_BITS
+        opts.pwm_lsb_nanoseconds = config.MATRIX_PWM_LSB_NS
+        opts.limit_refresh_rate_hz = config.MATRIX_REFRESH_LIMIT_HZ
+        opts.show_refresh_rate = config.MATRIX_SHOW_REFRESH
+        opts.brightness = config.MATRIX_BRIGHTNESS
         opts.drop_privileges = False
         self.matrix = RGBMatrix(options=opts)
         self.canvas = self.matrix.CreateFrameCanvas()
         self._lock = threading.Lock()
-        self._brightness = 80
+        self._brightness = config.MATRIX_BRIGHTNESS
+        self.last_amps = 0.0
+        self._prepare_layout()
+        self._luts = None
+        if config.MATRIX_APPLY_PANEL_GAINS:
+            self._load_gains()
+
+    def _load_gains(self):
+        """Load per-panel colour gains if a calibration file exists."""
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            config.PANEL_GAINS_FILE)
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            gains = np.array(data["gains"], dtype=np.float64)
+            if gains.shape != (config.CHAIN_LENGTH, 3):
+                print(f"[MATRIX] ignoring {config.PANEL_GAINS_FILE}: "
+                      f"{gains.shape[0]} panels, chain is {config.CHAIN_LENGTH}")
+                return
+            if [list(p) for p in data.get("chain_order", [])] != \
+                    [list(p) for p in config.PANEL_CHAIN_ORDER]:
+                print("[MATRIX] warning: calibration was made with a different "
+                      "PANEL_CHAIN_ORDER; re-run calibrate_colour.py")
+            self.set_gains(gains)
+            print(f"[MATRIX] colour calibration loaded ({config.PANEL_GAINS_FILE})")
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"[MATRIX] calibration load failed: {e}")
+
+    def set_gains(self, gains) -> None:
+        """gains: (chain, 3) array in [0, 1], or None to disable."""
+        if gains is None or np.allclose(gains, 1.0):
+            self._luts = None
+        else:
+            x = np.arange(256, dtype=np.float64)
+            self._luts = np.clip(np.rint(x[None, None, :] * np.asarray(gains)[:, :, None]),
+                                 0, 255).astype(np.uint8)       # (chain, 3, 256)
+        self._prev = None                                       # force a redraw
+
+    def _prepare_layout(self):
+        """Precompute everything about the chain layout once (not per frame)."""
+        order = config.PANEL_CHAIN_ORDER
+        if len(order) != config.CHAIN_LENGTH:
+            raise ValueError("PANEL_CHAIN_ORDER length != CHAIN_LENGTH")
+        self._tile_idx = np.array([r * config.PANELS_WIDE + c for c, r in order])
+        self._rots = {k: (config.PANEL_ROTATE.get(k, 0) % 360) // 90
+                      for k in range(len(order))
+                      if config.PANEL_ROTATE.get(k, 0) % 360}
+        self._prev = None
+
+    def _limit_power(self, arr: np.ndarray) -> np.ndarray:
+        """Scale the frame down if its estimated current exceeds the budget.
+
+        Estimate: each panel draws AMPS_PER_PANEL at full white, linear in mean
+        channel value and in brightness. Mean is taken on a 1-in-16 subsample —
+        plenty accurate for a budget check and ~16x cheaper.
+        """
+        mean = float(arr[::4, ::4].mean()) / 255.0
+        amps = (mean * config.CHAIN_LENGTH * config.MATRIX_AMPS_PER_PANEL
+                * self._brightness / 100.0)
+        self.last_amps = amps
+        if amps <= config.MATRIX_MAX_AMPS:
+            return arr
+        scale = config.MATRIX_MAX_AMPS / amps
+        return (arr * scale).astype(np.uint8)
+
+    def _remap(self, image: Image.Image) -> np.ndarray:
+        """Logical canvas -> flat chain strip (rows, chain*cols, 3) uint8.
+
+        Pure reshape/transpose/fancy-index: no per-panel Python loop on the
+        hot path.
+        """
+        if not hasattr(self, "_tile_idx"):
+            self._prepare_layout()
+        pr, pc = config.PANEL_ROWS, config.PANEL_COLS
+        arr = self._limit_power(np.asarray(image, dtype=np.uint8))
+        tiles = (arr.reshape(config.PANELS_TALL, pr, config.PANELS_WIDE, pc, 3)
+                 .transpose(0, 2, 1, 3, 4)
+                 .reshape(-1, pr, pc, 3))
+        sel = tiles[self._tile_idx]                      # (chain, pr, pc, 3)
+        if self._luts is not None:
+            for k in range(len(sel)):
+                sel[k] = self._luts[k][_CH, sel[k]]
+        for k, quarter_turns in self._rots.items():
+            sel[k] = np.rot90(sel[k], k=-quarter_turns)
+        return np.ascontiguousarray(
+            sel.transpose(1, 0, 2, 3).reshape(pr, len(self._tile_idx) * pc, 3))
 
     def draw(self, image: Image.Image) -> None:
         if image.size != (config.TOTAL_WIDTH, config.TOTAL_HEIGHT):
             image = image.resize((config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
         if image.mode != "RGB":
             image = image.convert("RGB")
+        strip = self._remap(image)
+        # Static content (idle text, held frames) costs nothing: skip the
+        # upload when nothing changed — the panels keep showing the last frame.
+        if self._prev is not None and np.array_equal(strip, self._prev):
+            return
+        self._prev = strip
         with self._lock:
-            self.canvas.SetImage(image)
+            self.canvas.SetImage(Image.fromarray(strip, "RGB"))
             self.canvas = self.matrix.SwapOnVSync(self.canvas)
 
     def clear(self) -> None:

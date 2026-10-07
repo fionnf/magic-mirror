@@ -1,22 +1,64 @@
-# Panel hardware — 6× 64x64 panels in a 2-wide x 3-tall portrait layout.
+# Panel hardware — up to 12× 64x64 panels (256 mm square) in a 3-wide x 4-tall
+# portrait layout, all on ONE chain from the Adafruit HAT.
 PANEL_ROWS = 64
 PANEL_COLS = 64
-CHAIN_LENGTH = 6
+PANELS_WIDE = 3
+PANELS_TALL = 3   # 9 panels connected for now (3x3); set to 4 when the last row is added
+CHAIN_LENGTH = PANELS_WIDE * PANELS_TALL
 PARALLEL = 1
-# Pixel mapper depends on how you physically chain the panels. Tune to your
-# wiring; see https://github.com/hzeller/rpi-rgb-led-matrix#chains for
-# options. The default `U-mapper` is a good starting point for a serpentine
-# chain (top-left → top-right → middle-right → middle-left → bottom-left →
-# bottom-right). If the image is mirrored or split, try `"U-mapper;Rotate:180"`,
-# `"V-mapper"`, or wire the panels differently.
-PIXEL_MAPPER = "U-mapper"
+# The built-in rpi-rgb-led-matrix mappers can't do a 3-column serpentine, so
+# the driver runs the chain as a flat (64*12) x 64 strip and remaps the image
+# in software (see led_matrix.py). Leave PIXEL_MAPPER empty.
+PIXEL_MAPPER = ""
+# Physical chain order, as (col, row) of each panel starting at the one the
+# HAT cable plugs into. Currently a row serpentine starting at the bottom-left
+# (see below). Edit to match your wiring; check with
+# panel_setup/display_test.py --pattern numbers.
+PANEL_CHAIN_ORDER = [
+    (0, 2), (1, 2), (2, 2),    # bottom row, left -> right  (chain 0-2)
+    (2, 1), (1, 1), (0, 1),    # middle row, right -> left  (chain 3-5)
+    (0, 0), (1, 0), (2, 0),    # top row, left -> right     (chain 6-8)
+]
+# ^ measured on the wall (photo 2026-10-07): the cable enters at the BOTTOM-LEFT
+#   panel and snakes by rows. Add the 4th row here when it is connected.
+# Per-panel rotation in degrees (0/90/180/270) keyed by chain index, for
+# panels mounted upside down. Missing = 0.
+# Middle row (chain 3-5) is mounted upside down.
+PANEL_ROTATE = {3: 180, 4: 180, 5: 180}
 SCAN_RATE = 32  # most 64x64 panels are 1/32 scan — confirm from sticker
-HARDWARE_MAPPING = "adafruit-hat"
-GPIO_SLOWDOWN = 4
+# CONFIRMED WORKING on Pi 4B (Fortuna) with the P3 64x64 FM6124 panels:
+#   hardware_mapping "regular", gpio_slowdown 3, panel_type FM6126A, pwm_bits 7
+# (FM6124 panels need the FM6126A init sequence, otherwise they stay dark/garbled.)
+HARDWARE_MAPPING = "regular"
+GPIO_SLOWDOWN = 6   # measured with a webcam: 3 streaky, 4 better, 5 good, 6 cleanest (~67 Hz at 7 bit),
+                    # 8 = ~57 Hz banding returns. 6-bit at slowdown 6 = ~77 Hz but colour banding.
+MATRIX_PANEL_TYPE = "FM6126A"
+# Long chain => low refresh rate. These are the main tuning knobs:
+MATRIX_BRIGHTNESS = 40         # 0-100. Keep low until PSU capacity is known.
+# Power budget. PSU is 40 A @ 5 V; keep headroom for the Pi and wiring losses.
+# The driver estimates current per frame from pixel values x brightness and
+# scales the frame down if it would exceed MATRIX_MAX_AMPS.
+MATRIX_MAX_AMPS = 28.0
+# Conservative full-white draw of ONE 64x64 panel at 100% brightness (typical
+# 3-4 A; measure yours and adjust).
+MATRIX_AMPS_PER_PANEL = 4.0
+MATRIX_PWM_BITS = 7            # 1-11; fewer bits = much higher refresh
+MATRIX_PWM_DITHER_BITS = 0      # 0-2: smoother gradients at low pwm_bits, costs refresh
+MATRIX_PWM_LSB_NS = 130        # lower = faster refresh (try 100-300)
+MATRIX_REFRESH_LIMIT_HZ = 0    # 0 = unlimited; set ~100 to steady flicker
+MATRIX_MULTIPLEXING = 0        # change if the image looks striped/scrambled
+MATRIX_ROW_ADDRESS_TYPE = 0    # 64x64 panels with ABCDE addressing: usually 0
+MATRIX_SHOW_REFRESH = False    # print refresh rate to stdout
 
-# Total canvas: 2 panels wide x 3 panels tall = 128 wide x 192 tall (portrait)
-TOTAL_WIDTH = 128
-TOTAL_HEIGHT = 192
+# Per-panel colour calibration (written by panel_setup/calibrate_colour.py).
+# Per-panel, per-channel gains applied through a 256-entry LUT; missing file or
+# MATRIX_APPLY_PANEL_GAINS=False = no correction.
+PANEL_GAINS_FILE = "panel_setup/colour_calibration.json"
+MATRIX_APPLY_PANEL_GAINS = True
+
+# Total canvas: 3 panels wide x 4 panels tall = 192 wide x 256 tall (portrait)
+TOTAL_WIDTH = PANELS_WIDE * PANEL_COLS
+TOTAL_HEIGHT = PANELS_TALL * PANEL_ROWS
 
 # GPIO — capacitive touch sensor (e.g. TTP223) wired to BUTTON_PIN.
 # Most capacitive touch modules output HIGH on touch; set TOUCH_ACTIVE_HIGH=True.
@@ -39,9 +81,11 @@ BG_THRESHOLD = 50
 SILHOUETTE_COLOUR = (0, 100, 255)
 # Live silhouette is continuously rendered as the always-on background of the
 # mirror. Refresh rate (Hz) for the capture/extract loop:
-LIVE_SILHOUETTE_FPS = 12
+LIVE_SILHOUETTE_FPS = 10
 # Absdiff threshold (0-255) used when a static background frame is available.
 SILHOUETTE_DIFF_THRESHOLD = 30
+# Silhouette maths runs on this small size (w, h), not the full frame.
+SILHOUETTE_PROC_SIZE = (160, 120)
 # Dim factor applied to the live silhouette while text is overlaid.
 SILHOUETTE_DIM_FACTOR = 0.3
 
@@ -59,7 +103,7 @@ MIRROR_PERSONA = (
 AI_FALLBACK_MESSAGE = "The mirror sees all, but speaks slowly tonight."
 
 # Display timing
-IDLE_ANIMATION_FPS = 30
+IDLE_ANIMATION_FPS = 24
 SILHOUETTE_DISPLAY_SEC = 1.5
 MESSAGE_SCROLL_SPEED = 40  # pixels per second
 MESSAGE_HOLD_SEC = 4
@@ -108,10 +152,10 @@ BOOTH_FALLBACK_PROMPTS = [
 TEXT_COLOUR = (255, 160, 50)
 FONT_PATH = "assets/fonts/6x10.bdf"  # fallback to PIL default if missing
 
-# Simulator (the window is now 128 x 192 logical px; scale 4 keeps it
-# comfortably on a laptop screen at 512 x 768 + strip border)
-SIM_SCALE = 4
-SIM_TITLE = "Magic Mirror Simulator — 128x192"
+# Simulator (the window is now 192 x 256 logical px; scale 4 keeps it
+# comfortably on a laptop screen at 576 x 768 + strip border)
+SIM_SCALE = 3
+SIM_TITLE = "Magic Mirror Simulator — 192x256"
 SIM_STRIP_BORDER_PX = 18  # thickness of the strip border in the sim window
 
 # Thermal receipt printer (optional, ESC/POS over USB). Use `lsusb` on the
@@ -150,6 +194,7 @@ USAGE_LOG = "usage.log"
 MQTT_HOST   = "localhost"
 MQTT_PORT   = 1883
 MQTT_WS_PORT = 9001   # WebSocket port for browser access
+MQTT_PREVIEW_INTERVAL_SEC = 1.0  # JPEG-encodes a frame each time; keep it slow
 
 # Addressable LED strip (SK6812 RGBWW) around the mirror frame — optional.
 # Driven by rpi_ws281x. If the library is missing or the strip won't init,

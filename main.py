@@ -35,6 +35,33 @@ class State(enum.Enum):
     BOOTH = "BOOTH"
 
 
+class NullButton:
+    """Stand-in when no touch sensor is wired up. Triggers come from the
+    dashboard/API, MQTT, or --auto."""
+    def __init__(self, short_cb=None, long_cb=None):
+        pass
+
+    def handle_event(self, event):
+        pass
+
+    def shutdown(self):
+        pass
+
+
+def start_auto_trigger(mirror, every_sec: float, booth_every: int = 0):
+    """Press the 'button' every N seconds while idle (hands-free testing)."""
+    def loop():
+        n = 0
+        while not mirror._stop.wait(every_sec):
+            if mirror.state == State.IDLE:
+                n += 1
+                if booth_every and n % booth_every == 0:
+                    mirror._booth_event.set()
+                else:
+                    mirror._trigger_event.set()
+    threading.Thread(target=loop, daemon=True, name="auto-trigger").start()
+
+
 class MagicMirror:
     def __init__(self, matrix, camera, button_factory, strip, printer,
                  sim_mode: bool, no_api: bool):
@@ -52,6 +79,7 @@ class MagicMirror:
         self._latest_frame = None              # last raw camera frame (for AI)
         self._live_silhouette: Optional[Image.Image] = None  # PIL RGB, full canvas
         self._silhouette_lock = threading.Lock()
+        self._silhouette_version = 0           # bumps when the silhouette changes
         self._capture_thread: Optional[threading.Thread] = None
         self._overlay_text: Optional[str] = None   # pushed from dashboard
         self._overlay_image: Optional[Image.Image] = None
@@ -93,6 +121,7 @@ class MagicMirror:
                 img = silhouette_render.render_silhouette(mask)
                 with self._silhouette_lock:
                     self._live_silhouette = img
+                    self._silhouette_version += 1
                 # tell the strip where the silhouette is so its hue band can
                 # follow the person horizontally
                 try:
@@ -153,6 +182,7 @@ class MagicMirror:
         """Block until short or long press. Returns 'short' or 'long'."""
         interval = 1.0 / config.IDLE_ANIMATION_FPS
 
+        last_key = None
         while not self._stop.is_set():
             if self._booth_event.is_set():
                 self._booth_event.clear()
@@ -161,18 +191,24 @@ class MagicMirror:
                 self._trigger_event.clear()
                 return "short"
 
-            canvas = self._silhouette()
-            if self._overlay_image is not None:
-                try:
-                    canvas.paste(self._overlay_image, (0, 0))
-                except Exception:
-                    pass
-            elif self._overlay_text is not None:
-                try:
-                    text_renderer.render_static_text(canvas, self._overlay_text)
-                except Exception:
-                    pass
-            self.matrix.draw(canvas)
+            # Only recompose + redraw when something visible changed (new
+            # silhouette frame or a new overlay) — not on every tick.
+            key = (self._silhouette_version, id(self._overlay_image),
+                   self._overlay_text)
+            if key != last_key:
+                last_key = key
+                canvas = self._silhouette()
+                if self._overlay_image is not None:
+                    try:
+                        canvas.paste(self._overlay_image, (0, 0))
+                    except Exception:
+                        pass
+                elif self._overlay_text is not None:
+                    try:
+                        text_renderer.render_static_text(canvas, self._overlay_text)
+                    except Exception:
+                        pass
+                self.matrix.draw(canvas)
             time.sleep(interval)
         return "short"
 
@@ -514,6 +550,14 @@ def build_args():
     p.add_argument("--camera", default="webcam", choices=["webcam", "static"],
                    help="Sim camera source")
     p.add_argument("--no-api", action="store_true", help="Skip API call (canned reply)")
+    p.add_argument("--no-touch", action="store_true",
+                   help="No touch sensor wired: trigger via dashboard/API or --auto")
+    p.add_argument("--mock-camera", choices=["webcam", "static"], default=None,
+                   help="Use the mock camera on hardware (no Pi camera attached)")
+    p.add_argument("--auto", type=float, default=0, metavar="SEC",
+                   help="Auto-trigger a cycle every SEC seconds while idle")
+    p.add_argument("--auto-booth-every", type=int, default=0, metavar="N",
+                   help="With --auto, every Nth trigger is a photobooth run")
     p.add_argument("--no-mqtt", action="store_true", help="Disable MQTT bridge")
     return p
 
@@ -575,17 +619,26 @@ def main(argv=None):
 
     # real hardware
     from led_matrix import LedMatrix
-    from camera import Camera
-    from gpio_button import GPIOButton
     matrix = LedMatrix()
-    camera = Camera()
+    if args.mock_camera:
+        from simulator.camera_mock import CameraMock
+        camera = CameraMock(mode=args.mock_camera)
+    else:
+        from camera import Camera
+        camera = Camera()
+    if args.no_touch:
+        button_factory = lambda short, long_: NullButton(short, long_)
+    else:
+        from gpio_button import GPIOButton
+        button_factory = lambda short, long_: GPIOButton(short, long_)
     import led_strip, printer as printer_mod
     strip = led_strip.create_strip()
     printer = printer_mod.create_printer()
-    mirror = MagicMirror(matrix, camera,
-                         lambda short, long_: GPIOButton(short, long_),
+    mirror = MagicMirror(matrix, camera, button_factory,
                          strip=strip, printer=printer,
                          sim_mode=False, no_api=args.no_api)
+    if args.auto > 0:
+        start_auto_trigger(mirror, args.auto, args.auto_booth_every)
 
     api = MirrorAPI(mirror, port=5000)
     api.start()

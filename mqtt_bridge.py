@@ -32,7 +32,7 @@ except ImportError:
 
 
 class MQTTBridge:
-    PREVIEW_INTERVAL = 0.5   # seconds between frame publishes
+    PREVIEW_INTERVAL = __import__("config").MQTT_PREVIEW_INTERVAL_SEC
     STATUS_INTERVAL  = 2.0   # seconds between status publishes
 
     def __init__(self, mirror, host: str = "localhost", port: int = 1883):
@@ -171,7 +171,7 @@ class MQTTBridge:
                     pass
                 last_preview = now
 
-            time.sleep(0.05)
+            time.sleep(0.25)
 
     # ----------------------------------------------------------------- public
 

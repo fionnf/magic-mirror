@@ -1,10 +1,10 @@
 """Simple panel hardware test — fills the display with solid colours.
 
 Usage:
-    sudo python3 tests/test_panel.py                    # white → red → green → blue
-    sudo python3 tests/test_panel.py --colour white     # hold white
-    sudo python3 tests/test_panel.py --mapping regular  # try different HAT wiring
-    sudo python3 tests/test_panel.py --multiplexing 1   # try stripe multiplexing
+    sudo python3 panel_setup/single_panel_test.py                    # white → red → green → blue
+    sudo python3 panel_setup/single_panel_test.py --colour white     # hold white
+    sudo python3 panel_setup/single_panel_test.py --mapping regular  # try different HAT wiring
+    sudo python3 panel_setup/single_panel_test.py --multiplexing 1   # try stripe multiplexing
 
 Common --mapping values: adafruit-hat (default), regular, adafruit-hat-pwm
 Common --multiplexing values: 0 (default), 1 (stripe), 2 (checker), 4 (z-stripe)
@@ -51,6 +51,9 @@ def run():
     config.TOTAL_WIDTH   = args.cols
     config.TOTAL_HEIGHT  = args.rows
     config.PIXEL_MAPPER  = ""
+    config.PANELS_WIDE = 1
+    config.PANELS_TALL = 1
+    config.PANEL_CHAIN_ORDER = [(0, 0)]
     if args.mapping:
         config.HARDWARE_MAPPING = args.mapping
 

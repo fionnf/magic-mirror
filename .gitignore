@@ -7,3 +7,9 @@ gcp-credentials.json
 oauth_client.json
 usage.log
 tests/sim_receipts/
+panel_setup/monitor.csv
+# personal / generated — never publish (public repo)
+photos/
+panel_setup/calibration_report/
+tests/printer_preview*.png
+tests/silhouette_test_output.jpg

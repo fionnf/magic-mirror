@@ -35,6 +35,9 @@ config.CHAIN_LENGTH  = 1
 config.TOTAL_WIDTH   = 64
 config.TOTAL_HEIGHT  = 64
 config.PIXEL_MAPPER  = ""
+config.PANELS_WIDE = 1
+config.PANELS_TALL = 1
+config.PANEL_CHAIN_ORDER = [(0, 0)]
 
 import main as mirror_main
 from tests.test_full_sim import SimPrinter

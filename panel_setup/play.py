@@ -3,6 +3,7 @@
     sudo python3 panel_setup/play.py pride               # HOUSE FORTUNA pride show
     sudo python3 panel_setup/play.py welcome             # the first welcome animation
     sudo python3 panel_setup/play.py maeva               # Maeva in Zürich, a little story
+    sudo python3 panel_setup/play.py trams               # live departures, Zürich Rennweg
     sudo python3 panel_setup/play.py lava                # lava & coral gallery (10 pieces)
     sudo python3 panel_setup/play.py art                 # slow generative art gallery
     sudo python3 panel_setup/play.py dewa                # Dewa, Edelweiss flight attendant
@@ -21,8 +22,9 @@ import config
 
 
 def _anims():
-    from display import welcome, pride_show, cards, maeva_story, dewa_story, art
+    from display import welcome, pride_show, cards, maeva_story, dewa_story, art, departures
     return {
+        "trams":   (departures.frame, 60.0),
         "art":     (art.frame, art.LOOP_SEC),
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),
@@ -35,7 +37,7 @@ def _anims():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("anim", nargs="?", default="pride", help="lava | art | pride | maeva | dewa | welcome | cow")
+    ap.add_argument("anim", nargs="?", default="pride", help="trams | lava | art | pride | maeva | dewa | welcome | cow")
     ap.add_argument("--seconds", type=float, default=0, help="stop after N s (0 = forever)")
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--gif", help="write one loop to this GIF instead of the wall")

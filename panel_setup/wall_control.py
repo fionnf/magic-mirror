@@ -32,6 +32,7 @@ PY = sys.executable or "/usr/bin/python3"
 MODES = [
     # id, category, title, description
     ("lava", "Art", "Lava & Coral", "Lava lamps, brain coral, mercury, neon contours - 10 slow pieces"),
+    ("shapes", "Art", "Shapes", "Flow dots & lines, node garden, spiral, woven grid, ripples - thin glowing patterns"),
     ("art", "Art", "Art Gallery", "Ink flow, colour fields, lava, coral, moiré"),
     ("pride", "Shows", "Pride Show", "Disco ball, HOUSE FORTUNA, people nearby, vortex, heart"),
     ("dewa", "Shows", "Dewa's Story", "Edelweiss flight attendant, a date at every layover"),
@@ -243,7 +244,7 @@ def make_thumbs():
     os.makedirs(THUMB_DIR, exist_ok=True)
     try:
         from PIL import Image, ImageDraw
-        from display import (art, cards, dewa_story, maeva_story, pride_show, welcome)
+        from display import (art, cards, dewa_story, maeva_story, pride_show, shapes, welcome)
         from display.pride_show import _emoji
         import config
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
@@ -266,6 +267,7 @@ def make_thumbs():
         jobs = {
             "lava": lambda: seq(art.LavaCoralGallery(), 4.0),
             "art": lambda: seq(art.Gallery(), 12.0),
+            "shapes": lambda: seq(shapes.ShapesGallery(), 60.0),
             "pride": lambda: pride_show.frame(9.5),
             "dewa": lambda: dewa_story.frame(24.5),
             "maeva": lambda: maeva_story.frame(8.0),

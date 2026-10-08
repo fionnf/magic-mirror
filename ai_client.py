@@ -58,16 +58,27 @@ def _log_usage(tokens_in: int, tokens_out: int) -> None:
         print(f"[AI] usage log write failed: {e}")
 
 
-def _call_api(frame: np.ndarray) -> tuple[str, int, int]:
+def _persona() -> str:
+    """The mirror's voice: base persona + tone (kind..roast) + language, from the web app."""
+    try:
+        import mirror_settings as ms
+        st = ms.load()
+        return (config.MIRROR_PERSONA + " " + ms.tone_line(st["tone"]) + " "
+                + ms.language_line(st["language"]))
+    except Exception:
+        return config.MIRROR_PERSONA
+
+
+def _call_api(frame: np.ndarray, hint: str = "") -> tuple[str, int, int]:
     client = _get_client()
     b64 = _frame_to_b64_jpeg(frame)
     resp = client.chat.completions.create(
         model=config.AI_MODEL,
         max_tokens=config.AI_MAX_TOKENS,
         messages=[
-            {"role": "system", "content": config.MIRROR_PERSONA},
+            {"role": "system", "content": _persona()},
             {"role": "user", "content": [
-                {"type": "text", "text": "Look at this person and speak."},
+                {"type": "text", "text": ("Look at this person and speak. " + hint).strip()},
                 {"type": "image_url",
                  "image_url": {"url": f"data:image/jpeg;base64,{b64}",
                                "detail": "low"}},
@@ -80,10 +91,11 @@ def _call_api(frame: np.ndarray) -> tuple[str, int, int]:
     return text, usage.prompt_tokens, usage.completion_tokens
 
 
-def get_mirror_message(frame: np.ndarray) -> str:
-    """Blocking call with timeout and fallback."""
+def get_mirror_message(frame: np.ndarray, hint: str = "") -> str:
+    """Blocking call with timeout and fallback. `hint` carries facts the camera knows
+    (a recognised name, a smile), e.g. "The person is called Fionn. They are smiling."."""
     start = time.monotonic()
-    future = _executor.submit(_call_api, frame)
+    future = _executor.submit(_call_api, frame, hint)
     try:
         text, tin, tout = future.result(timeout=config.AI_TIMEOUT_SEC + 2)
         elapsed = time.monotonic() - start
@@ -153,3 +165,65 @@ def get_booth_prompts(n: int = 3) -> list[str]:
     except Exception as e:
         print(f"[AI] booth prompts failed ({e}); using fallback")
         return random.sample(config.BOOTH_FALLBACK_PROMPTS, k=n)
+
+
+# ---------------------------------------------------------------- aura ---
+
+AURA_FALLBACKS = [
+    ("Rose Gold", "#E8A0A0", "Soft heart, fierce timing. Glowing."),
+    ("Electric Violet", "#9B5DE5", "Main-character energy, quietly loading."),
+    ("Sea Glass", "#7FD1B9", "Calm waters hiding a very sharp wit."),
+    ("Sunset Amber", "#FFA94D", "Warm, a little chaotic, entirely magnetic."),
+]
+
+
+def _aura_prompt() -> str:
+    try:
+        import mirror_settings as ms
+        st = ms.load()
+        tone, lang = ms.tone_line(st["tone"]), ms.language_line(st["language"])
+    except Exception:
+        tone, lang = "", ""
+    return (
+        "You are the mirror of House Fortuna, a fun, warm gay flatshare, reading someone's AURA. "
+        "Look at the person's outfit, expression and mood and choose ONE aura colour with a poetic "
+        "name (e.g. 'Rose Gold', 'Midnight Teal'). Reply ONLY with JSON: "
+        '{"colour": the colour name, "hex": a #rrggbb hex that matches it, "reading": '
+        "a reading of at most 12 words, specific to what you see}. "
+        f"{tone} {lang} Never mention body shape, age, ethnicity or identity.")
+
+
+def _aura_call(frame: np.ndarray, hint: str):
+    import json
+    client = _get_client()
+    b64 = _frame_to_b64_jpeg(frame)
+    resp = client.chat.completions.create(
+        model=config.AI_MODEL, max_tokens=160, temperature=1.0,
+        response_format={"type": "json_object"},
+        messages=[{"role": "system", "content": _aura_prompt()},
+                  {"role": "user", "content": [
+                      {"type": "text", "text": ("Read this person's aura. " + hint).strip()},
+                      {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}",
+                                                          "detail": "low"}}]}],
+        timeout=config.AI_TIMEOUT_SEC)
+    j = json.loads(resp.choices[0].message.content or "{}")
+    hexv = str(j.get("hex", "")).strip()
+    if not (len(hexv) == 7 and hexv.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in hexv[1:])):
+        raise ValueError("no usable colour")
+    return {"colour": str(j.get("colour", "Aura"))[:24], "hex": hexv,
+            "reading": str(j.get("reading", ""))[:100].strip()}
+
+
+def get_aura(frame: np.ndarray, hint: str = "") -> dict:
+    """{'colour', 'hex', 'reading'}; a built-in aura if the AI is unavailable."""
+    import random
+    future = _executor.submit(_aura_call, frame, hint)
+    try:
+        j = future.result(timeout=config.AI_TIMEOUT_SEC + 2)
+        _log_usage(0, 0)
+        print(f"[AI] aura {j['colour']} {j['hex']}: {j['reading']}")
+        return j
+    except Exception as e:
+        print(f"[AI] aura fallback ({type(e).__name__}: {str(e)[:60]})")
+        name, hexv, reading = random.choice(AURA_FALLBACKS)
+        return {"colour": name, "hex": hexv, "reading": reading}

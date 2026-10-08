@@ -141,7 +141,6 @@
       <div id="lightsBtns" class="row" style="margin-top:10px;display:none">
         <button class="primary" onclick="lightsRoom(false)">🌙 Living room off</button>
         <button onclick="lightsRoom(true)">Living room on</button>
-        <button onclick="lightsAll(false)">Everything off</button>
         <button onclick="lightsScan()" title="at home: finds the lights' addresses on the Wi-Fi">🔍 Find lights</button>
       </div>
       <div id="lightsSched" class="row" style="margin-top:12px;display:none">
@@ -298,7 +297,6 @@ function lightsScan() {
   toast('Looking for your lights on the Wi-Fi… (20 s)');
   post('/api/lights/scan').then(r => { toast(`Found ${r.mine} of your lights` + (r.missing && r.missing.length ? ` — missing: ${r.missing.join(', ')}` : '')); lightsLoad(true); }).catch(e => toast(e.message));
 }
-function lightsAll(on) { post('/api/lights/all', {on}).then(() => { toast(on ? '💡 Lights on' : '🌙 Lights off'); setTimeout(() => lightsLoad(true), 1200); }).catch(e => toast(e.message)); }
 function lightsOne(name, on) { post('/api/lights/one', {name, on}).then(() => setTimeout(() => lightsLoad(true), 1000)).catch(e => toast(e.message)); }
 function lightsSchedule() { post('/api/lights/schedule', {off: $('lightsOff').value || null}).then(() => toast($('lightsOff').value ? 'Lights off nightly at ' + $('lightsOff').value : 'Nightly lights-off cleared')).catch(e => toast(e.message)); }
 function cropSet(on) {

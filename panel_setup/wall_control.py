@@ -437,13 +437,6 @@ def make_app(runner):
                         "devices": [{**x, "room": x["name"] in members} for x in _light_cache["data"]],
                         "schedule": lt.schedule(), "room": sorted(members)})
 
-    @app.post("/api/lights/all")
-    def lights_all():
-        on = bool((request.get_json(force=True, silent=True) or {}).get("on", False))
-        res = lt.set_all(on)
-        _light_cache["t"] = 0
-        return jsonify({"results": res})
-
     @app.post("/api/lights/room")
     def lights_room():
         on = bool((request.get_json(force=True, silent=True) or {}).get("on", False))

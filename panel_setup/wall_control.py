@@ -49,7 +49,7 @@ MODES = [
 MODE_IDS = {m[0] for m in MODES}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",
-                 "mirror_auto": 0, "smart_crop": True, "art_speed": 0.35}
+                 "mirror_auto": 0, "smart_crop": True, "art_speed": 0.12}
 
 
 # ------------------------------------------------------------------ state ---
@@ -127,7 +127,7 @@ class Runner:
         if cmd is None:                                 # "off"
             return
         env = dict(os.environ, WALL_BRIGHTNESS=str(int(self.state.get("brightness", 40))),
-                   WALL_ART_SPEED=str(float(self.state.get("art_speed", 0.35))),
+                   WALL_ART_SPEED=str(float(self.state.get("art_speed", 0.12))),
                    WALL_SMART_CROP="1" if self.state.get("smart_crop", True) else "0",
                    PYTHONUNBUFFERED="1")
         if getattr(self, "boot_pending", False) and self.state.get("boot_welcome", True):
@@ -180,7 +180,7 @@ class Runner:
 
     def set_art_speed(self, value):
         with self.lock:
-            self.state["art_speed"] = max(0.1, min(1.5, float(value)))
+            self.state["art_speed"] = max(0.03, min(1.0, float(value)))
             save_state(self.state)
             if self.current in ("art", "lava", "shapes", "glass", "artsy", "ambient"):
                 self._start(self.current)
@@ -207,7 +207,7 @@ class Runner:
                     "mirror_auto": self.state.get("mirror_auto", 0),
                     "wheel_print": self.state.get("wheel_print", True),
                     "smart_crop": self.state.get("smart_crop", True),
-                    "art_speed": self.state.get("art_speed", 0.35),
+                    "art_speed": self.state.get("art_speed", 0.12),
                     "error": self.error, "oneshot": self.oneshot_resume is not None}
 
     # -- watchdog: crashes, one-shots, playlists
@@ -352,7 +352,7 @@ def make_app(runner):
     @app.post("/api/artspeed")
     def artspeed():
         try:
-            runner.set_art_speed((request.get_json(force=True, silent=True) or {}).get("value", 0.35))
+            runner.set_art_speed((request.get_json(force=True, silent=True) or {}).get("value", 0.12))
         except (TypeError, ValueError):
             return jsonify({"error": "bad value"}), 400
         return jsonify(runner.status())

@@ -165,18 +165,17 @@ class LightGallery(art.Gallery):
     def __init__(self):
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
         P = _palette
-        jewel = P([(10, 4, 30), (60, 20, 140), (200, 40, 120), (255, 170, 60), (255, 240, 200)])
+        indigo = P([(8, 4, 30), (50, 25, 130), (160, 70, 170), (250, 220, 240)])
         ocean = P([(2, 6, 25), (10, 60, 120), (20, 170, 190), (160, 240, 230)])
         dusk = P([(15, 6, 35), (90, 30, 110), (230, 90, 120), (255, 200, 140)])
         forest = P([(3, 12, 8), (15, 80, 60), (90, 190, 120), (230, 250, 190)])
-        self.pieces = [StainedGlass(W, H, jewel), Nebula(W, H, dusk), JuliaMorph(W, H, ocean),
-                       Trails(W, H, forest), Kaleido(W, H, jewel), Trails(W, H, dusk, n=1500),
-                       StainedGlass(W, H, ocean, n=30), Kaleido(W, H, forest, folds=8)]
+        self.pieces = [StainedGlass(W, H, indigo), Nebula(W, H, dusk), Trails(W, H, forest),
+                       StainedGlass(W, H, ocean, n=30), Trails(W, H, dusk, n=1500), Nebula(W, H, ocean)]
         self.last_t = None
         self.current = -1
 
 
-LOOP_SEC = art.PIECE_SEC * 8
+LOOP_SEC = art.PIECE_SEC * 6
 _gallery = None
 
 

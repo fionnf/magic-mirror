@@ -20,26 +20,17 @@ from display import art
 # name -> description (for the designer's menu)
 PIECE_STYLES = {
     "spiral": "golden-angle spiral of glowing dots, slowly twisting (hypnotic)",
-    "hex": "lattice of leaning strands, a drifting wave (techy, calm)",
     "harmonograph": "decaying pendulum rose drawn in light (elegant, mellow)",
-    "isocubes": "isometric wireframe cubes rippling in height (geometric, electronic)",
-    "chevrons": "sliding zig-zag bands (rhythmic, graphic)",
     "poles": "streamlines curling around turning vortices and sinks (fluid, dramatic)",
-    "mosaic": "half-square triangles, order to chaos top to bottom (graphic, punchy)",
-    "mesh": "two fine line grids turning against each other, moire (hypnotic, electronic)",
     "marbling": "suminagashi marbling ink swirls (rich, flowing)",
     "oilslick": "iridescent oil-on-water interference colours (psychedelic, dreamy)",
-    "kandinsky": "Bauhaus composition of circles, arcs, lines and triangles (playful, jazzy)",
     "opart": "Bridget-Riley op-art stripes bent by waves (dizzying, bold)",
-    "mondrian": "Mondrian grid with drifting dividers (modernist, cheerful)",
     "glass": "stained-glass Voronoi cells with dark lead lines (jewel-like, warm)",
-    "julia": "morphing Julia-set fractal (cosmic, intense)",
-    "kaleido": "turning plasma folded into a kaleidoscope (euphoric, trippy)",
     "trails": "particles painting long-exposure light trails (airy, cinematic)",
     "nebula": "layered drifting space clouds with stars (spacey, ambient)",
 }
 # styles also allowed as the second, screen-blended layer (cheap ones)
-LAYER_STYLES = ("aurora", "ripples", "garden", "rings", "flowlines", "trails", "nebula", "kaleido")
+LAYER_STYLES = ("aurora", "ripples", "garden", "rings", "flowlines", "trails", "nebula")
 SYMMETRIES = ("none", "mirror", "quad", "diag")
 
 
@@ -58,7 +49,7 @@ class PieceBank:
         mint = P([(5, 25, 20), (20, 140, 110), (120, 240, 190), (240, 255, 245)])
         rose = P([(30, 6, 40), (170, 40, 140), (255, 120, 180), (255, 230, 240)])
         gold = P([(20, 10, 0), (150, 90, 10), (240, 180, 60), (255, 245, 190)])
-        jewel = P([(10, 4, 30), (60, 20, 140), (200, 40, 120), (255, 170, 60), (255, 240, 200)])
+        jewel = P([(8, 4, 30), (50, 25, 130), (160, 70, 170), (250, 220, 240)])
         dusk = P([(15, 6, 35), (90, 30, 110), (230, 90, 120), (255, 200, 140)])
         ocean = P([(2, 6, 25), (10, 60, 120), (20, 170, 190), (160, 240, 230)])
         forest = P([(3, 12, 8), (15, 80, 60), (90, 190, 120), (230, 250, 190)])

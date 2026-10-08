@@ -14,6 +14,7 @@ Layers
   - silence for a few seconds: drifts into slow dusk lava
 """
 import base64
+import colorsys
 import io
 import json
 import math
@@ -33,6 +34,8 @@ from display.art import _palette, _lut, Coral
 from display.beat import BeatTracker
 from display import vj_fx
 from display.intensity import Intensity
+from display import loops as vjloops
+LOOP_BANK = vjloops.LoopBank()
 
 SR = 22050
 WIN, HOP = 1024, 256
@@ -51,7 +54,7 @@ USAGE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
                           "panel_setup", "ai_usage.json")
 AI_CLIP = 10.0
 SHAPE_STYLES = ["flowdots", "flowlines", "garden", "truchet", "rings", "ridges", "weave"]
-STYLES = ["aurora", "lava", "ripples", "coral", "ink"] + SHAPE_STYLES + list(vj_fx.PIECE_STYLES)      # "glow" retired (Visuals.glow kept)
+STYLES = ["aurora", "lava", "ripples", "coral", "ink"] + SHAPE_STYLES + list(vj_fx.PIECE_STYLES) + ["loops"]      # "glow" retired (Visuals.glow kept)
 PALETTES = {
     "dusk":   [(15, 8, 30), (80, 30, 90), (220, 120, 120), (255, 200, 150)],
     "ocean":  [(2, 8, 25), (10, 50, 90), (30, 140, 160), (170, 230, 230)],
@@ -73,16 +76,16 @@ PROFILES = {
     "chill": dict(
         label="chill, organic and painterly",
         styles=["aurora", "lava", "coral", "ink", "ripples", "marbling", "oilslick",
-                "nebula", "glass", "harmonograph", "ridges"],
+                "nebula", "glass", "harmonograph", "ridges", "trails", "loops"],
         palettes=["dusk", "ocean", "forest", "moon", "blush", "ember", "gold"],
         layers=("aurora", "ripples", "nebula"), layer_max=0.4, symmetry=("none",),
         trails=(0.0, 0.25), hue=(0.0, 0.08), accent=(0.0, 0.08), react=(0.2, 0.5),
-        speed=(0.4, 1.1), scale=(0.7, 1.5), count=(3, 8), soft=(0.9, 1.8),
+        speed=(0.25, 0.7), scale=(0.8, 1.6), count=(3, 7), soft=(1.0, 1.8),
         hold=(150.0, 300.0), fade=(14.0, 22.0), glide=5.0, pulse=0.0, breath=0.3, tc=3.0, smooth=0.8, surge=0.0, every=90.0),
     "techno": dict(
         label="cool techno: geometric, neon on black, driving",
-        styles=["truchet", "mesh", "opart", "flowlines", "poles", "mosaic", "isocubes", "chevrons",
-                "kaleido", "julia", "rings", "garden", "weave", "spiral", "hex", "flowdots"],
+        styles=["truchet", "opart", "flowlines", "poles", "garden", "spiral", "flowdots", "trails",
+                "marbling", "glass", "loops"],
         palettes=["neon", "violet", "acid", "ice", "ocean", "moon"],
         layers=("rings", "ripples", "garden"), layer_max=0.4,
         symmetry=("none", "mirror", "quad"), trails=(0.0, 0.5), hue=(0.0, 0.25), accent=(0.0, 0.0),
@@ -133,6 +136,8 @@ def profile(mode=None, level=None):
     for fav in FAVOURITES:
         if fav not in pool and L > 0.3:
             pool.append(fav)
+    if not len(LOOP_BANK):
+        pool = [x for x in pool if x != "loops"]
     out["styles"], out["palettes"] = pool, pals
     out["label"] = ("quiet evening, organic and painterly" if L < 0.4 else
                     "lively living room: organic shapes with a clear groove" if L <= 0.65 else
@@ -154,7 +159,9 @@ def ai_prompt(mode=None):
         "repeat the base style or palette of your recent scenes. "
         f"Mode: {p['label']}. Base styles you may use: {', '.join(p['styles'])}. "
         f"Preset palettes: {_swatches(mode)} - or invent a 4-colour ramp (deep shadow to bright highlight) "
-        "in the same spirit. "
+        "in the same spirit. COLOUR DISCIPLINE: a scene uses ONE or TWO neighbouring hues and their tints "
+        "(e.g. deep teal to pale mint; plum to rose gold) - tonal and restrained, never a rainbow, never "
+        "complementary clashes. 'loops' are real VJ video loops (Beeple, CC) speed-matched to the tempo. "
         "You are told the measured tempo: slow music (under 90 bpm) wants big, slow, long scenes; mid tempo "
         "(90-125) medium; fast music (over 125) quicker flow and shorter scenes. Let it set speed, scale and hold. "
     )
@@ -222,10 +229,32 @@ def _hex_rgb(h):
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
 
 
+def _restrain(cols, max_spread=0.22):
+    """Colour discipline: a scene gets at most two neighbouring hues. If the AI's colours span
+    more of the hue circle than that, every hue is pulled towards the circular mean."""
+    import math as _m
+    hsv = [colorsys.rgb_to_hsv(*(v / 255.0 for v in c)) for c in cols]
+    sat = [(h, s_, v) for h, s_, v in hsv if s_ > 0.25 and v > 0.15]
+    if len(sat) < 2:
+        return cols
+    cx = sum(_m.cos(2 * _m.pi * h) for h, _, _ in sat)
+    cy = sum(_m.sin(2 * _m.pi * h) for h, _, _ in sat)
+    mean = (_m.atan2(cy, cx) / (2 * _m.pi)) % 1.0
+    dist = lambda h: min(abs(h - mean), 1 - abs(h - mean))
+    if max(dist(h) for h, _, _ in sat) <= max_spread:
+        return cols
+    out = []
+    for (h, s_, v) in hsv:
+        d = (h - mean + 0.5) % 1.0 - 0.5
+        h2 = (mean + max(-max_spread, min(max_spread, d))) % 1.0
+        out.append(tuple(int(round(x * 255)) for x in colorsys.hsv_to_rgb(h2, s_, v)))
+    return out
+
+
 def _soften(cols):
     """Keep an AI palette soft: darkest stays a deep shadow, brightest a soft highlight."""
     lum = lambda c: 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
-    cols = sorted(cols, key=lum)
+    cols = sorted(_restrain(cols), key=lum)
     d = cols[0]
     if lum(d) > 45:
         k = 45 / lum(d)
@@ -243,7 +272,7 @@ def _validate(j):
         return None
     if j.get("style") == "glow":
         j = {**j, "style": "aurora"}                      # retired style -> nearest calm one
-    if j.get("style") not in STYLES:
+    if j.get("style") not in STYLES and not str(j.get("style")).startswith("loop:"):
         return None
     P = profile()
     num = lambda v, lo, hi, d: max(lo, min(hi, float(v))) if isinstance(v, (int, float)) else d
@@ -253,15 +282,23 @@ def _validate(j):
         v = j.get(k)
         out[k] = str(v)[:60] if v and str(v).strip().lower() not in ("null", "none", "unknown", "") else ""
     style = j["style"]
-    if style not in P["styles"]:                      # outside this mode's world: pick a fitting one
+    if style not in P["styles"] and not style.startswith("loop:"):   # outside this mode's world: pick a fitting one
         style = random.choice(P["styles"])
+    if style == "loops":                              # a real video loop whose motion suits the level
+        clip = LOOP_BANK.pick(P["level"], avoid=set(_recent_loops))
+        if clip is None:
+            style = random.choice([x for x in P["styles"] if x != "loops"] or ["aurora"])
+        else:
+            style = "loop:" + clip
+            _recent_loops.append(clip)
+            del _recent_loops[:-6]
     out["style"] = style
     layer = j.get("layer", "none")
     out["layer"] = layer if layer in P["layers"] and layer != style else "none"
     out["layer_opacity"] = num(j.get("layer_opacity"), 0.0, P["layer_max"], 0.25) if out["layer"] != "none" else 0.0
     out["concept"] = str(j.get("concept", ""))[:120]
     pal = j.get("palette")
-    if pal == "native" and style == "oilslick":
+    if pal == "native" and style.startswith("loop:"):
         out["palkey"] = out["palette_desc"] = "native"
     elif pal in P["palettes"]:
         out["palkey"] = out["palette_desc"] = pal
@@ -288,6 +325,9 @@ def _validate(j):
     out["fade"] = num(j.get("fade"), *P["fade"], sum(P["fade"]) / 2)
     out["scene"] = out["scene"] or out["mood"] or "untitled"
     return out
+
+
+_recent_loops = []
 
 
 def _scene_key(c):
@@ -950,6 +990,8 @@ class VJ:
         last = self.history[-1]["style"] if self.history else None
         style = random.choice([x for x in P["styles"] if x != last] or P["styles"])
         pal = random.choice(P["palettes"])
+        if style == "loops":
+            pal = "native"
         e = self.l.f["energy"]
         return _validate({"scene": "", "style": style, "palette": pal, "layer": "none",
                           "symmetry": random.choice(P["symmetry"]), "speed": 0.5 + e,
@@ -1074,6 +1116,7 @@ class Visuals:
         self.ripples = []
         self._shapes = None
         self.bank = vj_fx.PieceBank(W, H)
+        self.players = {}                                  # clip name -> LoopPlayer (a few open at once)
         threading.Thread(target=self.bank.prewarm, daemon=True).start()
 
     def shape_(self, style, f, lut):
@@ -1201,7 +1244,29 @@ class Visuals:
             v = v + np.exp(-((d - r) ** 2) / 30) * (1 - age / 6) * 0.45
         return _lut(np.clip(v, 0, 1), lut)
 
+    def loop_(self, name, f, dt):
+        pl = self.players.get(name)
+        if pl is None:
+            if len(self.players) >= 3:                     # keep memory small
+                old = next(iter(self.players))
+                self.players.pop(old).close()
+            pl = self.players[name] = vjloops.LoopPlayer(name, LOOP_BANK)
+        period = f.get("period", 0.0) if f.get("bconf", 0.0) > 0.5 else 0.0
+        beats = vjloops.beats_for(pl.frames / pl.fps, period)
+        if beats:                                           # one loop = a whole number of beats
+            target = pl.frames / (beats * period)
+        else:
+            target = pl.fps * max(0.4, min(1.6, f.get("d_speed", 1.0)))
+        pl.rate = _ema(getattr(pl, "rate", target), target, dt, 2.0)
+        img = pl.frame(dt, pl.rate)
+        if img.shape[0] != self.H or img.shape[1] != self.W:
+            from PIL import Image as _I
+            img = np.asarray(_I.fromarray(img.astype(np.uint8)).resize((self.W, self.H)), np.float32)
+        return img
+
     def render(self, style, f, lut, dt, beat, native=False):
+        if style.startswith("loop:"):
+            return self.loop_(style[5:], f, dt)
         if style in vj_fx.PIECE_STYLES:
             return self.bank.render(style, self.phase * 1.5, lut, native)
         if style in SHAPE_STYLES:
@@ -1423,7 +1488,7 @@ class MusicShow:
                             tempo_factor(f.get("bpm", 0.0), f.get("bconf", 0.0), "chill" if L < 0.5 else "techno"),
                             dt, 6.0)
         f["d_speed"] *= self.tempo_f * (1.0 + 0.3 * self.rise + 0.6 * self.surge)
-        f["d_speed"] = min(f["d_speed"], 0.9 + 0.6 * L)   # never frantic
+        f["d_speed"] = min(f["d_speed"], 0.6 + 0.8 * L)   # never frantic; near-still when quiet
         f["speed_tc"] = max(2.0, P["tc"])
         self.layer_op = _ema(self.layer_op, float(c.get("layer_opacity", 0.0)) if auto else 0.0, dt, P["glide"])
         self.vis.step(f, dt)

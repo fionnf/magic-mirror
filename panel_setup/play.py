@@ -46,7 +46,7 @@ def _anims():
 
 
 ART_MODES = {"art", "lava", "shapes", "glass", "artsy", "ambient"}   # galleries: art for the house, slow
-ART_SPEED = float(os.environ.get("WALL_ART_SPEED", "0.35"))         # 1.0 = the old pace
+ART_SPEED = float(os.environ.get("WALL_ART_SPEED", "0.12"))         # 1.0 = the old pace; sleep-friendly by default
 
 
 class _MusicClock:

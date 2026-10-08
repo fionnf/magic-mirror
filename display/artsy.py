@@ -53,8 +53,8 @@ class OilSlick(_P):
 
     def __init__(self, W, H):
         super().__init__(W, H, "Oil Slick")
-        self.lut = _palette([(10, 8, 30), (30, 90, 200), (20, 200, 170), (230, 220, 60),
-                             (230, 70, 140), (120, 50, 210), (10, 8, 30)])
+        self.lut = _palette([(6, 8, 28), (20, 70, 150), (30, 170, 170), (220, 245, 240), (30, 170, 170),
+                             (20, 70, 150), (6, 8, 28)])
 
     def render(self, dt, t):
         x, y = self.x * 2.2, self.y * 2.2
@@ -185,14 +185,12 @@ class ArtsyGallery(art.Gallery):
         rose = P([(25, 6, 35), (150, 40, 120), (250, 120, 150), (255, 220, 200)])
         wash = P([(60, 120, 220), (220, 70, 120), (250, 190, 70), (60, 190, 160), (60, 120, 220)])
         stripe = P([(10, 10, 20), (20, 40, 120), (240, 90, 120), (250, 240, 220)])
-        self.pieces = [Marbling(W, H, ink), OilSlick(W, H),
-                       Kandinsky(W, H), OpArt(W, H, stripe), Marbling(W, H, rose),
-                       Mondrian(W, H)]
+        self.pieces = [Marbling(W, H, ink), OilSlick(W, H), OpArt(W, H, stripe), Marbling(W, H, rose)]
         self.last_t = None
         self.current = -1
 
 
-LOOP_SEC = art.PIECE_SEC * 6
+LOOP_SEC = art.PIECE_SEC * 4
 _gallery = None
 
 

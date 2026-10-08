@@ -114,9 +114,17 @@
           </select>
         </div>
         <div class="row" style="margin-bottom:8px"><input type="text" id="camUrl" placeholder="stream URL"></div>
+        <label class="sub" style="display:flex;gap:8px;align-items:center;margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" id="tCrop" style="width:18px;height:18px;accent-color:var(--pink)" onchange="cropSet(this.checked)">
+          Follow people when cropping photos to portrait (face detection)
+        </label>
         <div class="row">
           <button class="primary" onclick="startMirror()">Start mirror</button>
           <button id="photoBtn" onclick="photo()">📸 Take photo</button>
+        </div>
+        <div id="lastBox" style="display:none;margin-top:12px;gap:12px;align-items:center">
+          <img id="lastImg" alt="" style="width:84px;aspect-ratio:3/4;object-fit:cover;border-radius:10px;background:#000">
+          <div><div class="sub" id="lastAge"></div><div id="lastText" style="font-weight:600"></div></div>
         </div>
       </div>
     </div>
@@ -224,6 +232,7 @@ function show(s) {
   if (document.activeElement !== $('bright')) { $('bright').value = s.brightness; $('bVal').textContent = s.brightness + '%'; }
   document.querySelectorAll('.card').forEach(c => c.classList.toggle('active', c.dataset.id === cur));
   $('photoBtn').disabled = cur !== 'mirror';
+  $('tCrop').checked = s.smart_crop !== false;
   if (!$('camUrl').value) $('camUrl').value = s.camera_url || '';
   if (!show.init) { $('cam').value = s.camera || 'stream'; $('auto').value = String(s.mirror_auto || 0);
                     $('wheelPrint').checked = s.wheel_print !== false; show.init = true; }
@@ -239,6 +248,21 @@ function spin() { post('/api/wheel', {print: $('wheelPrint').checked}).then(s =>
 function startMirror() {
   post('/api/mirror', {camera: $('cam').value, camera_url: $('camUrl').value, auto: +$('auto').value})
     .then(s => { toast('🪞 Mirror starting… step out of view for 5 s'); show(s); }).catch(e => toast(e.message));
+}
+function cropSet(on) {
+  post('/api/mirror/crop', {on}).then(s => { toast(on ? 'Portrait crop follows people' : 'Portrait crop: centre only'); show(s); })
+    .catch(e => toast(e.message));
+}
+async function lastPhoto() {
+  try {
+    const d = await (await fetch('/api/mirror/last')).json();
+    const box = $('lastBox');
+    if (!d.photo) { box.style.display = 'none'; return; }
+    if ($('lastImg').dataset.src !== d.photo) { $('lastImg').src = d.photo; $('lastImg').dataset.src = d.photo; }
+    $('lastText').textContent = d.text ? '“' + d.text + '”' : '';
+    $('lastAge').textContent = d.age < 90 ? 'just now' : d.age < 5400 ? Math.round(d.age / 60) + ' min ago' : Math.round(d.age / 3600) + ' h ago';
+    box.style.display = 'flex';
+  } catch (e) {}
 }
 function photo() { post('/api/mirror/photo').then(() => toast('📸 3… 2… 1…')).catch(e => toast(e.message)); }
 function togglePick() {
@@ -316,6 +340,7 @@ function musicSet(start) {
 }
 (async () => {
   musicLoad(true); setInterval(musicLoad, 5000);
+  lastPhoto(); setInterval(lastPhoto, 5000);
   MODES = await (await fetch('/api/modes')).json();
   render(); refresh(); setInterval(refresh, 3000);
 })();

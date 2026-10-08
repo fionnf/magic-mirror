@@ -167,3 +167,11 @@ curl -s -H "x-goog-api-key: $GEMINI_API_KEY" -H 'Content-Type: application/json'
   -d '{"contents":[{"parts":[{"text":"say hi"}]}]}' \
   https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent
 ```
+
+## Portrait photos that keep people in frame
+Every photo (the picture the AI comments on, the receipt, the photobooth shots) is cut to
+portrait **around the people**: a small local face detector (`smartcrop.py`, model in
+`assets/models/`) places the crop over everyone's face; if no face is found it uses where the
+scene changed against the empty room, then the centre. The website's Mirror card has a switch
+("Follow people when cropping photos to portrait") and shows the last photo with the AI's line.
+The live silhouette on the wall keeps its cheap centred crop.

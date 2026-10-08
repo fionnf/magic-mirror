@@ -21,13 +21,15 @@ class Camera:
             history=config.BG_HISTORY, varThreshold=config.BG_THRESHOLD, detectShadows=False
         )
 
-    def capture_frame(self) -> np.ndarray:
-        rgb = self.cam.capture_array()
-        return vision.crop_to_aspect(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR),
-                                     config.CAMERA_ASPECT)
+    def capture_frame(self, raw: bool = False) -> np.ndarray:
+        """raw=True: the full-width frame (for the smart portrait crop of photos).
+        Default: centred portrait crop (cheap; used by the live silhouette)."""
+        frame = cv2.cvtColor(self.cam.capture_array(), cv2.COLOR_RGB2BGR)
+        return frame if raw else vision.crop_to_aspect(frame, config.CAMERA_ASPECT)
 
     def get_background_frame(self) -> np.ndarray:
-        self._background = self.capture_frame()
+        self._background_raw = self.capture_frame(raw=True)      # for the motion crop fallback
+        self._background = vision.crop_to_aspect(self._background_raw, config.CAMERA_ASPECT)
         # prime the MOG2 subtractor
         for _ in range(5):
             self._subtractor.apply(self._background)

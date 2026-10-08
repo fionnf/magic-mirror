@@ -80,8 +80,9 @@ class CameraMock:
             else:
                 time.sleep(0.05)
 
-    def capture_frame(self) -> np.ndarray:
-        return vision.crop_to_aspect(self._raw_frame(), config.CAMERA_ASPECT)
+    def capture_frame(self, raw: bool = False) -> np.ndarray:
+        frame = self._raw_frame()
+        return frame if raw else vision.crop_to_aspect(frame, config.CAMERA_ASPECT)
 
     def _raw_frame(self) -> np.ndarray:
         if self.mode == "stream":
@@ -100,10 +101,10 @@ class CameraMock:
         if self.mode in ("webcam", "stream"):
             print("[SIM] Stand clear — capturing background in 3s...")
             time.sleep(3.0)
-            self._background = self.capture_frame()
+            self._background_raw = self.capture_frame(raw=True)
         else:
-            self._background = vision.crop_to_aspect(self._static_background,
-                                                     config.CAMERA_ASPECT).copy()
+            self._background_raw = self._static_background.copy()
+        self._background = vision.crop_to_aspect(self._background_raw, config.CAMERA_ASPECT).copy()
         for _ in range(5):
             self._subtractor.apply(self._background)
         return self._background

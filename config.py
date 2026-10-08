@@ -1,3 +1,4 @@
+import os
 # Panel hardware — up to 12× 64x64 panels (256 mm square) in a 3-wide x 4-tall
 # portrait layout, all on ONE chain from the Adafruit HAT.
 PANEL_ROWS = 64
@@ -78,6 +79,9 @@ FRAME_HEIGHT = 480
 # Every captured frame is centre-cropped to this width/height ratio, so the AI,
 # the receipt and the silhouette all see the same portrait picture.
 CAMERA_ASPECT = 3 / 4
+# Photos (AI / receipt / booth) are cut to portrait around the people (face detector, then motion,
+# then centre). Set False to always centre-crop.
+SMART_CROP = os.environ.get("WALL_SMART_CROP", "1") != "0"   # the web app sets WALL_SMART_CROP
 
 # Silhouette
 BG_HISTORY = 500

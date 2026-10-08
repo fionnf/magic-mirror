@@ -210,6 +210,11 @@ def render_booth_pil(frames: List[np.ndarray], label: str = "PHOTOBOOTH",
     # ---- photos ----
     target_ratio = W / photo_h
     for i, frame in enumerate(frames):
+        try:                       # keep the people in the strip frame (face-aware, then centre)
+            import smartcrop
+            frame, _ = smartcrop.portrait_crop(frame, target_ratio)
+        except Exception:
+            pass
         photo = _frame_to_pil(frame)
         # crop to target aspect ratio before resizing
         src_ratio = photo.width / photo.height

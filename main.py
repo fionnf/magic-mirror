@@ -243,6 +243,19 @@ class MagicMirror:
                 self.matrix.draw(canvas)
                 time.sleep(interval)
 
+    def _grab_photo(self):
+        """A full-width frame cut to portrait around the people (smart crop). Falls back to
+        the last live frame (already a centred portrait crop) if the camera hiccups."""
+        try:
+            raw = self.camera.capture_frame(raw=True)
+        except TypeError:                        # a camera without raw support
+            return self.camera.capture_frame()
+        import smartcrop
+        frame, how = smartcrop.portrait_crop(raw, config.CAMERA_ASPECT,
+                                             getattr(self.camera, "_background_raw", None))
+        print(f"[CROP] portrait via {how}")
+        return frame
+
     def _do_trigger_capture(self):
         """Single-shot capture: countdown then grab the latest frame from the
         live thread — no LED flash. Booth mode has its own _capture_with_flash
@@ -251,7 +264,7 @@ class MagicMirror:
         self._do_countdown(3)
         self._set_state(State.CAPTURING)
         try:
-            frame = self.camera.capture_frame()
+            frame = self._grab_photo()
         except Exception as e:
             print(f"[CAPTURE] direct grab failed, falling back: {e}")
             frame = self._latest_frame
@@ -323,7 +336,7 @@ class MagicMirror:
         self.matrix.draw(white)
         time.sleep(config.PHOTO_FLASH_PRE_MS / 1000.0)
         try:
-            frame = self.camera.capture_frame()
+            frame = self._grab_photo()
         except Exception as e:
             print(f"[CAPTURE] direct grab failed: {e}")
             frame = self._latest_frame

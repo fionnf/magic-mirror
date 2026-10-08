@@ -45,7 +45,7 @@ MODES = [
 MODE_IDS = {m[0] for m in MODES}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",
-                 "mirror_auto": 0}
+                 "mirror_auto": 0, "smart_crop": True}
 
 
 # ------------------------------------------------------------------ state ---
@@ -123,6 +123,7 @@ class Runner:
         if cmd is None:                                 # "off"
             return
         env = dict(os.environ, WALL_BRIGHTNESS=str(int(self.state.get("brightness", 40))),
+                   WALL_SMART_CROP="1" if self.state.get("smart_crop", True) else "0",
                    PYTHONUNBUFFERED="1")
         log = open(os.path.join(LOG_DIR, f"{what}.log"), "ab")
         log.write(f"\n==== {time.ctime()} {' '.join(cmd)}\n".encode())
@@ -189,6 +190,7 @@ class Runner:
                     "camera": self.state.get("camera"), "camera_url": self.state.get("camera_url"),
                     "mirror_auto": self.state.get("mirror_auto", 0),
                     "wheel_print": self.state.get("wheel_print", True),
+                    "smart_crop": self.state.get("smart_crop", True),
                     "error": self.error, "oneshot": self.oneshot_resume is not None}
 
     # -- watchdog: crashes, one-shots, playlists
@@ -348,6 +350,8 @@ def make_app(runner):
             if k in d:
                 runner.state[k] = d[k]
         runner.state["mirror_auto"] = int(d.get("auto", 0) or 0)
+        if "smart_crop" in d:
+            runner.state["smart_crop"] = bool(d["smart_crop"])
         runner.play("mirror")
         return jsonify(runner.status())
 
@@ -381,6 +385,38 @@ def make_app(runner):
         elif runner.current == "music" and mu.load_settings()["source"] != old_source:
             runner.restart_current()                      # new microphone: restart listening
         return jsonify({"settings": mu.load_settings(), "status": runner.status()})
+
+    PHOTOS = os.path.join(ROOT, "photos")
+
+    @app.post("/api/mirror/crop")
+    def mirror_crop():
+        """Switch the smart portrait crop on/off; restarts mirror mode if it is running."""
+        runner.state["smart_crop"] = bool((request.get_json(force=True, silent=True) or {}).get("on", True))
+        save_state(runner.state)
+        if runner.current == "mirror":
+            runner.restart_current()
+        return jsonify(runner.status())
+
+    @app.get("/api/mirror/last")
+    def mirror_last():
+        """The newest mirror photo and what the AI said about it."""
+        try:
+            names = [n for n in os.listdir(PHOTOS) if n.startswith("receipt_") and n.endswith(".jpg")]
+            newest = max(names, key=lambda n: os.path.getmtime(os.path.join(PHOTOS, n)))
+        except (OSError, ValueError):
+            return jsonify({"photo": None})
+        text = ""
+        try:
+            with open(os.path.join(PHOTOS, newest[:-4] + ".json")) as fh:
+                text = json.load(fh).get("text", "")
+        except Exception:
+            pass
+        return jsonify({"photo": f"/photos/{newest}", "text": text,
+                        "age": int(time.time() - os.path.getmtime(os.path.join(PHOTOS, newest)))})
+
+    @app.get("/photos/<path:name>")
+    def photos(name):
+        return send_from_directory(PHOTOS, name, max_age=60)
 
     @app.post("/api/mirror/photo")
     def photo():

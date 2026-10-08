@@ -92,6 +92,7 @@ class MagicMirror:
         self._overlay_text: Optional[str] = None   # pushed from dashboard
         self._overlay_image: Optional[Image.Image] = None
         self._aura_event = threading.Event()
+        self._pixel_event = threading.Event()
         self._sparkle = None                       # (cx, cy normalised, until_monotonic)
         self._sparkle_check = 0.0
         self._last_presence = time.monotonic()      # last time someone/something moved in front
@@ -266,6 +267,9 @@ class MagicMirror:
             if self._aura_event.is_set():
                 self._aura_event.clear()
                 return "aura"
+            if self._pixel_event.is_set():
+                self._pixel_event.clear()
+                return "pixel"
             if self._trigger_event.is_set():
                 self._trigger_event.clear()
                 return "short"
@@ -679,6 +683,46 @@ class MagicMirror:
             self.matrix.draw(canvas)
             time.sleep(interval)
 
+    def run_pixel_cycle(self):
+        """Pixel selfie: photo -> 48x48 sprite revealed row by row on the wall, sticker printed."""
+        self._overlay_text = None
+        self._overlay_image = None
+        try:
+            frame = self._do_trigger_capture()
+            self._set_state(State.DISPLAYING)
+            from display import pixel_art
+            small = pixel_art.pixelate(frame)
+            full = pixel_art.to_wall(small, min(config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
+            canvas0 = Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
+            off = ((config.TOTAL_WIDTH - full.width) // 2, (config.TOTAL_HEIGHT - full.height) // 2)
+            cell = full.height // small.height
+            rows = small.height
+            for r in range(rows + 1):                          # reveal like a scanner, row by row
+                c = canvas0.copy()
+                c.paste(full.crop((0, 0, full.width, r * cell)), off)
+                self.matrix.draw(c)
+                time.sleep(0.05)
+            t0 = time.monotonic()
+            while time.monotonic() - t0 < 6.0 and not self._stop.is_set():
+                c = canvas0.copy()
+                c.paste(full, off)
+                self.matrix.draw(c)
+                time.sleep(0.2)
+            try:
+                import numpy as np, cv2
+                stick = np.asarray(pixel_art.to_wall(small, 240).convert("RGB"))[:, :, ::-1]
+                name = self._info["names"][0] if self._info.get("names") else "House Fortuna"
+                self.printer.print_receipt(np.ascontiguousarray(stick), f"Pixel {name}")
+            except Exception as e:
+                print(f"[PRINTER] skip: {e}")
+            self._set_state(State.FADE_OUT)
+            self._fade_out(canvas0.copy(), config.FADE_OUT_SEC)
+        except Exception as e:
+            print(f"[ERROR] pixel cycle failed: {e}")
+        finally:
+            self._set_state(State.IDLE)
+            self.strip.set_mode("idle")
+
     def run_aura_cycle(self):
         self._overlay_text = None
         self._overlay_image = None
@@ -756,6 +800,8 @@ class MagicMirror:
                 self.run_booth_cycle()
             elif kind == "aura":
                 self.run_aura_cycle()
+            elif kind == "pixel":
+                self.run_pixel_cycle()
             else:
                 self.run_cycle()
 
@@ -763,6 +809,7 @@ class MagicMirror:
         self._stop.set()
         self._trigger_event.set()
         self._aura_event.set()
+        self._pixel_event.set()
         try:
             self.matrix.clear()
         except Exception:

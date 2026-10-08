@@ -610,6 +610,10 @@ const j=await r.json().catch(()=>({}));m.textContent=r.ok?'✨ Sent! Look at the
     def photo():
         return _mirror_trigger("short")
 
+    @app.post("/api/mirror/pixel")
+    def pixel():
+        return _mirror_trigger("pixel")
+
     @app.post("/api/mirror/aura")
     def aura():
         return _mirror_trigger("aura")

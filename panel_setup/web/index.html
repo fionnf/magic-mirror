@@ -122,6 +122,7 @@
           <button class="primary" onclick="startMirror()">Start mirror</button>
           <button id="photoBtn" onclick="photo()">📸 Take photo</button>
           <button id="auraBtn" onclick="aura()">🔮 Read my aura</button>
+          <button id="pixBtn" onclick="pixel()">👾 Pixel selfie</button>
         </div>
         <div id="lastBox" style="display:none;margin-top:12px;gap:12px;align-items:center">
           <img id="lastImg" alt="" style="width:84px;aspect-ratio:3/4;object-fit:cover;border-radius:10px;background:#000">
@@ -303,7 +304,7 @@ function show(s) {
   $('nowErr').textContent = s.error || '';
   if (document.activeElement !== $('bright')) { $('bright').value = s.brightness; $('bVal').textContent = s.brightness + '%'; }
   document.querySelectorAll('.card').forEach(c => c.classList.toggle('active', c.dataset.id === cur));
-  $('photoBtn').disabled = $('auraBtn').disabled = cur !== 'mirror';
+  $('photoBtn').disabled = $('auraBtn').disabled = $('pixBtn').disabled = cur !== 'mirror';
   $('tCrop').checked = s.smart_crop !== false;
   if (!$('camUrl').value) $('camUrl').value = s.camera_url || '';
   if (!show.init) { $('cam').value = s.camera || 'stream'; $('auto').value = String(s.mirror_auto || 0);
@@ -360,6 +361,7 @@ async function dLoad() {
 const esc = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 const dDel = id => post('/api/dedications/delete', {id}).then(dLoad);
 const dClear = () => confirm('Delete all messages?') && post('/api/dedications/delete', {all: true}).then(dLoad);
+async function pixel() { try { await post('/api/mirror/pixel'); toast('👾 Look at the mirror…'); } catch (e) { toast(e.message); } }
 async function aura() { try { await post('/api/mirror/aura'); toast('🔮 Look at the mirror…'); } catch (e) { toast(e.message); } }
 async function refresh() { try { show(await (await fetch('/api/status')).json()); } catch (e) {} }
 let bTimer;

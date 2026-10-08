@@ -128,6 +128,9 @@ class Runner:
         env = dict(os.environ, WALL_BRIGHTNESS=str(int(self.state.get("brightness", 40))),
                    WALL_SMART_CROP="1" if self.state.get("smart_crop", True) else "0",
                    PYTHONUNBUFFERED="1")
+        if getattr(self, "boot_pending", False) and self.state.get("boot_welcome", True):
+            env["WALL_BOOT"] = "1"               # first start after power-on: play the welcome once
+        self.boot_pending = False
         log = open(os.path.join(LOG_DIR, f"{what}.log"), "ab")
         log.write(f"\n==== {time.ctime()} {' '.join(cmd)}\n".encode())
         self.proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
@@ -175,6 +178,7 @@ class Runner:
 
     def resume_saved(self):
         with self.lock:
+            self.boot_pending = True
             m = self.state.get("mode", "lava")
             if m == "playlist" and self.state.get("playlist"):
                 pl = self.state["playlist"]
@@ -625,9 +629,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=80)
     a = ap.parse_args()
+    try:
+        os.nice(12)                          # the website must never steal time from the panel refresh
+    except OSError:
+        pass
     runner = Runner()
     runner.resume_saved()
-    threading.Thread(target=make_thumbs, daemon=True).start()
+    if len([f for f in os.listdir(THUMB_DIR)] if os.path.isdir(THUMB_DIR) else []) < len(MODES) + 2:
+        threading.Thread(target=make_thumbs, daemon=True).start()   # normally shipped by deploy.sh
 
     def lights_watch():                      # fires the daily "lights off at HH:MM"
         import lights

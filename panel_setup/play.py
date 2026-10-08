@@ -14,6 +14,8 @@
 """
 import argparse
 import os
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")     # numpy must not fight the panel refresh for cores
+os.environ.setdefault("OMP_NUM_THREADS", "1")
 import sys
 import time
 
@@ -42,6 +44,56 @@ def _anims():
     }
 
 
+def _boot_frame(progress):
+    """Start-up screen: HOUSE FORTUNA and a progress bar (shown while the animation loads)."""
+    from PIL import Image, ImageDraw
+    from display import text_renderer
+    W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+    img = Image.new("RGB", (W, H), (6, 3, 12))
+    d = ImageDraw.Draw(img)
+    f = text_renderer._load_font(26)
+    for i, word in enumerate(("HOUSE", "FORTUNA")):
+        w = d.textlength(word, font=f)
+        d.text(((W - w) / 2, 34 + i * 34), word, font=f, fill=(255, 150, 215) if i == 0 else (255, 214, 120))
+    x0, x1, y0, y1 = 36, W - 36, 128, 140
+    d.rounded_rectangle([x0, y0, x1, y1], radius=6, outline=(120, 80, 150), width=1)
+    fill = int((x1 - x0 - 4) * max(0.0, min(1.0, progress)))
+    for x in range(fill):                                  # pink -> gold gradient
+        u = x / max(1, x1 - x0 - 4)
+        d.line([(x0 + 2 + x, y0 + 2), (x0 + 2 + x, y1 - 2)],
+               fill=(int(255 * (0.9 + 0.1 * u)), int(110 + 110 * u), int(190 - 100 * u)))
+    small = text_renderer._load_font(11)
+    label = "starting up" if progress < 1 else "ready"
+    d.text(((W - d.textlength(label, font=small)) / 2, y1 + 8), label, font=small, fill=(170, 150, 190))
+    return img
+
+
+def _loading_screen(matrix, frame_fn):
+    """Warm the animation up in a thread (first-frame set-up can take seconds on the Pi) while
+    the wall shows a progress bar that eases towards 90% and snaps to 100% when it is ready."""
+    import math
+    import threading
+    done = threading.Event()
+
+    def warm():
+        try:
+            frame_fn(0.0)
+        finally:
+            done.set()
+    threading.Thread(target=warm, daemon=True).start()
+    t0, p = time.monotonic(), 0.0
+    while True:
+        el = time.monotonic() - t0
+        target = 1.0 if done.is_set() else 0.9 * (1 - math.exp(-el / 2.5))
+        p += (target - p) * 0.25
+        matrix.draw(_boot_frame(p))
+        if done.is_set() and p > 0.985:
+            break
+        time.sleep(0.05)
+    matrix.draw(_boot_frame(1.0))
+    time.sleep(0.25)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("anim", nargs="?", default="pride", help="music | ambient | trams | shapes | glass | lava | art | pride | maeva | dewa | welcome | cow")
@@ -68,7 +120,22 @@ def main():
     matrix = LedMatrix()
     overlay = dedications.Overlay()
     interval = 1.0 / a.fps
+    try:
+        _loading_screen(matrix, frame_fn)
+    except Exception as e:
+        print(f"[boot] loading screen skipped: {e}")
+    if os.environ.get("WALL_BOOT") and a.anim not in ("welcome", "music"):
+        try:                                             # power-on greeting, once
+            from display import welcome
+            tw = time.monotonic()
+            while time.monotonic() - tw < welcome.LOOP_SEC:
+                if not matrix.draw(welcome.welcome_frame(time.monotonic() - tw), frame_fraction=2):
+                    time.sleep(interval)
+        except Exception as e:
+            print(f"[boot] welcome skipped: {e}")
     t0 = time.monotonic()
+    stats = [] if os.environ.get("WALL_STATS") else None
+    stats_t = time.monotonic()
     try:
         while True:
             t = time.monotonic() - t0
@@ -76,8 +143,22 @@ def main():
                 break
             # each frame held for exactly 2 refreshes (58 Hz -> 29 fps), paced by the
             # panels' own vsync instead of a sleep timer that drifts against it
-            if not matrix.draw(overlay.apply(frame_fn(t)), frame_fraction=2):
+            c0 = time.perf_counter()
+            img = overlay.apply(frame_fn(t))
+            c1 = time.perf_counter()
+            if not matrix.draw(img, frame_fraction=2):
                 time.sleep(interval)                    # unchanged frame: nothing to pace
+            if stats is not None:
+                stats.append((c1 - c0, time.perf_counter() - c1))
+                if time.monotonic() - stats_t > 10.0:
+                    import numpy as np
+                    a = np.array(stats) * 1000
+                    print(f"[stats] {len(a)} frames/10s  render p50 {np.percentile(a[:,0],50):.1f} p95 "
+                          f"{np.percentile(a[:,0],95):.1f} max {a[:,0].max():.1f} ms | draw(wait) p50 "
+                          f"{np.percentile(a[:,1],50):.1f} p95 {np.percentile(a[:,1],95):.1f} "
+                          f"max {a[:,1].max():.1f} ms (budget 34.5)", flush=True)
+                    stats.clear()
+                    stats_t = time.monotonic()
     except KeyboardInterrupt:
         pass
     matrix.clear()

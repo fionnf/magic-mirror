@@ -13,6 +13,7 @@ rsync -avz \
     --exclude '.git' --exclude '.idea' --exclude '.venv' --exclude 'venv' --exclude '.claude' --exclude '.build' --exclude '__pycache__' \
     --exclude '.env' --exclude 'token.json' --exclude 'oauth_client.json' \
     --exclude 'gcp-credentials.json' --exclude 'tinytuya.json' --exclude 'tuya-raw.json' --exclude 'snapshot.json' --exclude 'photos/' --exclude 'tests/sim_receipts' \
+    --include 'panel_setup/web/thumbs/' --include 'panel_setup/web/thumbs/*.png' --exclude 'gifs/' \
     --exclude '*.png' --exclude '*.jpg' --exclude 'usage.log' --exclude 'panel_setup/monitor.csv' \
     "${ROOT}/" "${PI_USER}@${PI_HOST}:${PI_DIR}/"
 echo "==> Done. On the Pi:  cd ~/${PI_DIR} && ./panel_setup/run.sh numbers"

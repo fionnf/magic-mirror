@@ -1251,9 +1251,9 @@ class Visuals:
                 self.players.pop(old).close()
             pl = self.players[name] = vjloops.LoopPlayer(name, LOOP_BANK)
         period = f.get("period", 0.0) if f.get("bconf", 0.0) > 0.5 else 0.0
-        beats = vjloops.beats_for(pl.frames / pl.fps, period)
+        beats = vjloops.beats_for(pl.seconds, period)
         if beats:                                           # one loop = a whole number of beats
-            target = pl.frames / (beats * period)
+            target = pl.total / (beats * period)
         else:
             target = pl.fps * max(0.4, min(1.6, f.get("d_speed", 1.0)))
         pl.rate = _ema(getattr(pl, "rate", target), target, dt, 2.0)

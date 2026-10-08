@@ -63,7 +63,9 @@ class LoopBank:
 
 
 class LoopPlayer:
-    """Sequential decoder with a fractional play head; loops seamlessly."""
+    """Sequential decoder with a fractional play head. Every clip loops seamlessly: the last K
+    frames are cross-dissolved into the first K, and the loop runs over frames K..end."""
+    K = 24                      # ~0.8 s dissolve at 29 fps
 
     def __init__(self, name, bank=None):
         import cv2
@@ -72,43 +74,57 @@ class LoopPlayer:
         self.info = self.bank.info(name)
         self.frames = max(1, int(self.info.get("frames", 1)))
         self.fps = float(self.info.get("fps", 29))
+        self.K = max(1, min(self.K, self.frames // 4))
         self.cap = cv2.VideoCapture(self.bank.path(name))
-        self.pos, self.idx, self.last = 0.0, -1, None
+        self.head = []                                   # the first K frames (uint8 RGB)
+        for _ in range(self.K):
+            ok, fr = self.cap.read()
+            if not ok:
+                break
+            self.head.append(cv2.cvtColor(fr, cv2.COLOR_BGR2RGB))
+        self.K = len(self.head) or 1
+        self.total = max(1, self.frames - self.K)        # effective loop length
+        self.seconds = self.total / self.fps
+        self.pos, self.idx, self.last = 0.0, self.K - 1, None
 
-    def _next(self):
+    def _read(self):
         import cv2
         ok, fr = self.cap.read()
-        if not ok:                                        # end: wrap around
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            ok, fr = self.cap.read()
-            self.idx = -1
-            if not ok:
-                return
-        self.idx += 1
-        self.last = cv2.cvtColor(fr, cv2.COLOR_BGR2RGB).astype(np.float32)
+        if ok:
+            self.idx += 1
+            self.last = cv2.cvtColor(fr, cv2.COLOR_BGR2RGB).astype(np.float32)
+        return ok
 
     def frame(self, dt, rate):
         """Advance by rate*dt clip frames (rate in frames/s; the native speed is self.fps)."""
+        import cv2
         self.pos += max(0.0, rate) * dt
-        target = int(self.pos)
-        if target >= self.frames:                          # keep the head inside the loop
-            self.pos -= self.frames * (target // self.frames)
-            target = int(self.pos)
-            if self.idx > target:
-                self.idx = -1
-                import cv2
-                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        if self.pos >= self.total:
+            self.pos %= self.total
+        target = self.K + int(self.pos)                  # absolute frame in the file
+        if target < self.idx:                            # wrapped: continue after the head
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.K)
+            self.idx = self.K - 1
         steps = 0
-        while self.idx < target and steps < 6:             # catch up (skip a few if the rate is high)
+        while self.idx < target and steps < 6:           # catch up (skip a few if the rate is high)
             if target - self.idx > 1:
-                self.cap.grab()
-                self.idx += 1
-            else:
-                self._next()
+                if self.cap.grab():
+                    self.idx += 1
+                else:
+                    break
+            elif not self._read():
+                break
             steps += 1
         if self.last is None:
-            self._next()
-        return self.last if self.last is not None else np.zeros((192, 192, 3), np.float32)
+            self._read()
+        if self.last is None:
+            return np.zeros((192, 192, 3), np.float32)
+        out = self.last
+        tail = self.idx - (self.frames - self.K)         # 0..K-1 inside the dissolve
+        if 0 <= tail < self.K:
+            a = (tail + 1) / (self.K + 1)
+            out = out * (1.0 - a) + self.head[tail].astype(np.float32) * a
+        return out
 
     def close(self):
         try:

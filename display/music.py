@@ -159,7 +159,7 @@ AI_MODELS = ["gpt-audio"]
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # written by the app
 NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # read by the app
-DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "mac",
+DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "pi",
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
                     "brain": "gemini"}
 
@@ -177,7 +177,7 @@ def load_settings():
     if s["vibe"] != "auto" and s["vibe"] not in VIBES:
         s["vibe"] = "auto"
     if s["source"] not in ("mac", "pi"):
-        s["source"] = "mac"
+        s["source"] = "pi"
     for k in ("ai", "shazam", "song_on_wall"):
         s[k] = bool(s.get(k, True))
     if s.get("brain") not in ("gemini", "text", "openai", "claude"):
@@ -1049,7 +1049,7 @@ class MusicShow:
                                "shazam": self.rec.status, "brain_status": self.vj.brain_status,
                                "ai_calls": {k: v for k, v in self.vj.usage.items() if k != "date"},
                                "source": self.vj.source, "settings": self.settings,
-                               "audio": {"source": self.settings.get("source", "mac"),
+                               "audio": {"source": self.settings.get("source", "pi"),
                                          "spec": self.l.spec, "error": self.l.error,
                                          "receiving": time.time() - self.l.last_audio < 2},
                                "silent": self.l.f["silent"], "time": time.time()})

@@ -1,0 +1,1028 @@
+{
+ "ubersketch__archimedes": {
+  "frames": 619,
+  "fps": 29,
+  "seconds": 21.34,
+  "motion": 0.351,
+  "bright": 0.638,
+  "kb": 2442,
+  "source": "archimedes.mov"
+ },
+ "ubersketch__atommy": {
+  "frames": 691,
+  "fps": 29,
+  "seconds": 23.83,
+  "motion": 0.291,
+  "bright": 0.344,
+  "kb": 2164,
+  "source": "atommy.mov"
+ },
+ "ubersketch__building-tubes": {
+  "frames": 871,
+  "fps": 29,
+  "seconds": 30.03,
+  "motion": 0.222,
+  "bright": 0.761,
+  "kb": 3295,
+  "source": "building tubes.mov"
+ },
+ "ubersketch__firegrid": {
+  "frames": 773,
+  "fps": 29,
+  "seconds": 26.66,
+  "motion": 0.206,
+  "bright": 0.739,
+  "kb": 3394,
+  "source": "firegrid.mov"
+ },
+ "ubersketch__membrane": {
+  "frames": 757,
+  "fps": 29,
+  "seconds": 26.1,
+  "motion": 0.377,
+  "bright": 0.708,
+  "kb": 3594,
+  "source": "membrane.mov"
+ },
+ "ubersketch__meta-build": {
+  "frames": 769,
+  "fps": 29,
+  "seconds": 26.52,
+  "motion": 0.328,
+  "bright": 0.504,
+  "kb": 3090,
+  "source": "meta_build.mov"
+ },
+ "ubersketch__rainbee": {
+  "frames": 871,
+  "fps": 29,
+  "seconds": 30.03,
+  "motion": 0.168,
+  "bright": 0.464,
+  "kb": 3139,
+  "source": "rainbee.mov"
+ },
+ "ubersketch__triangle-field": {
+  "frames": 581,
+  "fps": 29,
+  "seconds": 20.03,
+  "motion": 0.381,
+  "bright": 0.376,
+  "kb": 2521,
+  "source": "triangle_field.mov"
+ },
+ "ubersketch__trianglefield-two": {
+  "frames": 568,
+  "fps": 29,
+  "seconds": 19.59,
+  "motion": 0.301,
+  "bright": 0.404,
+  "kb": 1898,
+  "source": "trianglefield_two.mov"
+ },
+ "ubersketch__ubersketch-preview": {
+  "frames": 1430,
+  "fps": 29,
+  "seconds": 49.31,
+  "motion": 0.206,
+  "bright": 0.291,
+  "kb": 3518,
+  "source": "ubersketch preview.mov"
+ },
+ "ubersketch__worm-parade": {
+  "frames": 300,
+  "fps": 29,
+  "seconds": 10.34,
+  "motion": 0.216,
+  "bright": 0.541,
+  "kb": 1408,
+  "source": "worm parade.mov"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-army-marching-a": {
+  "frames": 109,
+  "fps": 29,
+  "seconds": 3.76,
+  "motion": 0.09,
+  "bright": 0.392,
+  "kb": 165,
+  "source": "BEEPLE_MANIFEST_ARMY_MARCHING-A.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-army-marching-b": {
+  "frames": 118,
+  "fps": 29,
+  "seconds": 4.07,
+  "motion": 0.154,
+  "bright": 0.156,
+  "kb": 133,
+  "source": "BEEPLE_MANIFEST_ARMY_MARCHING-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-army-standing-b": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.022,
+  "bright": 0.198,
+  "kb": 21,
+  "source": "BEEPLE_MANIFEST_ARMY_STANDING-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-coins-pouring-b": {
+  "frames": 58,
+  "fps": 29,
+  "seconds": 2.0,
+  "motion": 0.306,
+  "bright": 0.461,
+  "kb": 204,
+  "source": "BEEPLE_MANIFEST_COINS_POURING-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-coins-pouring-c": {
+  "frames": 276,
+  "fps": 29,
+  "seconds": 9.52,
+  "motion": 0.07,
+  "bright": 0.197,
+  "kb": 188,
+  "source": "BEEPLE_MANIFEST_COINS_POURING-C.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-coins-pouring": {
+  "frames": 52,
+  "fps": 29,
+  "seconds": 1.79,
+  "motion": 0.22,
+  "bright": 0.375,
+  "kb": 100,
+  "source": "BEEPLE_MANIFEST_COINS_POURING.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-coins-pouring-d": {
+  "frames": 146,
+  "fps": 29,
+  "seconds": 5.03,
+  "motion": 0.304,
+  "bright": 0.251,
+  "kb": 241,
+  "source": "BEEPLE_MANIFEST_COINS_POURING_D.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-coins-pouring-e": {
+  "frames": 103,
+  "fps": 29,
+  "seconds": 3.55,
+  "motion": 0.051,
+  "bright": 0.169,
+  "kb": 103,
+  "source": "BEEPLE_MANIFEST_COINS_POURING_E.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-fight-scene-one": {
+  "frames": 194,
+  "fps": 29,
+  "seconds": 6.69,
+  "motion": 0.259,
+  "bright": 0.136,
+  "kb": 327,
+  "source": "BEEPLE_MANIFEST_FIGHT_SCENE_ONE.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-fight-scene-one-b": {
+  "frames": 127,
+  "fps": 29,
+  "seconds": 4.38,
+  "motion": 0.291,
+  "bright": 0.218,
+  "kb": 182,
+  "source": "BEEPLE_MANIFEST_FIGHT_SCENE_ONE_B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-fight-scene-one-d": {
+  "frames": 291,
+  "fps": 29,
+  "seconds": 10.03,
+  "motion": 0.304,
+  "bright": 0.19,
+  "kb": 431,
+  "source": "BEEPLE_MANIFEST_FIGHT_SCENE_ONE_D.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-fight-scene-one-e": {
+  "frames": 175,
+  "fps": 29,
+  "seconds": 6.03,
+  "motion": 0.244,
+  "bright": 0.232,
+  "kb": 213,
+  "source": "BEEPLE_MANIFEST_FIGHT_SCENE_ONE_E.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-fight-scene-one-f": {
+  "frames": 102,
+  "fps": 29,
+  "seconds": 3.52,
+  "motion": 0.054,
+  "bright": 0.228,
+  "kb": 52,
+  "source": "BEEPLE_MANIFEST_FIGHT_SCENE_ONE_F.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-fight-scene-one-h": {
+  "frames": 113,
+  "fps": 29,
+  "seconds": 3.9,
+  "motion": 0.107,
+  "bright": 0.13,
+  "kb": 89,
+  "source": "BEEPLE_MANIFEST_FIGHT_SCENE_ONE_H.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-fist-fight-a": {
+  "frames": 168,
+  "fps": 29,
+  "seconds": 5.79,
+  "motion": 0.174,
+  "bright": 0.221,
+  "kb": 153,
+  "source": "BEEPLE_MANIFEST_FIST_FIGHT-A.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-fist-fight-b": {
+  "frames": 175,
+  "fps": 29,
+  "seconds": 6.03,
+  "motion": 0.369,
+  "bright": 0.225,
+  "kb": 253,
+  "source": "BEEPLE_MANIFEST_FIST_FIGHT_B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-flag-a": {
+  "frames": 174,
+  "fps": 29,
+  "seconds": 6.0,
+  "motion": 0.147,
+  "bright": 0.251,
+  "kb": 290,
+  "source": "BEEPLE_MANIFEST_FLAG-A.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-flag-b": {
+  "frames": 196,
+  "fps": 29,
+  "seconds": 6.76,
+  "motion": 0.12,
+  "bright": 0.14,
+  "kb": 262,
+  "source": "BEEPLE_MANIFEST_FLAG-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-golden-city-a": {
+  "frames": 146,
+  "fps": 29,
+  "seconds": 5.03,
+  "motion": 0.032,
+  "bright": 0.184,
+  "kb": 119,
+  "source": "BEEPLE_MANIFEST_GOLDEN_CITY-A.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-golden-city-b": {
+  "frames": 88,
+  "fps": 29,
+  "seconds": 3.03,
+  "motion": 0.132,
+  "bright": 0.301,
+  "kb": 63,
+  "source": "BEEPLE_MANIFEST_GOLDEN_CITY-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-golden-city-c": {
+  "frames": 86,
+  "fps": 29,
+  "seconds": 2.97,
+  "motion": 0.14,
+  "bright": 0.335,
+  "kb": 136,
+  "source": "BEEPLE_MANIFEST_GOLDEN_CITY-C.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-golden-city-d": {
+  "frames": 266,
+  "fps": 29,
+  "seconds": 9.17,
+  "motion": 0.189,
+  "bright": 0.242,
+  "kb": 383,
+  "source": "BEEPLE_MANIFEST_GOLDEN_CITY-D.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-golden-city-e": {
+  "frames": 88,
+  "fps": 29,
+  "seconds": 3.03,
+  "motion": 0.178,
+  "bright": 0.268,
+  "kb": 132,
+  "source": "BEEPLE_MANIFEST_GOLDEN_CITY-E.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-golden-city-f": {
+  "frames": 75,
+  "fps": 29,
+  "seconds": 2.59,
+  "motion": 0.165,
+  "bright": 0.533,
+  "kb": 100,
+  "source": "BEEPLE_MANIFEST_GOLDEN_CITY-F.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-golden-city-g": {
+  "frames": 146,
+  "fps": 29,
+  "seconds": 5.03,
+  "motion": 0.183,
+  "bright": 0.266,
+  "kb": 157,
+  "source": "BEEPLE_MANIFEST_GOLDEN_CITY-G.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-kidmarch-d": {
+  "frames": 146,
+  "fps": 29,
+  "seconds": 5.03,
+  "motion": 0.09,
+  "bright": 0.179,
+  "kb": 149,
+  "source": "BEEPLE_MANIFEST_KIDMARCH_D.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-burning-a": {
+  "frames": 88,
+  "fps": 29,
+  "seconds": 3.03,
+  "motion": 0.033,
+  "bright": 0.19,
+  "kb": 64,
+  "source": "BEEPLE_MANIFEST_MONEY_BURNING-A.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-burning-b": {
+  "frames": 88,
+  "fps": 29,
+  "seconds": 3.03,
+  "motion": 0.167,
+  "bright": 0.307,
+  "kb": 98,
+  "source": "BEEPLE_MANIFEST_MONEY_BURNING-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-burning-c": {
+  "frames": 117,
+  "fps": 29,
+  "seconds": 4.03,
+  "motion": 0.1,
+  "bright": 0.371,
+  "kb": 105,
+  "source": "BEEPLE_MANIFEST_MONEY_BURNING-C.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-burning-d": {
+  "frames": 117,
+  "fps": 29,
+  "seconds": 4.03,
+  "motion": 0.042,
+  "bright": 0.355,
+  "kb": 118,
+  "source": "BEEPLE_MANIFEST_MONEY_BURNING-D.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-burning-e": {
+  "frames": 49,
+  "fps": 29,
+  "seconds": 1.69,
+  "motion": 0.231,
+  "bright": 0.489,
+  "kb": 79,
+  "source": "BEEPLE_MANIFEST_MONEY_BURNING-E.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-printing-a": {
+  "frames": 56,
+  "fps": 29,
+  "seconds": 1.93,
+  "motion": 0.143,
+  "bright": 0.25,
+  "kb": 105,
+  "source": "BEEPLE_MANIFEST_MONEY_PRINTING-A.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-printing-b": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.318,
+  "bright": 0.349,
+  "kb": 107,
+  "source": "BEEPLE_MANIFEST_MONEY_PRINTING-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-printing-c": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.259,
+  "bright": 0.237,
+  "kb": 107,
+  "source": "BEEPLE_MANIFEST_MONEY_PRINTING-C.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-printing-d": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.172,
+  "bright": 0.271,
+  "kb": 94,
+  "source": "BEEPLE_MANIFEST_MONEY_PRINTING-D.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-printing-e": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.217,
+  "bright": 0.335,
+  "kb": 151,
+  "source": "BEEPLE_MANIFEST_MONEY_PRINTING-E.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-printing-f": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.08,
+  "bright": 0.287,
+  "kb": 46,
+  "source": "BEEPLE_MANIFEST_MONEY_PRINTING-F.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-printing-g": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.077,
+  "bright": 0.29,
+  "kb": 36,
+  "source": "BEEPLE_MANIFEST_MONEY_PRINTING-G.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-printing-h": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.174,
+  "bright": 0.168,
+  "kb": 56,
+  "source": "BEEPLE_MANIFEST_MONEY_PRINTING-H.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-printing-i": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.295,
+  "bright": 0.411,
+  "kb": 114,
+  "source": "BEEPLE_MANIFEST_MONEY_PRINTING-I.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-money-printing-j": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.058,
+  "bright": 0.298,
+  "kb": 30,
+  "source": "BEEPLE_MANIFEST_MONEY_PRINTING-J.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-orgy-a": {
+  "frames": 581,
+  "fps": 29,
+  "seconds": 20.03,
+  "motion": 0.053,
+  "bright": 0.244,
+  "kb": 591,
+  "source": "BEEPLE_MANIFEST_ORGY-A.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-orgy-b": {
+  "frames": 98,
+  "fps": 29,
+  "seconds": 3.38,
+  "motion": 0.274,
+  "bright": 0.264,
+  "kb": 198,
+  "source": "BEEPLE_MANIFEST_ORGY-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-orgy-c": {
+  "frames": 98,
+  "fps": 29,
+  "seconds": 3.38,
+  "motion": 0.054,
+  "bright": 0.401,
+  "kb": 99,
+  "source": "BEEPLE_MANIFEST_ORGY-C.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-orgy-d": {
+  "frames": 194,
+  "fps": 29,
+  "seconds": 6.69,
+  "motion": 0.074,
+  "bright": 0.163,
+  "kb": 272,
+  "source": "BEEPLE_MANIFEST_ORGY-D.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-orgy-e": {
+  "frames": 47,
+  "fps": 29,
+  "seconds": 1.62,
+  "motion": 0.078,
+  "bright": 0.303,
+  "kb": 65,
+  "source": "BEEPLE_MANIFEST_ORGY-E.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-orgy-f": {
+  "frames": 88,
+  "fps": 29,
+  "seconds": 3.03,
+  "motion": 0.032,
+  "bright": 0.318,
+  "kb": 100,
+  "source": "BEEPLE_MANIFEST_ORGY-F.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-orgy-g": {
+  "frames": 135,
+  "fps": 29,
+  "seconds": 4.66,
+  "motion": 0.024,
+  "bright": 0.386,
+  "kb": 135,
+  "source": "BEEPLE_MANIFEST_ORGY-G.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-orgy-i": {
+  "frames": 154,
+  "fps": 29,
+  "seconds": 5.31,
+  "motion": 0.127,
+  "bright": 0.334,
+  "kb": 189,
+  "source": "BEEPLE_MANIFEST_ORGY-I.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-rifle-run-a": {
+  "frames": 175,
+  "fps": 29,
+  "seconds": 6.03,
+  "motion": 0.169,
+  "bright": 0.387,
+  "kb": 278,
+  "source": "BEEPLE_MANIFEST_RIFLE_RUN-A.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-rifle-run-b": {
+  "frames": 88,
+  "fps": 29,
+  "seconds": 3.03,
+  "motion": 0.111,
+  "bright": 0.531,
+  "kb": 91,
+  "source": "BEEPLE_MANIFEST_RIFLE_RUN-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-rifle-run-c": {
+  "frames": 82,
+  "fps": 29,
+  "seconds": 2.83,
+  "motion": 0.317,
+  "bright": 0.193,
+  "kb": 125,
+  "source": "BEEPLE_MANIFEST_RIFLE_RUN-C.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-running-b": {
+  "frames": 88,
+  "fps": 29,
+  "seconds": 3.03,
+  "motion": 0.174,
+  "bright": 0.212,
+  "kb": 83,
+  "source": "BEEPLE_MANIFEST_RUNNING-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-running-c": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.153,
+  "bright": 0.497,
+  "kb": 72,
+  "source": "BEEPLE_MANIFEST_RUNNING-C.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-running-a": {
+  "frames": 117,
+  "fps": 29,
+  "seconds": 4.03,
+  "motion": 0.163,
+  "bright": 0.247,
+  "kb": 171,
+  "source": "BEEPLE_MANIFEST_RUNNING_A.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-snake-a": {
+  "frames": 120,
+  "fps": 29,
+  "seconds": 4.14,
+  "motion": 0.218,
+  "bright": 0.307,
+  "kb": 168,
+  "source": "BEEPLE_MANIFEST_SNAKE-A.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-snake-b": {
+  "frames": 59,
+  "fps": 29,
+  "seconds": 2.03,
+  "motion": 0.239,
+  "bright": 0.266,
+  "kb": 77,
+  "source": "BEEPLE_MANIFEST_SNAKE-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-snake-c": {
+  "frames": 88,
+  "fps": 29,
+  "seconds": 3.03,
+  "motion": 0.063,
+  "bright": 0.18,
+  "kb": 89,
+  "source": "BEEPLE_MANIFEST_SNAKE-C.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-snake-d": {
+  "frames": 117,
+  "fps": 29,
+  "seconds": 4.03,
+  "motion": 0.118,
+  "bright": 0.223,
+  "kb": 131,
+  "source": "BEEPLE_MANIFEST_SNAKE-D.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-worship-a": {
+  "frames": 146,
+  "fps": 29,
+  "seconds": 5.03,
+  "motion": 0.064,
+  "bright": 0.283,
+  "kb": 153,
+  "source": "BEEPLE_MANIFEST_WORSHIP-A.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-worship-b": {
+  "frames": 131,
+  "fps": 29,
+  "seconds": 4.52,
+  "motion": 0.112,
+  "bright": 0.185,
+  "kb": 147,
+  "source": "BEEPLE_MANIFEST_WORSHIP-B.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-worship-c": {
+  "frames": 88,
+  "fps": 29,
+  "seconds": 3.03,
+  "motion": 0.106,
+  "bright": 0.21,
+  "kb": 70,
+  "source": "BEEPLE_MANIFEST_WORSHIP-C.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-worship-d": {
+  "frames": 60,
+  "fps": 29,
+  "seconds": 2.07,
+  "motion": 0.101,
+  "bright": 0.198,
+  "kb": 76,
+  "source": "BEEPLE_MANIFEST_WORSHIP-D.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-worship-e": {
+  "frames": 88,
+  "fps": 29,
+  "seconds": 3.03,
+  "motion": 0.041,
+  "bright": 0.411,
+  "kb": 91,
+  "source": "BEEPLE_MANIFEST_WORSHIP-E.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-worship-f": {
+  "frames": 88,
+  "fps": 29,
+  "seconds": 3.03,
+  "motion": 0.047,
+  "bright": 0.428,
+  "kb": 54,
+  "source": "BEEPLE_MANIFEST_WORSHIP-F.mp4"
+ },
+ "beeple-manifest-destiny-clips__beeple-manifest-kidmarch-c": {
+  "frames": 145,
+  "fps": 29,
+  "seconds": 5.0,
+  "motion": 0.059,
+  "bright": 0.362,
+  "kb": 130,
+  "source": "BEEPLE_MANIFEST_kidmarch_c.mp4"
+ },
+ "beeple-resolume-pack__cycloid": {
+  "frames": 699,
+  "fps": 29,
+  "seconds": 24.1,
+  "motion": 0.188,
+  "bright": 0.476,
+  "kb": 2007,
+  "source": "cycloid.mov"
+ },
+ "beeple-resolume-pack__gerschwinn": {
+  "frames": 844,
+  "fps": 29,
+  "seconds": 29.1,
+  "motion": 0.11,
+  "bright": 0.661,
+  "kb": 2037,
+  "source": "gerschwinn.mov"
+ },
+ "beeple-resolume-pack__glytchghost": {
+  "frames": 581,
+  "fps": 29,
+  "seconds": 20.03,
+  "motion": 0.141,
+  "bright": 0.169,
+  "kb": 1199,
+  "source": "glytchghost.mov"
+ },
+ "beeple-resolume-pack__mocircshii": {
+  "frames": 968,
+  "fps": 29,
+  "seconds": 33.38,
+  "motion": 0.177,
+  "bright": 0.353,
+  "kb": 3078,
+  "source": "mocircshii.mov"
+ },
+ "beeple-resolume-pack__narrow-gultch": {
+  "frames": 580,
+  "fps": 29,
+  "seconds": 20.0,
+  "motion": 0.237,
+  "bright": 0.321,
+  "kb": 1461,
+  "source": "narrow gultch.mov"
+ },
+ "beeple-resolume-pack__plugs-slower": {
+  "frames": 870,
+  "fps": 29,
+  "seconds": 30.0,
+  "motion": 0.054,
+  "bright": 0.284,
+  "kb": 1968,
+  "source": "plugs slower.mov"
+ },
+ "beeple-resolume-pack__space-crystals": {
+  "frames": 1160,
+  "fps": 29,
+  "seconds": 40.0,
+  "motion": 0.118,
+  "bright": 0.361,
+  "kb": 1005,
+  "source": "space crystals.mov"
+ },
+ "beeple-resolume-pack__twirlers": {
+  "frames": 579,
+  "fps": 29,
+  "seconds": 19.97,
+  "motion": 0.477,
+  "bright": 0.438,
+  "kb": 2175,
+  "source": "twirlers.mov"
+ },
+ "beeple-resolume-pack__twisted-hall": {
+  "frames": 581,
+  "fps": 29,
+  "seconds": 20.03,
+  "motion": 0.13,
+  "bright": 0.521,
+  "kb": 824,
+  "source": "twisted hall.mov"
+ },
+ "beeple-four-color-process__blockpile-one": {
+  "frames": 423,
+  "fps": 29,
+  "seconds": 14.59,
+  "motion": 0.443,
+  "bright": 0.302,
+  "kb": 1159,
+  "source": "blockpile (one).mov"
+ },
+ "beeple-four-color-process__blockpile-two": {
+  "frames": 297,
+  "fps": 29,
+  "seconds": 10.24,
+  "motion": 0.157,
+  "bright": 0.259,
+  "kb": 763,
+  "source": "blockpile (two).mov"
+ },
+ "beeple-four-color-process__danny-tannigle": {
+  "frames": 581,
+  "fps": 29,
+  "seconds": 20.03,
+  "motion": 0.399,
+  "bright": 0.302,
+  "kb": 2594,
+  "source": "danny tannigle.mov"
+ },
+ "beeple-four-color-process__gloablee": {
+  "frames": 581,
+  "fps": 29,
+  "seconds": 20.03,
+  "motion": 0.369,
+  "bright": 0.218,
+  "kb": 2996,
+  "source": "gloablee.mov"
+ },
+ "beeple-four-color-process__hexgrow": {
+  "frames": 525,
+  "fps": 29,
+  "seconds": 18.1,
+  "motion": 0.517,
+  "bright": 0.573,
+  "kb": 1628,
+  "source": "hexgrow.mov"
+ },
+ "beeple-four-color-process__midflow": {
+  "frames": 529,
+  "fps": 29,
+  "seconds": 18.24,
+  "motion": 0.147,
+  "bright": 0.325,
+  "kb": 987,
+  "source": "midflow.mov"
+ },
+ "beeple-four-color-process__sphere-deamon": {
+  "frames": 581,
+  "fps": 29,
+  "seconds": 20.03,
+  "motion": 0.251,
+  "bright": 0.424,
+  "kb": 2015,
+  "source": "sphere.deamon.mov"
+ },
+ "beeple-four-color-process__tiestrapstream": {
+  "frames": 291,
+  "fps": 29,
+  "seconds": 10.03,
+  "motion": 0.317,
+  "bright": 0.361,
+  "kb": 938,
+  "source": "tiestrapstream.mov"
+ },
+ "beeple-four-color-process__tubecam-one": {
+  "frames": 581,
+  "fps": 29,
+  "seconds": 20.03,
+  "motion": 0.392,
+  "bright": 0.447,
+  "kb": 2070,
+  "source": "tubecam (one).mov"
+ },
+ "beeple-four-color-process__tubecam-two": {
+  "frames": 581,
+  "fps": 29,
+  "seconds": 20.03,
+  "motion": 0.212,
+  "bright": 0.423,
+  "kb": 916,
+  "source": "tubecam (two).mov"
+ },
+ "mixkit-chill__mixkit-14165": {
+  "frames": 435,
+  "fps": 29,
+  "seconds": 15.0,
+  "motion": 0.025,
+  "bright": 0.161,
+  "kb": 197,
+  "source": "mixkit-14165.mp4"
+ },
+ "mixkit-chill__mixkit-14902": {
+  "frames": 401,
+  "fps": 29,
+  "seconds": 13.83,
+  "motion": 0.005,
+  "bright": 0.057,
+  "kb": 144,
+  "source": "mixkit-14902.mp4"
+ },
+ "mixkit-chill__mixkit-152": {
+  "frames": 585,
+  "fps": 29,
+  "seconds": 20.17,
+  "motion": 0.007,
+  "bright": 0.347,
+  "kb": 160,
+  "source": "mixkit-152.mp4"
+ },
+ "mixkit-chill__mixkit-154": {
+  "frames": 1098,
+  "fps": 29,
+  "seconds": 37.86,
+  "motion": 0.005,
+  "bright": 0.303,
+  "kb": 391,
+  "source": "mixkit-154.mp4"
+ },
+ "mixkit-chill__mixkit-1962": {
+  "frames": 352,
+  "fps": 29,
+  "seconds": 12.14,
+  "motion": 0.041,
+  "bright": 0.239,
+  "kb": 220,
+  "source": "mixkit-1962.mp4"
+ },
+ "mixkit-chill__mixkit-1963": {
+  "frames": 480,
+  "fps": 29,
+  "seconds": 16.55,
+  "motion": 0.096,
+  "bright": 0.311,
+  "kb": 712,
+  "source": "mixkit-1963.mp4"
+ },
+ "mixkit-chill__mixkit-1964": {
+  "frames": 645,
+  "fps": 29,
+  "seconds": 22.24,
+  "motion": 0.042,
+  "bright": 0.078,
+  "kb": 603,
+  "source": "mixkit-1964.mp4"
+ },
+ "mixkit-chill__mixkit-1968": {
+  "frames": 435,
+  "fps": 29,
+  "seconds": 15.0,
+  "motion": 0.023,
+  "bright": 0.138,
+  "kb": 320,
+  "source": "mixkit-1968.mp4"
+ },
+ "mixkit-chill__mixkit-4033": {
+  "frames": 357,
+  "fps": 29,
+  "seconds": 12.31,
+  "motion": 0.037,
+  "bright": 0.28,
+  "kb": 158,
+  "source": "mixkit-4033.mp4"
+ },
+ "mixkit-chill__mixkit-4034": {
+  "frames": 200,
+  "fps": 29,
+  "seconds": 6.9,
+  "motion": 0.093,
+  "bright": 0.318,
+  "kb": 209,
+  "source": "mixkit-4034.mp4"
+ },
+ "mixkit-chill__mixkit-4035": {
+  "frames": 221,
+  "fps": 29,
+  "seconds": 7.62,
+  "motion": 0.017,
+  "bright": 0.313,
+  "kb": 73,
+  "source": "mixkit-4035.mp4"
+ },
+ "mixkit-chill__mixkit-4038": {
+  "frames": 205,
+  "fps": 29,
+  "seconds": 7.07,
+  "motion": 0.086,
+  "bright": 0.232,
+  "kb": 180,
+  "source": "mixkit-4038.mp4"
+ },
+ "mixkit-chill__mixkit-4039": {
+  "frames": 78,
+  "fps": 29,
+  "seconds": 2.69,
+  "motion": 0.02,
+  "bright": 0.412,
+  "kb": 35,
+  "source": "mixkit-4039.mp4"
+ },
+ "mixkit-chill__mixkit-4040": {
+  "frames": 337,
+  "fps": 29,
+  "seconds": 11.62,
+  "motion": 0.024,
+  "bright": 0.396,
+  "kb": 209,
+  "source": "mixkit-4040.mp4"
+ },
+ "mixkit-chill__mixkit-44818": {
+  "frames": 504,
+  "fps": 29,
+  "seconds": 17.38,
+  "motion": 0.052,
+  "bright": 0.254,
+  "kb": 642,
+  "source": "mixkit-44818.mp4"
+ },
+ "mixkit-chill__mixkit-45298": {
+  "frames": 519,
+  "fps": 29,
+  "seconds": 17.9,
+  "motion": 0.019,
+  "bright": 0.101,
+  "kb": 225,
+  "source": "mixkit-45298.mp4"
+ },
+ "mixkit-chill__mixkit-50956": {
+  "frames": 504,
+  "fps": 29,
+  "seconds": 17.38,
+  "motion": 0.019,
+  "bright": 0.043,
+  "kb": 136,
+  "source": "mixkit-50956.mp4"
+ },
+ "mixkit-chill__mixkit-8461": {
+  "frames": 803,
+  "fps": 29,
+  "seconds": 27.69,
+  "motion": 0.008,
+  "bright": 0.078,
+  "kb": 216,
+  "source": "mixkit-8461.mp4"
+ }
+}

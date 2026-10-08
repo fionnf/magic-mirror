@@ -344,6 +344,7 @@ def _scene_key(c):
 AI_MODELS = ["gpt-audio"]
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # written by the app
+AUDIO_FILE = os.path.join(_HERE, "panel_setup", "audio_now.json")          # live meter for the app (4x/s)
 NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # read by the app
 DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "pi",
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
@@ -1639,6 +1640,20 @@ class MusicShow:
         if now - getattr(self, "_published", 0) > 3:
             self._published = now
             self._publish()
+        if now - getattr(self, "_audio_pub", 0) > 0.25:                 # live waveform + level for the app
+            self._audio_pub = now
+            try:
+                raw = self.l.recent(0.09)
+                k = max(1, len(raw) // 96)
+                pts = raw[: k * 96].reshape(96, k).mean(1) if len(raw) >= 96 else np.zeros(96, np.float32)
+                lf = self.l.f
+                _write_json(AUDIO_FILE, {"wave": [round(float(v), 3) for v in np.clip(pts * 4.0, -1, 1)],
+                                         "db": round(lf.get("db", -80.0), 1), "energy": round(f["energy"], 2),
+                                         "bass": round(f.get("kick_fast", 0.0), 2), "silent": bool(lf.get("silent", True)),
+                                         "bpm": round(lf.get("bpm", 0.0), 1), "lock": round(lf.get("bconf", 0.0), 2),
+                                         "sensitivity": sens, "time": now})
+            except Exception:
+                pass
         slow = getattr(self, "cost", 0.0) > 26.0
         lop = 0.0 if slow else self.layer_op                  # too slow: drop the second layer
         if slow and self.xfade > 2.5:

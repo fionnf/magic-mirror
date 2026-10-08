@@ -386,6 +386,18 @@ def make_app(runner):
         runner.play("mirror")
         return jsonify(runner.status())
 
+    @app.get("/api/audio")
+    def audio_now():
+        from display import music as mu
+        try:
+            with open(mu.AUDIO_FILE) as fh:
+                d = json.load(fh)
+            if time.time() - d.get("time", 0) > 3:
+                d = {"stale": True}
+        except Exception:
+            d = {"stale": True}
+        return jsonify(d)
+
     @app.get("/api/loops")
     def loops_list():
         from display import loops as lp

@@ -157,6 +157,8 @@
         <label><input type="checkbox" id="tShz" onchange="toggleSet('shazam', this.checked)"> 🎵 Recognise songs</label>
         <label><input type="checkbox" id="tWall" onchange="toggleSet('song_on_wall', this.checked)"> Song title on the wall</label>
       </div>
+      <canvas id="scope" width="600" height="90" style="width:100%;height:90px;border-radius:10px;background:#0c0914;display:block;margin-bottom:6px"></canvas>
+      <div class="sub" id="scopeTxt" style="margin-bottom:8px">microphone: –</div>
       <div class="row" style="justify-content:space-between"><span class="sub">Sensitivity</span><b id="sensVal">50</b></div>
       <input type="range" id="sens" min="0" max="100" step="5" style="margin-bottom:12px">
       <div class="toggles"><label><input type="checkbox" id="tReact" onchange="toggleSet('art_reacts', this.checked)"> 🎶 Make ALL art move to music (when music is playing)</label></div>
@@ -462,6 +464,22 @@ function musicSet(start) {
     .then(r => { if (start) toast('🎵 Music art on'); else toast('Updated'); show(r.status); musicLoad(); })
     .catch(e => toast(e.message));
 }
+async function scopeTick() {
+  const c = $('scope'); if (!c) return;
+  if (STATUS.current !== 'music') { return; }
+  let d; try { d = await (await fetch('/api/audio')).json(); } catch (e) { return; }
+  const ctx = c.getContext('2d'), W = c.width, H = c.height;
+  ctx.fillStyle = '#0c0914'; ctx.fillRect(0, 0, W, H);
+  if (d.stale || !d.wave) { $('scopeTxt').textContent = 'microphone: no data (is Music mode running?)'; return; }
+  ctx.strokeStyle = '#3a2f4f'; ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
+  ctx.strokeStyle = d.silent ? '#6b6478' : '#ff5fa2'; ctx.lineWidth = 2; ctx.beginPath();
+  d.wave.forEach((v, i) => { const x = i / (d.wave.length - 1) * W, y = H / 2 - v * (H / 2 - 4); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.stroke();
+  const lvl = Math.max(0, Math.min(1, (d.db + 60) / 50));
+  ctx.fillStyle = '#ffb347'; ctx.fillRect(0, H - 4, W * lvl, 4);
+  $('scopeTxt').textContent = `microphone: ${d.db} dB ${d.silent ? '(silence)' : ''} · energy ${Math.round(d.energy * 100)}% · bass ${Math.round(d.bass * 100)}%` + (d.bpm ? ` · ${d.bpm} bpm (lock ${Math.round(d.lock * 100)}%)` : '') + ' — raise Sensitivity if the wave stays flat while music plays';
+}
+setInterval(scopeTick, 350);
 (async () => {
   musicLoad(true); setInterval(musicLoad, 5000);
   lastPhoto(); setInterval(lastPhoto, 5000);

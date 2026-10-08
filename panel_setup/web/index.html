@@ -139,11 +139,13 @@
       <div id="lightsSetup" class="sub" style="display:none">Not set up yet. Follow “Smart Life lights” in <code>panel_setup/README.md</code> (one-time, at home), then lights appear here.</div>
       <div id="lightsList"></div>
       <div id="lightsBtns" class="row" style="margin-top:10px;display:none">
-        <button class="primary" onclick="lightsAll(false)">🌙 All off</button>
-        <button onclick="lightsAll(true)">All on</button>
+        <button class="primary" onclick="lightsRoom(false)">🌙 Living room off</button>
+        <button onclick="lightsRoom(true)">Living room on</button>
+        <button onclick="lightsAll(false)">Everything off</button>
+        <button onclick="lightsScan()" title="at home: finds the lights' addresses on the Wi-Fi">🔍 Find lights</button>
       </div>
       <div id="lightsSched" class="row" style="margin-top:12px;display:none">
-        <span class="sub">Switch off every night at</span>
+        <span class="sub">Switch the living room off every night at</span>
         <input type="time" id="lightsOff" onchange="lightsSchedule()">
         <button onclick="$('lightsOff').value='';lightsSchedule()">clear</button>
       </div>
@@ -277,12 +279,24 @@ async function lightsLoad(fresh) {
     $('lightsNote').textContent = d.configured && !d.installed ? 'tinytuya is not installed on the Pi' : '';
     $('lightsList').innerHTML = (d.devices || []).map(x => `
       <label class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);cursor:pointer">
-        <span>${x.name}${x.error ? ' <span class="sub">⚠️ ' + x.error + '</span>' : ''}</span>
+        <span><button title="counts as the living room" onclick="event.preventDefault();roomToggle('${x.name.replace(/'/g, "\\'")}')"
+              style="padding:2px 8px;margin-right:6px;${x.room ? 'background:var(--gold);color:#241600' : ''}">${x.room ? '🏠 room' : '＋'}</button>${x.name}${x.error ? ' <span class="sub">⚠️ ' + x.error + '</span>' : ''}</span>
         <input type="checkbox" ${x.on ? 'checked' : ''} ${x.on === null ? 'disabled' : ''}
                style="width:22px;height:22px;accent-color:var(--gold)"
                onchange="lightsOne('${x.name.replace(/'/g, "\\'")}', this.checked)"></label>`).join('');
+    lightsRoomNames = d.room || [];
     if (d.schedule && document.activeElement !== $('lightsOff')) $('lightsOff').value = d.schedule.off || '';
   } catch (e) {}
+}
+let lightsRoomNames = [];
+function roomToggle(name) {
+  const s = new Set(lightsRoomNames); s.has(name) ? s.delete(name) : s.add(name);
+  post('/api/lights/members', {names: [...s]}).then(() => lightsLoad(true)).catch(e => toast(e.message));
+}
+function lightsRoom(on) { post('/api/lights/room', {on}).then(() => { toast(on ? '💡 Living room lights on' : '🌙 Living room lights off'); setTimeout(() => lightsLoad(true), 1200); }).catch(e => toast(e.message)); }
+function lightsScan() {
+  toast('Looking for your lights on the Wi-Fi… (20 s)');
+  post('/api/lights/scan').then(r => { toast(`Found ${r.mine} of your lights` + (r.missing && r.missing.length ? ` — missing: ${r.missing.join(', ')}` : '')); lightsLoad(true); }).catch(e => toast(e.message));
 }
 function lightsAll(on) { post('/api/lights/all', {on}).then(() => { toast(on ? '💡 Lights on' : '🌙 Lights off'); setTimeout(() => lightsLoad(true), 1200); }).catch(e => toast(e.message)); }
 function lightsOne(name, on) { post('/api/lights/one', {name, on}).then(() => setTimeout(() => lightsLoad(true), 1000)).catch(e => toast(e.message)); }

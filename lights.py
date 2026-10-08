@@ -23,6 +23,9 @@ STATE_FILE = os.path.join(_HERE, "panel_setup", "lights_state.json")
 TIMEOUT = 5.0
 # Tuya category codes that are lights (dj = light, dd = strip, xdd = ceiling, fwd = ambient, ...)
 LIGHT_CATEGORIES = {"dj", "dd", "xdd", "fwd", "dc", "tgq", "tyndj"}
+# everything we may switch (lights + sockets/switches); sensors, gateways and sub-devices are skipped
+CONTROLLABLE = LIGHT_CATEGORIES | {"cz", "kg", "pc"}
+CACHE_FILE = os.path.join(_HERE, "panel_setup", "lights_cache.json")      # {id: {"ip", "version"}} from a scan
 
 
 def _read(path):
@@ -41,12 +44,16 @@ def devices():
         raw = [{"name": d.get("name"), "id": d.get("id"), "ip": d.get("ip", ""), "key": d.get("key"),
                 "version": d.get("ver", 3.3),
                 "kind": "bulb" if d.get("category") in LIGHT_CATEGORIES else "outlet"}
-               for d in (_read(WIZARD_FILE) or []) if isinstance(d, dict) and d.get("key")]
+               for d in (_read(WIZARD_FILE) or []) if isinstance(d, dict) and d.get("key")
+               and not d.get("sub") and d.get("category", "dj") in CONTROLLABLE]
+    found = _read(CACHE_FILE) or {}                       # addresses found by a network scan
     out = []
     for d in raw:
         if d.get("id") and d.get("key"):
-            out.append({"name": d.get("name") or d["id"][:8], "id": d["id"], "ip": d.get("ip") or "Auto",
-                        "key": d["key"], "version": float(d.get("version") or 3.3),
+            c = found.get(d["id"], {})
+            out.append({"name": d.get("name") or d["id"][:8], "id": d["id"],
+                        "ip": d.get("ip") or c.get("ip") or "Auto",
+                        "key": d["key"], "version": float(c.get("version") or d.get("version") or 3.3),
                         "kind": d.get("kind", "bulb")})
     only = cfg.get("only")                                # optional: restrict to some names
     return [d for d in out if not only or d["name"] in only]
@@ -124,6 +131,47 @@ def set_one(name, on):
     if not devs:
         raise KeyError(f"no light called {name!r}")
     return _run_each(devs, lambda d: _switch(d, on))
+
+
+# -------------------------------------------------------------------- room ---
+
+def room():
+    """Names of the lights that count as 'the room' (default: all of them)."""
+    names = (_read(STATE_FILE) or {}).get("room")
+    allnames = [d["name"] for d in devices()]
+    return [n for n in names if n in allnames] if names is not None else allnames
+
+
+def set_room_members(names):
+    _save_state({"room": [str(n) for n in names]})
+    return room()
+
+
+def set_group(names, on):
+    group = [d for d in devices() if d["name"] in set(names)]
+    return _run_each(group, lambda d: _switch(d, on))
+
+
+def rescan(seconds=20):
+    """Find the lights' addresses and protocol versions on this network (run at home).
+    Matches by device id and caches the result, so later commands connect directly."""
+    import tinytuya
+    try:
+        found = tinytuya.deviceScan(False, seconds, byID=True)
+    except TypeError:
+        found = tinytuya.deviceScan(False, seconds)
+    cache = {}
+    for key, v in (found or {}).items():
+        did = v.get("gwId") or v.get("id") or key
+        if v.get("ip"):
+            cache[did] = {"ip": v["ip"], "version": v.get("version") or 3.3}
+    tmp = CACHE_FILE + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump(cache, fh)
+    os.replace(tmp, CACHE_FILE)
+    mine = {d["id"] for d in devices()}
+    return {"found": len(cache), "mine": len(mine & set(cache)), "missing": sorted(
+        d["name"] for d in devices() if d["id"] not in cache)}
 
 
 # ---------------------------------------------------------------- schedule ---

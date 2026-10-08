@@ -432,8 +432,10 @@ def make_app(runner):
             return jsonify({"configured": True, "installed": False, "devices": [], "schedule": lt.schedule()})
         if time.time() - _light_cache["t"] > 8 or request.args.get("fresh"):
             _light_cache.update(t=time.time(), data=lt.status())
-        return jsonify({"configured": True, "installed": True, "devices": _light_cache["data"],
-                        "schedule": lt.schedule()})
+        members = set(lt.room())
+        return jsonify({"configured": True, "installed": True,
+                        "devices": [{**x, "room": x["name"] in members} for x in _light_cache["data"]],
+                        "schedule": lt.schedule(), "room": sorted(members)})
 
     @app.post("/api/lights/all")
     def lights_all():
@@ -441,6 +443,25 @@ def make_app(runner):
         res = lt.set_all(on)
         _light_cache["t"] = 0
         return jsonify({"results": res})
+
+    @app.post("/api/lights/room")
+    def lights_room():
+        on = bool((request.get_json(force=True, silent=True) or {}).get("on", False))
+        res = lt.set_group(lt.room(), on)
+        _light_cache["t"] = 0
+        return jsonify({"results": res})
+
+    @app.post("/api/lights/members")
+    def lights_members():
+        names = (request.get_json(force=True, silent=True) or {}).get("names", [])
+        return jsonify({"room": lt.set_room_members(names)})
+
+    @app.post("/api/lights/scan")
+    def lights_scan():
+        try:
+            return jsonify(lt.rescan())
+        except Exception as e:
+            return jsonify({"error": str(e)[:120]}), 500
 
     @app.post("/api/lights/one")
     def lights_one():
@@ -488,8 +509,8 @@ def main():
             time.sleep(20)
             try:
                 if lights.installed() and lights.devices() and lights.due():
-                    print("[LIGHTS] scheduled lights-off", flush=True)
-                    lights.set_all(False)
+                    print("[LIGHTS] scheduled lights-off (the room)", flush=True)
+                    lights.set_group(lights.room(), False)
             except Exception as e:
                 print(f"[LIGHTS] {e}", flush=True)
     threading.Thread(target=lights_watch, daemon=True).start()

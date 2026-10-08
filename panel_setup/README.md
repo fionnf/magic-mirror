@@ -197,6 +197,10 @@ developer cloud:
    `sudo pip3 install --break-system-packages tinytuya` (the bootstrap script does this) and
    `sudo systemctl restart wall-control`. The lights show up in the Lights card.
 Keep `devices.json` / `tinytuya.json` out of git (they are ignored): they hold the keys to your lights.
-To use only some devices, create `panel_setup/lights.json` with `{"only": ["Living room lamp"]}`.
+The **Living room** group (default: "Living room lights" + "White LED strip") is what the 🌙 button and the
+nightly schedule switch off; tap the 🏠/＋ tag next to a light in the app to add or remove it from the group.
+**At home**, press 🔍 Find lights once (or run it again if a light's address changes): it scans the Wi-Fi and
+caches each light's IP address and protocol version. Sensors, the gateway and Zigbee sub-devices are never
+controlled. To use only some devices, create `panel_setup/lights.json` with `{"only": ["Living room lights"]}`.
 Give each light a fixed address in your router (DHCP reservation), or re-run the wizard if one moves.
 Re-pairing a light in the Smart Life app changes its local key - re-run the wizard then.

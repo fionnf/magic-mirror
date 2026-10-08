@@ -54,7 +54,7 @@ USAGE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
                           "panel_setup", "ai_usage.json")
 AI_CLIP = 10.0
 SHAPE_STYLES = ["flowdots", "flowlines", "garden", "truchet", "rings", "ridges", "weave"]
-STYLES = ["aurora", "lava", "ripples", "coral", "ink"] + SHAPE_STYLES + list(vj_fx.PIECE_STYLES) + ["loops"]      # "glow" retired (Visuals.glow kept)
+STYLES = ["lava", "ripples", "coral", "ink"] + SHAPE_STYLES + list(vj_fx.PIECE_STYLES) + ["loops"]      # "glow" retired (Visuals.glow kept)
 PALETTES = {
     "dusk":   [(15, 8, 30), (80, 30, 90), (220, 120, 120), (255, 200, 150)],
     "ocean":  [(2, 8, 25), (10, 50, 90), (30, 140, 160), (170, 230, 230)],
@@ -75,10 +75,10 @@ VIBES = {"chill": ("chill and tranquil", 1.0), "dreamy": ("dreamy and floaty", 0
 PROFILES = {
     "chill": dict(
         label="chill, organic and painterly",
-        styles=["aurora", "lava", "coral", "ink", "ripples", "marbling", "oilslick",
+        styles=["lava", "coral", "ink", "ripples", "marbling", "oilslick",
                 "nebula", "glass", "harmonograph", "ridges", "trails", "loops"],
         palettes=["dusk", "ocean", "forest", "moon", "blush", "ember", "gold"],
-        layers=("aurora", "ripples", "nebula"), layer_max=0.4, symmetry=("none",),
+        layers=("ripples", "nebula"), layer_max=0.4, symmetry=("none",),
         trails=(0.0, 0.25), hue=(0.0, 0.08), accent=(0.0, 0.08), react=(0.2, 0.5),
         speed=(0.25, 0.7), scale=(0.8, 1.6), count=(3, 7), soft=(1.0, 1.8),
         hold=(150.0, 300.0), fade=(14.0, 22.0), glide=5.0, pulse=0.0, breath=0.3, tc=3.0, smooth=0.8, surge=0.0, every=90.0),
@@ -186,7 +186,7 @@ def ai_prompt(mode=None):
         mood = (
             "Think soft light, water, ink, clouds and coral: slow, round, organic shapes in gentle colours, "
             "long dreamy fades, scenes of 3-5 minutes, speed 0.4-1.1. The beat is only a gentle breath. "
-            "Pick styles by feel: aurora/ripples/nebula for airy, lava/coral/ink for warm and living, "
+            "Pick styles by feel: ripples/nebula for airy, lava/coral/ink for warm and living, "
             "marbling/oilslick/glass for painterly. "
         )
     ranges = (
@@ -215,7 +215,7 @@ def ai_prompt(mode=None):
 
 
 LAYERS = vj_fx.LAYER_STYLES
-DEFAULT_CHOICE = {"scene": "", "genre": "", "mood": "", "song": "", "artist": "", "style": "aurora", "layer": "none",
+DEFAULT_CHOICE = {"scene": "", "genre": "", "mood": "", "song": "", "artist": "", "style": "nebula", "layer": "none",
                   "layer_opacity": 0.0, "palkey": "dusk", "palette_desc": "dusk",
                   "vibe": "chill", "speed": 1.0, "scale": 1.0, "count": 6, "softness": 1.0,
                   "concept": "", "symmetry": "none", "trails": 0.0, "hue_drift": 0.0, "accent": 0.4,
@@ -269,8 +269,8 @@ def _validate(j):
     """Clamp an AI scene to the chosen mode's pool and ranges; None if unusable."""
     if not isinstance(j, dict) or not isinstance(j.get("style"), str):
         return None
-    if j.get("style") == "glow":
-        j = {**j, "style": "aurora"}                      # retired style -> nearest calm one
+    if j.get("style") in ("glow", "aurora"):
+        j = {**j, "style": "nebula"}                      # retired styles -> nearest calm one
     if j.get("style") not in STYLES and not str(j.get("style")).startswith("loop:"):
         return None
     P = profile()
@@ -350,7 +350,7 @@ def load_settings():
     except Exception:
         s = dict(DEFAULT_SETTINGS)
     if s["style"] != "auto" and s["style"] not in STYLES:
-        s["style"] = "auto"
+        s["style"] = "auto"                                 # ("loops" is in STYLES: video loops only)
     if s["palette"] != "auto" and s["palette"] not in PALETTES:
         s["palette"] = "auto"
     if s["vibe"] != "auto" and s["vibe"] not in VIBES:
@@ -1313,7 +1313,7 @@ class MusicShow:
         self.vis = Visuals(W, H)
         self.luts = {k: _palette(v) for k, v in PALETTES.items()}
         self.prev = None
-        self.cur = ("aurora", "dusk", "none", "none")
+        self.cur = ("nebula", "dusk", "none", "none")
         self.switched = 0.0
         self.last_t = None
         self.silent_since = None
@@ -1363,13 +1363,23 @@ class MusicShow:
         st, c = self.settings, self.vj.choice
         auto_style = st["style"] == "auto"
         style = c["style"] if auto_style else st["style"]
+        if style == "loops":                                # "video loops only": a clip that fits the level
+            hold = float(c.get("hold", 150.0))
+            if not getattr(self, "_loop_pick", None) or now - self._loop_pick_t > hold:
+                clip = LOOP_BANK.pick(profile()["level"], avoid=set(_recent_loops))
+                if clip:
+                    _recent_loops.append(clip); del _recent_loops[:-6]
+                    self._loop_pick, self._loop_pick_t = "loop:" + clip, now
+            style = self._loop_pick or c["style"]
+            if st["palette"] == "auto":
+                pal = "native"
         pal = c["palkey"] if st["palette"] == "auto" else st["palette"]
         layer = c["layer"] if auto_style else "none"
         sym = c.get("symmetry", "none") if auto_style else "none"
         if f["silent"]:
             self.silent_since = self.silent_since or now
             if now - self.silent_since > 30:               # quiet room: soft dusk glow
-                return ("aurora" if auto_style else style,
+                return ("nebula" if auto_style else style,
                         "dusk" if st["palette"] == "auto" else pal, "none", "none")
         else:
             self.silent_since = None

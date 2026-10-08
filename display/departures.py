@@ -139,6 +139,26 @@ class Board:
         ImageDraw.Draw(mask).text(xy, text, font=font, fill=255, anchor=anchor)
         img.paste(colour, mask=mask.point(lambda v: 255 if v > 110 else 0))
 
+    # a small tram-front pictogram (as on the real boards when a tram is pulling in)
+    TRAM = ["..#######..",
+            ".#########.",
+            "#..#...#..#",
+            "#..#...#..#",
+            "#.........#",
+            "#.#.....#.#",
+            "###########",
+            ".##.....##.",
+            "...........",
+            ]
+
+    def _tram_icon(self, img, x, y, colour=AMBER):
+        px = img.load()
+        for j, row in enumerate(self.TRAM):
+            for i, ch in enumerate(row):
+                if ch == "#" and 0 <= x + i < img.width and 0 <= y + j < img.height:
+                    px[x + i, y + j] = colour
+        px[x + 5, y - 1] = colour                                   # pantograph
+
     def frame(self, t):
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
         img = Image.new("RGB", (W, H), (0, 0, 0))
@@ -157,10 +177,10 @@ class Board:
             line, dest, mins, delay = rows[r]
             self._led(img, (22, y), line, f_row, anchor="ra")               # line number, right-aligned
             self._led(img, (30, y), dest[:dest_cells], f_row)
-            mtxt = f"{mins}'"
-            if mins == 0 and int(t * 2) % 2:                                 # leaving now: blinks
-                mtxt = ""
-            self._led(img, (W - 4, y), mtxt, f_row, anchor="ra")
+            if mins == 0:                                                   # pulling in: the tram pictogram
+                self._tram_icon(img, W - 16, y + 3)
+            else:
+                self._led(img, (W - 4, y), f"{mins}'", f_row, anchor="ra")
         # bottom info line: the date, or the outage notice (real boards scroll messages here)
         if self.ok:
             info = now.strftime("%a %d.%m.%Y").replace("Mon", "Mo").replace("Tue", "Di").replace("Wed", "Mi") \

@@ -132,6 +132,64 @@
   </section>
 
   <section>
+    <h2>Music</h2>
+    <div class="box">
+      <div class="row" style="justify-content:space-between;margin-bottom:6px">
+        <b>🎵 Music art</b><span class="sub" id="musicNow">—</span>
+      </div>
+      <div class="row" style="margin-bottom:8px;gap:6px"><b id="musicScene" style="font-size:16px"></b><span id="musicSw"></span></div>
+      <div id="musicSong" style="margin:-2px 0 8px;color:var(--pink);font-weight:600"></div>
+      <div class="row" style="justify-content:space-between;margin-top:6px"><span class="sub">Party level</span><b id="partyLab"></b></div>
+      <input type="range" id="party" min="0" max="100" step="5" style="margin-bottom:2px">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="sub">art just breathes</span><span class="sub">dance floor</span></div>
+      <div class="row" style="margin:10px 0 6px">
+        <input type="text" id="vjPrompt" maxlength="200" style="flex:1;min-width:180px" placeholder="e.g. hot pink and gold, mandalas, make it feel like a festival">
+        <button class="primary" onclick="vjSend()">Tell the VJ</button>
+        <button onclick="vjClear()" title="back to the VJ's own taste">Clear</button>
+      </div>
+      <div class="sub" id="vjActive" style="margin-bottom:10px"></div>
+      <div class="toggles"><label><input type="checkbox" id="tLoops" onchange="post('/api/music', {style: this.checked ? 'loops' : 'auto', start: true}).then(() => musicLoad())"> 🎞 Video loops only (the downloaded clips)</label></div>
+      <button class="primary big" onclick="musicSet(true)">▶ Play music art</button>
+      <details class="more"><summary>More</summary>
+      <div class="toggles"><label><input type="checkbox" id="tAuto" onchange="post('/api/music', {mode: this.checked ? 'auto' : 'manual'}).then(() => musicLoad())"> 👂 Let the wall listen and set the party level itself</label></div>
+      <div class="sub" id="partyWhy" style="margin-bottom:10px"></div>
+      <div class="toggles">
+        <label><input type="checkbox" id="tAi" onchange="toggleSet('ai', this.checked)"> 🤖 AI designer</label>
+        <label><input type="checkbox" id="tShz" onchange="toggleSet('shazam', this.checked)"> 🎵 Recognise songs</label>
+        <label><input type="checkbox" id="tWall" onchange="toggleSet('song_on_wall', this.checked)"> Song title on the wall</label>
+      </div>
+      <div class="row" style="margin-bottom:4px;justify-content:space-between">
+        <span class="sub">Designer brain</span>
+        <span class="seg">
+          <button id="brText" onclick="setBrain('text')">OpenAI · cheap</button><button id="brOpenai" onclick="setBrain('openai')">Audio · pricey</button><button id="brClaude" onclick="setBrain('claude')">Claude</button>
+        </span>
+      </div>
+      <div class="sub" id="brainStatus" style="margin:0 0 10px"></div>
+      <div class="row" style="justify-content:space-between"><span class="sub">Sensitivity</span><b id="sensVal">50</b></div>
+      <input type="range" id="sens" min="0" max="100" step="5" style="margin-bottom:12px">
+      <div class="toggles"><label><input type="checkbox" id="tReact" onchange="toggleSet('art_reacts', this.checked)"> 🎶 Make ALL art move to music (when music is playing)</label></div>
+      </details>
+    </div>
+  </section>
+
+  <div id="library"></div>
+
+  <section>
+    <div class="box">
+      <details class="more" style="margin-top:0;border-top:0;padding-top:0"><summary>Playlist — rotate through several shows</summary>
+      <p>Tap “Choose”, tick the cards above, then start.</p>
+      <div class="row">
+        <button onclick="togglePick()" id="pickBtn">Choose</button>
+        <select id="mins">
+          <option value="2">every 2 min</option><option value="5" selected>every 5 min</option>
+          <option value="10">every 10 min</option><option value="30">every 30 min</option>
+        </select>
+        <button class="primary" onclick="startPlaylist()">Start playlist</button>
+      </div>
+      </details>
+    </div>
+  </section>
+  <section>
     <h2>Mirror voice &amp; people</h2>
     <div class="box">
       <b>🗣 How the mirror talks</b>
@@ -186,63 +244,6 @@
     </div>
   </section>
 
-  <section>
-    <h2>Music</h2>
-    <div class="box">
-      <div class="row" style="justify-content:space-between;margin-bottom:6px">
-        <b>🎵 Music art</b><span class="sub" id="musicNow">—</span>
-      </div>
-      <div class="row" style="margin-bottom:8px;gap:6px"><b id="musicScene" style="font-size:16px"></b><span id="musicSw"></span></div>
-      <div id="musicSong" style="margin:-2px 0 8px;color:var(--pink);font-weight:600"></div>
-      <div class="row" style="justify-content:space-between;margin-top:6px"><span class="sub">Party level</span><b id="partyLab"></b></div>
-      <input type="range" id="party" min="0" max="100" step="5" style="margin-bottom:2px">
-      <div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="sub">art just breathes</span><span class="sub">dance floor</span></div>
-      <div class="row" style="margin:10px 0 6px">
-        <input type="text" id="vjPrompt" maxlength="200" style="flex:1;min-width:180px" placeholder="e.g. hot pink and gold, mandalas, make it feel like a festival">
-        <button class="primary" onclick="vjSend()">Tell the VJ</button>
-        <button onclick="vjClear()" title="back to the VJ's own taste">Clear</button>
-      </div>
-      <div class="sub" id="vjActive" style="margin-bottom:10px"></div>
-      <button class="primary big" onclick="musicSet(true)">▶ Play music art</button>
-      <details class="more"><summary>More</summary>
-      <div class="toggles"><label><input type="checkbox" id="tAuto" onchange="post('/api/music', {mode: this.checked ? 'auto' : 'manual'}).then(() => musicLoad())"> 👂 Let the wall listen and set the party level itself</label></div>
-      <div class="sub" id="partyWhy" style="margin-bottom:10px"></div>
-      <div class="toggles">
-        <label><input type="checkbox" id="tAi" onchange="toggleSet('ai', this.checked)"> 🤖 AI designer</label>
-        <label><input type="checkbox" id="tShz" onchange="toggleSet('shazam', this.checked)"> 🎵 Recognise songs</label>
-        <label><input type="checkbox" id="tWall" onchange="toggleSet('song_on_wall', this.checked)"> Song title on the wall</label>
-      </div>
-      <div class="row" style="margin-bottom:4px;justify-content:space-between">
-        <span class="sub">Designer brain</span>
-        <span class="seg">
-          <button id="brText" onclick="setBrain('text')">OpenAI · cheap</button><button id="brOpenai" onclick="setBrain('openai')">Audio · pricey</button><button id="brClaude" onclick="setBrain('claude')">Claude</button>
-        </span>
-      </div>
-      <div class="sub" id="brainStatus" style="margin:0 0 10px"></div>
-      <div class="row" style="justify-content:space-between"><span class="sub">Sensitivity</span><b id="sensVal">50</b></div>
-      <input type="range" id="sens" min="0" max="100" step="5" style="margin-bottom:12px">
-      <div class="toggles"><label><input type="checkbox" id="tReact" onchange="toggleSet('art_reacts', this.checked)"> 🎶 Make ALL art move to music (when music is playing)</label></div>
-      </details>
-    </div>
-  </section>
-
-  <div id="library"></div>
-
-  <section>
-    <div class="box">
-      <details class="more" style="margin-top:0;border-top:0;padding-top:0"><summary>Playlist — rotate through several shows</summary>
-      <p>Tap “Choose”, tick the cards above, then start.</p>
-      <div class="row">
-        <button onclick="togglePick()" id="pickBtn">Choose</button>
-        <select id="mins">
-          <option value="2">every 2 min</option><option value="5" selected>every 5 min</option>
-          <option value="10">every 10 min</option><option value="30">every 30 min</option>
-        </select>
-        <button class="primary" onclick="startPlaylist()">Start playlist</button>
-      </div>
-      </details>
-    </div>
-  </section>
 </main>
 <div id="toast"></div>
 <script>
@@ -403,7 +404,7 @@ async function musicLoad(first) {
     $('tWall').checked = !!m.settings.song_on_wall; $('tReact').checked = !!m.settings.art_reacts;
     const pt = m.now && m.now.party, au2 = m.now && m.now.audio || {};
     const autoOn = m.settings.mode === 'auto';
-    $('tAuto').checked = autoOn;
+    $('tAuto').checked = autoOn; $('tLoops').checked = m.settings.style === 'loops';
     if (document.activeElement !== $('party')) {
       const v = autoOn && pt ? Math.round(pt.level * 100) : m.settings.party;
       $('party').value = v; $('partyLab').textContent = partyName(v) + (autoOn ? ' (auto)' : '');

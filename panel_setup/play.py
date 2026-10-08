@@ -45,6 +45,10 @@ def _anims():
     }
 
 
+ART_MODES = {"art", "lava", "shapes", "glass", "artsy", "ambient"}   # galleries: art for the house, slow
+ART_SPEED = float(os.environ.get("WALL_ART_SPEED", "0.35"))         # 1.0 = the old pace
+
+
 class _MusicClock:
     """Optional: when "Make all art move to music" is on (app, Music card) and music is playing,
     any art mode runs faster with the energy and breathes on the detected beat. In silence it is
@@ -54,6 +58,7 @@ class _MusicClock:
         self.l, self.enabled, self.checked, self.t, self.last = None, False, 0.0, 0.0, None
         self.st = {}
         self.phase = 0.0
+        self.inten, self.env = None, 0.0
 
     def _poll(self, now):
         if now - self.checked < 3.0:
@@ -64,7 +69,8 @@ class _MusicClock:
             self.st = music.load_settings()
             self.enabled = bool(self.st["art_reacts"])
             if self.enabled and self.l is None:
-                self.l = music.Listener()
+                from display.intensity import Intensity
+                self.l, self.inten = music.Listener(), Intensity()
         except Exception as e:
             print(f"[music-clock] {e}")
             self.enabled = False
@@ -80,13 +86,19 @@ class _MusicClock:
             return self.t, 1.0
         from display import music
         f = self.l.f
-        react = music.reactivity(self.st.get("sensitivity", 50))
+        sens = self.st.get("sensitivity", 50)
+        react = music.reactivity(sens)
+        lvl = self.inten.update(f, time.time(), sens)                 # quiet evening .. dance floor
+        P = music.profile("auto", lvl)
         energy = min(1.0, f["energy"] * react)
-        self.t += dt * (0.85 + 0.7 * energy)
-        (pulse, self.phase, w), _ = music.beat_pulse(f, time.time(), self.st.get("beat_offset", 0),
-                                                     self.st.get("beat_strength", 100) / 100.0, self.phase)
-        kick = w * pulse + (1 - w) * min(1.0, f["kick"] * react) * 0.6
-        return self.t, 0.9 + 0.14 * kick
+        tempo = music.tempo_factor(f.get("bpm", 0.0), f.get("bconf", 0.0), "chill" if lvl < 0.5 else "techno")
+        self.t += dt * tempo * (0.9 + 0.6 * energy * lvl)
+        (pulse, self.phase, w), _ = music.beat_pulse(f, time.time(), 0, 1.0, self.phase)
+        self.env = music._ema(self.env, min(1.0, f["kick"] * react), dt, P["smooth"])
+        mix = w * P["pulse"]
+        kick = (1 - mix) * self.env + mix * pulse
+        br = P["breath"]
+        return self.t, 1.0 - 0.1 * br + 0.14 * br * kick
 
 
 def _boot_frame(progress):
@@ -199,6 +211,8 @@ def main():
             gain = 1.0
             if clock is not None:
                 t, gain = clock.step(t)
+            if a.anim in ART_MODES:
+                t *= ART_SPEED                               # house art: slow
             img = overlay.apply(frame_fn(t))
             if gain < 0.999 or gain > 1.001:
                 img = img.point([min(255, int(i * gain)) for i in range(256)] * 3)

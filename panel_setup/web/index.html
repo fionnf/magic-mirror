@@ -47,6 +47,10 @@
   body.picking .card .pick { display: block; }
   .box { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
   .box p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+  details.more { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+  details.more summary { cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; user-select: none; }
+  details.more summary::before { content: '⋯  '; }
+  details.more[open] summary { margin-bottom: 10px; }
   select, input[type=text], input[type=number] { font: inherit; color: var(--text); background: var(--panel2);
           border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; }
   input[type=text] { flex: 1; min-width: 180px; }
@@ -84,6 +88,8 @@
     <div class="slider">
       <div class="row" style="justify-content:space-between"><span>Brightness</span><b id="bVal">40%</b></div>
       <input type="range" id="bright" min="5" max="100" step="5">
+      <div class="row" style="justify-content:space-between;margin-top:10px"><span class="sub">Art pace (galleries)</span><b id="paceVal">35%</b></div>
+      <input type="range" id="pace" min="10" max="150" step="5">
     </div>
   </section>
 
@@ -91,8 +97,18 @@
     <h2>Interactive</h2>
     <div class="two">
       <div class="box">
-        <b>🪞 Mirror mode</b>
-        <p>Live silhouette, countdown, AI one-liner and a printed receipt.</p>
+        <b>🪞 Mirror</b>
+        <div class="row" style="margin-top:10px">
+          <button class="primary" onclick="startMirror()">Start mirror</button>
+          <button id="photoBtn" onclick="photo()">📸 Photo</button>
+          <button id="auraBtn" onclick="aura()">🔮 Aura</button>
+          <button id="pixBtn" onclick="pixel()">👾 Pixel selfie</button>
+        </div>
+        <div id="lastBox" style="display:none;margin-top:12px;gap:12px;align-items:center">
+          <img id="lastImg" alt="" style="width:84px;aspect-ratio:3/4;object-fit:cover;border-radius:10px;background:#000">
+          <div><div class="sub" id="lastAge"></div><div id="lastText" style="font-weight:600"></div></div>
+        </div>
+        <details class="more"><summary>Camera</summary>
         <div class="row" style="margin-bottom:8px">
           <select id="cam">
             <option value="stream">Laptop webcam stream</option>
@@ -108,18 +124,9 @@
         <div class="row" style="margin-bottom:8px"><input type="text" id="camUrl" placeholder="stream URL"></div>
         <label class="sub" style="display:flex;gap:8px;align-items:center;margin-bottom:10px;cursor:pointer">
           <input type="checkbox" id="tCrop" style="width:18px;height:18px;accent-color:var(--pink)" onchange="cropSet(this.checked)">
-          Follow people when cropping photos to portrait (face detection)
+          Keep people in frame when cropping photos
         </label>
-        <div class="row">
-          <button class="primary" onclick="startMirror()">Start mirror</button>
-          <button id="photoBtn" onclick="photo()">📸 Take photo</button>
-          <button id="auraBtn" onclick="aura()">🔮 Read my aura</button>
-          <button id="pixBtn" onclick="pixel()">👾 Pixel selfie</button>
-        </div>
-        <div id="lastBox" style="display:none;margin-top:12px;gap:12px;align-items:center">
-          <img id="lastImg" alt="" style="width:84px;aspect-ratio:3/4;object-fit:cover;border-radius:10px;background:#000">
-          <div><div class="sub" id="lastAge"></div><div id="lastText" style="font-weight:600"></div></div>
-        </div>
+        </details>
       </div>
     </div>
   </section>
@@ -133,6 +140,15 @@
         <span class="sub" id="toneVal" style="min-width:90px;text-align:right"></span></div>
       <div class="row" style="margin-bottom:10px"><span class="sub" style="min-width:48px">Speaks</span>
         <select id="lang" onchange="mset({language:this.value})"></select></div>
+      <b>👥 People</b>
+      <div id="peopleList" style="margin:8px 0"></div>
+      <div class="row" style="margin-bottom:8px">
+        <input type="text" id="newName" placeholder="Name" style="flex:1;min-width:120px">
+        <button onclick="enrol()">Learn my face</button>
+      </div>
+      <div class="sub" id="peopleNote"></div>
+      <div id="sugList"></div>
+      <details class="more"><summary>More</summary>
       <div class="toggles">
         <label><input type="checkbox" id="tSmile" onchange="mset({smile:this.checked})"> ✨ Sparkles when you smile</label>
         <label><input type="checkbox" id="tRecog" onchange="mset({recognise:this.checked})"> 👋 Greet people by name</label>
@@ -143,35 +159,30 @@
           <option value="0">never</option><option value="2">2 min</option><option value="5">5 min</option>
           <option value="10">10 min</option><option value="30">30 min</option><option value="60">1 hour</option></select></div>
       <div class="toggles"><label><input type="checkbox" id="tWake" onchange="mset({wake_on_motion:this.checked})"> Motion or a face brings the mirror back (otherwise only a button does)</label></div>
-      <div class="sub" style="margin-bottom:10px">Faces stay on the Pi as numbers (no photos of people you have not named). “Learn frequent faces” is off by default; it only suggests someone after they show up several times on different days.</div>
-      <b>👥 People</b>
-      <div id="peopleList" style="margin:8px 0"></div>
-      <div class="row" style="margin-bottom:8px">
-        <input type="text" id="newName" placeholder="Name" style="flex:1;min-width:120px">
-        <button onclick="enrol()">Learn my face</button>
-      </div>
-      <div class="sub" id="peopleNote"></div>
-      <div id="sugList"></div>
-      <div class="row" style="margin-top:8px"><button onclick="forgetLearned()">Forget learned faces</button><button onclick="forgetAll()">Delete all face data</button></div>
+      <div class="sub" style="margin-bottom:10px">Faces stay on the Pi as numbers (no photos of people you have not named). “Learn frequent faces” only suggests someone after several visits on different days.</div>
+      <div class="row"><button onclick="forgetLearned()">Forget learned faces</button><button onclick="forgetAll()">Delete all face data</button></div>
+      </details>
     </div>
   </section>
 
   <section>
     <h2>Dedications</h2>
     <div class="box">
-      <b>💌 Messages from guests</b>
-      <p class="sub">Guests scan a QR code and type a message that scrolls across the bottom of the wall. No filtering — you can delete anything or pause it.</p>
-      <div class="toggles">
-        <label><input type="checkbox" id="dOn" onchange="dSet({enabled:this.checked})"> On the wall</label>
-        <label><input type="checkbox" id="dPause" onchange="dSet({paused:this.checked})"> ⏸ Paused</label>
-        <label><input type="checkbox" id="dQr" onchange="dSet({show_qr:this.checked})"> Show the QR on the wall now and then</label>
-      </div>
+      <div class="row" style="justify-content:space-between"><b>💌 Guest messages</b>
+        <label class="sub" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="dOn" onchange="dSet({enabled:this.checked})" style="width:18px;height:18px;accent-color:var(--pink)"> On the wall</label></div>
+      <p class="sub" style="margin-top:6px">Guests scan the QR and their message scrolls along the bottom of the wall. Not filtered.</p>
       <div class="row" style="gap:14px;align-items:flex-start;margin-bottom:8px">
         <a id="dQrLink" href="/d/qr.png" target="_blank"><img src="/d/qr.png" alt="QR" style="width:110px;height:110px;border-radius:8px;background:#fff"></a>
         <div class="sub">Guests open <b id="dUrl"></b><br>(same Wi-Fi). Tap the QR to print it.</div>
       </div>
       <div id="dList"></div>
+      <details class="more"><summary>More</summary>
+      <div class="toggles">
+        <label><input type="checkbox" id="dPause" onchange="dSet({paused:this.checked})"> ⏸ Paused</label>
+        <label><input type="checkbox" id="dQr" onchange="dSet({show_qr:this.checked})"> Show the QR on the wall now and then</label>
+      </div>
       <button onclick="dClear()">Clear all</button>
+      </details>
     </div>
   </section>
 
@@ -184,16 +195,22 @@
       <div class="row" style="margin-bottom:8px;gap:6px"><b id="musicScene" style="font-size:16px"></b><span id="musicSw"></span></div>
       <div id="musicSong" style="margin:-2px 0 8px;color:var(--pink);font-weight:600"></div>
       <div class="row" style="margin:4px 0 10px;gap:8px">
-        <span class="seg"><button id="modeChill" onclick="setMode('chill')">🌿 Chill</button><button id="modeTechno" onclick="setMode('techno')">⚡ Techno</button></span>
-        <span class="sub">organic &amp; painterly · or cool neon geometry</span>
+        <span class="seg"><button id="modeAuto" onclick="setMode('auto')">🤖 Auto</button><button id="modeChill" onclick="setMode('chill')">🌿 Chill</button><button id="modeTechno" onclick="setMode('techno')">⚡ Party</button></span>
       </div>
-      <p>The art flows with the sound. Tell the VJ what you want:</p>
-      <div class="row" style="margin-bottom:6px">
+      <div class="row" style="gap:10px;align-items:center;margin-bottom:4px">
+        <span class="sub" style="min-width:84px">Party level</span>
+        <div style="flex:1;height:8px;border-radius:4px;background:#2a2236;overflow:hidden"><div id="partyBar" style="height:100%;width:0;transition:width 1s;background:linear-gradient(90deg,#4bd3a8,#ffb347,#ff5fa2)"></div></div>
+        <b id="partyLab" style="min-width:120px;text-align:right"></b>
+      </div>
+      <div class="row" style="margin:10px 0 6px">
         <input type="text" id="vjPrompt" maxlength="200" style="flex:1;min-width:180px" placeholder="e.g. hot pink and gold, mandalas, make it feel like a festival">
         <button class="primary" onclick="vjSend()">Tell the VJ</button>
         <button onclick="vjClear()" title="back to the VJ's own taste">Clear</button>
       </div>
       <div class="sub" id="vjActive" style="margin-bottom:10px"></div>
+      <button class="primary big" onclick="musicSet(true)">▶ Play music art</button>
+      <details class="more"><summary>More</summary>
+      <div class="sub" id="partyWhy" style="margin-bottom:10px"></div>
       <div class="toggles">
         <label><input type="checkbox" id="tAi" onchange="toggleSet('ai', this.checked)"> 🤖 AI designer</label>
         <label><input type="checkbox" id="tShz" onchange="toggleSet('shazam', this.checked)"> 🎵 Recognise songs</label>
@@ -202,23 +219,23 @@
       <div class="row" style="margin-bottom:4px;justify-content:space-between">
         <span class="sub">Designer brain</span>
         <span class="seg">
-          <button id="brGemini" onclick="setBrain('gemini')">Gemini · free</button><button id="brText" onclick="setBrain('text')">OpenAI · cheap</button><button id="brOpenai" onclick="setBrain('openai')">Audio · pricey</button><button id="brClaude" onclick="setBrain('claude')">Claude</button>
+          <button id="brText" onclick="setBrain('text')">OpenAI · cheap</button><button id="brOpenai" onclick="setBrain('openai')">Audio · pricey</button><button id="brClaude" onclick="setBrain('claude')">Claude</button>
         </span>
       </div>
       <div class="sub" id="brainStatus" style="margin:0 0 10px"></div>
       <div class="row" style="justify-content:space-between"><span class="sub">Sensitivity</span><b id="sensVal">50</b></div>
       <input type="range" id="sens" min="0" max="100" step="5" style="margin-bottom:12px">
       <div class="toggles"><label><input type="checkbox" id="tReact" onchange="toggleSet('art_reacts', this.checked)"> 🎶 Make ALL art move to music (when music is playing)</label></div>
-      <button class="primary big" onclick="musicSet(true)">▶ Play music art</button>
+      </details>
     </div>
   </section>
 
   <div id="library"></div>
 
   <section>
-    <h2>Playlist</h2>
     <div class="box">
-      <p>Rotate through several shows. Tap “Choose”, tick the cards above, then start.</p>
+      <details class="more" style="margin-top:0;border-top:0;padding-top:0"><summary>Playlist — rotate through several shows</summary>
+      <p>Tap “Choose”, tick the cards above, then start.</p>
       <div class="row">
         <button onclick="togglePick()" id="pickBtn">Choose</button>
         <select id="mins">
@@ -227,6 +244,7 @@
         </select>
         <button class="primary" onclick="startPlaylist()">Start playlist</button>
       </div>
+      </details>
     </div>
   </section>
 </main>
@@ -273,6 +291,7 @@ function show(s) {
      (cur === 'off' ? 'wall is off' : `running for ${mins} min`);
   $('nowErr').textContent = s.error || '';
   if (document.activeElement !== $('bright')) { $('bright').value = s.brightness; $('bVal').textContent = s.brightness + '%'; }
+  if (document.activeElement !== $('pace') && s.art_speed != null) { $('pace').value = Math.round(s.art_speed * 100); $('paceVal').textContent = Math.round(s.art_speed * 100) + '%'; }
   document.querySelectorAll('.card').forEach(c => c.classList.toggle('active', c.dataset.id === cur));
   $('photoBtn').disabled = $('auraBtn').disabled = $('pixBtn').disabled = cur !== 'mirror';
   $('tCrop').checked = s.smart_crop !== false;
@@ -340,6 +359,12 @@ $('bright').addEventListener('input', e => {
   clearTimeout(bTimer);
   bTimer = setTimeout(() => post('/api/brightness', {value: +e.target.value}).then(show), 400);
 });
+let pTimer;
+$('pace').addEventListener('input', e => {
+  $('paceVal').textContent = e.target.value + '%';
+  clearTimeout(pTimer);
+  pTimer = setTimeout(() => post('/api/artspeed', {value: +e.target.value / 100}).then(show), 500);
+});
 function startMirror() {
   post('/api/mirror', {camera: $('cam').value, camera_url: $('camUrl').value, auto: +$('auto').value})
     .then(s => { toast('🪞 Mirror starting… step out of view for 5 s'); show(s); }).catch(e => toast(e.message));
@@ -380,8 +405,13 @@ async function musicLoad(first) {
     }
     $('tAi').checked = !!m.settings.ai; $('tShz').checked = !!m.settings.shazam;
     $('tWall').checked = !!m.settings.song_on_wall; $('tReact').checked = !!m.settings.art_reacts;
-    $('modeChill').classList.toggle('on', m.settings.mode !== 'techno'); $('modeTechno').classList.toggle('on', m.settings.mode === 'techno');
-    $('brGemini').classList.toggle('on', m.settings.brain === 'gemini');
+    for (const [id, v] of [['modeAuto', 'auto'], ['modeChill', 'chill'], ['modeTechno', 'techno']]) $(id).classList.toggle('on', (m.settings.mode || 'auto') === v);
+    const pt = m.now && m.now.party, au2 = m.now && m.now.audio || {};
+    if (pt) {
+      $('partyBar').style.width = Math.round(pt.level * 100) + '%';
+      $('partyLab').textContent = Math.round(pt.level * 100) + '% · ' + pt.label;
+      $('partyWhy').textContent = `loudness ${pt.why.db} dB · beat lock ${Math.round(pt.why.beat * 100)}% · ${au2.bpm ? au2.bpm + ' bpm' : 'tempo –'} · ${pt.why.busy ? 'busy ' + Math.round(pt.why.busy * 100) + '%' : 'calm'}${pt.mode !== 'auto' ? ' · (forced by ' + pt.mode + ')' : ''}`;
+    } else { $('partyBar').style.width = '0'; $('partyLab').textContent = ''; $('partyWhy').textContent = ''; }
     $('brText').classList.toggle('on', m.settings.brain === 'text');
     $('brOpenai').classList.toggle('on', m.settings.brain === 'openai');
     $('brClaude').classList.toggle('on', m.settings.brain === 'claude');
@@ -418,7 +448,7 @@ $('sens').addEventListener('input', e => {
   sTimer = setTimeout(() => post('/api/music', {sensitivity: +e.target.value}).then(() => musicLoad()), 300);
 });
 function setMode(mode) {
-  post('/api/music', {mode, start: true}).then(r => { toast(mode === 'techno' ? '⚡ Techno' : '🌿 Chill'); show(r.status); musicLoad(); }).catch(e => toast(e.message));
+  post('/api/music', {mode, start: true}).then(r => { toast(mode === 'techno' ? '⚡ Party' : mode === 'chill' ? '🌿 Chill' : '🤖 Auto'); show(r.status); musicLoad(); }).catch(e => toast(e.message));
 }
 function musicSet(start) {
   post('/api/music', {start: !!start})

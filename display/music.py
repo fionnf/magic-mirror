@@ -32,6 +32,7 @@ import config
 from display.art import _palette, _lut, Coral
 from display.beat import BeatTracker
 from display import vj_fx
+from display.intensity import Intensity
 
 SR = 22050
 WIN, HOP = 1024, 256
@@ -77,7 +78,7 @@ PROFILES = {
         layers=("aurora", "ripples", "nebula"), layer_max=0.4, symmetry=("none",),
         trails=(0.0, 0.25), hue=(0.0, 0.08), accent=(0.0, 0.08), react=(0.2, 0.5),
         speed=(0.4, 1.1), scale=(0.7, 1.5), count=(3, 8), soft=(0.9, 1.8),
-        hold=(150.0, 300.0), fade=(14.0, 22.0), glide=5.0, pulse=0.0, breath=0.5, tc=3.0, smooth=0.6, surge=0.0, every=90.0),
+        hold=(150.0, 300.0), fade=(14.0, 22.0), glide=5.0, pulse=0.0, breath=0.3, tc=3.0, smooth=0.8, surge=0.0, every=90.0),
     "techno": dict(
         label="cool techno: geometric, neon on black, driving",
         styles=["truchet", "mesh", "opart", "flowlines", "poles", "mosaic", "isocubes", "chevrons",
@@ -88,12 +89,55 @@ PROFILES = {
         react=(0.7, 1.3), speed=(0.8, 1.7), scale=(0.7, 1.6), count=(4, 10), soft=(0.6, 1.3),
         hold=(50.0, 110.0), fade=(5.0, 10.0), glide=2.5, pulse=0.45, breath=0.9, tc=1.2, smooth=0.3, surge=0.7, every=60.0),
 }
-MODES = tuple(PROFILES)
-CURRENT_MODE = "chill"            # set by MusicShow from the app's setting
+MODES = ("auto", "chill", "techno")      # auto = follow the measured party level
+CURRENT_MODE = "auto"                     # set by MusicShow from the app's setting
+CURRENT_LEVEL = 0.2                       # set by MusicShow every frame (0 quiet .. 1 rave)
+FAVOURITES = ["opart"]                    # the house loves these: offered in every pool
 
 
-def profile(mode=None):
-    return PROFILES.get(mode or CURRENT_MODE, PROFILES["chill"])
+def _lerp(a, b, k):
+    return a + (b - a) * k
+
+
+def _smoothstep(x, lo, hi):
+    k = max(0.0, min(1.0, (x - lo) / (hi - lo)))
+    return k * k * (3 - 2 * k)
+
+
+def level_for(mode, level):
+    return {"chill": 0.12, "techno": 0.88}.get(mode, level)
+
+
+def profile(mode=None, level=None):
+    """Everything the engine and the designer are allowed to do at this party level: ranges are
+    interpolated between the chill pole (level 0) and the techno pole (level 1); the style pool
+    is chill's below 0.4, both in between, techno's above 0.65."""
+    mode = mode or CURRENT_MODE
+    L = level_for(mode, CURRENT_LEVEL if level is None else level)
+    c, t = PROFILES["chill"], PROFILES["techno"]
+    out = {"level": L, "mode": mode}
+    for k in ("trails", "hue", "accent", "react", "speed", "scale", "count", "soft", "hold", "fade"):
+        out[k] = (_lerp(c[k][0], t[k][0], L), _lerp(c[k][1], t[k][1], L))
+    for k in ("glide", "breath", "tc", "smooth", "every", "layer_max"):
+        out[k] = _lerp(c[k], t[k], L)
+    out["pulse"] = _smoothstep(L, 0.35, 0.85)              # 0 = organic envelope .. 1 = beat-locked
+    out["surge"] = 0.0 if L < 0.55 else 0.8 * (L - 0.55) / 0.45
+    out["symmetry"] = t["symmetry"] if L > 0.6 else ("none",)
+    out["layers"] = t["layers"] if L > 0.5 else c["layers"]
+    if L < 0.4:
+        pool, pals = list(c["styles"]), list(c["palettes"])
+    elif L > 0.65:
+        pool, pals = list(t["styles"]), list(t["palettes"])
+    else:
+        pool, pals = c["styles"] + t["styles"], c["palettes"] + t["palettes"]
+    for fav in FAVOURITES:
+        if fav not in pool and L > 0.3:
+            pool.append(fav)
+    out["styles"], out["palettes"] = pool, pals
+    out["label"] = ("quiet evening, organic and painterly" if L < 0.4 else
+                    "lively living room: organic shapes with a clear groove" if L <= 0.65 else
+                    "dance party: geometric neon on black, driving")
+    return out
 
 
 def _swatches(mode):
@@ -114,12 +158,20 @@ def ai_prompt(mode=None):
         "You are told the measured tempo: slow music (under 90 bpm) wants big, slow, long scenes; mid tempo "
         "(90-125) medium; fast music (over 125) quicker flow and shorter scenes. Let it set speed, scale and hold. "
     )
-    if (mode or CURRENT_MODE) == "techno":
+    L = p["level"]
+    if L > 0.65:
         mood = (
             "Think underground club: black backgrounds, crisp geometry, cold neon cyan/blue/violet or acid "
             "green, precise and hypnotic, with mirrored or quad symmetry when it suits. A firm beat, scenes "
             "of 1-2 minutes, speed 0.8-1.7. Pick styles by feel: truchet/mesh/opart/mosaic for hard and "
             "graphic, flowlines/poles/spiral for flowing, kaleido/julia for peak moments. "
+        )
+    elif L > 0.4:
+        mood = (
+            "Think a lively living room with a good groove on: organic, flowing shapes with a clear pulse, "
+            "warm saturated colours, scenes of 1.5-3 minutes, speed 0.7-1.3. Pick styles by feel: lava/coral/"
+            "ink/glass for warm and living, flowlines/poles/spiral for flowing, opart (a house favourite) "
+            "for hypnotic. "
         )
     else:
         mood = (
@@ -135,6 +187,9 @@ def ai_prompt(mode=None):
         f"{p['react'][1]}; speed {p['speed'][0]}-{p['speed'][1]}; scale {p['scale'][0]}-{p['scale'][1]}; count "
         f"{p['count'][0]}-{p['count'][1]}; softness {p['soft'][0]}-{p['soft'][1]}; hold {int(p['hold'][0])}-"
         f"{int(p['hold'][1])} s; fade {int(p['fade'][0])}-{int(p['fade'][1])} s. "
+        f"House favourites (use them often when they fit): {', '.join(FAVOURITES)}. "
+        "When Shazam has named the song, use its title and artist: let the song's mood, era and cover "
+        "art shape the scene and mention it in the scene name. "
         "If the house typed a request, follow it within these limits. Never ask for flashing or strobing. "
         "If - and only if - you genuinely recognise the song, name it and its artist and let it inspire the scene; "
         "never guess. "
@@ -245,8 +300,8 @@ SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # wr
 NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # read by the app
 DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "pi",
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
-                    "brain": "gemini", "beat_offset": 0, "beat_strength": 100, "art_reacts": False,
-                    "prompt": "", "mode": "chill"}
+                    "brain": "text", "beat_offset": 0, "beat_strength": 100, "art_reacts": False,
+                    "prompt": "", "mode": "auto"}
 
 
 def load_settings():
@@ -265,8 +320,10 @@ def load_settings():
         s["source"] = "pi"
     for k in ("ai", "shazam", "song_on_wall"):
         s[k] = bool(s.get(k, True))
-    if s.get("brain") not in ("gemini", "text", "openai", "claude"):
-        s["brain"] = "gemini"
+    if s.get("brain") == "gemini":                      # retired (the key ran out of credits)
+        s["brain"] = "text"
+    if s.get("brain") not in ("text", "openai", "claude"):
+        s["brain"] = "text"
     try:
         s["sensitivity"] = max(0, min(100, int(s["sensitivity"])))
     except (TypeError, ValueError):
@@ -278,8 +335,8 @@ def load_settings():
             s[k] = d
     s["art_reacts"] = bool(s.get("art_reacts", False))
     s["prompt"] = " ".join(str(s.get("prompt", "") or "").split())[:200]
-    if s.get("mode") not in PROFILES:
-        s["mode"] = "chill"
+    if s.get("mode") not in MODES:
+        s["mode"] = "auto"
     return s
 
 
@@ -439,6 +496,8 @@ class Listener:
         self._flux_bands = [((freqs >= 30) & (freqs < 200), 1.0), ((freqs >= 200) & (freqs < 2500), 0.4),
                             ((freqs >= 2500) & (freqs < 8000), 0.12)]
         self._band_avg = [1e-3, 1e-3, 1e-3]
+        self._all_bins = (freqs >= 30) & (freqs < 8000)
+        self._rms_slow, self._prev_onset, self._onset_edges = 1e-5, 0.0, []
         last = time.time()
         while True:
             time.sleep(HOP / SR)
@@ -451,8 +510,13 @@ class Listener:
             self.peak = max(self.peak * (1 - 0.15 * dt), rms, 1e-3)      # slow auto-gain
             for k, v in raw.items():                                      # per-band auto-gain
                 self.bpeak[k] = max(self.bpeak.get(k, 1e-6) * (1 - 0.15 * dt), v, 1e-6)
-            silent = rms < 0.004 / self.react or now - self.last_audio > 1.5
+            silent = rms < 0.0018 / self.react or now - self.last_audio > 1.5     # ~-55 dBFS: quiet music still counts
             f = self.f
+            # absolute loudness and bass share (for the party level)
+            self._rms_slow = _ema(self._rms_slow, rms, dt, 1.5)
+            f["db"] = 20.0 * math.log10(max(self._rms_slow, 1e-6))
+            share = float(spec[bands["kickband"]].sum() / (spec[self._all_bins].sum() + 1e-9))
+            f["bass_share"] = _ema(f.get("bass_share", 0.0), 0.0 if silent else share, dt, 3.0)
             norm = lambda k: min(1.0, raw[k] / self.bpeak[k])
             f["energy"] = _ema(f["energy"], 0 if silent else min(1.0, rms / self.peak), dt, 2.0)
             f["bass"] = _ema(f["bass"], 0 if silent else norm("bass"), dt, 0.12)
@@ -485,12 +549,21 @@ class Listener:
                     self._band_avg[i] = 0.98 * self._band_avg[i] + 0.02 * fl
                     onset += w * fl / (self._band_avg[i] + 1e-6)
                 self.tracker.update(onset, now)
+                if onset > 3.0 and self._prev_onset <= 3.0:            # a new hit
+                    self._onset_edges.append(now)
+                self._prev_onset = onset
             self._prev_log = lg
+            self._onset_edges = [e for e in self._onset_edges if now - e < 4.0]
+            f["busy"] = 0.0 if silent else len(self._onset_edges) / 4.0     # hits per second
             if silent:
                 self.tracker.conf *= 0.97
             tr = self.tracker
             f["bpm"], f["bconf"] = tr.bpm, (0.0 if silent else tr.conf)
             f["anchor"], f["period"] = tr.anchor, tr.period
+            if tr.period > 0:
+                bi = tr.beat_index(now)
+                f["beat_idx"], f["bar_pos"] = bi, (bi - tr.downbeat) % 4
+                f["phrase_pos"] = (bi - tr.downbeat) % 32
 
 
 # ------------------------------------------------------- song recognition ---
@@ -648,6 +721,9 @@ class VJ:
         bpm = f.get("bpm") or f.get("bpm_hint") or 0
         lock = f.get("bconf", 0.0)
         tempo = (f"tempo {bpm:.0f} bpm (beat lock {lock:.0%})" if bpm else "tempo unknown")
+        P = profile()
+        tempo += (f"; party level {P['level']:.0%} ({P['label'].split(':')[0]}; loudness "
+                  f"{f.get('db', -80):.0f} dBFS, {f.get('busy', 0):.1f} hits/s)")
         ask = self.prompt()
         want = (f"THE HOUSE ASKS FOR THIS (it overrides your own taste - follow it as the art direction): "
                 f"\"{ask}\". " if ask else "")
@@ -1152,6 +1228,7 @@ class MusicShow:
         self.settings, self.settings_mtime, self.settings_checked = load_settings(), None, 0.0
         global CURRENT_MODE
         CURRENT_MODE = self.settings["mode"]
+        self.ks = 0.0
         self.force = False
         self.xfade = self.XFADE
         self.rec = Recognizer(self.l, enabled=lambda: self.settings["shazam"])
@@ -1160,6 +1237,9 @@ class MusicShow:
                      brain=lambda: self.settings["brain"],
                      prompt=lambda: self.settings.get("prompt", ""))
         self.drop = vj_fx.DropDetector()
+        self.inten = Intensity()
+        self.e_fast = self.e_slow = self.rise = 0.0
+        self._last_pp, self._pending = 0, None
         self.accents = vj_fx.Accents(W, H)
         self.surge, self.prev_out = 0.0, None
         self.vis = Visuals(W, H)
@@ -1242,6 +1322,8 @@ class MusicShow:
                                          "receiving": time.time() - self.l.last_audio < 2,
                                          "bpm": round(self.l.f.get("bpm", 0.0), 1),
                                          "beat_conf": round(self.l.f.get("bconf", 0.0), 2)},
+                               "party": {"level": round(CURRENT_LEVEL, 2), "label": self.inten.label,
+                                         "mode": CURRENT_MODE, "why": self.inten.parts},
                                "silent": self.l.f["silent"], "time": time.time()})
 
     def _render(self, key, f, dt, beat, op):
@@ -1264,23 +1346,28 @@ class MusicShow:
         return out
 
     def _frame(self, t):
+        global CURRENT_LEVEL
         now = time.time()
         dt = 0.033 if self.last_t is None else max(0.0, min(0.2, t - self.last_t))
         self.last_t = t
         f = dict(self.l.f)
         beat = f["beat"]
         self.l.f["beat"] = False
-        react = reactivity(self.settings.get("sensitivity", 50))      # live from the app
+        sens = self.settings.get("sensitivity", 50)
+        react = reactivity(sens)                                     # live from the app
         self.l.react = react
+        self._poll_settings()
+        # --- how much of a party is this? one slow number everything else follows
+        CURRENT_LEVEL = self.inten.update(self.l.f, now, sens)
         P = profile()
+        L = P["level"]
         for key in ("energy", "bass", "kick", "mid", "treble"):
             f[key] = min(1.0, f[key] * react)
-        self.ks = _ema(getattr(self, "ks", 0.0), f["kick"], dt, P["smooth"])     # organic: a smoothed bass envelope
-        f["kick"] = self.ks
-        self._poll_settings()
+        self.ks = _ema(self.ks, f["kick"], dt, P["smooth"])          # organic: a smoothed bass envelope
+        env = self.ks
         c = self.vj.choice
         auto = self.settings["style"] == "auto"
-        # --- scene design values glide in quickly (the VJ is meant to feel responsive)
+        # --- the scene's design values glide in (quicker at a party)
         for key, src, dflt in (("d_speed", "speed", 1.0), ("d_scale", "scale", 1.0),
                                ("d_count", "count", 6.0), ("d_soft", "softness", 1.0),
                                ("d_trails", "trails", 0.0), ("d_hue", "hue_drift", 0.0),
@@ -1288,41 +1375,66 @@ class MusicShow:
             tgt_v = float(c.get(src, dflt)) if auto else dflt
             self.design[key] = _ema(self.design[key], tgt_v, dt, P["glide"])
             f[key] = self.design[key]
-        # --- locked beat clock -> pulse exactly on the beat (strength per scene)
-        pulse, wrapped = beat_pulse(f, now, self.settings.get("beat_offset", 0), 1.0, self._last_phase)
+        # --- beat clock: from "barely there" (organic swell) to locked on the beat, strong/weak bars
+        pulse, wrapped = beat_pulse(f, now, 0, 1.0, self._last_phase)
         self._last_phase = pulse[1]
-        mix = pulse[2] * P["pulse"]                        # chill: 0 (pure organic); techno: a light beat influence
-        if mix > 0:
-            f["kick"] = (1 - mix) * f["kick"] + mix * pulse[0]
-            beat = wrapped if pulse[2] > 0.6 else (beat or wrapped)
+        mix = pulse[2] * P["pulse"] * min(1.0, f["d_react"])
+        bar_w = (1.0, 0.62, 0.84, 0.62)[int(f.get("bar_pos", 0)) % 4] if mix > 0.3 else 1.0
+        f["kick"] = (1 - mix) * env + mix * pulse[0] * bar_w
+        if pulse[2] > 0.6 and mix > 0.2:
+            beat = wrapped
         f["pulse"] = pulse[0]
-        if beat and f["d_accent"] > 0.12 and not f["silent"]:
-            self.accents.beat(f["d_accent"], now)
-        # --- drops (techno only): a shockwave and a short speed surge
+        # beat rings only at a real party (never on chill music), and not on every beat
+        if (beat and f["d_accent"] > 0.12 and not f["silent"] and L > 0.7
+                and now - getattr(self, "_last_ring", 0.0) > 2.0 * max(0.3, f.get("period", 0.5))):
+            self._last_ring = now
+            self.accents.beat(f["d_accent"] * _smoothstep(L, 0.7, 0.95), now)
+        # --- build-ups (riser) and drops - only once it is a party
+        self.e_fast = _ema(self.e_fast, f["energy"], dt, 2.0)
+        self.e_slow = _ema(self.e_slow, f["energy"], dt, 12.0)
+        rising = max(0.0, min(1.0, (self.e_fast - self.e_slow - 0.1) / 0.2)) if L > 0.55 else 0.0
+        self.rise = _ema(self.rise, rising, dt, 1.5)
         if P["surge"] > 0 and not f["silent"] and self.drop.update(f["bass"], f["energy"], dt, now):
             self.accents.drop(now)
             self.surge = P["surge"]
-            print("[VJ] DROP", flush=True)
+            print(f"[VJ] DROP (party {L:.0%})", flush=True)
         self.surge *= math.exp(-dt / 1.3)
-        vibe = self.settings["vibe"] if self.settings["vibe"] != "auto" else c.get("vibe", "chill")
+        # --- the music's speed sets the flow; a build-up and a drop push it
         f["vibe_speed"] = 1.0
-        self.tempo_f = _ema(getattr(self, "tempo_f", 1.0), tempo_factor(f.get("bpm", 0.0), f.get("bconf", 0.0)),
-                            dt, 6.0)                      # the music's speed sets the art's flow, slowly
-        f["d_speed"] *= self.tempo_f * (1.0 + 1.1 * self.surge)
+        self.tempo_f = _ema(getattr(self, "tempo_f", 1.0),
+                            tempo_factor(f.get("bpm", 0.0), f.get("bconf", 0.0), "chill" if L < 0.5 else "techno"),
+                            dt, 6.0)
+        f["d_speed"] *= self.tempo_f * (1.0 + 0.45 * self.rise + 1.1 * self.surge)
         f["speed_tc"] = P["tc"]
         self.layer_op = _ema(self.layer_op, float(c.get("layer_opacity", 0.0)) if auto else 0.0, dt, P["glide"])
         self.vis.step(f, dt)
-        # --- which scene, and when to switch
+        # --- scene changes: whenever, when it is quiet; on a 4-bar boundary when the party is on
         tgt = self._target()
         held = now - self.switched
         hold = float(c.get("hold", 150.0)) if auto else self.HOLD
         urgent = self.vj.urgent
-        if tgt != self.cur and (held >= hold or self.force or urgent
-                                or (self.surge > 0.8 and held > 20)):     # a drop may change the scene
-            self.xfade = 3.5 if (self.force or urgent) else (5.0 if self.surge > 0.8
-                                                              else float(c.get("fade", self.XFADE)))
+        want = tgt != self.cur and (held >= hold or self.force or urgent or (self.surge > 0.6 and held > 20))
+        pp = int(f.get("phrase_pos", 0)) % 16
+        boundary = pp < self._last_pp
+        self._last_pp = pp
+        musical = L > 0.6 and f.get("bconf", 0.0) > 0.5 and not (self.force or urgent)
+        if want and musical:
+            self._pending = self._pending or now
+            if not (boundary or now - self._pending > 16 * max(0.3, f.get("period", 0.5))):
+                want = False
+        if want:
+            if self.force or urgent:
+                self.xfade = 3.5
+            elif musical:
+                self.xfade = max(1.0, 2 * f.get("period", 0.5))       # snaps in over two beats
+                if L > 0.75:
+                    self.accents.rings.append([self.W / 2, self.H / 2, now, 0.3, 100.0])
+            elif self.surge > 0.6:
+                self.xfade = 5.0
+            else:
+                self.xfade = float(c.get("fade", self.XFADE))
             self.prev, self.cur, self.switched = self.cur, tgt, now
-            self.vj.urgent = False
+            self.vj.urgent, self._pending = False, None
         self.force = False
         if now - getattr(self, "_published", 0) > 3:
             self._published = now
@@ -1337,7 +1449,7 @@ class MusicShow:
             old = self._render(self.prev, f, dt, False, lop)
             k = k * k * (3 - 2 * k)
             img = old * (1 - k) + img * k
-        # --- post effects: colour drift, beat rings, light trails, beat breathing
+        # --- post effects: colour drift, beat rings, light trails, and the swell with the sound
         if f["d_hue"] > 0.02:
             img = vj_fx.hue_rotate(img, now * f["d_hue"] * 0.12)
         if self.accents.rings:
@@ -1348,7 +1460,8 @@ class MusicShow:
             self.prev_out = img
         else:
             self.prev_out = None
-        img = img * (1.0 - 0.12 * P["breath"] + 0.16 * P["breath"] * f["kick"] + 0.12 * self.surge)  # swells with the sound
+        br = P["breath"]
+        img = img * (1.0 - 0.12 * br + 0.16 * br * f["kick"] + 0.10 * self.surge + 0.06 * self.rise)
         out = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
         return self._song_overlay(out)
 

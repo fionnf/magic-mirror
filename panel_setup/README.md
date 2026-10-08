@@ -219,3 +219,12 @@ Re-pairing a light in the Smart Life app changes its local key - re-run the wiza
   No filtering by design; pause / delete / clear in the app. Off until you switch it on.
 - **Art**: *Shapes* (13 thin generative line patterns; also available as music styles) and *Light Art* (stained glass,
   Julia set, kaleidoscope, long-exposure trails, nebula).
+
+## Music VJ: the party level
+The VJ measures how much of a party the room is (0-100 %) from loudness, beat lock, tempo, hits per
+second and bass share (`display/intensity.py`), and slides every parameter along it: quiet evening =
+slow painterly art with a barely-there swell; dance party = neon geometry locked to the beat, scene
+changes on 4-bar boundaries, shockwaves on drops. Buttons: 🤖 Auto (follow the room), 🌿 Chill and
+⚡ Party force it. The app shows the level and why (loudness in dBFS is the main gate: tune the
+Sensitivity slider if your room reads too quiet/loud). Gallery art modes run slow ("Art pace").
+Brains: OpenAI cheap (text, default) / OpenAI audio / Claude; Gemini was retired (402, no credits).

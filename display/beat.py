@@ -7,6 +7,7 @@ beat clock, so visuals can pulse exactly on the beat and keep time through quiet
     bt.phase(now)              # 0 at a beat, rising to 1 just before the next
 """
 import collections
+import math
 
 import numpy as np
 
@@ -18,6 +19,7 @@ class BeatTracker:
 
     def __init__(self, fps):
         self.fps = float(fps)
+        self.fps0 = float(fps)          # nominal analysis rate: the onset series is resampled onto it
         self.t = collections.deque(maxlen=int(self.WINDOW * fps))
         self.x = collections.deque(maxlen=int(self.WINDOW * fps))
         self.bpm = 0.0
@@ -26,17 +28,35 @@ class BeatTracker:
         self.conf = 0.0
         self._last_est = 0.0
         self._pending = []       # recent tempo candidates, to avoid octave jumps
+        self.bar_acc = np.zeros(4)   # onset energy landing on each beat of the bar -> which one is "1"
+        self.downbeat = 0
 
     # ------------------------------------------------------------------
     def update(self, onset, now):
         self.t.append(now)
         self.x.append(float(onset))
+        if self.period > 0 and self.anchor:
+            rel = (now - self.anchor) / self.period
+            near = rel - round(rel)
+            w = math.exp(-(near / 0.12) ** 2)          # only onsets close to a beat count
+            self.bar_acc *= 0.9995                     # ~25 s memory
+            self.bar_acc[int(round(rel)) % 4] += onset * w
+            best = int(np.argmax(self.bar_acc))
+            if best != self.downbeat and self.bar_acc[best] > 1.3 * self.bar_acc[self.downbeat]:
+                self.downbeat = best
         if now - self._last_est >= self.EVERY and len(self.x) > self.fps * 4:
             self._last_est = now
             try:
                 self._estimate(now)
             except Exception:
                 pass
+
+    def beat_index(self, now):
+        return int(round((now - self.anchor) / self.period)) if self.period > 0 else 0
+
+    def bar_pos(self, now):
+        """0 on the downbeat, 1..3 for the other beats of a 4/4 bar."""
+        return (self.beat_index(now) - self.downbeat) % 4
 
     def phase(self, now):
         if self.period <= 0:
@@ -45,12 +65,17 @@ class BeatTracker:
 
     # ------------------------------------------------------------------
     def _estimate(self, now):
-        x = np.asarray(self.x, np.float64)
-        t = np.asarray(self.t, np.float64)
+        xr = np.asarray(self.x, np.float64)
+        tr = np.asarray(self.t, np.float64)
+        span = tr[-1] - tr[0]
+        if span < 2.0:
+            return
+        # the analysis loop's hops are irregular when the renderer is busy: put the onsets on a
+        # uniform grid first, or the autocorrelation smears and the tempo wanders
+        self.fps = self.fps0
+        t = np.arange(tr[0], tr[-1], 1.0 / self.fps)
+        x = np.interp(t, tr, xr)
         n = len(x)
-        span = t[-1] - t[0]
-        if span > 1.0:
-            self.fps = (n - 1) / span                  # the analysis loop does not run at exactly SR/HOP
         x = x - x.mean()
         if x.std() < 1e-6:
             self.conf *= 0.8

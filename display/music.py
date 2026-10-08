@@ -38,7 +38,9 @@ TEXT_EVERY = 90.0         # cheap text brain
 # cheapest-first; the next one is tried if a model is unavailable (override with AI_TEXT_MODEL)
 TEXT_MODELS = ["gpt-4.1-nano", "gpt-4o-mini"]
 # free-tier Gemini (Google AI Studio key in .env as GEMINI_API_KEY); text only, never audio
-GEMINI_MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
+# 2.5 Flash-Lite is retired for new keys (404); "-latest" survives future retirements.
+# Measured with a real key 2026-10-08: ~1.3 s each. Avoid gemini-flash-latest (thinking, ~30 s).
+GEMINI_MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.1-flash-lite"]
 GEMINI_EVERY = 90.0
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 SONG_CALL_GAP = 45.0      # a newly recognised song may trigger a call, at most this often

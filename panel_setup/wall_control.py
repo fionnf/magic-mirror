@@ -348,6 +348,7 @@ def make_app(runner):
 
     @app.post("/api/wheel")
     def wheel():
+        return jsonify({"error": "Wheel of Fortuna is switched off for now"}), 410
         d = request.get_json(force=True, silent=True) or {}
         runner.state["wheel_print"] = bool(d.get("print", True))
         save_state(runner.state)
@@ -387,7 +388,7 @@ def make_app(runner):
         st = mu.load_settings()
         old_source = st.get("source")
         for k in ("style", "palette", "vibe", "source", "sensitivity", "ai", "shazam",
-                  "song_on_wall", "brain"):
+                  "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt"):
             if k in d:
                 st[k] = d[k]
         mu._write_json(mu.SETTINGS_FILE, st)

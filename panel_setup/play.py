@@ -45,6 +45,50 @@ def _anims():
     }
 
 
+class _MusicClock:
+    """Optional: when "Make all art move to music" is on (app, Music card) and music is playing,
+    any art mode runs faster with the energy and breathes on the detected beat. In silence it is
+    ordinary time - so nothing changes unless there is music."""
+
+    def __init__(self):
+        self.l, self.enabled, self.checked, self.t, self.last = None, False, 0.0, 0.0, None
+        self.st = {}
+        self.phase = 0.0
+
+    def _poll(self, now):
+        if now - self.checked < 3.0:
+            return
+        self.checked = now
+        try:
+            from display import music
+            self.st = music.load_settings()
+            self.enabled = bool(self.st["art_reacts"])
+            if self.enabled and self.l is None:
+                self.l = music.Listener()
+        except Exception as e:
+            print(f"[music-clock] {e}")
+            self.enabled = False
+
+    def step(self, real_t):
+        """-> (time for the animation, brightness factor)"""
+        now = time.monotonic()
+        dt = 0.0 if self.last is None else max(0.0, min(0.2, real_t - self.last))
+        self.last = real_t
+        self._poll(now)
+        if not (self.enabled and self.l is not None) or self.l.f["silent"]:
+            self.t += dt
+            return self.t, 1.0
+        from display import music
+        f = self.l.f
+        react = music.reactivity(self.st.get("sensitivity", 50))
+        energy = min(1.0, f["energy"] * react)
+        self.t += dt * (0.85 + 0.7 * energy)
+        (pulse, self.phase, w), _ = music.beat_pulse(f, time.time(), self.st.get("beat_offset", 0),
+                                                     self.st.get("beat_strength", 100) / 100.0, self.phase)
+        kick = w * pulse + (1 - w) * min(1.0, f["kick"] * react) * 0.6
+        return self.t, 0.9 + 0.14 * kick
+
+
 def _boot_frame(progress):
     """Start-up screen: HOUSE FORTUNA and a progress bar (shown while the animation loads)."""
     from PIL import Image, ImageDraw
@@ -141,6 +185,7 @@ def main():
         except Exception as e:
             print(f"[boot] welcome skipped: {e}")
     t0 = time.monotonic()
+    clock = _MusicClock() if a.anim != "music" else None
     stats = [] if os.environ.get("WALL_STATS") else None
     stats_t = time.monotonic()
     try:
@@ -151,7 +196,12 @@ def main():
             # each frame held for exactly 2 refreshes (58 Hz -> 29 fps), paced by the
             # panels' own vsync instead of a sleep timer that drifts against it
             c0 = time.perf_counter()
+            gain = 1.0
+            if clock is not None:
+                t, gain = clock.step(t)
             img = overlay.apply(frame_fn(t))
+            if gain < 0.999 or gain > 1.001:
+                img = img.point([min(255, int(i * gain)) for i in range(256)] * 3)
             c1 = time.perf_counter()
             if not matrix.draw(img, frame_fraction=2):
                 time.sleep(interval)                    # unchanged frame: nothing to pace

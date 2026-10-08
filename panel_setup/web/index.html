@@ -91,14 +91,6 @@
     <h2>Interactive</h2>
     <div class="two">
       <div class="box">
-        <div class="row" style="justify-content:space-between;margin-bottom:8px">
-          <b>🎡 Wheel of Fortuna</b>
-          <label class="sub"><input type="checkbox" id="wheelPrint" checked> print verdict</label>
-        </div>
-        <p>The AI writes 8 fates for Fionn &amp; Dewa, the wheel decides. Returns to the current show afterwards.</p>
-        <button class="gold big" onclick="spin()">Spin</button>
-      </div>
-      <div class="box">
         <b>🪞 Mirror mode</b>
         <p>Live silhouette, countdown, AI one-liner and a printed receipt.</p>
         <div class="row" style="margin-bottom:8px">
@@ -184,27 +176,6 @@
   </section>
 
   <section>
-    <h2>Lights</h2>
-    <div class="box">
-      <div class="row" style="justify-content:space-between;margin-bottom:8px">
-        <b>💡 Room lights (Smart Life)</b><span class="sub" id="lightsNote"></span>
-      </div>
-      <div id="lightsSetup" class="sub" style="display:none">Not set up yet. Follow “Smart Life lights” in <code>panel_setup/README.md</code> (one-time, at home), then lights appear here.</div>
-      <div id="lightsList"></div>
-      <div id="lightsBtns" class="row" style="margin-top:10px;display:none">
-        <button class="primary" onclick="lightsRoom(false)">🌙 Living room off</button>
-        <button onclick="lightsRoom(true)">Living room on</button>
-        <button onclick="lightsScan()" title="at home: finds the lights' addresses on the Wi-Fi">🔍 Find lights</button>
-      </div>
-      <div id="lightsSched" class="row" style="margin-top:12px;display:none">
-        <span class="sub">Switch the living room off every night at</span>
-        <input type="time" id="lightsOff" onchange="lightsSchedule()">
-        <button onclick="$('lightsOff').value='';lightsSchedule()">clear</button>
-      </div>
-    </div>
-  </section>
-
-  <section>
     <h2>Music</h2>
     <div class="box">
       <div class="row" style="justify-content:space-between;margin-bottom:6px">
@@ -212,12 +183,13 @@
       </div>
       <div class="row" style="margin-bottom:8px;gap:6px"><b id="musicScene" style="font-size:16px"></b><span id="musicSw"></span></div>
       <div id="musicSong" style="margin:-2px 0 8px;color:var(--pink);font-weight:600"></div>
-      <p>Soft art that breathes with the music. On <b>Auto (AI)</b> the AI listens and designs the whole look (style, colours, vibe, speed, size, number of shapes); pick something to fix it. Changes apply live.</p>
-      <div class="row" style="margin-bottom:10px">
-        <label class="sub">Art style<br><select id="mStyle" onchange="musicSet()"></select></label>
-        <label class="sub">Colours<br><select id="mPal" onchange="musicSet()"></select></label>
-        <label class="sub">Vibe<br><select id="mVibe" onchange="musicSet()"></select></label>
+      <p>The AI VJ designs the whole look and locks onto the beat. Tell it what you want:</p>
+      <div class="row" style="margin-bottom:6px">
+        <input type="text" id="vjPrompt" maxlength="200" style="flex:1;min-width:180px" placeholder="e.g. hot pink and gold, mandalas, make it feel like a festival">
+        <button class="primary" onclick="vjSend()">Tell the VJ</button>
+        <button onclick="vjClear()" title="back to the VJ's own taste">Clear</button>
       </div>
+      <div class="sub" id="vjActive" style="margin-bottom:10px"></div>
       <div class="toggles">
         <label><input type="checkbox" id="tAi" onchange="toggleSet('ai', this.checked)"> 🤖 AI designer</label>
         <label><input type="checkbox" id="tShz" onchange="toggleSet('shazam', this.checked)"> 🎵 Recognise songs</label>
@@ -230,17 +202,15 @@
         </span>
       </div>
       <div class="sub" id="brainStatus" style="margin:0 0 10px"></div>
-      <div class="row" style="margin-bottom:10px;justify-content:space-between">
-        <span class="sub">Listen with</span>
-        <span class="seg">
-          <button id="srcMac" onclick="setSource('mac')">🎙 Mac</button><button id="srcPi" onclick="setSource('pi')">🎙 Pi</button>
-        </span>
-      </div>
-      <div class="sub" id="audioStatus" style="margin:-4px 0 10px"></div>
       <div class="row" style="justify-content:space-between"><span class="sub">Sensitivity</span><b id="sensVal">50</b></div>
       <input type="range" id="sens" min="0" max="100" step="5" style="margin-bottom:12px">
+      <div class="row" style="justify-content:space-between"><span class="sub">Beat strength</span><b id="bsVal">100%</b></div>
+      <input type="range" id="bstr" min="0" max="200" step="10" style="margin-bottom:12px">
+      <div class="row" style="justify-content:space-between"><span class="sub">Beat sync (earlier ← → later)</span><b id="boVal">0 ms</b></div>
+      <input type="range" id="boff" min="-250" max="250" step="10" style="margin-bottom:6px">
+      <div class="sub" id="bpmNow" style="margin-bottom:12px">Tempo: –</div>
+      <div class="toggles"><label><input type="checkbox" id="tReact" onchange="toggleSet('art_reacts', this.checked)"> 🎶 Make ALL art move to music (when music is playing)</label></div>
       <button class="primary big" onclick="musicSet(true)">▶ Play music art</button>
-      <p style="margin:8px 0 0">Mac: run <code>./panel_setup/stream_mic.sh</code> on the laptop. Pi: needs a USB sound card or USB mic on the Pi.</p>
     </div>
   </section>
 
@@ -309,7 +279,7 @@ function show(s) {
   $('tCrop').checked = s.smart_crop !== false;
   if (!$('camUrl').value) $('camUrl').value = s.camera_url || '';
   if (!show.init) { $('cam').value = s.camera || 'stream'; $('auto').value = String(s.mirror_auto || 0);
-                    $('wheelPrint').checked = s.wheel_print !== false; show.init = true; }
+                    show.init = true; }
 }
 
 function toneName(v) { v = +v; return v <= 15 ? 'sweet 💗' : v <= 40 ? 'kind' : v <= 65 ? 'cheeky 😉' : v <= 85 ? 'sassy 💅' : 'roast 🔥'; }
@@ -371,43 +341,9 @@ $('bright').addEventListener('input', e => {
   clearTimeout(bTimer);
   bTimer = setTimeout(() => post('/api/brightness', {value: +e.target.value}).then(show), 400);
 });
-function spin() { post('/api/wheel', {print: $('wheelPrint').checked}).then(s => { toast('🎡 Spinning!'); show(s); }).catch(e => toast(e.message)); }
 function startMirror() {
   post('/api/mirror', {camera: $('cam').value, camera_url: $('camUrl').value, auto: +$('auto').value})
     .then(s => { toast('🪞 Mirror starting… step out of view for 5 s'); show(s); }).catch(e => toast(e.message));
-}
-async function lightsLoad(fresh) {
-  try {
-    const d = await (await fetch('/api/lights' + (fresh ? '?fresh=1' : ''))).json();
-    $('lightsSetup').style.display = d.configured ? 'none' : 'block';
-    $('lightsBtns').style.display = $('lightsSched').style.display = d.configured && d.installed ? 'flex' : 'none';
-    $('lightsNote').textContent = d.configured && !d.installed ? 'tinytuya is not installed on the Pi' : '';
-    $('lightsList').innerHTML = (d.devices || []).map(x => `
-      <label class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);cursor:pointer">
-        <span><button title="counts as the living room" onclick="event.preventDefault();roomToggle('${x.name.replace(/'/g, "\\'")}')"
-              style="padding:2px 8px;margin-right:6px;${x.room ? 'background:var(--gold);color:#241600' : ''}">${x.room ? '🏠 room' : '＋'}</button>${x.name}${x.error ? ' <span class="sub">⚠️ ' + x.error + '</span>' : ''}</span>
-        <input type="checkbox" ${x.on ? 'checked' : ''} ${x.on === null ? 'disabled' : ''}
-               style="width:22px;height:22px;accent-color:var(--gold)"
-               onchange="lightsOne('${x.name.replace(/'/g, "\\'")}', this.checked)"></label>`).join('');
-    lightsRoomNames = d.room || [];
-    if (d.schedule && document.activeElement !== $('lightsOff')) $('lightsOff').value = d.schedule.off || '';
-  } catch (e) {}
-}
-let lightsRoomNames = [];
-function roomToggle(name) {
-  const s = new Set(lightsRoomNames); s.has(name) ? s.delete(name) : s.add(name);
-  post('/api/lights/members', {names: [...s]}).then(() => lightsLoad(true)).catch(e => toast(e.message));
-}
-function lightsRoom(on) { post('/api/lights/room', {on}).then(() => { toast(on ? '💡 Living room lights on' : '🌙 Living room lights off'); setTimeout(() => lightsLoad(true), 1200); }).catch(e => toast(e.message)); }
-function lightsScan() {
-  toast('Looking for your lights on the Wi-Fi… (20 s)');
-  post('/api/lights/scan').then(r => { toast(`Found ${r.mine} of your lights` + (r.missing && r.missing.length ? ` — missing: ${r.missing.join(', ')}` : '')); lightsLoad(true); }).catch(e => toast(e.message));
-}
-function lightsOne(name, on) { post('/api/lights/one', {name, on}).then(() => setTimeout(() => lightsLoad(true), 1000)).catch(e => toast(e.message)); }
-function lightsSchedule() { post('/api/lights/schedule', {off: $('lightsOff').value || null}).then(() => toast($('lightsOff').value ? 'Lights off nightly at ' + $('lightsOff').value : 'Nightly lights-off cleared')).catch(e => toast(e.message)); }
-function cropSet(on) {
-  post('/api/mirror/crop', {on}).then(s => { toast(on ? 'Portrait crop follows people' : 'Portrait crop: centre only'); show(s); })
-    .catch(e => toast(e.message));
 }
 async function lastPhoto() {
   try {
@@ -440,12 +376,15 @@ async function musicLoad(first) {
     if (first) {
       const fill = (id, arr, auto) => { $(id).innerHTML = (auto ? '<option value="auto">Auto (AI)</option>' : '') +
                                         arr.map(v => `<option value="${v}">${cap(v)}</option>`).join(''); };
-      fill('mStyle', m.styles, true); fill('mPal', m.palettes, true); fill('mVibe', m.vibes, true);
-      $('mStyle').value = m.settings.style; $('mPal').value = m.settings.palette; $('mVibe').value = m.settings.vibe;
+      $('vjPrompt').value = m.settings.prompt || '';
       $('sens').value = m.settings.sensitivity; $('sensVal').textContent = m.settings.sensitivity;
+      $('bstr').value = m.settings.beat_strength; $('bsVal').textContent = m.settings.beat_strength + '%';
+      $('boff').value = m.settings.beat_offset; $('boVal').textContent = m.settings.beat_offset + ' ms';
     }
     $('tAi').checked = !!m.settings.ai; $('tShz').checked = !!m.settings.shazam;
-    $('tWall').checked = !!m.settings.song_on_wall;
+    $('tWall').checked = !!m.settings.song_on_wall; $('tReact').checked = !!m.settings.art_reacts;
+    const au = m.now && m.now.audio || {};
+    $('bpmNow').textContent = au.bpm ? `Tempo: ${au.bpm} BPM (lock ${Math.round((au.beat_conf || 0) * 100)}%)` : 'Tempo: listening…';
     $('brGemini').classList.toggle('on', m.settings.brain === 'gemini');
     $('brText').classList.toggle('on', m.settings.brain === 'text');
     $('brOpenai').classList.toggle('on', m.settings.brain === 'openai');
@@ -454,12 +393,9 @@ async function musicLoad(first) {
       (m.now && m.now.brain_status ? (m.now.brain_status.includes('ok') ? '✓ ' : '⚠️ ') + m.now.brain_status : '') +
       (m.now && m.now.ai_calls && Object.keys(m.now.ai_calls).length ? '  ·  AI calls today: ' +
         Object.entries(m.now.ai_calls).map(([k, v]) => `${k} ${v}`).join(', ') : '');
-    $('srcMac').classList.toggle('on', m.settings.source === 'mac');
-    $('srcPi').classList.toggle('on', m.settings.source === 'pi');
     const a = m.now && m.now.audio;
-    $('audioStatus').textContent = !a ? '' : a.error ? '⚠️ ' + a.error :
-      (a.receiving ? (a.source === 'pi' ? 'Pi mic: listening ✓' : 'Mac stream: receiving ✓')
-                   : (a.source === 'pi' ? 'Pi mic: no sound yet' : 'Mac stream: nothing arriving — is stream_mic.sh running?'));
+    $('vjActive').textContent = (m.settings.prompt ? '🎯 Following: “' + m.settings.prompt + '”' : 'The VJ is using its own taste.') +
+      (a && a.error ? '   ⚠️ ' + a.error : '');
     const n = m.now;
     $('musicScene').textContent = n && n.scene && !n.silent ? '“' + n.scene + '”' : '';
     $('musicSong').textContent = n && n.song && !n.silent ? '♪ ' + n.song + (n.artist ? ' — ' + n.artist : '') :
@@ -472,15 +408,11 @@ async function musicLoad(first) {
   } catch (e) {}
 }
 function toggleSet(key, on) {
-  post('/api/music', {[key]: on}).then(() => { toast(`${key === 'ai' ? '🤖 AI designer' : key === 'shazam' ? '🎵 Song recognition' : 'Song on wall'} ${on ? 'on' : 'off'}`); musicLoad(); })
+  post('/api/music', {[key]: on}).then(() => { toast(`${key === 'ai' ? '🤖 AI designer' : key === 'shazam' ? '🎵 Song recognition' : key === 'art_reacts' ? '🎶 Art moves to music' : 'Song on wall'} ${on ? 'on' : 'off'}`); musicLoad(); })
     .catch(e => toast(e.message));
 }
 function setBrain(b) {
   post('/api/music', {brain: b}).then(() => { toast(b === 'claude' ? '🧠 Claude designs (text only)' : b === 'gemini' ? '🧠 Free Gemini designs (text only)' : b === 'text' ? '🧠 Cheap OpenAI text model designs' : '🧠 Audio model designs (hears the music, costs more)'); musicLoad(); })
-    .catch(e => toast(e.message));
-}
-function setSource(src) {
-  post('/api/music', {source: src}).then(r => { toast(src === 'pi' ? '🎙 Listening with the Pi' : '🎙 Listening with the Mac'); musicLoad(); })
     .catch(e => toast(e.message));
 }
 let sTimer;
@@ -489,15 +421,29 @@ $('sens').addEventListener('input', e => {
   clearTimeout(sTimer);
   sTimer = setTimeout(() => post('/api/music', {sensitivity: +e.target.value}).then(() => musicLoad()), 300);
 });
+for (const [id, key, lab, unit] of [['bstr', 'beat_strength', 'bsVal', '%'], ['boff', 'beat_offset', 'boVal', ' ms']]) {
+  let tm;
+  $(id).addEventListener('input', e => {
+    $(lab).textContent = e.target.value + unit;
+    clearTimeout(tm);
+    tm = setTimeout(() => post('/api/music', {[key]: +e.target.value}), 300);
+  });
+}
 function musicSet(start) {
-  post('/api/music', {style: $('mStyle').value, palette: $('mPal').value, vibe: $('mVibe').value, start: !!start})
+  post('/api/music', {start: !!start})
     .then(r => { if (start) toast('🎵 Music art on'); else toast('Updated'); show(r.status); musicLoad(); })
     .catch(e => toast(e.message));
 }
+function vjSend() {
+  const prompt = $('vjPrompt').value.trim();
+  post('/api/music', {prompt, start: true}).then(r => { toast(prompt ? '🎯 The VJ is on it…' : 'Back to the VJ\'s own taste'); show(r.status); musicLoad(); })
+    .catch(e => toast(e.message));
+}
+function vjClear() { $('vjPrompt').value = ''; vjSend(); }
+$('vjPrompt').addEventListener('keydown', e => { if (e.key === 'Enter') vjSend(); });
 (async () => {
   musicLoad(true); setInterval(musicLoad, 5000);
   lastPhoto(); setInterval(lastPhoto, 5000);
-  lightsLoad(); setInterval(lightsLoad, 15000);
   dLoad(); setInterval(dLoad, 8000);
   mirrorSettingsLoad(); peopleLoad(); setInterval(peopleLoad, 20000);
   MODES = await (await fetch('/api/modes')).json();

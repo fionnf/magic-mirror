@@ -30,25 +30,27 @@ from PIL import Image, ImageDraw
 
 import config
 from display.art import _palette, _lut, Coral
+from display.beat import BeatTracker
+from display import vj_fx
 
 SR = 22050
 WIN, HOP = 1024, 256
 AI_EVERY = 150.0          # audio brain: about once per scene hold (it is the expensive one)
-TEXT_EVERY = 90.0         # cheap text brain
+TEXT_EVERY = 45.0         # cheap text brain
 # cheapest-first; the next one is tried if a model is unavailable (override with AI_TEXT_MODEL)
 TEXT_MODELS = ["gpt-4.1-nano", "gpt-4o-mini"]
 # free-tier Gemini (Google AI Studio key in .env as GEMINI_API_KEY); text only, never audio
 # 2.5 Flash-Lite is retired for new keys (404); "-latest" survives future retirements.
 # Measured with a real key 2026-10-08: ~1.3 s each. Avoid gemini-flash-latest (thinking, ~30 s).
 GEMINI_MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.1-flash-lite"]
-GEMINI_EVERY = 90.0
+GEMINI_EVERY = 45.0
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-SONG_CALL_GAP = 45.0      # a newly recognised song may trigger a call, at most this often
+SONG_CALL_GAP = 12.0      # a newly recognised song may trigger a call, at most this often
 USAGE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                           "panel_setup", "ai_usage.json")
 AI_CLIP = 10.0
 SHAPE_STYLES = ["flowdots", "flowlines", "garden", "truchet", "rings", "ridges", "weave"]
-STYLES = ["aurora", "lava", "ripples", "coral", "ink"] + SHAPE_STYLES      # "glow" retired (Visuals.glow kept)
+STYLES = ["aurora", "lava", "ripples", "coral", "ink"] + SHAPE_STYLES + list(vj_fx.PIECE_STYLES)      # "glow" retired (Visuals.glow kept)
 PALETTES = {
     "dusk":   [(15, 8, 30), (80, 30, 90), (220, 120, 120), (255, 200, 150)],
     "ocean":  [(2, 8, 25), (10, 50, 90), (30, 140, 160), (170, 230, 230)],
@@ -59,33 +61,57 @@ PALETTES = {
     "gold":   [(8, 5, 0), (70, 45, 10), (200, 150, 60), (255, 235, 170)],
 }
 VIBES = {"chill": ("chill and tranquil", 1.0), "dreamy": ("dreamy and floaty", 0.75),
-         "warm": ("warm and cosy", 1.0), "lively": ("lively but still gentle", 1.4)}
+         "warm": ("warm and cosy", 1.0), "lively": ("lively but still gentle", 1.4),
+         "hypnotic": ("hypnotic and trance-like", 0.6), "euphoric": ("euphoric and glowing", 1.3),
+         "electric": ("electric and driving", 1.8)}
+_CLASSIC = {"aurora": "soft curtains of light", "lava": "slow glowing metaballs", "ripples": "rings spreading on water",
+            "coral": "growing reaction-diffusion coral", "ink": "ink flowing through water",
+            "flowdots": "dots streaming through a wave field", "flowlines": "streamlines through a wave field",
+            "garden": "drifting nodes joined by lines", "truchet": "arc tiles flipping into ribbons",
+            "rings": "wobbling concentric rings", "ridges": "stacked night-landscape ridges",
+            "weave": "woven cloth of waving threads"}
+_MENU = "; ".join(f"{k} ({v})" for k, v in {**_CLASSIC, **vj_fx.PIECE_STYLES}.items())
 AI_PROMPT = (
-    "You are the resident VJ and light designer of an LED art wall in the hallway of House "
-    "Fortuna, a cosy gay flatshare in Zürich. The vibe of the space is chill and tranquil and the "
-    "residents love calm, dreamy, slow-moving light. Each time you hear a clip you design a complete light scene "
-    "for the wall: never harsh, never strobing, always soft and beautiful. "
-    f"Base styles: {', '.join(STYLES)} (prefer aurora and lava; the shape styles flowdots, flowlines, garden, truchet, rings, ridges and weave are thin glowing line patterns - great for clear, rhythmic or electronic music). Optionally add ONE second "
-    "layer on top for depth (aurora or ripples - or none) with opacity 0-0.6. "
-    f"Colours: either a preset ({', '.join(PALETTES)}) or invent your own palette of 4 hex colours "
-    "from deep shadow to soft highlight that matches the music. "
-    "Also set vibe (" + ", ".join(VIBES) + "), drift speed 0.5-1.5, shape size 0.7-1.4, number of "
-    "shapes 3-8 and softness 0.7 (crisper) - 1.5 (dreamier). "
-    "Let the scenes evolve as a coherent set over the evening - vary them but let them belong "
-    "together - and match the music's mood and energy. "
-    "If - and only if - you genuinely recognise the song, name it and its artist and let the song "
-    "itself inspire the scene (its mood, its era, its artwork); never guess. "
+    "You are the resident VJ of an LED art wall (192x192 pixels, 3x3 HUB75 panels) in the hallway of "
+    "House Fortuna, a gay flatshare in Zürich where friends cook, dance and hang out. You are a bold, "
+    "original, tasteful creative director: each call you design the NEXT SCENE as a complete art "
+    "direction. Surprise people. Take risks with colour and composition instead of the safe default, and "
+    "NEVER repeat the base style or palette of your recent scenes. "
+    f"THE MENU of base styles: {_MENU}. "
+    f"EFFECTS you may add: layer = a second style screen-blended on top ({', '.join(vj_fx.LAYER_STYLES)}) "
+    "with layer_opacity 0-0.8; symmetry = none | mirror | quad | diag (quad and mirror make instant "
+    "mandalas); trails 0-0.9 (light streaks that persist); hue_drift 0-1 (slow colour rotation); accent 0-1 "
+    "(shockwave rings on the beat); reactivity 0-2 (how strongly the art pulses on the beat); speed 0.3-2.5; "
+    "scale 0.5-2; count 2-10 (number of shapes); softness 0.5-2; hold 45-400 (seconds this scene lasts); "
+    "fade 3-25 (seconds the crossfade into it takes). "
+    f"COLOUR: use a preset ({', '.join(PALETTES)}), or - better - invent a 4-colour ramp from deep shadow "
+    "to bright highlight with a concept behind it (\"bruise violet to acid lime\", \"sunset over the "
+    "Zürichsee\"), or palette \"native\" to keep a piece's own colours (great for kandinsky, mondrian, "
+    "oilslick, glass, opart, watercolour, kaleido). "
+    "MATCH THE MUSIC. Slow, ambient or intimate: oilslick, marbling, watercolour, nebula, aurora, "
+    "harmonograph, long fades, trails. Groovy pop, soul, disco: lava, coral, ink, glass, kandinsky, "
+    "flowlines, poles, spiral, warm saturated colours. Electronic, house, techno, high energy: truchet, mesh, "
+    "opart, mosaic, isocubes, chevrons, kaleido, julia, with quad/mirror symmetry, strong accent and "
+    "reactivity, short holds. Sad or romantic: watercolour, blush and rose. Angry or heavy: ember, bold "
+    "contrast, julia, poles. Fast tempo means higher speed and shorter holds; slow tempo means bigger, "
+    "slower scenes. Use the time of day too. "
+    "SAFETY: the engine pulses smoothly on the beat; never ask for flashing or strobing. "
+    "If - and only if - you genuinely recognise the song, name it and its artist and let the song itself "
+    "inspire the scene (its mood, era, cover art); never guess. "
     "Reply ONLY with JSON: {\"song\": \"title\" or null, \"artist\": \"name\" or null, "
-    "\"scene\": short evocative name, \"genre\": str, \"mood\": one word, "
-    "\"energy\": 0-1, \"style\": base style, \"layer\": style or \"none\", "
-    "\"layer_opacity\": number, \"palette\": preset name or \"custom\", "
-    "\"colors\": [4 hex strings, when custom], \"vibe\": str, \"speed\": number, "
-    "\"scale\": number, \"count\": integer, \"softness\": number}"
+    "\"scene\": short evocative name, \"concept\": one line of art direction, \"genre\": str, \"mood\": one "
+    "word, \"energy\": 0-1, \"style\": base style, \"layer\": style or \"none\", \"layer_opacity\": number, "
+    "\"palette\": preset name, \"custom\" or \"native\", \"colors\": [4 hex strings, when custom], "
+    "\"vibe\": str, \"speed\": number, \"scale\": number, \"count\": integer, \"softness\": number, "
+    "\"symmetry\": str, \"trails\": number, \"hue_drift\": number, \"accent\": number, "
+    "\"reactivity\": number, \"hold\": number, \"fade\": number}"
 )
-LAYERS = ("aurora", "ripples")
+LAYERS = vj_fx.LAYER_STYLES
 DEFAULT_CHOICE = {"scene": "", "genre": "", "mood": "", "song": "", "artist": "", "style": "aurora", "layer": "none",
                   "layer_opacity": 0.0, "palkey": "dusk", "palette_desc": "dusk",
-                  "vibe": "chill", "speed": 1.0, "scale": 1.0, "count": 6, "softness": 1.0}
+                  "vibe": "chill", "speed": 1.0, "scale": 1.0, "count": 6, "softness": 1.0,
+                  "concept": "", "symmetry": "none", "trails": 0.0, "hue_drift": 0.0, "accent": 0.4,
+                  "reactivity": 1.0, "hold": 150.0, "fade": 12.0}
 
 
 def _hex_rgb(h):
@@ -129,9 +155,12 @@ def _validate(j):
     out["style"] = j["style"]
     layer = j.get("layer", "none")
     out["layer"] = layer if layer in LAYERS and layer != j["style"] else "none"
-    out["layer_opacity"] = num(j.get("layer_opacity"), 0.0, 0.6, 0.3) if out["layer"] != "none" else 0.0
+    out["layer_opacity"] = num(j.get("layer_opacity"), 0.0, 0.8, 0.3) if out["layer"] != "none" else 0.0
+    out["concept"] = str(j.get("concept", ""))[:120]
     pal = j.get("palette")
-    if pal in PALETTES:
+    if pal == "native":
+        out["palkey"] = out["palette_desc"] = "native"
+    elif pal in PALETTES:
         out["palkey"] = out["palette_desc"] = pal
     else:
         try:
@@ -143,16 +172,23 @@ def _validate(j):
         except Exception:
             out["palkey"] = out["palette_desc"] = "dusk"
     out["vibe"] = j.get("vibe") if j.get("vibe") in VIBES else "chill"
-    out["speed"] = num(j.get("speed"), 0.5, 1.5, 1.0)
-    out["scale"] = num(j.get("scale"), 0.7, 1.4, 1.0)
-    out["count"] = num(j.get("count"), 3, 8, 6)
-    out["softness"] = num(j.get("softness"), 0.7, 1.5, 1.0)
+    out["speed"] = num(j.get("speed"), 0.3, 2.5, 1.0)
+    out["scale"] = num(j.get("scale"), 0.5, 2.0, 1.0)
+    out["count"] = num(j.get("count"), 2, 10, 6)
+    out["softness"] = num(j.get("softness"), 0.5, 2.0, 1.0)
+    out["symmetry"] = j.get("symmetry") if j.get("symmetry") in vj_fx.SYMMETRIES else "none"
+    out["trails"] = num(j.get("trails"), 0.0, 0.9, 0.0)
+    out["hue_drift"] = num(j.get("hue_drift"), 0.0, 1.0, 0.0)
+    out["accent"] = num(j.get("accent"), 0.0, 1.0, 0.4)
+    out["reactivity"] = num(j.get("reactivity"), 0.0, 2.0, 1.0)
+    out["hold"] = num(j.get("hold"), 45.0, 400.0, 150.0)
+    out["fade"] = num(j.get("fade"), 3.0, 25.0, 12.0)
     out["scene"] = out["scene"] or out["mood"] or "untitled"
     return out
 
 
 def _scene_key(c):
-    return (c["style"], c["palkey"], c["layer"])
+    return (c["style"], c["palkey"], c["layer"], c.get("symmetry", "none"))
 
 
 AI_MODELS = ["gpt-audio"]
@@ -161,7 +197,8 @@ SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # wr
 NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # read by the app
 DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "pi",
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
-                    "brain": "gemini"}
+                    "brain": "gemini", "beat_offset": 0, "beat_strength": 100, "art_reacts": False,
+                    "prompt": ""}
 
 
 def load_settings():
@@ -186,6 +223,13 @@ def load_settings():
         s["sensitivity"] = max(0, min(100, int(s["sensitivity"])))
     except (TypeError, ValueError):
         s["sensitivity"] = 50
+    for k, lo, hi, d in (("beat_offset", -250, 250, 0), ("beat_strength", 0, 200, 100)):
+        try:
+            s[k] = max(lo, min(hi, int(s[k])))
+        except (TypeError, ValueError):
+            s[k] = d
+    s["art_reacts"] = bool(s.get("art_reacts", False))
+    s["prompt"] = " ".join(str(s.get("prompt", "") or "").split())[:200]
     return s
 
 
@@ -263,7 +307,11 @@ class Listener:
         self.lock = threading.Lock()
         self.last_audio = 0.0
         self.f = {"energy": 0.0, "bass": 0.0, "kick": 0.0, "mid": 0.0, "treble": 0.0,
-                  "beat": False, "beat_t": 0.0, "bpm_hint": 0.0, "silent": True}
+                  "beat": False, "beat_t": 0.0, "bpm_hint": 0.0, "silent": True,
+                  "bpm": 0.0, "bconf": 0.0, "anchor": 0.0, "period": 0.0}
+        self.tracker = BeatTracker(SR / HOP)
+        self._prev_log = None
+        self._onset_avg = 1e-3
         self.peak = 1e-3
         self.bpeak = {}
         self.bass_hist = []
@@ -338,6 +386,9 @@ class Listener:
         bands = {"kickband": (freqs >= 40) & (freqs < 120),
                  "bass": (freqs >= 35) & (freqs < 160), "mid": (freqs >= 160) & (freqs < 2000),
                  "treble": (freqs >= 2000) & (freqs < 8000)}
+        self._flux_bands = [((freqs >= 30) & (freqs < 200), 1.0), ((freqs >= 200) & (freqs < 2500), 0.4),
+                            ((freqs >= 2500) & (freqs < 8000), 0.12)]
+        self._band_avg = [1e-3, 1e-3, 1e-3]
         last = time.time()
         while True:
             time.sleep(HOP / SR)
@@ -373,6 +424,23 @@ class Listener:
                     f["bpm_hint"] = 60 * (len(self.beats) - 1) / (self.beats[-1] - self.beats[0])
             f["beat"] = beat or f["beat"]
             f["silent"] = silent
+            # beat tracking: onset strength = rise of the log spectrum (30 Hz - 6 kHz)
+            # (per band, normalised, then weighted to favour kick/bass over hi-hats: the beat lives low)
+            lg = np.log1p(spec * 30.0)
+            if self._prev_log is not None and not silent:
+                rise = np.maximum(lg - self._prev_log, 0.0)
+                onset = 0.0
+                for i, (mask, w) in enumerate(self._flux_bands):
+                    fl = float(rise[mask].sum())
+                    self._band_avg[i] = 0.98 * self._band_avg[i] + 0.02 * fl
+                    onset += w * fl / (self._band_avg[i] + 1e-6)
+                self.tracker.update(onset, now)
+            self._prev_log = lg
+            if silent:
+                self.tracker.conf *= 0.97
+            tr = self.tracker
+            f["bpm"], f["bconf"] = tr.bpm, (0.0 if silent else tr.conf)
+            f["anchor"], f["period"] = tr.anchor, tr.period
 
 
 # ------------------------------------------------------- song recognition ---
@@ -496,8 +564,12 @@ class VJ:
     """The AI light designer: listens every AI_EVERY s and designs a whole scene."""
 
     def __init__(self, listener, vibe=lambda: "chill", enabled=lambda: True, song=lambda: None,
-                 brain=lambda: "openai"):
+                 brain=lambda: "openai", prompt=lambda: ""):
         self.l = listener
+        self.prompt = prompt
+        self._last_prompt = prompt()
+        self.urgent = False                   # a result that should switch the scene right now
+        self._e_ref = 0.0
         self.vibe = vibe
         self.enabled = enabled
         self.song = song
@@ -523,10 +595,16 @@ class VJ:
         hist = "; ".join(f"\"{s['scene']}\" ({s['style']}"
                          + (f" + {s['layer']}" if s["layer"] != "none" else "")
                          + f", {s['palette']})" for s in self.history[-4:]) or "none yet"
+        bpm = f.get("bpm") or f.get("bpm_hint") or 0
+        lock = f.get("bconf", 0.0)
+        tempo = (f"tempo {bpm:.0f} bpm (beat lock {lock:.0%})" if bpm else "tempo unknown")
+        ask = self.prompt()
+        want = (f"THE HOUSE ASKS FOR THIS (it overrides your own taste - follow it as the art direction): "
+                f"\"{ask}\". " if ask else "")
         return (f"Here is a {AI_CLIP:.0f}-second clip of what is playing in the hallway now. "
                 f"Local time {lt.tm_hour:02d}:{lt.tm_min:02d} ({part}). Measured energy "
-                f"{f['energy']:.2f}, tempo roughly {f['bpm_hint']:.0f} bpm. Your recent scenes: "
-                f"{hist}. {self._song_line()}Design the next scene. Reply with the JSON only.")
+                f"{f['energy']:.2f}, {tempo}. Your recent scenes: "
+                f"{hist}. {want}{self._song_line()}Design the next scene. Reply with the JSON only.")
 
     def _song_line(self):
         sg = self.song()
@@ -548,9 +626,7 @@ class VJ:
         b64 = self._wav_b64(clip)
         self._count("openai")
         vibe = self.vibe()
-        system = AI_PROMPT.replace("chill and tranquil",
-                                   VIBES[vibe][0] if vibe in VIBES
-                                   else "chill and tranquil by default (you pick the vibe)")
+        system = AI_PROMPT
         for model in AI_MODELS:
             try:
                 r = client.chat.completions.create(
@@ -741,12 +817,20 @@ class VJ:
         return None
 
     def _fallback(self):
+        """No AI available: still make a bold, music-matched scene from the whole menu."""
         f = self.l.f
-        e = f["energy"]
-        style, pal = random.choice([("aurora", "dusk"), ("aurora", "ocean"), ("lava", "ember")]
-                                   if e < 0.5 else
-                                   [("lava", "blush"), ("aurora", "forest"), ("ripples", "gold")])
-        return _validate({"scene": "", "style": style, "palette": pal, "layer": "none"})
+        e, bpm = f["energy"], f.get("bpm", 0.0)
+        calm = ["oilslick", "marbling", "watercolour", "nebula", "aurora", "harmonograph", "ink", "coral"]
+        mid = ["lava", "glass", "kandinsky", "flowlines", "poles", "spiral", "trails", "ripples"]
+        hot = ["truchet", "mesh", "opart", "mosaic", "isocubes", "chevrons", "kaleido", "julia"]
+        pool = calm if e < 0.35 else mid if e < 0.65 else hot
+        last = self.history[-1]["style"] if self.history else None
+        style = random.choice([p for p in pool if p != last] or pool)
+        pal = random.choice(list(PALETTES) + ["native"] * 2) if style in vj_fx.PIECE_STYLES else random.choice(list(PALETTES))
+        return _validate({"scene": "", "style": style, "palette": pal, "layer": "none",
+                          "symmetry": random.choice(["none", "none", "mirror", "quad"]) if e > 0.5 else "none",
+                          "speed": 0.7 + 1.2 * e, "accent": 0.3 + 0.5 * e, "trails": random.choice([0, 0, 0.5]),
+                          "hold": 70 if e > 0.65 else 140})
 
     def _due(self, now):
         """Call the brain about once per scene, or soon after a newly recognised song."""
@@ -757,7 +841,15 @@ class VJ:
                "gemini": GEMINI_EVERY}.get(brain, AI_EVERY)
         sg = self.song()
         title = sg["title"] if sg else None
+        if self.prompt() != self._last_prompt and now - self._last_call >= 4.0:
+            return True                                    # the house typed something: answer now
         if title and title != self._last_song and now - self._last_call >= SONG_CALL_GAP:
+            return True
+        # the music changed character (energy jumped or fell): don't wait for the timer
+        e = self.l.f["energy"]
+        if self._e_ref == 0.0:
+            self._e_ref = e
+        if abs(e - self._e_ref) > 0.3 and now - self._last_call >= 15.0:
             return True
         return now - self._last_call >= gap
 
@@ -772,6 +864,10 @@ class VJ:
             level = float(np.sqrt(np.mean(clip * clip)))
             if not self.l.f["silent"] and now - self.l.last_audio < 2 and level > 0.003:
                 self._last_call = now
+                self._e_ref = self.l.f["energy"]
+                prompt_now = self.prompt()
+                urgent = prompt_now != self._last_prompt
+                self._last_prompt = prompt_now
                 sg = self.song()
                 self._last_song = sg["title"] if sg else self._last_song
                 if not self.enabled():
@@ -805,6 +901,7 @@ class VJ:
                     print(f"[VJ] {self.source} -> {j['style']} + {j['palkey']}", flush=True)
                 if _scene_key(j) != _scene_key(self.choice):
                     self.choice, self.changed = j, time.time()
+                    self.urgent = urgent
                 else:
                     self.choice.update({k: v for k, v in j.items()
                                         if k not in ("style", "palkey", "layer")})
@@ -812,6 +909,20 @@ class VJ:
 
 
 # ------------------------------------------------------------- visuals ---
+
+def beat_pulse(f, now, offset_ms=0, strength=1.0, last_phase=0.0):
+    """Beat-locked pulse from the tracker's clock.
+    -> ((pulse 0..1, new_phase, weight 0..1 how much to trust the tempo), wrapped)
+    pulse jumps up on the beat (35 ms attack) and decays until the next one; `wrapped` is True on
+    the frame a new beat starts."""
+    period, conf = f.get("period", 0.0), f.get("bconf", 0.0)
+    if period <= 0 or f.get("silent") or conf < 0.2:
+        return (0.0, last_phase, 0.0), False
+    ph = ((now - f["anchor"] - offset_ms / 1000.0) / period) % 1.0
+    pulse = math.exp(-3.2 * ph) * min(1.0, ph * period / 0.035) * strength
+    w = max(0.0, min(1.0, (conf - 0.2) / 0.4))
+    return (min(1.0, pulse), ph, w), ph < last_phase - 0.5
+
 
 class Visuals:
     def __init__(self, W, H):
@@ -825,6 +936,8 @@ class Visuals:
         self.ink_acc = np.zeros((H, W), np.float32)
         self.ripples = []
         self._shapes = None
+        self.bank = vj_fx.PieceBank(W, H)
+        threading.Thread(target=self.bank.prewarm, daemon=True).start()
 
     def shape_(self, style, f, lut):
         """Thin generative line patterns (display/shapes.py) recoloured with the scene palette;
@@ -846,7 +959,7 @@ class Visuals:
     def step(self, f, dt):
         # drift speed follows the music only slowly - no speeding up on every bass note
         target = (0.35 + 0.6 * f["energy"]) * f.get("vibe_speed", 1.0) * f.get("d_speed", 1.0)
-        self.speed = _ema(getattr(self, "speed", target), target, dt, 3.0)
+        self.speed = _ema(getattr(self, "speed", target), target, dt, 1.0)
         self.phase += dt * self.speed
         if f["beat"] and (not self.ripples or time.time() - self.ripples[-1][2] > 1.2):
             rs = random.random
@@ -951,7 +1064,9 @@ class Visuals:
             v = v + np.exp(-((d - r) ** 2) / 30) * (1 - age / 6) * 0.45
         return _lut(np.clip(v, 0, 1), lut)
 
-    def render(self, style, f, lut, dt, beat):
+    def render(self, style, f, lut, dt, beat, native=False):
+        if style in vj_fx.PIECE_STYLES:
+            return self.bank.render(style, self.phase * 1.5, lut, native)
         if style in SHAPE_STYLES:
             return self.shape_(style, f, lut)
         if style == "coral":
@@ -983,19 +1098,27 @@ class MusicShow:
         self.rec = Recognizer(self.l, enabled=lambda: self.settings["shazam"])
         self.vj = VJ(self.l, vibe=lambda: self.settings["vibe"],
                      enabled=lambda: self.settings["ai"], song=self.rec.current,
-                     brain=lambda: self.settings["brain"])
+                     brain=lambda: self.settings["brain"],
+                     prompt=lambda: self.settings.get("prompt", ""))
+        self.drop = vj_fx.DropDetector()
+        self.accents = vj_fx.Accents(W, H)
+        self.surge, self.prev_out = 0.0, None
         self.vis = Visuals(W, H)
         self.luts = {k: _palette(v) for k, v in PALETTES.items()}
         self.prev = None
-        self.cur = ("aurora", "dusk", "none")
+        self.cur = ("aurora", "dusk", "none", "none")
         self.switched = 0.0
         self.last_t = None
         self.silent_since = None
         self.pulse = 0.0
         self.layer_op = 0.0
-        self.design = {"d_speed": 1.0, "d_scale": 1.0, "d_count": 6.0, "d_soft": 1.0}
+        self._last_phase = 0.0
+        self.design = {"d_speed": 1.0, "d_scale": 1.0, "d_count": 6.0, "d_soft": 1.0,
+                       "d_trails": 0.0, "d_hue": 0.0, "d_accent": 0.4, "d_react": 1.0}
 
     def _lut(self, key):
+        if key == "native":
+            return self.luts["dusk"]
         if key not in self.luts:
             try:
                 cols = [_hex_rgb(h) for h in key.split(":", 1)[1].split(",")]
@@ -1026,14 +1149,15 @@ class MusicShow:
         style = c["style"] if auto_style else st["style"]
         pal = c["palkey"] if st["palette"] == "auto" else st["palette"]
         layer = c["layer"] if auto_style else "none"
+        sym = c.get("symmetry", "none") if auto_style else "none"
         if f["silent"]:
             self.silent_since = self.silent_since or now
             if now - self.silent_since > 30:               # quiet room: soft dusk glow
                 return ("aurora" if auto_style else style,
-                        "dusk" if st["palette"] == "auto" else pal, "none")
+                        "dusk" if st["palette"] == "auto" else pal, "none", "none")
         else:
             self.silent_since = None
-        return (style, pal, layer)
+        return (style, pal, layer, sym)
 
     def _publish(self):
         c = self.vj.choice
@@ -1051,19 +1175,32 @@ class MusicShow:
                                "source": self.vj.source, "settings": self.settings,
                                "audio": {"source": self.settings.get("source", "pi"),
                                          "spec": self.l.spec, "error": self.l.error,
-                                         "receiving": time.time() - self.l.last_audio < 2},
+                                         "receiving": time.time() - self.l.last_audio < 2,
+                                         "bpm": round(self.l.f.get("bpm", 0.0), 1),
+                                         "beat_conf": round(self.l.f.get("bconf", 0.0), 2)},
                                "silent": self.l.f["silent"], "time": time.time()})
 
     def _render(self, key, f, dt, beat, op):
-        style, palkey, layer = key
+        style, palkey, layer, sym = key
         lut = self._lut(palkey)
-        img = self.vis.render(style, f, lut, dt, beat)
+        native = palkey == "native"
+        img = self.vis.render(style, f, lut, dt, beat, native)
         if layer != "none" and op > 0.01:                  # second layer, screen-blended
-            top = self.vis.render(layer, f, lut, dt, False) * op
+            top = self.vis.render(layer, f, lut, dt, False, native) * op
             img = 255.0 - (255.0 - img) * (255.0 - top) / 255.0
+        if sym != "none":
+            img = vj_fx.symmetry(img, sym)
         return img
 
     def __call__(self, t):
+        t_in = time.perf_counter()
+        out = self._frame(t)
+        # cost guard: if frames take too long for the 29 fps budget, the VJ simplifies itself
+        self.cost = _ema(getattr(self, "cost", 0.0), (time.perf_counter() - t_in) * 1000.0, 0.033, 1.5)
+        return out
+
+    def _frame(self, t):
+        now = time.time()
         dt = 0.033 if self.last_t is None else max(0.0, min(0.2, t - self.last_t))
         self.last_t = t
         f = dict(self.l.f)
@@ -1073,69 +1210,103 @@ class MusicShow:
         self.l.react = react
         for key in ("energy", "bass", "kick", "mid", "treble"):
             f[key] = min(1.0, f[key] * react)
-        # visuals breathe with a ~0.6 s average of the bass, so nothing twitches
-        self.ks = _ema(getattr(self, "ks", 0.0), f["kick"], dt, 0.6)
+        self.ks = _ema(getattr(self, "ks", 0.0), f["kick"], dt, 0.25)  # loudness fallback when no tempo is locked
         f["kick"] = self.ks
         self._poll_settings()
         c = self.vj.choice
+        auto = self.settings["style"] == "auto"
+        # --- scene design values glide in quickly (the VJ is meant to feel responsive)
+        for key, src, dflt in (("d_speed", "speed", 1.0), ("d_scale", "scale", 1.0),
+                               ("d_count", "count", 6.0), ("d_soft", "softness", 1.0),
+                               ("d_trails", "trails", 0.0), ("d_hue", "hue_drift", 0.0),
+                               ("d_accent", "accent", 0.4), ("d_react", "reactivity", 1.0)):
+            tgt_v = float(c.get(src, dflt)) if auto else dflt
+            self.design[key] = _ema(self.design[key], tgt_v, dt, 1.8)
+            f[key] = self.design[key]
+        # --- locked beat clock -> pulse exactly on the beat (strength per scene)
+        strength = self.settings.get("beat_strength", 100) / 100.0 * f["d_react"]
+        pulse, wrapped = beat_pulse(f, now, self.settings.get("beat_offset", 0), strength, self._last_phase)
+        self._last_phase = pulse[1]
+        if pulse[2] > 0:
+            f["kick"] = pulse[2] * pulse[0] + (1 - pulse[2]) * f["kick"]
+            beat = wrapped if pulse[2] > 0.6 else (beat or wrapped)
+        f["pulse"] = pulse[0]
+        if beat and f["d_accent"] > 0.05 and not f["silent"]:
+            self.accents.beat(f["d_accent"], now)
+        # --- drops: a big shockwave and a short speed surge
+        if not f["silent"] and self.drop.update(f["bass"], f["energy"], dt, now):
+            self.accents.drop(now)
+            self.surge = 1.0
+            print("[VJ] DROP", flush=True)
+        self.surge *= math.exp(-dt / 1.3)
         vibe = self.settings["vibe"] if self.settings["vibe"] != "auto" else c.get("vibe", "chill")
         f["vibe_speed"] = VIBES.get(vibe, VIBES["chill"])[1]
-        auto = self.settings["style"] == "auto"
-        for key, src, dflt in (("d_speed", "speed", 1.0), ("d_scale", "scale", 1.0),
-                               ("d_count", "count", 6.0), ("d_soft", "softness", 1.0)):
-            tgt_v = float(c.get(src, dflt)) if auto else dflt
-            self.design[key] = _ema(self.design[key], tgt_v, dt, 5.0)   # redesigns blend in slowly
-            f[key] = self.design[key]
-        self.layer_op = _ema(self.layer_op, float(c.get("layer_opacity", 0.0)) if auto else 0.0,
-                             dt, 5.0)
+        f["d_speed"] *= 1.0 + 1.1 * self.surge
+        self.layer_op = _ema(self.layer_op, float(c.get("layer_opacity", 0.0)) if auto else 0.0, dt, 2.0)
         self.vis.step(f, dt)
+        # --- which scene, and when to switch
         tgt = self._target()
-        held = time.time() - self.switched
-        if tgt != self.cur and (held >= self.HOLD or self.force):   # hold, unless the app asks
-            self.xfade = 4.0 if self.force else self.XFADE
-            self.prev, self.cur, self.switched = self.cur, tgt, time.time()
+        held = now - self.switched
+        hold = float(c.get("hold", 150.0)) if auto else self.HOLD
+        urgent = self.vj.urgent
+        if tgt != self.cur and (held >= hold or self.force or urgent
+                                or (self.surge > 0.8 and held > 20)):     # a drop may change the scene
+            self.xfade = 3.5 if (self.force or urgent) else (5.0 if self.surge > 0.8
+                                                              else float(c.get("fade", self.XFADE)))
+            self.prev, self.cur, self.switched = self.cur, tgt, now
+            self.vj.urgent = False
         self.force = False
-        if time.time() - getattr(self, "_published", 0) > 3:
-            self._published = time.time()
+        if now - getattr(self, "_published", 0) > 3:
+            self._published = now
             self._publish()
-        img = self._render(self.cur, f, dt, beat, self.layer_op)
-        k = (time.time() - self.switched) / self.xfade
+        slow = getattr(self, "cost", 0.0) > 26.0
+        lop = 0.0 if slow else self.layer_op                  # too slow: drop the second layer
+        if slow and self.xfade > 2.5:
+            self.xfade = 2.5                                  # ...and cross-fade quickly (two renders at once)
+        img = self._render(self.cur, f, dt, beat, lop)
+        k = (now - self.switched) / max(0.5, self.xfade)
         if self.prev and k < 1:
-            old = self._render(self.prev, f, dt, False, self.layer_op)
+            old = self._render(self.prev, f, dt, False, lop)
             k = k * k * (3 - 2 * k)
             img = old * (1 - k) + img * k
-        img = img * (0.93 + 0.1 * f["kick"])                     # gently rides the (smoothed) bass
+        # --- post effects: colour drift, beat rings, light trails, beat breathing
+        if f["d_hue"] > 0.02:
+            img = vj_fx.hue_rotate(img, now * f["d_hue"] * 0.12)
+        if self.accents.rings:
+            img = self.accents.apply(img, now, self._lut(self.cur[1])[235])
+        if f["d_trails"] > 0.02:
+            if self.prev_out is not None:
+                img = np.maximum(img, self.prev_out * (0.5 + 0.46 * f["d_trails"]))
+            self.prev_out = img
+        else:
+            self.prev_out = None
+        img = img * (0.88 + 0.16 * f["kick"] + 0.12 * self.surge)              # breathes on the beat
         out = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
         return self._song_overlay(out)
 
-    SONG_SHOW = 12.0        # seconds a newly recognised song stays on the wall
+    SONG_ALPHA = 0.20       # how visible the ghost title is (0..1) - deliberately barely there
 
     def _song_overlay(self, out):
-        """Small, soft song title in the bottom-left, only when a song is first recognised."""
+        """The playing song as one tiny, very faint line along the bottom - while it plays."""
         sg = self.rec.current(600.0)
         if not (sg and self.settings.get("song_on_wall", True)):
-            return out
-        age = time.time() - sg["at"]
-        if age > self.SONG_SHOW:
-            return out
-        a = min(1.0, age / 1.5, (self.SONG_SHOW - age) / 2.0)
+            self._song_fade = max(0.0, getattr(self, "_song_fade", 0.0) - 0.05)
+            if self._song_fade <= 0:
+                return out
+        else:
+            self._song_fade = min(1.0, getattr(self, "_song_fade", 0.0) + 0.02)   # ~2 s fade in
+            self._song_text = sg["title"] + (" - " + sg["artist"] if sg.get("artist") else "")
         from display.maeva_story import _font
         W, H = out.size
-        f1, f2 = _font(9), _font(8)
-
-        def fit(text, font):
-            while text and font.getlength(text) > W - 14:
-                text = text[:-2].rstrip() + "…" if len(text) > 2 else ""
-            return text
-        title, artist = fit("♪ " + sg["title"], f1), fit(sg["artist"], f2)
+        font = _font(8)
+        text = self._song_text
+        while text and font.getlength(text) > W - 12:
+            text = text[:-2].rstrip() + "…" if len(text) > 2 else ""
+        a = int(255 * self.SONG_ALPHA * self._song_fade)
         layer = Image.new("RGBA", out.size, (0, 0, 0, 0))
         d = ImageDraw.Draw(layer)
-        y = H - 24 if artist else H - 14
-        d.text((6, y), title, font=f1, fill=(240, 235, 225, int(235 * a)), stroke_width=1,
-               stroke_fill=(0, 0, 0, int(200 * a)))
-        if artist:
-            d.text((6, y + 11), artist, font=f2, fill=(205, 200, 195, int(210 * a)),
-                   stroke_width=1, stroke_fill=(0, 0, 0, int(180 * a)))
+        tw = font.getlength(text)
+        d.text(((W - tw) / 2, H - 12), text, font=font, fill=(255, 255, 255, a))
         return Image.alpha_composite(out.convert("RGBA"), layer).convert("RGB")
 
 

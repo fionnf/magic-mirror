@@ -83,7 +83,7 @@ PROFILES = {
         styles=["truchet", "mesh", "opart", "flowlines", "poles", "mosaic", "isocubes", "chevrons",
                 "kaleido", "julia", "rings", "garden", "weave", "spiral", "hex", "flowdots"],
         palettes=["neon", "violet", "acid", "ice", "ocean", "moon"],
-        layers=("flowlines", "garden", "rings", "trails", "ripples"), layer_max=0.5,
+        layers=("rings", "ripples", "garden"), layer_max=0.4,
         symmetry=("none", "mirror", "quad"), trails=(0.0, 0.5), hue=(0.0, 0.4), accent=(0.15, 0.6),
         react=(0.7, 1.3), speed=(0.8, 1.7), scale=(0.7, 1.6), count=(4, 10), soft=(0.6, 1.3),
         hold=(50.0, 110.0), fade=(5.0, 10.0), glide=2.5, pulse=0.45, breath=0.9, tc=1.2, smooth=0.3, surge=0.7, every=60.0),

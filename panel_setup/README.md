@@ -204,3 +204,18 @@ caches each light's IP address and protocol version. Sensors, the gateway and Zi
 controlled. To use only some devices, create `panel_setup/lights.json` with `{"only": ["Living room lights"]}`.
 Give each light a fixed address in your router (DHCP reservation), or re-run the wizard if one moves.
 Re-pairing a light in the Smart Life app changes its local key - re-run the wizard then.
+
+## Mirror extras (app: "Mirror voice & people", Mirror mode, Dedications)
+- **Tone & language**: slider kind -> roast and a language (English, Deutsch, Züridütsch, Français, Drama queen);
+  applies to the very next photo, no restart (`mirror_settings.json`).
+- **Smile sparkles**: smile ratio from the face landmarks (`moods.py`; tune with env `MIRROR_SMILE_RATIO`, default 0.90 -
+  higher = needs a bigger smile). Switch in the app.
+- **People**: "Learn my face" needs mirror mode running (it looks through the camera ~5 s). Stored only as numbers in
+  `faces.json` on the Pi. "Learn frequent faces" is OFF by default; it suggests unnamed regulars after 5 sightings on 2 days.
+  Models: `assets/models/get_models.sh` (the bootstrap script runs it).
+- **Aura** / **Pixel selfie** buttons (mirror mode): AI colour reading with the wall glowing in that colour; 48x48 sprite portrait.
+- **Nobody around**: after N quiet minutes (default 10) the mirror shows Lava & Coral; motion or a face brings the silhouette back.
+- **Dedications**: guests open `http://<pi>/d` (or scan the QR from the app) - messages scroll across the bottom of the wall.
+  No filtering by design; pause / delete / clear in the app. Off until you switch it on.
+- **Art**: *Shapes* (13 thin generative line patterns; also available as music styles) and *Light Art* (stained glass,
+  Julia set, kaleidoscope, long-exposure trails, nebula).

@@ -183,7 +183,11 @@
       </div>
       <div class="row" style="margin-bottom:8px;gap:6px"><b id="musicScene" style="font-size:16px"></b><span id="musicSw"></span></div>
       <div id="musicSong" style="margin:-2px 0 8px;color:var(--pink);font-weight:600"></div>
-      <p>The AI VJ designs the whole look and locks onto the beat. Tell it what you want:</p>
+      <div class="row" style="margin:4px 0 10px;gap:8px">
+        <span class="seg"><button id="modeChill" onclick="setMode('chill')">🌿 Chill</button><button id="modeTechno" onclick="setMode('techno')">⚡ Techno</button></span>
+        <span class="sub">organic &amp; painterly · or cool neon geometry</span>
+      </div>
+      <p>The art flows with the sound. Tell the VJ what you want:</p>
       <div class="row" style="margin-bottom:6px">
         <input type="text" id="vjPrompt" maxlength="200" style="flex:1;min-width:180px" placeholder="e.g. hot pink and gold, mandalas, make it feel like a festival">
         <button class="primary" onclick="vjSend()">Tell the VJ</button>
@@ -204,11 +208,6 @@
       <div class="sub" id="brainStatus" style="margin:0 0 10px"></div>
       <div class="row" style="justify-content:space-between"><span class="sub">Sensitivity</span><b id="sensVal">50</b></div>
       <input type="range" id="sens" min="0" max="100" step="5" style="margin-bottom:12px">
-      <div class="row" style="justify-content:space-between"><span class="sub">Beat strength</span><b id="bsVal">100%</b></div>
-      <input type="range" id="bstr" min="0" max="200" step="10" style="margin-bottom:12px">
-      <div class="row" style="justify-content:space-between"><span class="sub">Beat sync (earlier ← → later)</span><b id="boVal">0 ms</b></div>
-      <input type="range" id="boff" min="-250" max="250" step="10" style="margin-bottom:6px">
-      <div class="sub" id="bpmNow" style="margin-bottom:12px">Tempo: –</div>
       <div class="toggles"><label><input type="checkbox" id="tReact" onchange="toggleSet('art_reacts', this.checked)"> 🎶 Make ALL art move to music (when music is playing)</label></div>
       <button class="primary big" onclick="musicSet(true)">▶ Play music art</button>
     </div>
@@ -378,13 +377,10 @@ async function musicLoad(first) {
                                         arr.map(v => `<option value="${v}">${cap(v)}</option>`).join(''); };
       $('vjPrompt').value = m.settings.prompt || '';
       $('sens').value = m.settings.sensitivity; $('sensVal').textContent = m.settings.sensitivity;
-      $('bstr').value = m.settings.beat_strength; $('bsVal').textContent = m.settings.beat_strength + '%';
-      $('boff').value = m.settings.beat_offset; $('boVal').textContent = m.settings.beat_offset + ' ms';
     }
     $('tAi').checked = !!m.settings.ai; $('tShz').checked = !!m.settings.shazam;
     $('tWall').checked = !!m.settings.song_on_wall; $('tReact').checked = !!m.settings.art_reacts;
-    const au = m.now && m.now.audio || {};
-    $('bpmNow').textContent = au.bpm ? `Tempo: ${au.bpm} BPM (lock ${Math.round((au.beat_conf || 0) * 100)}%)` : 'Tempo: listening…';
+    $('modeChill').classList.toggle('on', m.settings.mode !== 'techno'); $('modeTechno').classList.toggle('on', m.settings.mode === 'techno');
     $('brGemini').classList.toggle('on', m.settings.brain === 'gemini');
     $('brText').classList.toggle('on', m.settings.brain === 'text');
     $('brOpenai').classList.toggle('on', m.settings.brain === 'openai');
@@ -421,13 +417,8 @@ $('sens').addEventListener('input', e => {
   clearTimeout(sTimer);
   sTimer = setTimeout(() => post('/api/music', {sensitivity: +e.target.value}).then(() => musicLoad()), 300);
 });
-for (const [id, key, lab, unit] of [['bstr', 'beat_strength', 'bsVal', '%'], ['boff', 'beat_offset', 'boVal', ' ms']]) {
-  let tm;
-  $(id).addEventListener('input', e => {
-    $(lab).textContent = e.target.value + unit;
-    clearTimeout(tm);
-    tm = setTimeout(() => post('/api/music', {[key]: +e.target.value}), 300);
-  });
+function setMode(mode) {
+  post('/api/music', {mode, start: true}).then(r => { toast(mode === 'techno' ? '⚡ Techno' : '🌿 Chill'); show(r.status); musicLoad(); }).catch(e => toast(e.message));
 }
 function musicSet(start) {
   post('/api/music', {start: !!start})

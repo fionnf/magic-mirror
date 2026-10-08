@@ -96,17 +96,25 @@ class LedMatrix:
         """Scale the frame down if its estimated current exceeds the budget.
 
         Estimate: each panel draws AMPS_PER_PANEL at full white, linear in mean
-        channel value and in brightness. Mean is taken on a 1-in-16 subsample —
+        channel value and in brightness. Mean is taken on a 1-in-16 subsample -
         plenty accurate for a budget check and ~16x cheaper.
+        The scale is smoothed over time: it drops quickly when the frame needs it (safety)
+        but recovers slowly, so content hovering around the budget never flickers.
         """
         mean = float(arr[::4, ::4].mean()) / 255.0
         amps = (mean * config.CHAIN_LENGTH * config.MATRIX_AMPS_PER_PANEL
                 * self._brightness / 100.0)
         self.last_amps = amps
-        if amps <= config.MATRIX_MAX_AMPS:
+        want = min(1.0, config.MATRIX_MAX_AMPS * 0.97 / amps) if amps > 0 else 1.0
+        cur = getattr(self, "_pscale", 1.0)
+        if want < cur:
+            cur = max(want, cur - 0.25)                      # down: within a few frames
+        else:
+            cur = min(want, cur + 0.008)                     # up: ~2 s to recover
+        self._pscale = cur
+        if cur >= 0.999:
             return arr
-        scale = config.MATRIX_MAX_AMPS / amps
-        return (arr * scale).astype(np.uint8)
+        return (arr.astype(np.float32) * cur).astype(np.uint8)
 
     def _remap(self, image: Image.Image) -> np.ndarray:
         """Logical canvas -> flat chain strip (rows, chain*cols, 3) uint8.

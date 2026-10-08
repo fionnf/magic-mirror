@@ -376,11 +376,13 @@ class LavaCoralGallery(Gallery):
             Lava(W, H),
             Coral(W, H),
         ]
+        from display import organic
+        self.pieces += organic.pieces(W, H)
         self.last_t = None
         self.current = -1
 
 
-LAVA_CORAL_LOOP_SEC = PIECE_SEC * 8
+LAVA_CORAL_LOOP_SEC = PIECE_SEC * 11
 _lc_gallery = None
 
 

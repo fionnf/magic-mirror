@@ -36,6 +36,8 @@ from display import vj_fx
 from display.intensity import Intensity
 from display import loops as vjloops
 from display import shaders as vjshaders
+from display import organic as vjorganic
+ORGANIC_STYLES = ["jelly", "cells", "breath", "wave"]
 LOOP_BANK = vjloops.LoopBank()
 SHADER_STYLES = ["shader:" + n for n in vjshaders.names()]      # GPU shaders (need EGL: the Pi 4)
 
@@ -56,7 +58,7 @@ USAGE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
                           "panel_setup", "ai_usage.json")
 AI_CLIP = 10.0
 SHAPE_STYLES = ["flowdots", "flowlines", "garden", "truchet", "rings", "ridges", "weave"]
-STYLES = ["lava", "ripples", "coral", "ink"] + SHAPE_STYLES + list(vj_fx.PIECE_STYLES) + ["loops"] + SHADER_STYLES      # "glow" retired (Visuals.glow kept)
+STYLES = ["lava", "ripples", "coral", "ink"] + ORGANIC_STYLES + SHAPE_STYLES + list(vj_fx.PIECE_STYLES) + ["loops"] + SHADER_STYLES      # "glow" retired (Visuals.glow kept)
 PALETTES = {
     "dusk":   [(15, 8, 30), (80, 30, 90), (220, 120, 120), (255, 200, 150)],
     "ocean":  [(2, 8, 25), (10, 50, 90), (30, 140, 160), (170, 230, 230)],
@@ -77,7 +79,7 @@ VIBES = {"chill": ("chill and tranquil", 1.0), "dreamy": ("dreamy and floaty", 0
 PROFILES = {
     "chill": dict(
         label="chill, organic and painterly",
-        styles=["lava", "coral", "ink", "ripples", "marbling", "oilslick",
+        styles=["lava", "coral", "ink", "ripples", "marbling", "oilslick", "jelly", "cells", "breath", "wave",
                 "nebula", "glass", "harmonograph", "ridges", "trails", "loops"],
         palettes=["dusk", "ocean", "forest", "moon", "blush", "ember", "gold"],
         layers=("ripples", "nebula"), layer_max=0.4, symmetry=("none",),
@@ -87,7 +89,7 @@ PROFILES = {
     "techno": dict(
         label="cool techno: geometric, neon on black, driving",
         styles=["truchet", "opart", "flowlines", "poles", "garden", "spiral", "flowdots", "trails",
-                "marbling", "glass", "loops"],
+                "marbling", "glass", "cells", "breath", "wave", "loops"],
         palettes=["neon", "violet", "acid", "ice", "ocean", "moon"],
         layers=("rings", "ripples", "garden"), layer_max=0.4,
         symmetry=("none", "mirror", "quad"), trails=(0.0, 0.5), hue=(0.0, 0.25), accent=(0.0, 0.0),
@@ -1125,6 +1127,10 @@ class Visuals:
         self._shapes = None
         self.bank = vj_fx.PieceBank(W, H)
         self.players = {}                                  # clip name -> LoopPlayer (a few open at once)
+        grey = _palette([(0, 0, 0), (255, 255, 255)])
+        self.organic = {"jelly": vjorganic.Jelly(W, H, grey), "cells": vjorganic.Cells(W, H, grey),
+                        "breath": vjorganic.Breath(W, H, grey)}
+        self.wave_prev = None
         threading.Thread(target=self.bank.prewarm, daemon=True).start()
 
     def shape_(self, style, f, lut):
@@ -1140,15 +1146,15 @@ class Visuals:
                 "rings": shapes.RadialRings(W, H, grey), "ridges": shapes.Ridges(W, H, grey),
                 "weave": shapes.WovenGrid(W, H, grey),
             }
-        img = self._shapes[style].render(0.04, self.phase * 1.5)
-        field = np.clip(img.mean(-1) / 255.0 * (1.1 + 0.3 * f["kick"]), 0, 1)
+        img = self._thicken(np.asarray(self._shapes[style].render(0.04, self.phase * 1.5), np.float32), f)
+        field = np.clip(img.mean(-1) / 255.0 * 1.1, 0, 1)
         return _lut(field, lut)
 
     def step(self, f, dt):
         # drift speed follows the music only slowly - no speeding up on every bass note
         target = (0.35 + 0.6 * f["energy"]) * f.get("vibe_speed", 1.0) * f.get("d_speed", 1.0)
         self.speed = _ema(getattr(self, "speed", target), target, dt, f.get("speed_tc", 3.0))
-        self.phase += dt * self.speed * (1.0 + 0.45 * f.get("groove", 0.0))
+        self.phase += dt * self.speed * (1.0 + 0.45 * f.get("groove", 0.0) + 0.25 * f.get("kick", 0.0))
         if f["beat"] and (not self.ripples or time.time() - self.ripples[-1][2] > 1.2):
             rs = random.random
             self.ripples.append([rs() * self.W, rs() * self.H * 0.9, time.time()])
@@ -1301,13 +1307,51 @@ class Visuals:
                  "energy": f.get("energy", 0.0), "level": CURRENT_LEVEL}
         return r.render(name, self.phase * 2.0, feats, cols)
 
+    LINE_STYLES = {"spiral", "harmonograph", "poles", "opart"}
+
+    def _thicken(self, img, f):
+        """Subtle bass coupling for line art: lines get a little heavier with the bass."""
+        k = min(1.0, 0.8 * f.get("kick", 0.0))
+        if k < 0.02:
+            return img
+        import cv2
+        fat = cv2.dilate(img, np.ones((3, 3), np.uint8))
+        return img * (1.0 - k) + fat * k
+
+    def organic_(self, name, f, lut, dt):
+        img = self.organic[name].render(dt, self.phase * 1.5, f)      # rendered grey, coloured by the scene
+        return _lut(np.clip(img.mean(-1) / 255.0, 0, 1), lut)
+
+    def wave_(self, f, lut, dt):
+        """The music itself: a glowing waveform across the wall, with a soft echo of the last frames."""
+        W, H = self.W, self.H
+        w = f.get("wave")
+        if w is None or len(w) < 8:
+            w = np.zeros(W, np.float32)
+        amp = 0.12 + 0.3 * f.get("energy", 0.0) + 0.1 * f.get("kick", 0.0)
+        yc = H / 2 + w * H * amp
+        sigma = 2.2 + 1.5 * f.get("kick", 0.0)
+        line = np.exp(-((self.y - yc[None, :]) ** 2) / (2 * sigma * sigma))
+        glow = np.exp(-((self.y - yc[None, :]) ** 2) / (2 * (sigma * 4) ** 2)) * 0.35
+        v = np.clip(line + glow, 0, 1)
+        if self.wave_prev is not None:
+            v = np.maximum(v, self.wave_prev * 0.86)                    # echo
+        self.wave_prev = v
+        base = 0.06 + 0.06 * (1 - np.abs(self.y / H - 0.5) * 2)         # faint tonal background
+        return _lut(np.clip(base + v * 0.92, 0, 1), lut)
+
     def render(self, style, f, lut, dt, beat, native=False):
+        if style in self.organic:
+            return self.organic_(style, f, lut, dt)
+        if style == "wave":
+            return self.wave_(f, lut, dt)
         if style.startswith("shader:"):
             return self.shader_(style[7:], f, lut)
         if style.startswith("loop:"):
             return self.loop_(style[5:], f, dt)
         if style in vj_fx.PIECE_STYLES:
-            return self.bank.render(style, self.phase * 1.5, lut, native)
+            img = self.bank.render(style, self.phase * 1.5, lut, native)
+            return self._thicken(img, f) if style in self.LINE_STYLES else img
         if style in SHAPE_STYLES:
             return self.shape_(style, f, lut)
         if style == "coral":
@@ -1546,6 +1590,15 @@ class MusicShow:
         f["d_speed"] = min(f["d_speed"], 0.6 + 0.8 * L)   # never frantic; near-still when quiet
         f["speed_tc"] = max(2.0, P["tc"])
         f["loop_music"] = self.settings.get("loop_music", "tempo")
+        if self.cur[0] == "wave" or (self.prev and self.prev[0] == "wave") or self._target()[0] == "wave":
+            raw = self.l.recent(0.07)                                   # the last 70 ms of sound
+            if len(raw) >= self.W:
+                k = len(raw) // self.W
+                pts = raw[: k * self.W].reshape(self.W, k).mean(1)
+                pts = pts / max(0.02, float(np.abs(pts).max()) * 0.9 + 0.1 * self.l.peak)   # ~ -1..1
+                pts = np.clip(pts, -1, 1).astype(np.float32)
+                self._wave = pts if getattr(self, "_wave", None) is None else self._wave * 0.35 + pts * 0.65
+                f["wave"] = self._wave * (0.0 if f["silent"] else 1.0)
         self.layer_op = _ema(self.layer_op, float(c.get("layer_opacity", 0.0)) if auto else 0.0, dt, P["glide"])
         self.vis.step(f, dt)
         # --- scene changes: whenever, when it is quiet; on a 4-bar boundary when the party is on

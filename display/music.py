@@ -47,7 +47,8 @@ SONG_CALL_GAP = 45.0      # a newly recognised song may trigger a call, at most 
 USAGE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                           "panel_setup", "ai_usage.json")
 AI_CLIP = 10.0
-STYLES = ["aurora", "lava", "ripples", "coral", "ink"]      # "glow" retired (Visuals.glow kept)
+SHAPE_STYLES = ["flowdots", "flowlines", "garden", "truchet", "rings", "ridges", "weave"]
+STYLES = ["aurora", "lava", "ripples", "coral", "ink"] + SHAPE_STYLES      # "glow" retired (Visuals.glow kept)
 PALETTES = {
     "dusk":   [(15, 8, 30), (80, 30, 90), (220, 120, 120), (255, 200, 150)],
     "ocean":  [(2, 8, 25), (10, 50, 90), (30, 140, 160), (170, 230, 230)],
@@ -64,7 +65,7 @@ AI_PROMPT = (
     "Fortuna, a cosy gay flatshare in Zürich. The vibe of the space is chill and tranquil and the "
     "residents love calm, dreamy, slow-moving light. Each time you hear a clip you design a complete light scene "
     "for the wall: never harsh, never strobing, always soft and beautiful. "
-    f"Base styles: {', '.join(STYLES)} (prefer aurora and lava). Optionally add ONE second "
+    f"Base styles: {', '.join(STYLES)} (prefer aurora and lava; the shape styles flowdots, flowlines, garden, truchet, rings, ridges and weave are thin glowing line patterns - great for clear, rhythmic or electronic music). Optionally add ONE second "
     "layer on top for depth (aurora or ripples - or none) with opacity 0-0.6. "
     f"Colours: either a preset ({', '.join(PALETTES)}) or invent your own palette of 4 hex colours "
     "from deep shadow to soft highlight that matches the music. "
@@ -807,6 +808,24 @@ class Visuals:
         self.ink_p = rs.random((600, 2)).astype(np.float32) * [W, H]
         self.ink_acc = np.zeros((H, W), np.float32)
         self.ripples = []
+        self._shapes = None
+
+    def shape_(self, style, f, lut):
+        """Thin generative line patterns (display/shapes.py) recoloured with the scene palette;
+        they drift with the music's energy and glow a little on the kick."""
+        if self._shapes is None:
+            from display import shapes
+            grey = _palette([(0, 0, 0), (255, 255, 255)])
+            W, H = self.W, self.H
+            self._shapes = {
+                "flowdots": shapes.FlowDots(W, H, grey), "flowlines": shapes.FlowDots(W, H, grey, lines=True),
+                "garden": shapes.NodeGarden(W, H, grey), "truchet": shapes.Truchet(W, H, grey),
+                "rings": shapes.RadialRings(W, H, grey), "ridges": shapes.Ridges(W, H, grey),
+                "weave": shapes.WovenGrid(W, H, grey),
+            }
+        img = self._shapes[style].render(0.04, self.phase * 1.5)
+        field = np.clip(img.mean(-1) / 255.0 * (1.1 + 0.3 * f["kick"]), 0, 1)
+        return _lut(field, lut)
 
     def step(self, f, dt):
         # drift speed follows the music only slowly - no speeding up on every bass note
@@ -917,6 +936,8 @@ class Visuals:
         return _lut(np.clip(v, 0, 1), lut)
 
     def render(self, style, f, lut, dt, beat):
+        if style in SHAPE_STYLES:
+            return self.shape_(style, f, lut)
         if style == "coral":
             return self.coral_(f, lut, dt, beat)
         if style == "ink":

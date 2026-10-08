@@ -37,6 +37,10 @@ AI_EVERY = 150.0          # audio brain: about once per scene hold (it is the ex
 TEXT_EVERY = 90.0         # cheap text brain
 # cheapest-first; the next one is tried if a model is unavailable (override with AI_TEXT_MODEL)
 TEXT_MODELS = ["gpt-4.1-nano", "gpt-4o-mini"]
+# free-tier Gemini (Google AI Studio key in .env as GEMINI_API_KEY); text only, never audio
+GEMINI_MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
+GEMINI_EVERY = 90.0
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 SONG_CALL_GAP = 45.0      # a newly recognised song may trigger a call, at most this often
 USAGE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                           "panel_setup", "ai_usage.json")
@@ -154,7 +158,7 @@ SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # wr
 NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # read by the app
 DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "mac",
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
-                    "brain": "text"}
+                    "brain": "gemini"}
 
 
 def load_settings():
@@ -173,8 +177,8 @@ def load_settings():
         s["source"] = "mac"
     for k in ("ai", "shazam", "song_on_wall"):
         s[k] = bool(s.get(k, True))
-    if s.get("brain") not in ("openai", "text", "claude"):
-        s["brain"] = "text"
+    if s.get("brain") not in ("gemini", "text", "openai", "claude"):
+        s["brain"] = "gemini"
     try:
         s["sensitivity"] = max(0, min(100, int(s["sensitivity"])))
     except (TypeError, ValueError):
@@ -610,6 +614,71 @@ class VJ:
         self.brain_status = f"text error: {last}"
         return None
 
+    def _ask_gemini(self):
+        """Free-tier Gemini, text only (song + sensor numbers, never audio)."""
+        import urllib.request, urllib.error
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(os.path.join(_HERE, ".env"))
+        except Exception:
+            pass
+        key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not key:
+            self.brain_status = "no GEMINI_API_KEY in the Pi's .env (free key: aistudio.google.com/apikey)"
+            return None
+        models = [os.environ["GEMINI_MODEL"]] if os.environ.get("GEMINI_MODEL") else GEMINI_MODELS
+        system, user = self._text_prompt()
+        t0 = time.time()
+        self._count("gemini")
+        last = ""
+        for model in models:
+            for thinking in (True, False):                 # retry once without thinkingConfig
+                cfg = {"responseMimeType": "application/json", "maxOutputTokens": 600,
+                       "temperature": 1.0}
+                if thinking:
+                    cfg["thinkingConfig"] = {"thinkingBudget": 0}
+                body = json.dumps({"systemInstruction": {"parts": [{"text": system}]},
+                                   "contents": [{"role": "user", "parts": [{"text": user}]}],
+                                   "generationConfig": cfg}).encode()
+                req = urllib.request.Request(GEMINI_URL.format(model=model), data=body, method="POST",
+                                             headers={"Content-Type": "application/json",
+                                                      "x-goog-api-key": key})
+                try:
+                    with urllib.request.urlopen(req, timeout=40) as r:
+                        out = json.load(r)
+                    text = out["candidates"][0]["content"]["parts"][0]["text"]
+                    j = _validate(json.loads(text[text.index("{"): text.rindex("}") + 1]))
+                    if not j:
+                        raise RuntimeError("scene was not valid")
+                    j["model"] = model
+                    self.brain_status = f"Gemini free ({model}) ok - {time.time() - t0:.0f} s"
+                    return j
+                except urllib.error.HTTPError as e:
+                    detail = ""
+                    try:
+                        detail = json.load(e).get("error", {}).get("message", "")[:90]
+                    except Exception:
+                        pass
+                    last = f"{model}: HTTP {e.code} {detail}"
+                    if e.code == 429:                      # free-tier limit: rest for a while
+                        self._backoff_until = time.time() + 600
+                        self.brain_status = "Gemini free-tier limit reached - using built-in rules for 10 min"
+                        print(f"[VJ] {self.brain_status}", flush=True)
+                        return None
+                    if e.code in (401, 403):
+                        self.brain_status = f"Gemini key rejected (HTTP {e.code}) - check GEMINI_API_KEY"
+                        print(f"[VJ] {self.brain_status}", flush=True)
+                        return None
+                    if e.code == 400 and thinking:
+                        continue                           # try again without thinkingConfig
+                    break                                  # unknown model etc.: next model
+                except Exception as e:
+                    last = f"{model}: {str(e)[:90]}"
+                    break
+        self.brain_status = f"Gemini error: {last}"
+        print(f"[VJ] {self.brain_status}", flush=True)
+        return None
+
     def _ask_claude(self):
         """Text-only designer: the Claude Code CLI (Haiku) sees the song + measurements, not audio."""
         import subprocess
@@ -662,8 +731,11 @@ class VJ:
 
     def _due(self, now):
         """Call the brain about once per scene, or soon after a newly recognised song."""
+        if now < getattr(self, "_backoff_until", 0.0):
+            return False                                   # provider said slow down
         brain = self.brain()
-        gap = {"openai": AI_EVERY, "text": TEXT_EVERY, "claude": CLAUDE_EVERY}.get(brain, AI_EVERY)
+        gap = {"openai": AI_EVERY, "text": TEXT_EVERY, "claude": CLAUDE_EVERY,
+               "gemini": GEMINI_EVERY}.get(brain, AI_EVERY)
         sg = self.song()
         title = sg["title"] if sg else None
         if title and title != self._last_song and now - self._last_call >= SONG_CALL_GAP:
@@ -687,6 +759,8 @@ class VJ:
                     j = None
                 elif self.brain() == "claude":
                     j = self._ask_claude()
+                elif self.brain() == "gemini":
+                    j = self._ask_gemini()
                 elif self.brain() == "text":
                     j = self._ask_text()
                 else:

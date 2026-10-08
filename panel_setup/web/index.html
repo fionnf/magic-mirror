@@ -54,7 +54,7 @@
   .toggles { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; }
   .toggles label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .toggles input { width: 18px; height: 18px; accent-color: var(--pink); }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .seg button { border: 0; border-radius: 0; background: var(--panel2); }
   .seg button.on { background: var(--gold); color: #241600; font-weight: 700; }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #000c;
@@ -144,7 +144,7 @@
       <div class="row" style="margin-bottom:4px;justify-content:space-between">
         <span class="sub">Designer brain</span>
         <span class="seg">
-          <button id="brText" onclick="setBrain('text')">Text · cheap</button><button id="brOpenai" onclick="setBrain('openai')">Audio · pricey</button><button id="brClaude" onclick="setBrain('claude')">Claude</button>
+          <button id="brGemini" onclick="setBrain('gemini')">Gemini · free</button><button id="brText" onclick="setBrain('text')">OpenAI · cheap</button><button id="brOpenai" onclick="setBrain('openai')">Audio · pricey</button><button id="brClaude" onclick="setBrain('claude')">Claude</button>
         </span>
       </div>
       <div class="sub" id="brainStatus" style="margin:0 0 10px"></div>
@@ -266,6 +266,7 @@ async function musicLoad(first) {
     }
     $('tAi').checked = !!m.settings.ai; $('tShz').checked = !!m.settings.shazam;
     $('tWall').checked = !!m.settings.song_on_wall;
+    $('brGemini').classList.toggle('on', m.settings.brain === 'gemini');
     $('brText').classList.toggle('on', m.settings.brain === 'text');
     $('brOpenai').classList.toggle('on', m.settings.brain === 'openai');
     $('brClaude').classList.toggle('on', m.settings.brain === 'claude');
@@ -295,7 +296,7 @@ function toggleSet(key, on) {
     .catch(e => toast(e.message));
 }
 function setBrain(b) {
-  post('/api/music', {brain: b}).then(() => { toast(b === 'claude' ? '🧠 Claude designs (text only)' : b === 'text' ? '🧠 Cheap text model designs' : '🧠 Audio model designs (hears the music, costs more)'); musicLoad(); })
+  post('/api/music', {brain: b}).then(() => { toast(b === 'claude' ? '🧠 Claude designs (text only)' : b === 'gemini' ? '🧠 Free Gemini designs (text only)' : b === 'text' ? '🧠 Cheap OpenAI text model designs' : '🧠 Audio model designs (hears the music, costs more)'); musicLoad(); })
     .catch(e => toast(e.message));
 }
 function setSource(src) {

@@ -148,3 +148,21 @@ sudo nmcli connection up eduroam
 ```
 A web-login ("captive portal") network cannot be completed on a headless Pi: use eduroam,
 Ethernet, or a phone hotspot instead.
+
+## Free Gemini as the music designer (default brain)
+Music mode's **Gemini · free** brain calls Gemini 2.5 Flash-Lite (fallback 2.5 Flash) on Google's
+free tier. It sends **text only** (Shazam song, bass/mid/treble levels, energy, tempo, time of
+day, its last scenes) - never audio. Free-tier requests may be used by Google to improve their
+products, which is why the room microphone is never sent.
+1. Create a free key at https://aistudio.google.com/apikey (any Google account).
+2. On the Pi add one line to `~/magic-mirror/.env` (never commit it): `GEMINI_API_KEY=<key>`
+   (optional: `GEMINI_MODEL=gemini-2.5-flash-lite`)
+3. `sudo systemctl restart wall-control`, then check the Music card: it should say
+   "Gemini free (gemini-2.5-flash-lite) ok". Without a key, or when the free-tier limit is hit
+   (it rests for 10 min), the wall uses the built-in rules - it never falls back to a paid model.
+Quick key test on the Pi:
+```
+curl -s -H "x-goog-api-key: $GEMINI_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"contents":[{"parts":[{"text":"say hi"}]}]}' \
+  https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent
+```

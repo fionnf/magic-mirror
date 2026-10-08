@@ -229,24 +229,21 @@ def _hex_rgb(h):
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
 
 
-def _restrain(cols, max_spread=0.22):
-    """Colour discipline: a scene gets at most two neighbouring hues. If the AI's colours span
-    more of the hue circle than that, every hue is pulled towards the circular mean."""
-    import math as _m
+def _restrain(cols, max_spread=0.15):
+    """Colour discipline: many tints and shades of ONE colour (or two neighbouring hues) are fine;
+    anything wider is pulled to the dominant hue, so a scene is never a rainbow."""
     hsv = [colorsys.rgb_to_hsv(*(v / 255.0 for v in c)) for c in cols]
     sat = [(h, s_, v) for h, s_, v in hsv if s_ > 0.25 and v > 0.15]
     if len(sat) < 2:
         return cols
-    cx = sum(_m.cos(2 * _m.pi * h) for h, _, _ in sat)
-    cy = sum(_m.sin(2 * _m.pi * h) for h, _, _ in sat)
-    mean = (_m.atan2(cy, cx) / (2 * _m.pi)) % 1.0
-    dist = lambda h: min(abs(h - mean), 1 - abs(h - mean))
+    anchor = max(sat, key=lambda t: t[1] * t[2])[0]            # the most vivid colour sets the hue
+    dist = lambda h: min(abs(h - anchor), 1 - abs(h - anchor))
     if max(dist(h) for h, _, _ in sat) <= max_spread:
         return cols
     out = []
     for (h, s_, v) in hsv:
-        d = (h - mean + 0.5) % 1.0 - 0.5
-        h2 = (mean + max(-max_spread, min(max_spread, d))) % 1.0
+        d = (h - anchor + 0.5) % 1.0 - 0.5
+        h2 = (anchor + max(-max_spread / 2, min(max_spread / 2, d))) % 1.0
         out.append(tuple(int(round(x * 255)) for x in colorsys.hsv_to_rgb(h2, s_, v)))
     return out
 

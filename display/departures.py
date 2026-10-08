@@ -127,50 +127,50 @@ class Board:
             if ch != " ":
                 d.text((cx + 0.5, y + 1), ch, font=self.f_row, fill=colour)
 
+    # --- VBZ stop display look: amber LED dot-matrix on black, nothing else
+    AMBER = (255, 158, 16)
+    AMBER_DIM = (120, 70, 6)
+
+    def _led(self, img, xy, text, font, colour=AMBER, anchor="la"):
+        """Crisp (non-antialiased) text, like the LED dots of the real display."""
+        if not text:
+            return
+        mask = Image.new("L", img.size, 0)
+        ImageDraw.Draw(mask).text(xy, text, font=font, fill=255, anchor=anchor)
+        img.paste(colour, mask=mask.point(lambda v: 255 if v > 110 else 0))
+
     def frame(self, t):
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
-        img = Image.new("RGB", (W, H), (8, 8, 12))
+        img = Image.new("RGB", (W, H), (0, 0, 0))
         d = ImageDraw.Draw(img)
-        # header
-        d.rectangle([0, 0, W, 20], fill=(0, 45, 110))
-        name = self.station.split(", ")[-1].upper()
-        d.text((5, 3), name, font=self.f_head, fill=(255, 210, 0))
+        f_row, f_head, f_small = self.f_row, self.f_head, _mono(9)
+        name = self.station.split(", ")[-1]
         now = datetime.datetime.now()
-        clock = now.strftime("%H:%M") if now.second % 2 == 0 else now.strftime("%H %M")
-        d.text((W - 5 - self.f_head.getlength(clock), 3), clock, font=self.f_head,
-               fill=(255, 255, 255))
-        if not self.ok:
-            d.ellipse([W - 52, 8, W - 47, 13], fill=(255, 40, 40))      # offline dot
+        self._led(img, (4, 3), name, f_head)
+        self._led(img, (W - 4, 3), now.strftime("%H:%M"), f_head, anchor="ra")
+        d.line([4, 21, W - 4, 21], fill=self.AMBER_DIM)
         rows = self._rows()
-        top, rh = 24, (H - 26) // self.n_rows
-        dest_cells = max(6, (W - 30 - 5 * self.cell - 6) // self.cell)
-        for r in range(self.n_rows):
+        top, rh = 26, (H - 26 - 16) // self.n_rows
+        dest_cells = max(6, (W - 30 - 3 * self.cell - 6) // self.cell)
+        for r in range(min(self.n_rows, len(rows))):
             y = top + r * rh
-            if r < len(rows):
-                line, dest, mins, delay = rows[r]
-                mtxt = "now" if mins == 0 else f"{mins}'"
-                text = f"{line}|{dest[:dest_cells]}|{mtxt}"
-            else:
-                line, dest, mins, delay, mtxt, text = "", "", 0, 0, "", ""
-            if self.shown.get(r) != text:                # content changed: flip
-                key = text.split("|")[:2]
-                old = (self.shown.get(r) or "").split("|")[:2]
-                self.shown[r] = text
-                if key != old:
-                    self.changed_at[r] = t
-            start = self.changed_at.get(r, 0.0)
-            if line:
-                bg, fg = LINE_COLOURS.get(line, ((90, 90, 100), (255, 255, 255)))
-                d.rounded_rectangle([3, y, 25, y + 15], 3, fill=bg,
-                                    outline=(200, 200, 200) if bg == (20, 20, 20) else None)
-                d.text((14, y + 8), line, font=self.f_row, fill=fg, anchor="mm")
-            self._flap_text(d, 29, y, dest[:dest_cells], dest_cells, t, start,
-                            (240, 235, 210))
-            mcol = (255, 150, 40) if delay > 0 else (255, 210, 0)
-            if mtxt == "now" and int(t * 2) % 2 == 0:
-                mcol = (90, 90, 90)
-            mx = W - 4 - 4 * self.cell
-            self._flap_text(d, mx, y, mtxt.rjust(4), 4, t, start, mcol)
+            line, dest, mins, delay = rows[r]
+            self._led(img, (22, y), line, f_row, anchor="ra")               # line number, right-aligned
+            self._led(img, (30, y), dest[:dest_cells], f_row)
+            mtxt = f"{mins}'"
+            if mins == 0 and int(t * 2) % 2:                                 # leaving now: blinks
+                mtxt = ""
+            self._led(img, (W - 4, y), mtxt, f_row, anchor="ra")
+        # bottom info line: the date, or the outage notice (real boards scroll messages here)
+        if self.ok:
+            info = now.strftime("%a %d.%m.%Y").replace("Mon", "Mo").replace("Tue", "Di").replace("Wed", "Mi") \
+                .replace("Thu", "Do").replace("Fri", "Fr").replace("Sat", "Sa").replace("Sun", "So")
+            self._led(img, (4, H - 12), info, f_small, self.AMBER_DIM)
+        else:
+            msg = "Keine Daten - Verbindung zur Fahrplanauskunft unterbrochen      "
+            w = f_small.getlength(msg)
+            x = W - (t * 18) % (w + W)
+            self._led(img, (x, H - 12), msg, f_small, self.AMBER_DIM)
         return img
 
 

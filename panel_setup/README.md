@@ -128,3 +128,23 @@ the other option):
    `CLAUDE_CODE_OAUTH_TOKEN=<token>`   (or `ANTHROPIC_API_KEY=<key>`), optional `CLAUDE_MODEL=haiku`
 4. `sudo systemctl restart wall-control`, then pick "Claude · text" in the app.
 Test the CLI alone first: `claude -p "say hi" --model haiku` on the Pi.
+
+## New Pi from scratch
+1. Raspberry Pi Imager: Raspberry Pi OS Lite (64-bit), user `pi`, hostname, your **home** Wi-Fi,
+   SSH on with your public key (`~/.ssh/id_rsa.pub`).
+2. Boot with the camera ribbon already attached (the CSI port is only probed at power-on).
+3. Join a network (see below), then from the laptop: `PI_HOST=<ip> ./panel_setup/deploy.sh`
+4. On the Pi: `cd ~/magic-mirror && ./panel_setup/bootstrap_pi.sh && sudo reboot`
+5. Copy the secrets over: `.env` (and `token.json` / `oauth_client.json` if Drive uploads are used).
+
+Joining eduroam on a keyboard-only Pi (NetworkManager). `--ask` prompts for the password so it
+never lands in the shell history; check the exact identity / CA settings with your institution's
+eduroam page (or https://cat.eduroam.org):
+```
+sudo nmcli --ask connection add type wifi con-name eduroam ifname wlan0 ssid eduroam \
+  wifi-sec.key-mgmt wpa-eap 802-1x.eap peap 802-1x.phase2-auth mschapv2 \
+  802-1x.identity "USERNAME@your.institution" 802-1x.system-ca-certs yes
+sudo nmcli connection up eduroam
+```
+A web-login ("captive portal") network cannot be completed on a headless Pi: use eduroam,
+Ethernet, or a phone hotspot instead.

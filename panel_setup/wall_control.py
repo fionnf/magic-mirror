@@ -34,6 +34,7 @@ MODES = [
     # id, category, title, description
     ("lava", "Art", "Lava & Coral", "Brain coral, bloom, mitosis, neon contours, bioluminescence - 8 slow pieces"),
     ("shapes", "Art", "Shapes", "Flow dots & lines, node garden, spiral, woven grid, ripples - thin glowing patterns"),
+    ("shaders", "Art", "Shaders", "GPU shaders: silk, ink veil, dunes, lanterns, tide - slow two-hue pieces"),
     ("artsy", "Art", "Artsy", "Marbling, oil slick, watercolour, Kandinsky, op-art stripes, a drifting Mondrian"),
     ("glass", "Art", "Light Art", "Stained glass, Julia fractal, kaleidoscope, long-exposure trails, nebula - soft and filled"),
     ("art", "Art", "Art Gallery", "Ink flow, colour fields, lava, coral, moiré"),
@@ -182,7 +183,7 @@ class Runner:
         with self.lock:
             self.state["art_speed"] = max(0.03, min(1.0, float(value)))
             save_state(self.state)
-            if self.current in ("art", "lava", "shapes", "glass", "artsy", "ambient"):
+            if self.current in ("art", "lava", "shapes", "glass", "artsy", "ambient", "shaders"):
                 self._start(self.current)
 
     def resume_saved(self):
@@ -286,6 +287,7 @@ def make_thumbs():
             "shapes": lambda: seq(shapes.ShapesGallery(), 60.0),
             "glass": lambda: seq(light_art.LightGallery(), 60.0),
             "artsy": lambda: seq(artsy.ArtsyGallery(), 60.0),
+            "shaders": lambda: icon("🌊", (10, 20, 50), "shaders"),
             "pride": lambda: pride_show.frame(9.5),
             "dewa": lambda: dewa_story.frame(24.5),
             "maeva": lambda: maeva_story.frame(8.0),
@@ -384,6 +386,33 @@ def make_app(runner):
         runner.play("mirror")
         return jsonify(runner.status())
 
+    @app.get("/api/loops")
+    def loops_list():
+        from display import loops as lp
+        b = lp.LoopBank()
+        out = [{"name": k, "pack": k.split("__")[0], "seconds": v.get("seconds"), "motion": v.get("motion"),
+                "bright": v.get("bright")} for k, v in sorted(b.clips.items(), key=lambda kv: kv[1].get("motion", 0))]
+        return jsonify(out)
+
+    @app.get("/loops/thumb/<name>.jpg")
+    def loop_thumb(name):
+        from display import loops as lp
+        from PIL import Image
+        b = lp.LoopBank()
+        if name not in b.clips:
+            return jsonify({"error": "no such loop"}), 404
+        path = os.path.join(THUMB_DIR, "loop_" + name + ".jpg")
+        if not os.path.exists(path):
+            import cv2
+            cap = cv2.VideoCapture(b.path(name))
+            cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, b.clips[name].get("frames", 2) // 2))
+            ok, fr = cap.read()
+            cap.release()
+            if not ok:
+                return jsonify({"error": "cannot read"}), 500
+            Image.fromarray(cv2.cvtColor(fr, cv2.COLOR_BGR2RGB)).resize((96, 96)).save(path, quality=80)
+        return send_from_directory(THUMB_DIR, "loop_" + name + ".jpg", max_age=86400)
+
     @app.get("/api/music")
     def music_get():
         from display import music as mu
@@ -405,7 +434,7 @@ def make_app(runner):
         st = mu.load_settings()
         old_source = st.get("source")
         for k in ("style", "palette", "vibe", "source", "sensitivity", "ai", "shazam",
-                  "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt", "mode", "party"):
+                  "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt", "mode", "party", "loop", "loop_music"):
             if k in d:
                 st[k] = d[k]
         mu._write_json(mu.SETTINGS_FILE, st)

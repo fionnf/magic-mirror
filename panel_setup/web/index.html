@@ -149,6 +149,12 @@
       </div>
       <div class="sub" id="vjActive" style="margin-bottom:10px"></div>
       <div class="toggles"><label><input type="checkbox" id="tLoops" onchange="post('/api/music', {style: this.checked ? 'loops' : 'auto', start: true}).then(() => musicLoad())"> 🎞 Video loops only (the downloaded clips)</label></div>
+      <div id="loopBox" style="display:none;margin-bottom:10px">
+        <div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="sub">Music affects the loops</span>
+          <span class="seg"><button id="lmOff" onclick="post('/api/music',{loop_music:'off'}).then(musicLoad)">Off</button><button id="lmTempo" onclick="post('/api/music',{loop_music:'tempo'}).then(musicLoad)">Tempo-matched</button><button id="lmBass" onclick="post('/api/music',{loop_music:'bass'}).then(musicLoad)">Breathes with the bass</button></span></div>
+        <div class="sub" style="margin-bottom:6px">Pick a clip (or Auto: the VJ chooses by party level)</div>
+        <div id="loopGrid" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px"></div>
+      </div>
       <button class="primary big" onclick="musicSet(true)">▶ Play music art</button>
       <details class="more"><summary>More</summary>
       <div class="toggles"><label><input type="checkbox" id="tAuto" onchange="post('/api/music', {mode: this.checked ? 'auto' : 'manual'}).then(() => musicLoad())"> 👂 Let the wall listen and set the party level itself</label></div>
@@ -405,6 +411,9 @@ async function musicLoad(first) {
     const pt = m.now && m.now.party, au2 = m.now && m.now.audio || {};
     const autoOn = m.settings.mode === 'auto';
     $('tAuto').checked = autoOn; $('tLoops').checked = m.settings.style === 'loops';
+    $('loopBox').style.display = m.settings.style === 'loops' ? 'block' : 'none';
+    for (const [id, v] of [['lmOff', 'off'], ['lmTempo', 'tempo'], ['lmBass', 'bass']]) $(id).classList.toggle('on', m.settings.loop_music === v);
+    if (m.settings.style === 'loops') loopGridLoad(m.settings.loop || '');
     if (document.activeElement !== $('party')) {
       const v = autoOn && pt ? Math.round(pt.level * 100) : m.settings.party;
       $('party').value = v; $('partyLab').textContent = partyName(v) + (autoOn ? ' (auto)' : '');
@@ -446,6 +455,16 @@ $('sens').addEventListener('input', e => {
   clearTimeout(sTimer);
   sTimer = setTimeout(() => post('/api/music', {sensitivity: +e.target.value}).then(() => musicLoad()), 300);
 });
+let loopsCache = null, loopSel = null;
+async function loopGridLoad(selected) {
+  if (!loopsCache) { try { loopsCache = await (await fetch('/api/loops')).json(); } catch (e) { return; } }
+  if (loopSel === selected && $('loopGrid').children.length) return;
+  loopSel = selected;
+  const tile = (name, label, img) => `<div onclick="post('/api/music',{loop:'${name}'}).then(musicLoad)" title="${label}" style="flex:0 0 auto;width:72px;cursor:pointer;text-align:center;border-radius:10px;padding:3px;background:${selected === name ? 'var(--gold)' : 'transparent'}">
+      ${img ? `<img src="${img}" loading="lazy" style="width:64px;height:64px;border-radius:8px;object-fit:cover;background:#000">` : '<div style="width:64px;height:64px;border-radius:8px;background:#2a2236;display:flex;align-items:center;justify-content:center;margin:auto">🤖</div>'}
+      <div class="sub" style="font-size:10px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:${selected === name ? '#241600' : ''}">${label}</div></div>`;
+  $('loopGrid').innerHTML = tile('', 'Auto', null) + loopsCache.map(l => tile(l.name, l.name.split('__')[1].replace(/^(beeple-|mixkit-)/, ''), '/loops/thumb/' + l.name + '.jpg')).join('');
+}
 const partyName = v => v <= 10 ? v + '% · breathing' : v <= 35 ? v + '% · quiet evening' : v <= 60 ? v + '% · lively' : v <= 85 ? v + '% · party' : v + '% · dance floor';
 let ptTimer;
 $('party').addEventListener('input', e => {

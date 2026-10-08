@@ -24,9 +24,24 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 
 
+_sg = None
+
+
+def _shader_gallery_frame(t):
+    """GPU shader gallery (slow, two-hue pieces) via the usual cross-fading Gallery."""
+    global _sg
+    if _sg is None:
+        from display import art, shaders
+        g = art.Gallery.__new__(art.Gallery)
+        g.pieces = shaders.gallery_pieces(config.TOTAL_WIDTH, config.TOTAL_HEIGHT)
+        g.last_t, g.current = None, -1
+        _sg = g
+    return _sg(t)
+
+
 def _anims():
     from display import (welcome, pride_show, cards, maeva_story, dewa_story, art,
-                         departures, music, shapes, light_art, artsy)
+                         departures, music, shapes, light_art, artsy, shaders)
     return {
         "music":   (music.frame, 600.0),
         "trams":   (departures.frame, 60.0),
@@ -36,6 +51,7 @@ def _anims():
         "shapes":  (shapes.frame, shapes.LOOP_SEC),
         "glass":   (light_art.frame, light_art.LOOP_SEC),
         "artsy":   (artsy.frame, artsy.LOOP_SEC),
+        "shaders": (_shader_gallery_frame, 60.0 * 5),
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),
         "maeva":   (maeva_story.frame, maeva_story.LOOP_SEC),
@@ -45,7 +61,7 @@ def _anims():
     }
 
 
-ART_MODES = {"art", "lava", "shapes", "glass", "artsy", "ambient"}   # galleries: art for the house, slow
+ART_MODES = {"art", "lava", "shapes", "glass", "artsy", "ambient", "shaders"}   # galleries: art for the house, slow
 ART_SPEED = float(os.environ.get("WALL_ART_SPEED", "0.12"))         # 1.0 = the old pace; sleep-friendly by default
 
 

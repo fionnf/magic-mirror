@@ -35,7 +35,9 @@ from display.beat import BeatTracker
 from display import vj_fx
 from display.intensity import Intensity
 from display import loops as vjloops
+from display import shaders as vjshaders
 LOOP_BANK = vjloops.LoopBank()
+SHADER_STYLES = ["shader:" + n for n in vjshaders.names()]      # GPU shaders (need EGL: the Pi 4)
 
 SR = 22050
 WIN, HOP = 1024, 256
@@ -54,7 +56,7 @@ USAGE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
                           "panel_setup", "ai_usage.json")
 AI_CLIP = 10.0
 SHAPE_STYLES = ["flowdots", "flowlines", "garden", "truchet", "rings", "ridges", "weave"]
-STYLES = ["lava", "ripples", "coral", "ink"] + SHAPE_STYLES + list(vj_fx.PIECE_STYLES) + ["loops"]      # "glow" retired (Visuals.glow kept)
+STYLES = ["lava", "ripples", "coral", "ink"] + SHAPE_STYLES + list(vj_fx.PIECE_STYLES) + ["loops"] + SHADER_STYLES      # "glow" retired (Visuals.glow kept)
 PALETTES = {
     "dusk":   [(15, 8, 30), (80, 30, 90), (220, 120, 120), (255, 200, 150)],
     "ocean":  [(2, 8, 25), (10, 50, 90), (30, 140, 160), (170, 230, 230)],
@@ -138,6 +140,8 @@ def profile(mode=None, level=None):
             pool.append(fav)
     if not len(LOOP_BANK):
         pool = [x for x in pool if x != "loops"]
+    if SHADER_STYLES and vjshaders.renderer().ok:
+        pool = pool + (SHADER_STYLES if L < 0.65 else SHADER_STYLES[:2])   # silk/veil also at a party
     out["styles"], out["palettes"] = pool, pals
     out["label"] = ("quiet evening, organic and painterly" if L < 0.4 else
                     "lively living room: organic shapes with a clear groove" if L <= 0.65 else
@@ -163,7 +167,9 @@ def ai_prompt(mode=None):
         f"Preset palettes: {_swatches(mode)} - or invent a 4-colour ramp (deep shadow to bright highlight) "
         "in the same spirit. COLOUR DISCIPLINE: a scene uses ONE or TWO neighbouring hues and their tints "
         "(e.g. deep teal to pale mint; plum to rose gold) - tonal and restrained, never a rainbow, never "
-        "complementary clashes. 'loops' are real VJ video loops (Beeple, CC) speed-matched to the tempo. "
+        "complementary clashes. 'loops' are real VJ video loops (Beeple, CC) speed-matched to the tempo; 'shader:*' are GPU "
+        "shaders (silk = drifting fabric, veil = rising smoke, dunes = lit ridges, lanterns = soft glows, "
+        "tide = breathing bands) - slow and elegant, ideal for the living room. "
         "You are told the measured tempo: slow music (under 90 bpm) wants big, slow, long scenes; mid tempo "
         "(90-125) medium; fast music (over 125) quicker flow and shorter scenes. Let it set speed, scale and hold. "
     )
@@ -340,7 +346,7 @@ NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # re
 DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "pi",
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
                     "brain": "text", "beat_offset": 0, "beat_strength": 100, "art_reacts": False,
-                    "prompt": "", "mode": "manual", "party": 15}
+                    "prompt": "", "mode": "manual", "party": 15, "loop": "", "loop_music": "tempo"}
 
 
 def load_settings():
@@ -376,6 +382,9 @@ def load_settings():
     s["prompt"] = " ".join(str(s.get("prompt", "") or "").split())[:200]
     if s.get("mode") not in MODES:
         s["mode"] = "manual"
+    s["loop"] = str(s.get("loop", "") or "")[:80]
+    if s.get("loop_music") not in ("off", "tempo", "bass"):
+        s["loop_music"] = "tempo"
     try:
         s["party"] = max(0, min(100, int(s["party"])))
     except (TypeError, ValueError):
@@ -1250,10 +1259,15 @@ class Visuals:
                 old = next(iter(self.players))
                 self.players.pop(old).close()
             pl = self.players[name] = vjloops.LoopPlayer(name, LOOP_BANK)
-        period = f.get("period", 0.0) if f.get("bconf", 0.0) > 0.5 else 0.0
+        how = f.get("loop_music", "tempo")
+        period = f.get("period", 0.0) if (f.get("bconf", 0.0) > 0.5 and how == "tempo") else 0.0
         beats = vjloops.beats_for(pl.seconds, period)
         if beats:                                           # one loop = a whole number of beats
             target = pl.total / (beats * period)
+        elif how == "bass":                                 # breathes with the bass: 0.7x .. 1.4x
+            target = pl.fps * (0.7 + 0.7 * f.get("kick", 0.0))
+        elif how == "off":
+            target = pl.fps
         else:
             target = pl.fps * max(0.4, min(1.6, f.get("d_speed", 1.0)))
         pl.rate = _ema(getattr(pl, "rate", target), target, dt, 2.0)
@@ -1263,7 +1277,18 @@ class Visuals:
             img = np.asarray(_I.fromarray(img.astype(np.uint8)).resize((self.W, self.H)), np.float32)
         return img
 
+    def shader_(self, name, f, lut):
+        r = vjshaders.renderer()
+        if not r.ok:
+            return self.aurora(f, lut)
+        cols = tuple(tuple(float(v) / 255.0 for v in lut[i]) for i in (25, 140, 245))
+        feats = {"bass": f.get("kick", 0.0), "mid": f.get("mid", 0.0), "treble": f.get("treble", 0.0),
+                 "energy": f.get("energy", 0.0), "level": CURRENT_LEVEL}
+        return r.render(name, self.phase * 2.0, feats, cols)
+
     def render(self, style, f, lut, dt, beat, native=False):
+        if style.startswith("shader:"):
+            return self.shader_(style[7:], f, lut)
         if style.startswith("loop:"):
             return self.loop_(style[5:], f, dt)
         if style in vj_fx.PIECE_STYLES:
@@ -1363,7 +1388,11 @@ class MusicShow:
         st, c = self.settings, self.vj.choice
         auto_style = st["style"] == "auto"
         style = c["style"] if auto_style else st["style"]
-        if style == "loops":                                # "video loops only": a clip that fits the level
+        if style == "loops" and st.get("loop") and st["loop"] in LOOP_BANK.clips:
+            style = "loop:" + st["loop"]                    # a clip chosen in the app
+            if st["palette"] == "auto":
+                pal = "native"
+        elif style == "loops":                              # "video loops only": a clip that fits the level
             hold = float(c.get("hold", 150.0))
             if not getattr(self, "_loop_pick", None) or now - self._loop_pick_t > hold:
                 clip = LOOP_BANK.pick(profile()["level"], avoid=set(_recent_loops))
@@ -1499,6 +1528,7 @@ class MusicShow:
         f["d_speed"] *= self.tempo_f * (1.0 + 0.3 * self.rise + 0.6 * self.surge)
         f["d_speed"] = min(f["d_speed"], 0.6 + 0.8 * L)   # never frantic; near-still when quiet
         f["speed_tc"] = max(2.0, P["tc"])
+        f["loop_music"] = self.settings.get("loop_music", "tempo")
         self.layer_op = _ema(self.layer_op, float(c.get("layer_opacity", 0.0)) if auto else 0.0, dt, P["glide"])
         self.vis.step(f, dt)
         # --- scene changes: whenever, when it is quiet; on a 4-bar boundary when the party is on

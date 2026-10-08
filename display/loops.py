@@ -47,7 +47,9 @@ class LoopBank:
         self.reload()
         if not self.clips:
             return None
-        items = sorted(self.clips.items(), key=lambda kv: kv[1].get("motion", 0.5))
+        # white-background clips are blinding on an LED wall: skip anything that bright
+        items = sorted(((k, v) for k, v in self.clips.items() if v.get("bright", 0.3) <= 0.5),
+                       key=lambda kv: kv[1].get("motion", 0.5)) or sorted(self.clips.items(), key=lambda kv: kv[1].get("motion", 0.5))
         n = len(items)
         lo, hi = int(n * max(0.0, level - 0.35)), int(n * min(1.0, level + 0.35)) + 1
         pool = [k for k, _ in items[lo:hi] if k not in avoid] or [k for k, _ in items if k not in avoid] or [k for k, _ in items]

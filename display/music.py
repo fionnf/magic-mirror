@@ -95,7 +95,7 @@ PROFILES = {
 MODES = ("manual", "auto")               # manual = the app's party slider; auto = follow the room
 CURRENT_MODE = "manual"                   # set by MusicShow from the app's setting
 CURRENT_LEVEL = 0.2                       # set by MusicShow every frame (0 quiet .. 1 rave)
-FAVOURITES = ["opart"]                    # the house loves these: offered in every pool
+FAVOURITES = ["opart", "marbling"]                    # the house loves these: offered in every pool
 
 
 def _lerp(a, b, k):

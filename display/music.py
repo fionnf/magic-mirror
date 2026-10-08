@@ -33,7 +33,11 @@ from display.art import _palette, _lut, Coral
 
 SR = 22050
 WIN, HOP = 1024, 256
-AI_EVERY = 30.0
+AI_EVERY = 150.0          # audio brain: about once per scene hold (it is the expensive one)
+TEXT_EVERY = 90.0         # cheap text brain
+SONG_CALL_GAP = 45.0      # a newly recognised song may trigger a call, at most this often
+USAGE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "panel_setup", "ai_usage.json")
 AI_CLIP = 10.0
 STYLES = ["aurora", "lava", "ripples", "coral", "ink"]      # "glow" retired (Visuals.glow kept)
 PALETTES = {
@@ -148,7 +152,7 @@ SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # wr
 NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # read by the app
 DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "mac",
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
-                    "brain": "openai"}
+                    "brain": "text"}
 
 
 def load_settings():
@@ -167,8 +171,8 @@ def load_settings():
         s["source"] = "mac"
     for k in ("ai", "shazam", "song_on_wall"):
         s[k] = bool(s.get(k, True))
-    if s.get("brain") not in ("openai", "claude"):
-        s["brain"] = "openai"
+    if s.get("brain") not in ("openai", "text", "claude"):
+        s["brain"] = "text"
     try:
         s["sensitivity"] = max(0, min(100, int(s["sensitivity"])))
     except (TypeError, ValueError):
@@ -419,7 +423,7 @@ class Recognizer:
 
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "haiku")       # alias; any model the plan allows
 CLAUDE_TIMEOUT = 90
-CLAUDE_EVERY = 60.0                                          # go easy on the plan
+CLAUDE_EVERY = 120.0                                         # go easy on the plan
 
 
 def find_claude():
@@ -474,6 +478,8 @@ class VJ:
         self.song = song
         self.brain = brain
         self.brain_status = ""
+        self.usage = {}
+        self._last_call, self._last_song = 0.0, None
         self.choice = dict(DEFAULT_CHOICE)
         self.history = []
         self.changed = 0.0
@@ -515,6 +521,7 @@ class VJ:
             print(f"[VJ] no AI client: {e}")
             return None
         b64 = self._wav_b64(clip)
+        self._count("openai")
         vibe = self.vibe()
         system = AI_PROMPT.replace("chill and tranquil",
                                    VIBES[vibe][0] if vibe in VIBES
@@ -540,6 +547,64 @@ class VJ:
                 print(f"[VJ] {model}: {str(e)[:120]}")
         return None
 
+    def _text_prompt(self):
+        """(system, user) for the text-only brains: no audio, just the song and measurements."""
+        f = self.l.f
+        vibe = self.vibe()
+        system = AI_PROMPT.replace("chill and tranquil",
+                                   VIBES[vibe][0] if vibe in VIBES
+                                   else "chill and tranquil by default (you pick the vibe)")
+        user = self._context().replace(
+            f"Here is a {AI_CLIP:.0f}-second clip of what is playing in the hallway now. ",
+            "You cannot hear the music (you are text only); here is what the hallway sensors "
+            f"measure: bass {f['bass']:.2f}, mids {f['mid']:.2f}, treble {f['treble']:.2f} (0-1). ")
+        return system, user + "\nIf no song is given, do not invent one: use null."
+
+    def _count(self, brain):
+        """Count AI calls per day (shown in the app)."""
+        day = time.strftime("%Y-%m-%d")
+        try:
+            with open(USAGE_FILE) as fh:
+                u = json.load(fh)
+        except Exception:
+            u = {}
+        if u.get("date") != day:
+            u = {"date": day}
+        u[brain] = u.get(brain, 0) + 1
+        _write_json(USAGE_FILE, u)
+        self.usage = u
+
+    def _ask_text(self):
+        """Cheap text-only designer: a small OpenAI text model (default: the project's AI_MODEL)."""
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(os.path.join(_HERE, ".env"))
+            from openai import OpenAI
+            client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=40)
+        except Exception as e:
+            self.brain_status = f"no OpenAI client: {str(e)[:80]}"
+            return None
+        model = os.environ.get("AI_TEXT_MODEL", config.AI_MODEL)
+        system, user = self._text_prompt()
+        t0 = time.time()
+        try:
+            self._count("text")
+            r = client.chat.completions.create(
+                model=model, max_tokens=350, temperature=1.0,
+                response_format={"type": "json_object"},
+                messages=[{"role": "system", "content": system},
+                          {"role": "user", "content": user}])
+            j = _validate(json.loads(r.choices[0].message.content or "{}"))
+            if not j:
+                raise RuntimeError("scene was not valid")
+            j["model"] = model
+            self.brain_status = f"text ({model}) ok - {time.time() - t0:.0f} s"
+            return j
+        except Exception as e:
+            self.brain_status = f"text error: {str(e)[:100]}"
+            print(f"[VJ] {self.brain_status}", flush=True)
+            return None
+
     def _ask_claude(self):
         """Text-only designer: the Claude Code CLI (Haiku) sees the song + measurements, not audio."""
         import subprocess
@@ -555,21 +620,14 @@ class VJ:
         if not claude_credentials():
             self.brain_status = "no CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY in the Pi's .env"
             return None
-        f = self.l.f
-        vibe = self.vibe()
-        system = AI_PROMPT.replace("chill and tranquil",
-                                   VIBES[vibe][0] if vibe in VIBES
-                                   else "chill and tranquil by default (you pick the vibe)")
-        ctx = self._context().replace(
-            f"Here is a {AI_CLIP:.0f}-second clip of what is playing in the hallway now. ",
-            "You cannot hear the music (you are text only); here is what the hallway sensors "
-            f"measure: bass {f['bass']:.2f}, mids {f['mid']:.2f}, treble {f['treble']:.2f} (0-1). ")
-        prompt = (system + "\n\n" + ctx + "\nIf no song is given, do not invent one: use null.")
+        system, user = self._text_prompt()
+        prompt = system + "\n\n" + user
         import tempfile
         wd = os.path.join(tempfile.gettempdir(), "wall_claude_cwd")
         os.makedirs(wd, exist_ok=True)                 # empty dir: no project files to load
         t0 = time.time()
         try:
+            self._count("claude")
             r = subprocess.run([exe, "-p", prompt, "--model", CLAUDE_MODEL,
                                 "--output-format", "json"],
                                capture_output=True, text=True, timeout=CLAUDE_TIMEOUT, cwd=wd,
@@ -597,20 +655,39 @@ class VJ:
                                    [("lava", "blush"), ("aurora", "forest"), ("ripples", "gold")])
         return _validate({"scene": "", "style": style, "palette": pal, "layer": "none"})
 
+    def _due(self, now):
+        """Call the brain about once per scene, or soon after a newly recognised song."""
+        brain = self.brain()
+        gap = {"openai": AI_EVERY, "text": TEXT_EVERY, "claude": CLAUDE_EVERY}.get(brain, AI_EVERY)
+        sg = self.song()
+        title = sg["title"] if sg else None
+        if title and title != self._last_song and now - self._last_call >= SONG_CALL_GAP:
+            return True
+        return now - self._last_call >= gap
+
     def _loop(self):
         time.sleep(8)
         while True:
+            time.sleep(5)
+            now = time.time()
+            if not self._due(now):
+                continue
             clip = self.l.recent(AI_CLIP)
             level = float(np.sqrt(np.mean(clip * clip)))
-            if not self.l.f["silent"] and time.time() - self.l.last_audio < 2 and level > 0.003:
-                # normalise the clip so quiet rooms still give the model something to hear
+            if not self.l.f["silent"] and now - self.l.last_audio < 2 and level > 0.003:
+                self._last_call = now
+                sg = self.song()
+                self._last_song = sg["title"] if sg else self._last_song
                 if not self.enabled():
                     j = None
                 elif self.brain() == "claude":
                     j = self._ask_claude()
+                elif self.brain() == "text":
+                    j = self._ask_text()
                 else:
+                    # normalise the clip so quiet rooms still give the model something to hear
                     j = self._ask_ai(clip * min(8.0, 0.25 / max(level, 1e-4)))
-                    self.brain_status = "OpenAI ok" if j else "OpenAI did not answer"
+                    self.brain_status = "OpenAI (hears the clip) ok" if j else "OpenAI did not answer"
                 if j:
                     self.source = j.get("model", "ai")
                     if j.get("song"):
@@ -634,7 +711,6 @@ class VJ:
                     self.choice.update({k: v for k, v in j.items()
                                         if k not in ("style", "palkey", "layer")})
                 self.choice["song"], self.choice["artist"] = j.get("song", ""), j.get("artist", "")
-            time.sleep(CLAUDE_EVERY if (self.enabled() and self.brain() == "claude") else AI_EVERY)
 
 
 # ------------------------------------------------------------- visuals ---
@@ -853,6 +929,7 @@ class MusicShow:
                                "song": (self.rec.current() or {}).get("title") or c.get("song", ""),
                                "artist": (self.rec.current() or {}).get("artist") or c.get("artist", ""),
                                "shazam": self.rec.status, "brain_status": self.vj.brain_status,
+                               "ai_calls": {k: v for k, v in self.vj.usage.items() if k != "date"},
                                "source": self.vj.source, "settings": self.settings,
                                "audio": {"source": self.settings.get("source", "mac"),
                                          "spec": self.l.spec, "error": self.l.error,

@@ -144,7 +144,7 @@
       <div class="row" style="margin-bottom:4px;justify-content:space-between">
         <span class="sub">Designer brain</span>
         <span class="seg">
-          <button id="brOpenai" onclick="setBrain('openai')">OpenAI · hears</button><button id="brClaude" onclick="setBrain('claude')">Claude · text</button>
+          <button id="brText" onclick="setBrain('text')">Text · cheap</button><button id="brOpenai" onclick="setBrain('openai')">Audio · pricey</button><button id="brClaude" onclick="setBrain('claude')">Claude</button>
         </span>
       </div>
       <div class="sub" id="brainStatus" style="margin:0 0 10px"></div>
@@ -266,10 +266,13 @@ async function musicLoad(first) {
     }
     $('tAi').checked = !!m.settings.ai; $('tShz').checked = !!m.settings.shazam;
     $('tWall').checked = !!m.settings.song_on_wall;
-    $('brOpenai').classList.toggle('on', m.settings.brain !== 'claude');
+    $('brText').classList.toggle('on', m.settings.brain === 'text');
+    $('brOpenai').classList.toggle('on', m.settings.brain === 'openai');
     $('brClaude').classList.toggle('on', m.settings.brain === 'claude');
     $('brainStatus').textContent = !m.settings.ai ? 'AI designer is off — simple built-in rules' :
-      (m.now && m.now.brain_status ? (m.now.brain_status.includes('ok') ? '✓ ' : '⚠️ ') + m.now.brain_status : '');
+      (m.now && m.now.brain_status ? (m.now.brain_status.includes('ok') ? '✓ ' : '⚠️ ') + m.now.brain_status : '') +
+      (m.now && m.now.ai_calls && Object.keys(m.now.ai_calls).length ? '  ·  AI calls today: ' +
+        Object.entries(m.now.ai_calls).map(([k, v]) => `${k} ${v}`).join(', ') : '');
     $('srcMac').classList.toggle('on', m.settings.source === 'mac');
     $('srcPi').classList.toggle('on', m.settings.source === 'pi');
     const a = m.now && m.now.audio;
@@ -292,7 +295,7 @@ function toggleSet(key, on) {
     .catch(e => toast(e.message));
 }
 function setBrain(b) {
-  post('/api/music', {brain: b}).then(() => { toast(b === 'claude' ? '🧠 Claude designs (text only)' : '🧠 OpenAI designs (hears the music)'); musicLoad(); })
+  post('/api/music', {brain: b}).then(() => { toast(b === 'claude' ? '🧠 Claude designs (text only)' : b === 'text' ? '🧠 Cheap text model designs' : '🧠 Audio model designs (hears the music, costs more)'); musicLoad(); })
     .catch(e => toast(e.message));
 }
 function setSource(src) {

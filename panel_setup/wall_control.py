@@ -418,6 +418,48 @@ def make_app(runner):
     def photos(name):
         return send_from_directory(PHOTOS, name, max_age=60)
 
+    # ---------------------------------------------------------------- lights
+    import lights as lt
+    _light_cache = {"t": 0.0, "data": None}
+
+    @app.get("/api/lights")
+    def lights_get():
+        devs = lt.devices()
+        if not devs:
+            return jsonify({"configured": False, "installed": lt.installed(), "devices": [],
+                            "schedule": lt.schedule()})
+        if not lt.installed():
+            return jsonify({"configured": True, "installed": False, "devices": [], "schedule": lt.schedule()})
+        if time.time() - _light_cache["t"] > 8 or request.args.get("fresh"):
+            _light_cache.update(t=time.time(), data=lt.status())
+        return jsonify({"configured": True, "installed": True, "devices": _light_cache["data"],
+                        "schedule": lt.schedule()})
+
+    @app.post("/api/lights/all")
+    def lights_all():
+        on = bool((request.get_json(force=True, silent=True) or {}).get("on", False))
+        res = lt.set_all(on)
+        _light_cache["t"] = 0
+        return jsonify({"results": res})
+
+    @app.post("/api/lights/one")
+    def lights_one():
+        d = request.get_json(force=True, silent=True) or {}
+        try:
+            res = lt.set_one(d.get("name", ""), bool(d.get("on")))
+        except KeyError as e:
+            return jsonify({"error": str(e)}), 404
+        _light_cache["t"] = 0
+        return jsonify({"results": res})
+
+    @app.post("/api/lights/schedule")
+    def lights_schedule():
+        off = (request.get_json(force=True, silent=True) or {}).get("off") or None
+        try:
+            return jsonify(lt.set_schedule(off))
+        except ValueError:
+            return jsonify({"error": "time must look like 23:30"}), 400
+
     @app.post("/api/mirror/photo")
     def photo():
         if runner.current != "mirror":
@@ -439,6 +481,18 @@ def main():
     runner = Runner()
     runner.resume_saved()
     threading.Thread(target=make_thumbs, daemon=True).start()
+
+    def lights_watch():                      # fires the daily "lights off at HH:MM"
+        import lights
+        while True:
+            time.sleep(20)
+            try:
+                if lights.installed() and lights.devices() and lights.due():
+                    print("[LIGHTS] scheduled lights-off", flush=True)
+                    lights.set_all(False)
+            except Exception as e:
+                print(f"[LIGHTS] {e}", flush=True)
+    threading.Thread(target=lights_watch, daemon=True).start()
 
     def bye(*_):
         runner.shutdown()

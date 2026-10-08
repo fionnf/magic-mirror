@@ -31,7 +31,7 @@ say "3/7 python packages (system-wide: the services run as root)"
 sudo pip3 install --break-system-packages --root-user-action=ignore \
     openai python-escpos pyusb qrcode \
     google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2 \
-    shazamio audioop-lts
+    shazamio audioop-lts tinytuya
 # optional hardware extras (touch button, LED strip): fine if they fail
 sudo pip3 install --break-system-packages --root-user-action=ignore RPi.GPIO rpi_ws281x \
     || echo "(optional RPi.GPIO / rpi_ws281x not installed - only needed for touch button / LED strip)"

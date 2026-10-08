@@ -175,3 +175,28 @@ portrait **around the people**: a small local face detector (`smartcrop.py`, mod
 scene changed against the empty room, then the centre. The website's Mirror card has a switch
 ("Follow people when cropping photos to portrait") and shows the last photo with the AI's line.
 The live silhouette on the wall keeps its cheap centred crop.
+
+## Smart Life lights (Tuya, local control)
+The website's **Lights** card switches your Smart Life lights/plugs off (and on) over the home
+network with `tinytuya` - fast, no cloud at runtime, works if the internet is down - plus an
+optional nightly "lights off at HH:MM". Google Home is not needed. One-time setup, **at home**
+(the laptop must be on the same Wi-Fi as the lights); each light's *local key* comes from Tuya's
+developer cloud:
+1. Create a free account at https://iot.tuya.com -> Cloud -> Development -> **Create Cloud Project**
+   (industry "Smart Home", data centre **Central Europe** for Switzerland). Note its **Access ID**
+   and **Access Secret**. Under the project's *Service API*, make sure **IoT Core** and
+   **Authorization** are subscribed.
+2. In the project, *Devices* -> **Link Tuya App Account** -> *Add App Account*, and scan the QR code
+   with the **Smart Life** app (Me -> the scan icon). Your lights now appear under the project.
+3. On the laptop, in the project folder:
+   `pip install tinytuya && python -m tinytuya wizard`
+   Enter the Access ID, the Access Secret, any one device ID from the project's device list and the
+   region (`eu` for Central Europe); say yes to scanning the network for IP addresses. It writes
+   `devices.json` (names, local keys, IPs) - and `tinytuya.json` (your API secret).
+4. `./panel_setup/deploy.sh` copies `devices.json` to the Pi (not `tinytuya.json`), then on the Pi
+   `sudo pip3 install --break-system-packages tinytuya` (the bootstrap script does this) and
+   `sudo systemctl restart wall-control`. The lights show up in the Lights card.
+Keep `devices.json` / `tinytuya.json` out of git (they are ignored): they hold the keys to your lights.
+To use only some devices, create `panel_setup/lights.json` with `{"only": ["Living room lamp"]}`.
+Give each light a fixed address in your router (DHCP reservation), or re-run the wizard if one moves.
+Re-pairing a light in the Smart Life app changes its local key - re-run the wizard then.

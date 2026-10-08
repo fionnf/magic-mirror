@@ -28,3 +28,9 @@ assets/models/face_recognition_sface_2021dec_int8.onnx
 panel_setup/faces.json
 panel_setup/mirror_settings.json
 panel_setup/dedications.json
+devices.json
+tinytuya.json
+snapshot.json
+tuya-raw.json
+panel_setup/lights.json
+panel_setup/lights_state.json

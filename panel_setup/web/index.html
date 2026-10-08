@@ -477,7 +477,7 @@ async function scopeTick() {
   ctx.stroke();
   const lvl = Math.max(0, Math.min(1, (d.db + 60) / 50));
   ctx.fillStyle = '#ffb347'; ctx.fillRect(0, H - 4, W * lvl, 4);
-  $('scopeTxt').textContent = `microphone: ${d.db} dB ${d.silent ? '(silence)' : ''} · energy ${Math.round(d.energy * 100)}% · bass ${Math.round(d.bass * 100)}%` + (d.bpm ? ` · ${d.bpm} bpm (lock ${Math.round(d.lock * 100)}%)` : '') + ' — raise Sensitivity if the wave stays flat while music plays';
+  $('scopeTxt').textContent = `microphone: ${d.db} dB (room floor ${d.floor} dB) ${d.silent ? '· silence' : ''} · energy ${Math.round(d.energy * 100)}% · bass ${Math.round(d.bass * 100)}%` + (d.bpm ? ` · ${d.bpm} bpm (lock ${Math.round(d.lock * 100)}%)` : '') + ' — raise Sensitivity if the wave stays flat while music plays';
 }
 setInterval(scopeTick, 350);
 (async () => {

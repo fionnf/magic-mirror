@@ -566,7 +566,19 @@ class Listener:
             self.peak = max(self.peak * (1 - 0.15 * dt), rms, 1e-3)      # slow auto-gain
             for k, v in raw.items():                                      # per-band auto-gain
                 self.bpeak[k] = max(self.bpeak.get(k, 1e-6) * (1 - 0.15 * dt), v, 1e-6)
-            silent = rms < 0.0018 / self.react or now - self.last_audio > 1.5     # ~-55 dBFS: quiet music still counts
+            # silence gate: an adaptive noise floor (the mic's room hiss) + an absolute minimum, so
+            # the beat tracker never runs on silence and invents tempos
+            self._rms_fast = _ema(getattr(self, "_rms_fast", rms), rms, dt, 0.3)
+            db_now = 20.0 * math.log10(max(self._rms_fast, 1e-6))
+            if not hasattr(self, "_audio_since"):
+                self._audio_since = now
+            if now - self._audio_since < 2.0 or not hasattr(self, "floor_db"):
+                self.floor_db = db_now                           # settle on the room first
+            fl = self.floor_db
+            fl = fl + (db_now - fl) * min(1.0, dt / 0.8) if db_now < fl else min(-35.0, fl + 0.6 * dt)
+            self.floor_db = max(-70.0, fl)
+            silent = (rms < 0.0018 / self.react or db_now < self.floor_db + 6.0 / self.react
+                      or now - self.last_audio > 1.5)
             f = self.f
             # absolute loudness and bass share (for the party level)
             self._rms_slow = _ema(self._rms_slow, rms, dt, 1.5)
@@ -614,7 +626,7 @@ class Listener:
             if silent:
                 self.tracker.conf *= 0.97
             tr = self.tracker
-            f["bpm"], f["bconf"] = tr.bpm, (0.0 if silent else tr.conf)
+            f["bpm"], f["bconf"] = (tr.bpm if tr.conf >= 0.5 and not silent else 0.0), (0.0 if silent else tr.conf)
             f["anchor"], f["period"] = tr.anchor, tr.period
             if tr.period > 0:
                 bi = tr.beat_index(now)
@@ -1651,6 +1663,7 @@ class MusicShow:
                                          "db": round(lf.get("db", -80.0), 1), "energy": round(f["energy"], 2),
                                          "bass": round(f.get("kick_fast", 0.0), 2), "silent": bool(lf.get("silent", True)),
                                          "bpm": round(lf.get("bpm", 0.0), 1), "lock": round(lf.get("bconf", 0.0), 2),
+                                         "floor": round(getattr(self.l, "floor_db", -45.0), 1),
                                          "sensitivity": sens, "time": now})
             except Exception:
                 pass

@@ -121,13 +121,15 @@ def main():
     matrix = LedMatrix()
     overlay = dedications.Overlay()
     interval = 1.0 / a.fps
-    try:
-        _loading_screen(matrix, frame_fn)
-    except KeyboardInterrupt:                            # stopped while starting up (mode switch)
-        return
-    except Exception as e:
-        print(f"[boot] loading screen skipped: {e}")
-    if os.environ.get("WALL_BOOT") and a.anim not in ("welcome", "music"):
+    booting = bool(os.environ.get("WALL_BOOT"))          # set by wall_control for the first start after power-on only
+    if booting:
+        try:
+            _loading_screen(matrix, frame_fn)
+        except KeyboardInterrupt:                        # stopped while starting up
+            return
+        except Exception as e:
+            print(f"[boot] loading screen skipped: {e}")
+    if booting and a.anim not in ("welcome", "music"):
         try:                                             # power-on greeting, once
             from display import welcome
             tw = time.monotonic()

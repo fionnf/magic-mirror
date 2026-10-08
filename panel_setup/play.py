@@ -123,6 +123,8 @@ def main():
     interval = 1.0 / a.fps
     try:
         _loading_screen(matrix, frame_fn)
+    except KeyboardInterrupt:                            # stopped while starting up (mode switch)
+        return
     except Exception as e:
         print(f"[boot] loading screen skipped: {e}")
     if os.environ.get("WALL_BOOT") and a.anim not in ("welcome", "music"):
@@ -132,6 +134,8 @@ def main():
             while time.monotonic() - tw < welcome.LOOP_SEC:
                 if not matrix.draw(welcome.welcome_frame(time.monotonic() - tw), frame_fraction=2):
                     time.sleep(interval)
+        except KeyboardInterrupt:
+            return
         except Exception as e:
             print(f"[boot] welcome skipped: {e}")
     t0 = time.monotonic()

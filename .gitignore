@@ -24,3 +24,7 @@ panel_setup/logs/
 panel_setup/music_settings.json
 panel_setup/music_now.json
 panel_setup/ai_usage.json
+assets/models/face_recognition_sface_2021dec_int8.onnx
+panel_setup/faces.json
+panel_setup/mirror_settings.json
+panel_setup/dedications.json

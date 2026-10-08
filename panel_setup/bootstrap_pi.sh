@@ -53,6 +53,9 @@ else
     echo "   .env already present"
 fi
 
+say "5b/7 face models (OpenCV zoo)"
+./assets/models/get_models.sh
+
 say "6/7 wall control website + autostart (port 80)"
 chmod +x panel_setup/*.sh
 ./panel_setup/install_control.sh

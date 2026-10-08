@@ -40,8 +40,9 @@ def _detector(w, h):
     return _det
 
 
-def find_faces(frame):
-    """[(x, y, w, h, score)] in the coordinates of `frame`."""
+def find_face_rows(frame):
+    """YuNet rows in the coordinates of `frame`: x, y, w, h, 5 landmarks (x, y) x5, score.
+    Landmark order: right eye, left eye, nose tip, right mouth corner, left mouth corner."""
     h, w = frame.shape[:2]
     scale = DETECT_WIDTH / float(w) if w > DETECT_WIDTH else 1.0
     small = cv2.resize(frame, (int(round(w * scale)), int(round(h * scale)))) if scale != 1.0 else frame
@@ -54,8 +55,18 @@ def find_faces(frame):
         return []
     if faces is None:
         return []
-    return [(float(f[0]) / scale, float(f[1]) / scale, float(f[2]) / scale, float(f[3]) / scale,
-             float(f[14])) for f in faces]
+    rows = []
+    for f in faces:
+        r = np.array(f, np.float32).copy()
+        r[:14] /= scale
+        rows.append(r)
+    return rows
+
+
+def find_faces(frame):
+    """[(x, y, w, h, score)] in the coordinates of `frame`."""
+    return [(float(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[14]))
+            for r in find_face_rows(frame)]
 
 
 def _motion_extent(frame, background):
@@ -81,7 +92,7 @@ def _window(lo_ok, hi_ok, span, size, centre):
     return int(round(max(0.0, min(span - size, start))))
 
 
-def portrait_crop(frame, aspect=None, background=None):
+def portrait_crop(frame, aspect=None, background=None, faces=None):
     aspect = aspect or config.CAMERA_ASPECT
     h, w = frame.shape[:2]
     if w / h <= aspect + 1e-3:                       # already portrait or squarer: crop height
@@ -91,7 +102,10 @@ def portrait_crop(frame, aspect=None, background=None):
     if cw >= w and ch >= h:
         return frame, "as-is"
 
-    faces = [f for f in find_faces(frame) if f[4] >= MIN_SCORE] if getattr(config, "SMART_CROP", True) else []
+    if not getattr(config, "SMART_CROP", True):
+        faces = []
+    else:                                            # reuse detections if the caller has them
+        faces = [f for f in (faces if faces is not None else find_faces(frame)) if f[4] >= MIN_SCORE]
     cx, cy, how = w / 2.0, h / 2.0, "centre"
     if faces:
         # person region per face (face + shoulders), weighted by face size (near people first)

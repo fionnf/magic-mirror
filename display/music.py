@@ -1097,7 +1097,7 @@ class Visuals:
         # drift speed follows the music only slowly - no speeding up on every bass note
         target = (0.35 + 0.6 * f["energy"]) * f.get("vibe_speed", 1.0) * f.get("d_speed", 1.0)
         self.speed = _ema(getattr(self, "speed", target), target, dt, f.get("speed_tc", 3.0))
-        self.phase += dt * self.speed
+        self.phase += dt * self.speed * (1.0 + 0.45 * f.get("groove", 0.0))
         if f["beat"] and (not self.ripples or time.time() - self.ripples[-1][2] > 1.2):
             rs = random.random
             self.ripples.append([rs() * self.W, rs() * self.H * 0.9, time.time()])
@@ -1106,7 +1106,7 @@ class Visuals:
     def lava(self, f, lut):
         p, W, H = self.phase, self.W, self.H
         fld = np.zeros((H, W), np.float32)
-        swell = (1 + 0.45 * f["kick"]) * f.get("d_scale", 1.0)
+        swell = (1 + 0.45 * f["kick"] + 0.15 * f.get("groove", 0.0)) * f.get("d_scale", 1.0)
         n = f.get("d_count", 6.0)
         for i in range(8):
             w = max(0.0, min(1.0, n - i))
@@ -1391,10 +1391,23 @@ class MusicShow:
         self._last_phase = pulse[1]
         f["kick"] = 0.55 * env * min(1.0, f["d_react"])
         f["pulse"] = 0.0
+        # GROOVE: beat-matched *motion* (never brightness). A soft 120 ms attack so it reads as a
+        # bounce, strong/weak bars, trusted only with a locked tempo, fading in with the party level.
+        g = _smoothstep(L, 0.45, 0.9) * pulse[2] * min(1.0, f["d_react"])
+        if g > 0.01 and f.get("period", 0) > 0:
+            ph = pulse[1]
+            soft = math.exp(-2.5 * ph) * min(1.0, ph * f["period"] / 0.12)
+            bar_w = (1.0, 0.6, 0.85, 0.6)[int(f.get("bar_pos", 0)) % 4]
+            f["groove"] = g * soft * bar_w
+        else:
+            f["groove"] = 0.0
+        self.vis_last_groove = f["groove"]
+        downbeat = wrapped and int(f.get("bar_pos", 1)) == 0 and g > 0.3
         if beat and now - getattr(self, "_last_beat_evt", 0.0) < 2.5:
             beat = False                                   # pieces that react to "a beat" get one every few seconds at most
-        if beat:
+        if beat or downbeat:
             self._last_beat_evt = now
+        beat = beat or downbeat                            # at a party, the bar's first beat is an event (ripples etc.)
         # --- build-ups (riser) and drops - only once it is a party
         self.e_fast = _ema(self.e_fast, f["energy"], dt, 2.0)
         self.e_slow = _ema(self.e_slow, f["energy"], dt, 12.0)

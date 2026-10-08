@@ -35,6 +35,8 @@ SR = 22050
 WIN, HOP = 1024, 256
 AI_EVERY = 150.0          # audio brain: about once per scene hold (it is the expensive one)
 TEXT_EVERY = 90.0         # cheap text brain
+# cheapest-first; the next one is tried if a model is unavailable (override with AI_TEXT_MODEL)
+TEXT_MODELS = ["gpt-4.1-nano", "gpt-4o-mini"]
 SONG_CALL_GAP = 45.0      # a newly recognised song may trigger a call, at most this often
 USAGE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                           "panel_setup", "ai_usage.json")
@@ -584,26 +586,29 @@ class VJ:
         except Exception as e:
             self.brain_status = f"no OpenAI client: {str(e)[:80]}"
             return None
-        model = os.environ.get("AI_TEXT_MODEL", config.AI_MODEL)
+        models = [os.environ["AI_TEXT_MODEL"]] if os.environ.get("AI_TEXT_MODEL") else TEXT_MODELS
         system, user = self._text_prompt()
         t0 = time.time()
-        try:
-            self._count("text")
-            r = client.chat.completions.create(
-                model=model, max_tokens=350, temperature=1.0,
-                response_format={"type": "json_object"},
-                messages=[{"role": "system", "content": system},
-                          {"role": "user", "content": user}])
-            j = _validate(json.loads(r.choices[0].message.content or "{}"))
-            if not j:
-                raise RuntimeError("scene was not valid")
-            j["model"] = model
-            self.brain_status = f"text ({model}) ok - {time.time() - t0:.0f} s"
-            return j
-        except Exception as e:
-            self.brain_status = f"text error: {str(e)[:100]}"
-            print(f"[VJ] {self.brain_status}", flush=True)
-            return None
+        self._count("text")
+        last = ""
+        for model in models:
+            try:
+                r = client.chat.completions.create(
+                    model=model, max_tokens=350, temperature=1.0,
+                    response_format={"type": "json_object"},
+                    messages=[{"role": "system", "content": system},
+                              {"role": "user", "content": user}])
+                j = _validate(json.loads(r.choices[0].message.content or "{}"))
+                if not j:
+                    raise RuntimeError("scene was not valid")
+                j["model"] = model
+                self.brain_status = f"text ({model}) ok - {time.time() - t0:.0f} s"
+                return j
+            except Exception as e:
+                last = f"{model}: {str(e)[:90]}"
+                print(f"[VJ] text brain {last}", flush=True)
+        self.brain_status = f"text error: {last}"
+        return None
 
     def _ask_claude(self):
         """Text-only designer: the Claude Code CLI (Haiku) sees the song + measurements, not audio."""

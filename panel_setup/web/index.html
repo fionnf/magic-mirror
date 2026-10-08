@@ -182,7 +182,14 @@
 
   <section>
     <div class="box">
-      <details class="more" style="margin-top:0;border-top:0;padding-top:0"><summary>Playlist — rotate through several shows</summary>
+      <b>🎲 Tour</b>
+      <p style="margin-top:6px">Let the wall wander: galleries, shaders and video loops in a shuffled rotation (music mode with Auto loops included when something is playing).</p>
+      <div class="row" style="margin-bottom:10px">
+        <button class="primary" onclick="tour('art')">🖼 Art tour</button>
+        <button onclick="tour('all')">🎞 Everything</button>
+        <select id="tourMins"><option value="5">5 min each</option><option value="10" selected>10 min each</option><option value="20">20 min each</option></select>
+      </div>
+      <details class="more"><summary>Playlist — choose the shows yourself</summary>
       <p>Tap “Choose”, tick the cards above, then start.</p>
       <div class="row">
         <button onclick="togglePick()" id="pickBtn">Choose</button>
@@ -464,6 +471,13 @@ async function loopGridLoad(selected) {
       ${img ? `<img src="${img}" loading="lazy" style="width:64px;height:64px;border-radius:8px;object-fit:cover;background:#000">` : '<div style="width:64px;height:64px;border-radius:8px;background:#2a2236;display:flex;align-items:center;justify-content:center;margin:auto">🤖</div>'}
       <div class="sub" style="font-size:10px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:${selected === name ? '#241600' : ''}">${label}</div></div>`;
   $('loopGrid').innerHTML = tile('', 'Auto', null) + loopsCache.map(l => tile(l.name, l.name.split('__')[1].replace(/^(beeple-|mixkit-)/, ''), '/loops/thumb/' + l.name + '.jpg')).join('');
+}
+function tour(kind) {
+  const art = ['artsy', 'shaders', 'shapes', 'glass', 'lava'];
+  const ids = kind === 'all' ? art.concat(['music']) : art;
+  for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+  post('/api/music', {style: 'loops', loop: ''}).catch(() => {});
+  post('/api/playlist', {ids, minutes: +$('tourMins').value}).then(s => { toast('🎲 Tour started'); show(s); }).catch(e => toast(e.message));
 }
 const partyName = v => v <= 10 ? v + '% · breathing' : v <= 35 ? v + '% · quiet evening' : v <= 60 ? v + '% · lively' : v <= 85 ? v + '% · party' : v + '% · dance floor';
 let ptTimer;

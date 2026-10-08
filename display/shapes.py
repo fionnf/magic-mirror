@@ -322,6 +322,103 @@ class Ridges(_Piece):
         return self.finish(img)
 
 
+class FlowPoles(_Piece):
+    """Streamlines bending around a ring of alternating vortices and sinks that slowly turns."""
+
+    def __init__(self, W, H, lut, n=7, seeds=10):
+        super().__init__(W, H, "Flow Poles", lut)
+        self.n, self.seeds = n, seeds
+
+    def render(self, dt, t):
+        W, H = self.W, self.H
+        img, d = self.canvas()
+        ang = t * 0.05 + np.arange(self.n) * 2 * math.pi / self.n
+        rad = W * (0.27 + 0.03 * math.sin(t * 0.07))
+        px, py = W / 2 + rad * np.cos(ang), H / 2 + rad * np.sin(ang)
+        sign = np.where(np.arange(self.n) % 2 == 0, 1.0, -1.0)
+        gx, gy = np.meshgrid(np.linspace(0.06, 0.94, self.seeds) * W, np.linspace(0.06, 0.94, self.seeds) * H)
+        pos = np.stack([gx.ravel(), gy.ravel()], 1).astype(np.float32)
+        pos += np.random.default_rng(2).normal(0, 2.0, pos.shape).astype(np.float32)
+        path = [pos.copy()]
+        for _ in range(22):
+            dx = pos[:, 0:1] - px[None, :]
+            dy = pos[:, 1:2] - py[None, :]
+            r2 = dx * dx + dy * dy + 30.0
+            vx = (-dy * sign[None, :] * (sign[None, :] > 0) + (-dx) * (sign[None, :] < 0)) / r2
+            vy = (dx * sign[None, :] * (sign[None, :] > 0) + (-dy) * (sign[None, :] < 0)) / r2
+            v = np.stack([vx.sum(1), vy.sum(1)], 1)
+            sp = np.linalg.norm(v, axis=1, keepdims=True) + 1e-6
+            pos = pos + v / sp * 3.2
+            path.append(pos.copy())
+        path = np.stack(path, 1)                                   # seeds x steps x 2
+        for i in range(path.shape[0]):
+            p = path[i]
+            if np.all((p[:, 0] < -5) | (p[:, 0] > W + 5)):
+                continue
+            d.line([tuple(q) for q in p], fill=self.colour(0.15 + 0.8 * ((i * 7) % 23) / 23), width=1)
+        for x, y, sg in zip(px, py, sign):
+            d.ellipse([x - 2, y - 2, x + 2, y + 2], fill=self.colour(0.95 if sg > 0 else 0.4))
+        return self.finish(img)
+
+
+class TriMosaic(_Piece):
+    """Half-square triangles: orderly pinwheels at the top, drifting into noisy clusters below."""
+    GLOW = 0.5
+
+    def __init__(self, W, H, lut, cell=12):
+        super().__init__(W, H, "Triangular Mosaic", lut)
+        self.cell = cell
+        n = W // cell + 1
+        r = np.random.default_rng(6)
+        self.rnd = r.random((n, n))
+        self.rate = r.uniform(0.02, 0.08, (n, n))
+        self.off = r.integers(0, 4, (n, n))
+
+    def render(self, dt, t):
+        img, d = self.canvas()
+        c, n = self.cell, self.W // self.cell + 1
+        for j in range(n):
+            frac = (j / (n - 1)) ** 1.4
+            for i in range(n):
+                ordered = (2 * (j % 2) + (i % 2)) % 4
+                o = ordered if self.rnd[j, i] > frac else int(self.off[j, i] + t * self.rate[j, i] * 3) % 4
+                x, y = i * c, j * c
+                corners = [(x, y), (x + c, y), (x + c, y + c), (x, y + c)]
+                tri = [pt for k, pt in enumerate(corners) if k != o]
+                d.polygon(tri, fill=self.colour(0.12 + 0.42 * (0.5 + 0.5 * math.sin(i * 0.4 + j * 0.3 + t * 0.15))))
+        return self.finish(img)
+
+
+class InterferenceMesh(_Piece):
+    """Two fine line grids turning slowly against each other: moire blooms where they cross."""
+    GLOW = 0.6
+
+    def __init__(self, W, H, lut, pitch=8):
+        super().__init__(W, H, "Interference Mesh", lut)
+        self.pitch = pitch
+
+    def _grid(self, angle, shift):
+        img = Image.new("L", (self.W, self.H), 0)
+        d = ImageDraw.Draw(img)
+        cx, cy = self.W / 2, self.H / 2
+        ca, sa = math.cos(angle), math.sin(angle)
+        L = self.W * 1.1
+        for k in range(-int(L / self.pitch), int(L / self.pitch) + 1):
+            o = k * self.pitch + shift
+            d.line([(cx - L * ca - o * sa, cy - L * sa + o * ca), (cx + L * ca - o * sa, cy + L * sa + o * ca)], fill=255)
+        return np.asarray(img, np.float32) / 255.0
+
+    def render(self, dt, t):
+        a = self._grid(0.0 + t * 0.012, t * 0.6) + self._grid(math.pi / 2 + t * 0.012, 0.0)
+        b = self._grid(0.12 + 0.08 * math.sin(t * 0.05), 0.0) + self._grid(math.pi / 2 + 0.12 + 0.08 * math.sin(t * 0.05), t * 0.4)
+        v = np.clip((a + b) * 0.55, 0, 1)
+        yy, xx = np.mgrid[0:self.H, 0:self.W].astype(np.float32)
+        hue = (0.2 + 0.6 * (0.5 + 0.5 * np.sin(xx / self.W * 3 + yy / self.H * 2 + t * 0.1)))
+        lut = np.asarray(self.lut, np.float32)
+        rgb = lut[(hue * 255).astype(int)] * (v ** 1.3)[..., None]
+        return np.clip(rgb * 1.25, 0, 255)
+
+
 class ShapesGallery(art.Gallery):
     def __init__(self):
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
@@ -337,13 +434,14 @@ class ShapesGallery(art.Gallery):
             HexStrands(W, H, mint), FlowDots(W, H, rose, lines=True, strands=22),
             Truchet(W, H, sun), Chevrons(W, H, ice), Harmonograph(W, H, gold),
             IsoCubes(W, H, mint), Ridges(W, H, rose),
+            FlowPoles(W, H, ice), TriMosaic(W, H, rose), InterferenceMesh(W, H, sun),
         ]
         self.last_t = None
         self.current = -1
 
 
 SHAPES_PIECE_SEC = art.PIECE_SEC
-LOOP_SEC = SHAPES_PIECE_SEC * 13
+LOOP_SEC = SHAPES_PIECE_SEC * 16
 _gallery = None
 
 

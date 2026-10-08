@@ -53,6 +53,11 @@ class MirrorAPI:
             self.mirror._trigger_event.set()
             return jsonify({"triggered": "short"})
 
+        @self.app.route("/api/trigger/aura", methods=["POST"])
+        def trigger_aura():
+            self.mirror._aura_event.set()
+            return jsonify({"triggered": "aura"})
+
         @self.app.route("/api/trigger/long", methods=["POST"])
         def trigger_long():
             self.mirror._booth_event.set()

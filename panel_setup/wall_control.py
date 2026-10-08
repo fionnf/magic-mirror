@@ -478,16 +478,23 @@ def make_app(runner):
         except ValueError:
             return jsonify({"error": "time must look like 23:30"}), 400
 
-    @app.post("/api/mirror/photo")
-    def photo():
+    def _mirror_trigger(kind):
         if runner.current != "mirror":
             return jsonify({"error": "mirror mode is not running"}), 409
         try:
-            req = urllib.request.Request("http://127.0.0.1:5000/api/trigger/short", method="POST")
+            req = urllib.request.Request(f"http://127.0.0.1:5000/api/trigger/{kind}", method="POST")
             urllib.request.urlopen(req, timeout=3).read()
             return jsonify({"ok": True})
         except Exception as e:
             return jsonify({"error": f"mirror not ready yet ({e})"}), 503
+
+    @app.post("/api/mirror/photo")
+    def photo():
+        return _mirror_trigger("short")
+
+    @app.post("/api/mirror/aura")
+    def aura():
+        return _mirror_trigger("aura")
 
     return app
 

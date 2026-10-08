@@ -11,6 +11,7 @@ import argparse
 import signal
 import sys
 import time
+import math
 import threading
 import enum
 from typing import Optional
@@ -90,6 +91,10 @@ class MagicMirror:
         self._capture_thread: Optional[threading.Thread] = None
         self._overlay_text: Optional[str] = None   # pushed from dashboard
         self._overlay_image: Optional[Image.Image] = None
+        self._aura_event = threading.Event()
+        self._sparkle = None                       # (cx, cy normalised, until_monotonic)
+        self._sparkle_check = 0.0
+        self._info = {"names": [], "smiling": False, "faces": 0}   # who/what the last photo saw
 
     # ---- button ----
 
@@ -123,6 +128,7 @@ class MagicMirror:
             try:
                 frame = self.camera.capture_frame()
                 self._latest_frame = frame
+                self._look_for_smile(frame)
                 mask = self.camera.extract_silhouette(
                     frame, getattr(self.camera, "_background", None))
                 img = silhouette_render.render_silhouette(mask)
@@ -146,6 +152,30 @@ class MagicMirror:
             dt = time.monotonic() - t0
             time.sleep(max(0.0, interval - dt))
 
+    def _look_for_smile(self, frame):
+        """About 3x a second: if the main face is smiling, sparkle around it for 2 seconds."""
+        now = time.monotonic()
+        if now - self._sparkle_check < 0.33 or self.state != State.IDLE:
+            return
+        self._sparkle_check = now
+        try:
+            import mirror_settings
+            if not mirror_settings.load()["smile"]:
+                return
+            import smartcrop, moods
+            rows = [r for r in smartcrop.find_face_rows(frame) if min(r[2], r[3]) >= 40]
+            if not rows:
+                return
+            r = max(rows, key=lambda r: r[2] * r[3])
+            if moods.is_smiling(r):
+                h, w = frame.shape[:2]
+                cx = (r[0] + r[2] / 2) / w
+                if config.SILHOUETTE_MIRROR:
+                    cx = 1.0 - cx
+                self._sparkle = (cx, (r[1] + r[3] / 2) / h, now + 2.0)
+        except Exception as e:
+            print(f"[SMILE] {e}")
+
     def _silhouette(self, dim: float = 1.0) -> Image.Image:
         with self._silhouette_lock:
             img = self._live_silhouette
@@ -162,7 +192,7 @@ class MagicMirror:
             time.sleep(1.0)
             return "The mirror dreams of electric sheep."
         import ai_client
-        return self._shorten(ai_client.get_mirror_message(frame))
+        return self._shorten(ai_client.get_mirror_message(frame, self._hint()))
 
     @staticmethod
     def _shorten(text):
@@ -204,14 +234,19 @@ class MagicMirror:
             if self._booth_event.is_set():
                 self._booth_event.clear()
                 return "long"
+            if self._aura_event.is_set():
+                self._aura_event.clear()
+                return "aura"
             if self._trigger_event.is_set():
                 self._trigger_event.clear()
                 return "short"
 
             # Only recompose + redraw when something visible changed (new
             # silhouette frame or a new overlay) — not on every tick.
+            sp = self._sparkle
+            sparkling = sp is not None and time.monotonic() < sp[2]
             key = (self._silhouette_version, id(self._overlay_image),
-                   self._overlay_text)
+                   self._overlay_text, int(time.monotonic() * 8) if sparkling else None)
             if key != last_key:
                 last_key = key
                 canvas = self._silhouette()
@@ -223,6 +258,13 @@ class MagicMirror:
                 elif self._overlay_text is not None:
                     try:
                         text_renderer.render_static_text(canvas, self._overlay_text)
+                    except Exception:
+                        pass
+                if sparkling:
+                    try:
+                        from display import sparkle
+                        sparkle.draw(canvas, sp[0] * config.TOTAL_WIDTH, sp[1] * config.TOTAL_HEIGHT,
+                                     time.monotonic())
                     except Exception:
                         pass
                 self.matrix.draw(canvas)
@@ -251,10 +293,48 @@ class MagicMirror:
         except TypeError:                        # a camera without raw support
             return self.camera.capture_frame()
         import smartcrop
+        rows = smartcrop.find_face_rows(raw)
+        self._read_faces(raw, rows)
+        faces = [(float(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[14])) for r in rows]
         frame, how = smartcrop.portrait_crop(raw, config.CAMERA_ASPECT,
-                                             getattr(self.camera, "_background_raw", None))
+                                             getattr(self.camera, "_background_raw", None), faces=faces)
         print(f"[CROP] portrait via {how}")
         return frame
+
+    def _read_faces(self, raw, rows):
+        """Who is in front of the mirror and are they smiling (names only for people who were
+        enrolled in the app; never anything else is stored)."""
+        info = {"names": [], "smiling": False, "faces": len(rows)}
+        try:
+            import mirror_settings
+            st = mirror_settings.load()
+            import moods
+            big = [r for r in rows if min(r[2], r[3]) >= 40]
+            if st["smile"] and big:
+                info["smiling"] = moods.is_smiling(max(big, key=lambda r: r[2] * r[3]))
+            if st["recognise"]:
+                import faces
+                if faces.available():
+                    book = getattr(self, "_facebook", None) or faces.FaceBook()
+                    self._facebook = book
+                    if book.people():
+                        seen = book.observe(raw, rows, learn=st["learn_faces"])
+                        info["names"] = [n for _, n, _ in seen if n]
+        except Exception as e:
+            print(f"[FACES] skipped: {e}")
+        self._info = info
+        print(f"[FACES] {info}")
+
+    def _hint(self):
+        """Facts for the AI line, e.g. 'The person is called Fionn. They are smiling.'"""
+        i, parts = self._info, []
+        if i["names"]:
+            parts.append("The person is called " + " and ".join(dict.fromkeys(i["names"])) + ".")
+        if i["smiling"]:
+            parts.append("They are smiling.")
+        if i["faces"] > 1:
+            parts.append(f"There are {i['faces']} people in the picture.")
+        return " ".join(parts)
 
     def _do_trigger_capture(self):
         """Single-shot capture: countdown then grab the latest frame from the
@@ -533,6 +613,77 @@ class MagicMirror:
             self._set_state(State.IDLE)
             self.strip.set_mode("idle")
 
+    def _aura_glow(self, hexcol, name, seconds=7.0):
+        """The wall breathes in the person's aura colour (a soft halo over the silhouette)."""
+        import numpy as np
+        col = np.array([int(hexcol[i:i + 2], 16) for i in (1, 3, 5)], np.float32)
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        y, x = np.mgrid[0:H, 0:W].astype(np.float32)
+        r = np.sqrt((x - W / 2) ** 2 + (y - H / 2) ** 2) / (W / 2)
+        interval = 1.0 / config.IDLE_ANIMATION_FPS
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < seconds and not self._stop.is_set():
+            u = (time.monotonic() - t0) / seconds
+            grow = min(1.0, u * 3.0)                                   # halo swells in
+            breathe = 0.75 + 0.25 * math.sin((time.monotonic() - t0) * 2.4)
+            halo = np.clip(1.15 - r / (0.35 + 0.75 * grow), 0, 1) ** 1.5 * breathe
+            fade = min(1.0, (1.0 - u) * 4.0)                           # and fades out at the end
+            base = np.asarray(self._silhouette(dim=0.55), np.float32)
+            out = np.clip(base * (1 - halo[..., None] * 0.5) + halo[..., None] * col * fade, 0, 255)
+            canvas = Image.fromarray(out.astype(np.uint8), "RGB")
+            if u > 0.12:
+                text_renderer.render_static_text(canvas, name, colour=(255, 255, 255))
+            self.matrix.draw(canvas)
+            time.sleep(interval)
+
+    def run_aura_cycle(self):
+        self._overlay_text = None
+        self._overlay_image = None
+        try:
+            frame = self._do_trigger_capture()
+            self._set_state(State.AI_WAITING)
+            self.strip.set_mode("thinking")
+            result = {}
+            if self.no_api:
+                result.update(colour="Rose Gold", hex="#E8A0A0", reading="Soft heart, fierce timing.")
+            else:
+                import ai_client
+                t = threading.Thread(target=lambda: result.update(ai_client.get_aura(frame, self._hint())),
+                                     daemon=True)
+                t.start()
+                import numpy as np
+                dots = animations.thinking_dots()
+                t0 = time.monotonic()
+                while (t.is_alive() or time.monotonic() - t0 < 1.5) and time.monotonic() - t0 < config.AI_TIMEOUT_SEC + 3:
+                    a = np.asarray(self._silhouette(), np.uint8)
+                    b = np.asarray(next(dots), np.uint8)
+                    self.matrix.draw(Image.fromarray(np.maximum(a, b), "RGB"))
+                    time.sleep(1.0 / config.IDLE_ANIMATION_FPS)
+            hexcol = result.get("hex", "#9B5DE5")
+            name = result.get("colour", "Aura")
+            reading = self._shorten(result.get("reading", "")) or config.AI_FALLBACK_MESSAGE
+            print(f"[AURA] {name} {hexcol}: {reading}")
+            try:
+                import photo_store
+                photo_store.save_receipt(frame, f"Aura: {name}. {reading}")
+            except Exception as e:
+                print(f"[PHOTOS] skip: {e}")
+            try:
+                self.printer.print_receipt(frame, f"Your aura is {name}. {reading}")
+            except Exception as e:
+                print(f"[PRINTER] skip: {e}")
+            self._set_state(State.DISPLAYING)
+            self._aura_glow(hexcol, name)
+            held = self._do_display(reading)
+            self._set_state(State.FADE_OUT)
+            self.strip.set_mode("fading")
+            self._fade_out(held, config.FADE_OUT_SEC)
+        except Exception as e:
+            print(f"[ERROR] aura cycle failed: {e}")
+        finally:
+            self._set_state(State.IDLE)
+            self.strip.set_mode("idle")
+
     def run(self):
         if not self.no_api:
             try:
@@ -559,12 +710,15 @@ class MagicMirror:
                 break
             if kind == "long":
                 self.run_booth_cycle()
+            elif kind == "aura":
+                self.run_aura_cycle()
             else:
                 self.run_cycle()
 
     def shutdown(self):
         self._stop.set()
         self._trigger_event.set()
+        self._aura_event.set()
         try:
             self.matrix.clear()
         except Exception:

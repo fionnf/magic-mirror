@@ -157,7 +157,7 @@
         <label><input type="checkbox" id="tShz" onchange="toggleSet('shazam', this.checked)"> 🎵 Recognise songs</label>
         <label><input type="checkbox" id="tWall" onchange="toggleSet('song_on_wall', this.checked)"> Song title on the wall</label>
       </div>
-      <canvas id="scope" width="600" height="90" style="width:100%;height:90px;border-radius:10px;background:#0c0914;display:block;margin-bottom:6px"></canvas>
+      <canvas id="scope" width="600" height="150" style="width:100%;height:150px;border-radius:10px;background:#0c0914;display:block;margin-bottom:6px"></canvas>
       <div class="sub" id="scopeTxt" style="margin-bottom:8px">microphone: –</div>
       <div class="row" style="justify-content:space-between"><span class="sub">Sensitivity</span><b id="sensVal">50</b></div>
       <input type="range" id="sens" min="0" max="100" step="5" style="margin-bottom:12px">
@@ -471,10 +471,17 @@ async function scopeTick() {
   const ctx = c.getContext('2d'), W = c.width, H = c.height;
   ctx.fillStyle = '#0c0914'; ctx.fillRect(0, 0, W, H);
   if (d.stale || !d.wave) { $('scopeTxt').textContent = 'microphone: no data (is Music mode running?)'; return; }
-  ctx.strokeStyle = '#3a2f4f'; ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
-  ctx.strokeStyle = d.silent ? '#6b6478' : '#ff5fa2'; ctx.lineWidth = 2; ctx.beginPath();
-  d.wave.forEach((v, i) => { const x = i / (d.wave.length - 1) * W, y = H / 2 - v * (H / 2 - 4); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-  ctx.stroke();
+  // top: 3 s of level (mirrored, like a long waveform) · bottom: 3 s of bass with the tracker's beat ticks
+  const top = H * 0.55, bot = H - 8;
+  ctx.strokeStyle = '#3a2f4f'; ctx.beginPath(); ctx.moveTo(0, top / 2); ctx.lineTo(W, top / 2); ctx.stroke();
+  ctx.fillStyle = d.silent ? '#4a4458' : '#ff5fa2';
+  (d.level || []).forEach(([x, v]) => { const px = x * W, h = v * (top / 2 - 3); ctx.fillRect(px - 2, top / 2 - h, 3, h * 2); });
+  ctx.fillStyle = '#2a2236'; ctx.fillRect(0, top + 4, W, bot - top - 4);
+  ctx.fillStyle = '#ffb347';
+  (d.bassline || []).forEach(([x, v]) => { const px = x * W, h = v * (bot - top - 6); ctx.fillRect(px - 2, bot - h, 3, h); });
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+  (d.ticks || []).forEach(x => { ctx.beginPath(); ctx.moveTo(x * W, top + 4); ctx.lineTo(x * W, bot); ctx.stroke(); });
+  ctx.fillStyle = '#8a8098'; ctx.font = '11px sans-serif'; ctx.fillText('level · 3 s', 6, 12); ctx.fillText('bass · white ticks = detected beats', 6, top + 16);
   const lvl = Math.max(0, Math.min(1, (d.db + 60) / 50));
   ctx.fillStyle = '#ffb347'; ctx.fillRect(0, H - 4, W * lvl, 4);
   $('scopeTxt').textContent = `microphone: ${d.db} dB (room floor ${d.floor} dB) ${d.silent ? '· silence' : ''} · energy ${Math.round(d.energy * 100)}% · bass ${Math.round(d.bass * 100)}%` + (d.bpm ? ` · ${d.bpm} bpm (lock ${Math.round(d.lock * 100)}%)` : '') + ' — raise Sensitivity if the wave stays flat while music plays';

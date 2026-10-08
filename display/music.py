@@ -1652,21 +1652,43 @@ class MusicShow:
         if now - getattr(self, "_published", 0) > 3:
             self._published = now
             self._publish()
+        # 3-second history of level and bass for the app's meter (every frame, cheap)
+        lf = self.l.f
+        hist = getattr(self, "_hist", None)
+        if hist is None:
+            hist = self._hist = []
+        lvl = min(1.0, float(getattr(self.l, "_rms_fast", 0.0)) / max(1e-4, self.l.peak))
+        hist.append((now, lvl, float(f.get("kick_fast", 0.0))))
+        del hist[: max(0, len(hist) - 120)]
         if now - getattr(self, "_audio_pub", 0) > 0.25:                 # live waveform + level for the app
             self._audio_pub = now
             try:
                 raw = self.l.recent(0.09)
                 k = max(1, len(raw) // 96)
                 pts = raw[: k * 96].reshape(96, k).mean(1) if len(raw) >= 96 else np.zeros(96, np.float32)
-                lf = self.l.f
+                t0 = now - 3.0
+                hist3 = [h for h in hist if h[0] >= t0]
+                ticks = []
+                if lf.get("bconf", 0.0) >= 0.5 and lf.get("period", 0) > 0:
+                    per, anc = lf["period"], lf["anchor"]
+                    b = anc + math.floor((t0 - anc) / per) * per
+                    while b <= now:
+                        if b >= t0:
+                            ticks.append(round((b - t0) / 3.0, 3))
+                        b += per
                 _write_json(AUDIO_FILE, {"wave": [round(float(v), 3) for v in np.clip(pts * 4.0, -1, 1)],
+                                         "level": [[round((h[0] - t0) / 3.0, 3), round(h[1], 3)] for h in hist3],
+                                         "bassline": [[round((h[0] - t0) / 3.0, 3), round(h[2], 3)] for h in hist3],
+                                         "ticks": ticks,
                                          "db": round(lf.get("db", -80.0), 1), "energy": round(f["energy"], 2),
                                          "bass": round(f.get("kick_fast", 0.0), 2), "silent": bool(lf.get("silent", True)),
                                          "bpm": round(lf.get("bpm", 0.0), 1), "lock": round(lf.get("bconf", 0.0), 2),
                                          "floor": round(getattr(self.l, "floor_db", -45.0), 1),
                                          "sensitivity": sens, "time": now})
-            except Exception:
-                pass
+            except Exception as e:
+                if not getattr(self, "_audio_err", False):
+                    self._audio_err = True
+                    print(f"[audio meter] {type(e).__name__}: {e}", flush=True)
         slow = getattr(self, "cost", 0.0) > 26.0
         lop = 0.0 if slow else self.layer_op                  # too slow: drop the second layer
         if slow and self.xfade > 2.5:

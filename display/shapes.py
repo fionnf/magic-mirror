@@ -325,7 +325,7 @@ class Ridges(_Piece):
 class FlowPoles(_Piece):
     """Streamlines bending around a ring of alternating vortices and sinks that slowly turns."""
 
-    def __init__(self, W, H, lut, n=7, seeds=10):
+    def __init__(self, W, H, lut, n=6, seeds=8):
         super().__init__(W, H, "Flow Poles", lut)
         self.n, self.seeds = n, seeds
 
@@ -340,7 +340,7 @@ class FlowPoles(_Piece):
         pos = np.stack([gx.ravel(), gy.ravel()], 1).astype(np.float32)
         pos += np.random.default_rng(2).normal(0, 2.0, pos.shape).astype(np.float32)
         path = [pos.copy()]
-        for _ in range(22):
+        for _ in range(18):
             dx = pos[:, 0:1] - px[None, :]
             dy = pos[:, 1:2] - py[None, :]
             r2 = dx * dx + dy * dy + 30.0

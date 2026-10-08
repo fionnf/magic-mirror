@@ -12,10 +12,18 @@ from display import art
 _lut, _palette = art._lut, art._palette
 
 
+def _up(arr, W, H):
+    """Smooth upscale of a small float RGB image to the wall size."""
+    from PIL import Image
+    img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB").resize((W, H), Image.BICUBIC)
+    return np.asarray(img, np.float32)
+
+
 class _Soft:
-    def __init__(self, W, H, name, lut):
-        self.W, self.H, self.name, self.lut = W, H, name, lut
-        y, x = np.mgrid[0:H, 0:W].astype(np.float32)
+    def __init__(self, W, H, name, lut, scale=1):
+        self.W, self.H, self.name, self.lut, self.scale = W, H, name, lut, scale
+        self.w, self.h = W // scale, H // scale                # computed size (upscaled afterwards)
+        y, x = np.mgrid[0:self.h, 0:self.w].astype(np.float32)
         self.x, self.y = x, y
 
     def reset(self):
@@ -26,7 +34,7 @@ class StainedGlass(_Soft):
     """Voronoi cells that drift; each is a flat glowing colour with dark lead lines."""
 
     def __init__(self, W, H, lut, n=22):
-        super().__init__(W, H, "Stained Glass", lut)
+        super().__init__(W, H, "Stained Glass", lut, scale=3)
         self.n = n
         r = np.random.default_rng(5)
         self.base = r.random((n, 2)).astype(np.float32)
@@ -34,7 +42,7 @@ class StainedGlass(_Soft):
         self.hue = r.random(n).astype(np.float32)
 
     def render(self, dt, t):
-        W, H = self.W, self.H
+        W, H = self.w, self.h
         sx = (self.base[:, 0] + 0.09 * np.sin(t * 0.11 + self.ph[:, 0])) * W
         sy = (self.base[:, 1] + 0.09 * np.cos(t * 0.09 + self.ph[:, 1])) * H
         d = (self.x[..., None] - sx) ** 2 + (self.y[..., None] - sy) ** 2
@@ -42,20 +50,21 @@ class StainedGlass(_Soft):
         d1 = np.take_along_axis(d, order[..., :1], -1)[..., 0]
         d2 = np.take_along_axis(d, order[..., 1:2], -1)[..., 0]
         cell = order[..., 0]
-        edge = np.clip((np.sqrt(d2) - np.sqrt(d1)) / 3.0, 0, 1)             # 0 on the lead line
+        edge = np.clip((np.sqrt(d2) - np.sqrt(d1)) / 1.4, 0, 1)             # 0 on the lead line
         v = (self.hue[cell] + 0.12 * np.sin(t * 0.2 + self.ph[cell, 2])) % 1.0
         glow = 0.55 + 0.45 * np.exp(-d1 / (W * W * 0.012))                   # brighter near centres
-        return _lut(np.clip(v * 0.85 + 0.1, 0, 1), self.lut) * (edge * glow)[..., None]
+        out = _lut(np.clip(v * 0.85 + 0.1, 0, 1), self.lut) * (edge * glow)[..., None]
+        return _up(out, self.W, self.H)
 
 
 class JuliaMorph(_Soft):
     """A Julia set whose constant slowly circles a point, rendered as smooth glowing bands."""
 
-    def __init__(self, W, H, lut, iters=28):
-        super().__init__(W, H, "Julia Morph", lut)
+    def __init__(self, W, H, lut, iters=24):
+        super().__init__(W, H, "Julia Morph", lut, scale=2)
         self.iters = iters
-        self.zx0 = (self.x / W - 0.5) * 3.0
-        self.zy0 = (self.y / H - 0.5) * 3.0
+        self.zx0 = (self.x / self.w - 0.5) * 3.0
+        self.zy0 = (self.y / self.h - 0.5) * 3.0
 
     def render(self, dt, t):
         a = t * 0.04
@@ -70,7 +79,8 @@ class JuliaMorph(_Soft):
             alive &= ~esc
         v = (mu / self.iters * 1.6 + t * 0.012) % 1.0
         v[alive] = 0.0
-        return _lut(np.clip(v, 0, 1), self.lut) * (0.35 + 0.65 * (~alive))[..., None]
+        out = _lut(np.clip(v, 0, 1), self.lut) * (0.35 + 0.65 * (~alive))[..., None]
+        return _up(out, self.W, self.H)
 
 
 class Kaleido(_Soft):

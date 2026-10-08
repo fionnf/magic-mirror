@@ -12,6 +12,29 @@ import config
 
 
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+_client = None
+
+
+def _get_client():
+    """One shared OpenAI client: reuses the connection and avoids re-importing."""
+    global _client
+    if _client is None:
+        from openai import OpenAI
+        _client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    return _client
+
+
+def warm_up() -> None:
+    """Import the OpenAI SDK and build the client in the background at startup.
+
+    The very first import in a fresh environment can take longer than the 10 s
+    reply limit, which made the first photo fall back to the canned line."""
+    def run():
+        try:
+            _get_client().models.retrieve(config.AI_MODEL)   # free metadata call: warms TLS too
+        except Exception:
+            pass                                             # best effort only
+    _executor.submit(run)
 
 
 def _frame_to_b64_jpeg(frame: np.ndarray) -> str:
@@ -36,8 +59,7 @@ def _log_usage(tokens_in: int, tokens_out: int) -> None:
 
 
 def _call_api(frame: np.ndarray) -> tuple[str, int, int]:
-    from openai import OpenAI
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    client = _get_client()
     b64 = _frame_to_b64_jpeg(frame)
     resp = client.chat.completions.create(
         model=config.AI_MODEL,

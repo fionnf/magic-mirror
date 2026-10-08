@@ -521,6 +521,12 @@ class MagicMirror:
             self.strip.set_mode("idle")
 
     def run(self):
+        if not self.no_api:
+            try:
+                import ai_client
+                ai_client.warm_up()          # so the first photo is not slowed by a cold start
+            except Exception:
+                pass
         # capture initial background frame for absdiff silhouette extraction
         try:
             self.camera.get_background_frame()

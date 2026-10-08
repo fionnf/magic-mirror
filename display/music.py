@@ -153,10 +153,12 @@ def ai_prompt(mode=None):
     """The designer's brief for the chosen mode (chill/organic or cool techno)."""
     p = profile(mode)
     common = (
-        "You are the resident VJ of an LED art wall (192x192 pixels) in the hallway of House Fortuna, a gay "
-        "flatshare in Zürich. Each call you design the NEXT SCENE. Make it BEAUTIFUL first: tasteful, "
-        "harmonious colours, nothing garish, nothing busy. Scenes change slowly and organically; never "
-        "repeat the base style or palette of your recent scenes. "
+        "You are the resident VJ of an LED art wall (192x192 pixels) in the living room of House Fortuna, a "
+        "modern apartment in Zürich. THIS IS WALL ART: a slow, abstract digital artwork people live with, like "
+        "a gallery piece or a designer object - never a screensaver, never a club visual. Each call you design "
+        "the NEXT SCENE. Make it BEAUTIFUL first: restrained, elegant, harmonious colours, nothing garish, "
+        "nothing busy. Scenes change slowly and organically; never repeat the base style or palette of your "
+        "recent scenes. "
         f"Mode: {p['label']}. Base styles you may use: {', '.join(p['styles'])}. "
         f"Preset palettes: {_swatches(mode)} - or invent a 4-colour ramp (deep shadow to bright highlight) "
         "in the same spirit. COLOUR DISCIPLINE: a scene uses ONE or TWO neighbouring hues and their tints "

@@ -142,12 +142,6 @@
       <div class="row" style="justify-content:space-between;margin-top:6px"><span class="sub">Party level</span><b id="partyLab"></b></div>
       <input type="range" id="party" min="0" max="100" step="5" style="margin-bottom:2px">
       <div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="sub">art just breathes</span><span class="sub">dance floor</span></div>
-      <div class="row" style="margin:10px 0 6px">
-        <input type="text" id="vjPrompt" maxlength="200" style="flex:1;min-width:180px" placeholder="e.g. hot pink and gold, mandalas, make it feel like a festival">
-        <button class="primary" onclick="vjSend()">Tell the VJ</button>
-        <button onclick="vjClear()" title="back to the VJ's own taste">Clear</button>
-      </div>
-      <div class="sub" id="vjActive" style="margin-bottom:10px"></div>
       <div class="toggles"><label><input type="checkbox" id="tLoops" onchange="post('/api/music', {style: this.checked ? 'loops' : 'auto', start: true}).then(() => musicLoad())"> 🎞 Video loops only (the downloaded clips)</label></div>
       <div id="loopBox" style="display:none;margin-bottom:10px">
         <div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="sub">Music affects the loops</span>
@@ -160,17 +154,9 @@
       <div class="toggles"><label><input type="checkbox" id="tAuto" onchange="post('/api/music', {mode: this.checked ? 'auto' : 'manual'}).then(() => musicLoad())"> 👂 Let the wall listen and set the party level itself</label></div>
       <div class="sub" id="partyWhy" style="margin-bottom:10px"></div>
       <div class="toggles">
-        <label><input type="checkbox" id="tAi" onchange="toggleSet('ai', this.checked)"> 🤖 AI designer</label>
         <label><input type="checkbox" id="tShz" onchange="toggleSet('shazam', this.checked)"> 🎵 Recognise songs</label>
         <label><input type="checkbox" id="tWall" onchange="toggleSet('song_on_wall', this.checked)"> Song title on the wall</label>
       </div>
-      <div class="row" style="margin-bottom:4px;justify-content:space-between">
-        <span class="sub">Designer brain</span>
-        <span class="seg">
-          <button id="brText" onclick="setBrain('text')">OpenAI · cheap</button><button id="brOpenai" onclick="setBrain('openai')">Audio · pricey</button><button id="brClaude" onclick="setBrain('claude')">Claude</button>
-        </span>
-      </div>
-      <div class="sub" id="brainStatus" style="margin:0 0 10px"></div>
       <div class="row" style="justify-content:space-between"><span class="sub">Sensitivity</span><b id="sensVal">50</b></div>
       <input type="range" id="sens" min="0" max="100" step="5" style="margin-bottom:12px">
       <div class="toggles"><label><input type="checkbox" id="tReact" onchange="toggleSet('art_reacts', this.checked)"> 🎶 Make ALL art move to music (when music is playing)</label></div>
@@ -410,10 +396,8 @@ async function musicLoad(first) {
     if (first) {
       const fill = (id, arr, auto) => { $(id).innerHTML = (auto ? '<option value="auto">Auto (AI)</option>' : '') +
                                         arr.map(v => `<option value="${v}">${cap(v)}</option>`).join(''); };
-      $('vjPrompt').value = m.settings.prompt || '';
       $('sens').value = m.settings.sensitivity; $('sensVal').textContent = m.settings.sensitivity;
     }
-    $('tAi').checked = !!m.settings.ai; $('tShz').checked = !!m.settings.shazam;
     $('tWall').checked = !!m.settings.song_on_wall; $('tReact').checked = !!m.settings.art_reacts;
     const pt = m.now && m.now.party, au2 = m.now && m.now.audio || {};
     const autoOn = m.settings.mode === 'auto';
@@ -427,16 +411,7 @@ async function musicLoad(first) {
     }
     $('party').disabled = autoOn;
     $('partyWhy').textContent = pt ? `The room sounds like ${Math.round(pt.measured * 100)}% (${pt.label}): loudness ${pt.why.db} dB · beat lock ${Math.round(pt.why.beat * 100)}% · ${au2.bpm ? au2.bpm + ' bpm' : 'tempo –'}` : '';
-    $('brText').classList.toggle('on', m.settings.brain === 'text');
-    $('brOpenai').classList.toggle('on', m.settings.brain === 'openai');
-    $('brClaude').classList.toggle('on', m.settings.brain === 'claude');
-    $('brainStatus').textContent = !m.settings.ai ? 'AI designer is off — simple built-in rules' :
-      (m.now && m.now.brain_status ? (m.now.brain_status.includes('ok') ? '✓ ' : '⚠️ ') + m.now.brain_status : '') +
-      (m.now && m.now.ai_calls && Object.keys(m.now.ai_calls).length ? '  ·  AI calls today: ' +
-        Object.entries(m.now.ai_calls).map(([k, v]) => `${k} ${v}`).join(', ') : '');
     const a = m.now && m.now.audio;
-    $('vjActive').textContent = (m.settings.prompt ? '🎯 Following: “' + m.settings.prompt + '”' : 'The VJ is using its own taste.') +
-      (a && a.error ? '   ⚠️ ' + a.error : '');
     const n = m.now;
     $('musicScene').textContent = n && n.scene && !n.silent ? '“' + n.scene + '”' : '';
     $('musicSong').textContent = n && n.song && !n.silent ? '♪ ' + n.song + (n.artist ? ' — ' + n.artist : '') :
@@ -450,10 +425,6 @@ async function musicLoad(first) {
 }
 function toggleSet(key, on) {
   post('/api/music', {[key]: on}).then(() => { toast(`${key === 'ai' ? '🤖 AI designer' : key === 'shazam' ? '🎵 Song recognition' : key === 'art_reacts' ? '🎶 Art moves to music' : 'Song on wall'} ${on ? 'on' : 'off'}`); musicLoad(); })
-    .catch(e => toast(e.message));
-}
-function setBrain(b) {
-  post('/api/music', {brain: b}).then(() => { toast(b === 'claude' ? '🧠 Claude designs (text only)' : b === 'gemini' ? '🧠 Free Gemini designs (text only)' : b === 'text' ? '🧠 Cheap OpenAI text model designs' : '🧠 Audio model designs (hears the music, costs more)'); musicLoad(); })
     .catch(e => toast(e.message));
 }
 let sTimer;
@@ -491,13 +462,6 @@ function musicSet(start) {
     .then(r => { if (start) toast('🎵 Music art on'); else toast('Updated'); show(r.status); musicLoad(); })
     .catch(e => toast(e.message));
 }
-function vjSend() {
-  const prompt = $('vjPrompt').value.trim();
-  post('/api/music', {prompt, start: true}).then(r => { toast(prompt ? '🎯 The VJ is on it…' : 'Back to the VJ\'s own taste'); show(r.status); musicLoad(); })
-    .catch(e => toast(e.message));
-}
-function vjClear() { $('vjPrompt').value = ''; vjSend(); }
-$('vjPrompt').addEventListener('keydown', e => { if (e.key === 'Enter') vjSend(); });
 (async () => {
   musicLoad(true); setInterval(musicLoad, 5000);
   lastPhoto(); setInterval(lastPhoto, 5000);

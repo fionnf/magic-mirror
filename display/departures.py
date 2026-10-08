@@ -160,16 +160,27 @@ class Board:
         px[x + 5, y - 1] = colour                                   # pantograph
 
     def frame(self, t):
+        """The board only changes when a departure, the clock or the blink state changes, so the
+        drawing (many text masks) is cached and most frames are a free repeat."""
+        now = datetime.datetime.now()
+        rows = self._rows()
+        key = (tuple(rows), now.strftime("%H:%M"), self.ok, int(t * 2) % 2 if any(r[2] == 0 for r in rows) else 0,
+               int(t * 18) if not self.ok else 0)
+        if getattr(self, "_cache_key", None) == key:
+            return self._cache_img
+        img = self._draw(t, now, rows)
+        self._cache_key, self._cache_img = key, img
+        return img
+
+    def _draw(self, t, now, rows):
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
         img = Image.new("RGB", (W, H), (0, 0, 0))
         d = ImageDraw.Draw(img)
         f_row, f_head, f_small = self.f_row, self.f_head, _mono(9)
         name = self.station.split(", ")[-1]
-        now = datetime.datetime.now()
         self._led(img, (4, 3), name, f_head)
         self._led(img, (W - 4, 3), now.strftime("%H:%M"), f_head, anchor="ra")
         d.line([4, 21, W - 4, 21], fill=self.AMBER_DIM)
-        rows = self._rows()
         top, rh = 26, (H - 26 - 16) // self.n_rows
         dest_cells = max(6, (W - 30 - 3 * self.cell - 6) // self.cell)
         for r in range(min(self.n_rows, len(rows))):

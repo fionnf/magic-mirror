@@ -365,8 +365,9 @@ def load_settings():
         s["vibe"] = "auto"
     if s["source"] not in ("mac", "pi"):
         s["source"] = "pi"
-    for k in ("ai", "shazam", "song_on_wall"):
+    for k in ("shazam", "song_on_wall"):
         s[k] = bool(s.get(k, True))
+    s["ai"] = False                                        # the AI designer is retired: a rule-based curator picks scenes
     if s.get("brain") == "gemini":                      # retired (the key ran out of credits)
         s["brain"] = "text"
     if s.get("brain") not in ("text", "openai", "claude"):
@@ -995,17 +996,25 @@ class VJ:
         return None
 
     def _fallback(self):
-        """No AI available (or the mode just changed): a good scene from this mode's pool."""
+        """The curator: a scene from this level's pool with variety (no style or palette from the
+        last few scenes), favourites a little more often, hold time by level."""
         P = profile()
-        last = self.history[-1]["style"] if self.history else None
-        style = random.choice([x for x in P["styles"] if x != last] or P["styles"])
-        pal = random.choice(P["palettes"])
+        recent_styles = [h["style"] for h in self.history[-4:]]
+        recent_pals = [h["palette"] for h in self.history[-3:]]
+        pool = [x for x in P["styles"] if x not in recent_styles] or list(P["styles"])
+        weights = [2.0 if x in FAVOURITES else 1.0 for x in pool]
+        style = random.choices(pool, weights=weights, k=1)[0]
+        pals = [x for x in P["palettes"] if x not in recent_pals] or list(P["palettes"])
+        pal = random.choice(pals)
         if style == "loops":
             pal = "native"
         e = self.l.f["energy"]
-        return _validate({"scene": "", "style": style, "palette": pal, "layer": "none",
-                          "symmetry": random.choice(P["symmetry"]), "speed": 0.5 + e,
-                          "hold": sum(P["hold"]) / 2})
+        j = _validate({"scene": "", "style": style, "palette": pal, "layer": "none",
+                       "symmetry": random.choice(P["symmetry"]), "speed": 0.5 + e,
+                       "hold": random.uniform(*P["hold"]), "fade": random.uniform(*P["fade"])})
+        self.history = (self.history + [{"scene": j["scene"], "style": j["style"], "layer": "none",
+                                         "palette": j["palette_desc"]}])[-6:]
+        return j
 
     def reset_for_mode(self):
         """The app switched chill <-> techno: change the scene now, then let the AI refine it."""

@@ -1260,18 +1260,32 @@ class Visuals:
                 self.players.pop(old).close()
             pl = self.players[name] = vjloops.LoopPlayer(name, LOOP_BANK)
         how = f.get("loop_music", "tempo")
+        kick, groove = max(f.get("kick_fast", 0.0), f.get("kick", 0.0)), f.get("beat_pulse", 0.0)
+        amount = 0.5 + 0.5 * CURRENT_LEVEL                  # the party slider scales the response
         period = f.get("period", 0.0) if (f.get("bconf", 0.0) > 0.5 and how == "tempo") else 0.0
         beats = vjloops.beats_for(pl.seconds, period)
-        if beats:                                           # one loop = a whole number of beats
-            target = pl.total / (beats * period)
-        elif how == "bass":                                 # breathes with the bass: 0.7x .. 1.4x
-            target = pl.fps * (0.7 + 0.7 * f.get("kick", 0.0))
+        if beats:                                           # one loop = a whole number of beats, pushed on the beat
+            target = pl.total / (beats * period) * (1.0 + 0.8 * amount * groove)
+            tc = 0.6
+        elif how == "bass":                                 # breathes with the bass: 0.5x .. 2x
+            target = pl.fps * (0.5 + 1.5 * amount * max(kick, groove) + 0.2 * (1 - amount))
+            tc = 0.25
         elif how == "off":
-            target = pl.fps
+            target, tc = pl.fps, 2.0
         else:
-            target = pl.fps * max(0.4, min(1.6, f.get("d_speed", 1.0)))
-        pl.rate = _ema(getattr(pl, "rate", target), target, dt, 2.0)
+            target = pl.fps * max(0.4, min(1.8, f.get("d_speed", 1.0) * (1.0 + 0.6 * amount * kick)))
+            tc = 0.6
+        pl.rate = _ema(getattr(pl, "rate", target), target, dt, tc)
         img = pl.frame(dt, pl.rate)
+        if how != "off":                                    # zoom "pump" on the kick: motion, not light
+            pump = max(kick, groove) * amount
+            z = 1.0 + 0.09 * pump
+            if z > 1.005:
+                import cv2
+                h, w = img.shape[:2]
+                cw, ch = int(w / z), int(h / z)
+                x0, y0 = (w - cw) // 2, (h - ch) // 2
+                img = cv2.resize(img[y0:y0 + ch, x0:x0 + cw], (w, h), interpolation=cv2.INTER_LINEAR)
         if img.shape[0] != self.H or img.shape[1] != self.W:
             from PIL import Image as _I
             img = np.asarray(_I.fromarray(img.astype(np.uint8)).resize((self.W, self.H)), np.float32)
@@ -1475,6 +1489,7 @@ class MusicShow:
         L = P["level"]
         for key in ("energy", "bass", "kick", "mid", "treble"):
             f[key] = min(1.0, f[key] * react)
+        f["kick_fast"] = f["kick"]                                     # the quick kick (for motion only)
         self.ks = _ema(self.ks, f["kick"], dt, P["smooth"])          # organic: a smoothed bass envelope
         env = self.ks
         c = self.vj.choice
@@ -1497,13 +1512,14 @@ class MusicShow:
         # GROOVE: beat-matched *motion* (never brightness). A soft 120 ms attack so it reads as a
         # bounce, strong/weak bars, trusted only with a locked tempo, fading in with the party level.
         g = _smoothstep(L, 0.45, 0.9) * pulse[2] * min(1.0, f["d_react"])
-        if g > 0.01 and f.get("period", 0) > 0:
-            ph = pulse[1]
-            soft = math.exp(-2.5 * ph) * min(1.0, ph * f["period"] / 0.12)
+        f["groove"] = f["beat_pulse"] = 0.0
+        if pulse[2] > 0.01 and f.get("period", 0) > 0:
+            ph, per = pulse[1], f["period"]
+            att = min(0.12, per * 0.3)                            # 120 ms soft attack
+            soft = min(1.0, ph * per / att) * math.exp(-2.5 * max(0.0, ph - att / per))
             bar_w = (1.0, 0.6, 0.85, 0.6)[int(f.get("bar_pos", 0)) % 4]
+            f["beat_pulse"] = pulse[2] * soft * bar_w             # 0..1, peaks on every beat (motion only)
             f["groove"] = g * soft * bar_w
-        else:
-            f["groove"] = 0.0
         self.vis_last_groove = f["groove"]
         downbeat = wrapped and int(f.get("bar_pos", 1)) == 0 and g > 0.3
         if beat and now - getattr(self, "_last_beat_evt", 0.0) < 2.5:

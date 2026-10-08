@@ -1262,18 +1262,19 @@ class Visuals:
         how = f.get("loop_music", "tempo")
         kick, groove = max(f.get("kick_fast", 0.0), f.get("kick", 0.0)), f.get("beat_pulse", 0.0)
         amount = 0.5 + 0.5 * CURRENT_LEVEL                  # the party slider scales the response
+        slow = 0.15 + 0.85 * _smoothstep(CURRENT_LEVEL, 0.0, 0.8)   # chill: ~0.2x speed .. party: full speed
         period = f.get("period", 0.0) if (f.get("bconf", 0.0) > 0.5 and how == "tempo") else 0.0
-        beats = vjloops.beats_for(pl.seconds, period)
+        beats = vjloops.beats_for(pl.seconds / slow, period)          # slower = the loop spans more beats
         if beats:                                           # one loop = a whole number of beats, pushed on the beat
             target = pl.total / (beats * period) * (1.0 + 0.8 * amount * groove)
             tc = 0.6
-        elif how == "bass":                                 # breathes with the bass: 0.5x .. 2x
-            target = pl.fps * (0.5 + 1.5 * amount * max(kick, groove) + 0.2 * (1 - amount))
+        elif how == "bass":                                 # breathes with the bass: 0.5x .. 2x of the base speed
+            target = pl.fps * slow * (0.5 + 1.5 * amount * max(kick, groove) + 0.2 * (1 - amount))
             tc = 0.25
         elif how == "off":
-            target, tc = pl.fps, 2.0
+            target, tc = pl.fps * slow, 2.0
         else:
-            target = pl.fps * max(0.4, min(1.8, f.get("d_speed", 1.0) * (1.0 + 0.6 * amount * kick)))
+            target = pl.fps * slow * max(0.4, min(1.8, f.get("d_speed", 1.0) * (1.0 + 0.6 * amount * kick)))
             tc = 0.6
         pl.rate = _ema(getattr(pl, "rate", target), target, dt, tc)
         img = pl.frame(dt, pl.rate)

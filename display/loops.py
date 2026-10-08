@@ -85,13 +85,14 @@ class LoopPlayer:
         self.K = len(self.head) or 1
         self.total = max(1, self.frames - self.K)        # effective loop length
         self.seconds = self.total / self.fps
-        self.pos, self.idx, self.last = 0.0, self.K - 1, None
+        self.pos, self.idx, self.last, self.prev = 0.0, self.K - 1, None, None
 
     def _read(self):
         import cv2
         ok, fr = self.cap.read()
         if ok:
             self.idx += 1
+            self.prev = self.last                            # kept for blending at slow speeds
             self.last = cv2.cvtColor(fr, cv2.COLOR_BGR2RGB).astype(np.float32)
         return ok
 
@@ -120,6 +121,9 @@ class LoopPlayer:
         if self.last is None:
             return np.zeros((192, 192, 3), np.float32)
         out = self.last
+        frac = self.pos - int(self.pos)
+        if rate < 0.7 * self.fps and self.prev is not None and self.idx == target:
+            out = self.prev * (1.0 - frac) + self.last * frac     # slow playback: glide between frames
         tail = self.idx - (self.frames - self.K)         # 0..K-1 inside the dissolve
         if 0 <= tail < self.K:
             a = (tail + 1) / (self.K + 1)

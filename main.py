@@ -97,7 +97,7 @@ class MagicMirror:
         self._sparkle_check = 0.0
         self._last_presence = time.monotonic()      # last time someone/something moved in front
         self._prev_small = None
-        self._idle_min = (10, 0.0)                  # (minutes, when read) cache of the setting
+        self._idle_min = (10, False, 0.0)           # (minutes, wake_on_motion, when read) cache of the settings
         self._info = {"names": [], "smiling": False, "faces": 0}   # who/what the last photo saw
 
     # ---- button ----
@@ -170,16 +170,21 @@ class MagicMirror:
 
     def _idle_art_wanted(self):
         """True when nobody has been in front of the mirror for the configured time."""
-        mins, read = self._idle_min
+        mins, wake, read = self._idle_min
         now = time.monotonic()
         if now - read > 5.0:
             try:
                 import mirror_settings
-                mins = mirror_settings.load()["idle_art_minutes"]
+                st = mirror_settings.load()
+                mins, wake = st["idle_art_minutes"], st["wake_on_motion"]
             except Exception:
                 pass
-            self._idle_min = (mins, now)
-        return mins > 0 and now - self._last_presence > mins * 60
+            self._idle_min = (mins, wake, now)
+        if mins <= 0:
+            return False
+        if getattr(self, "_art_on", False) and not wake:
+            return True                  # art stays until a button/trigger (run() clears _art_on)
+        return now - self._last_presence > mins * 60
 
     def _look_for_smile(self, frame):
         """About 3x a second: if the main face is smiling, sparkle around it for 2 seconds."""
@@ -796,6 +801,7 @@ class MagicMirror:
             if self._stop.is_set():
                 break
             self._last_presence = time.monotonic()
+            self._art_on = False
             if kind == "long":
                 self.run_booth_cycle()
             elif kind == "aura":

@@ -150,6 +150,7 @@
         <select id="idleArt" onchange="mset({idle_art_minutes:+this.value})">
           <option value="0">never</option><option value="2">2 min</option><option value="5">5 min</option>
           <option value="10">10 min</option><option value="30">30 min</option><option value="60">1 hour</option></select></div>
+      <div class="toggles"><label><input type="checkbox" id="tWake" onchange="mset({wake_on_motion:this.checked})"> Motion or a face brings the mirror back (otherwise only a button does)</label></div>
       <div class="sub" style="margin-bottom:10px">Faces stay on the Pi as numbers (no photos of people you have not named). “Learn frequent faces” is off by default; it only suggests someone after they show up several times on different days.</div>
       <b>👥 People</b>
       <div id="peopleList" style="margin:8px 0"></div>
@@ -318,7 +319,7 @@ async function mirrorSettingsLoad() {
     const d = await (await fetch('/api/mirror/settings')).json();
     if (!$('lang').options.length) $('lang').innerHTML = d.languages.map(l => `<option>${l}</option>`).join('');
     if (document.activeElement !== $('tone')) { $('tone').value = d.tone; $('toneVal').textContent = toneName(d.tone); }
-    $('lang').value = d.language; $('tSmile').checked = d.smile; $('tRecog').checked = d.recognise; $('tLearn').checked = d.learn_faces;
+    $('lang').value = d.language; $('tSmile').checked = d.smile; $('tRecog').checked = d.recognise; $('tLearn').checked = d.learn_faces; $('tWake').checked = d.wake_on_motion;
     if (document.activeElement !== $('idleArt')) $('idleArt').value = String(d.idle_art_minutes);
   } catch (e) {}
 }

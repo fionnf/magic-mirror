@@ -214,7 +214,7 @@ Re-pairing a light in the Smart Life app changes its local key - re-run the wiza
   `faces.json` on the Pi. "Learn frequent faces" is OFF by default; it suggests unnamed regulars after 5 sightings on 2 days.
   Models: `assets/models/get_models.sh` (the bootstrap script runs it).
 - **Aura** / **Pixel selfie** buttons (mirror mode): AI colour reading with the wall glowing in that colour; 48x48 sprite portrait.
-- **Nobody around**: after N quiet minutes (default 10) the mirror shows Lava & Coral; motion or a face brings the silhouette back.
+- **Nobody around**: after N quiet minutes (default 10) the mirror shows Lava & Coral; motion or a face brings the silhouette back only if "Motion or a face brings the mirror back" is ticked in the app (default off: only a button does).
 - **Dedications**: guests open `http://<pi>/d` (or scan the QR from the app) - messages scroll across the bottom of the wall.
   No filtering by design; pause / delete / clear in the app. Off until you switch it on.
 - **Art**: *Shapes* (13 thin generative line patterns; also available as music styles) and *Light Art* (stained glass,

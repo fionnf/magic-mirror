@@ -8,6 +8,8 @@ made in the web app apply to the very next photo with no restart.
   recognise   greet enrolled people by name (opt-in; needs people enrolled in the app)
   smile       sparkles when someone smiles
   idle_art_minutes  nobody in front of the mirror for this long -> show art; 0 = never
+  wake_on_motion  False: once art is showing, only a button/trigger brings the silhouette back;
+                  True: motion or a face does too
   learn_faces keep fingerprints of unnamed faces that keep turning up, so they can be named in the
               app (OFF by default; see faces.py for exactly what is kept and for how long)
 """
@@ -25,7 +27,7 @@ LANGUAGES = {
     "Drama queen": "Reply in English as the most dramatic, over-the-top drama queen alive.",
 }
 DEFAULTS = {"tone": 50, "language": "English", "recognise": True, "smile": True,
-            "learn_faces": False, "idle_art_minutes": 10}
+            "learn_faces": False, "idle_art_minutes": 10, "wake_on_motion": False}
 
 
 def load():
@@ -44,7 +46,7 @@ def load():
         s["idle_art_minutes"] = max(0, min(240, int(s["idle_art_minutes"])))
     except (TypeError, ValueError):
         s["idle_art_minutes"] = 10
-    for k in ("recognise", "smile", "learn_faces"):
+    for k in ("recognise", "smile", "learn_faces", "wake_on_motion"):
         s[k] = bool(s[k])
     return s
 

@@ -367,11 +367,9 @@ class LavaCoralGallery(Gallery):
         gold = _palette([(5, 3, 0), (90, 50, 0), (230, 170, 50), (255, 240, 180)])
         bloom = _palette([(5, 10, 30), (40, 30, 110), (230, 90, 140), (255, 210, 160)])
         self.pieces = [
-            LavaPlus(W, H, "Lava Lamp", "lamp", lamp, n=6, speed=1.0),
             CoralPlus(W, H, "3D Brain Coral", 0.0545, 0.062, brain, relief=True),
             LavaPlus(W, H, "Neon Topography", "contour", n=6, speed=0.8),
             CoralPlus(W, H, "Bloom", 0.0545, 0.062, bloom, seed="centre", relief=True),
-            LavaPlus(W, H, "Mercury", "chrome", n=6, speed=0.9),
             CoralPlus(W, H, "Mitosis", 0.0367, 0.0649, pink),
             LavaPlus(W, H, "Bioluminescence", "glow", bio, n=7, speed=0.7),
             CoralPlus(W, H, "Gold Labyrinth", 0.029, 0.057, gold, relief=True),
@@ -382,7 +380,7 @@ class LavaCoralGallery(Gallery):
         self.current = -1
 
 
-LAVA_CORAL_LOOP_SEC = PIECE_SEC * 10
+LAVA_CORAL_LOOP_SEC = PIECE_SEC * 8
 _lc_gallery = None
 
 

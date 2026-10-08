@@ -26,7 +26,7 @@ import config
 
 def _anims():
     from display import (welcome, pride_show, cards, maeva_story, dewa_story, art,
-                         departures, music, shapes, light_art)
+                         departures, music, shapes, light_art, artsy)
     return {
         "music":   (music.frame, 600.0),
         "trams":   (departures.frame, 60.0),
@@ -35,6 +35,7 @@ def _anims():
         "art":     (art.frame, art.LOOP_SEC),
         "shapes":  (shapes.frame, shapes.LOOP_SEC),
         "glass":   (light_art.frame, light_art.LOOP_SEC),
+        "artsy":   (artsy.frame, artsy.LOOP_SEC),
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),
         "maeva":   (maeva_story.frame, maeva_story.LOOP_SEC),
@@ -96,7 +97,7 @@ def _loading_screen(matrix, frame_fn):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("anim", nargs="?", default="pride", help="music | ambient | trams | shapes | glass | lava | art | pride | maeva | dewa | welcome | cow")
+    ap.add_argument("anim", nargs="?", default="pride", help="music | ambient | trams | shapes | glass | artsy | lava | art | pride | maeva | dewa | welcome | cow")
     ap.add_argument("--seconds", type=float, default=0, help="stop after N s (0 = forever)")
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--gif", help="write one loop to this GIF instead of the wall")
@@ -152,11 +153,11 @@ def main():
                 stats.append((c1 - c0, time.perf_counter() - c1))
                 if time.monotonic() - stats_t > 10.0:
                     import numpy as np
-                    a = np.array(stats) * 1000
-                    print(f"[stats] {len(a)} frames/10s  render p50 {np.percentile(a[:,0],50):.1f} p95 "
-                          f"{np.percentile(a[:,0],95):.1f} max {a[:,0].max():.1f} ms | draw(wait) p50 "
-                          f"{np.percentile(a[:,1],50):.1f} p95 {np.percentile(a[:,1],95):.1f} "
-                          f"max {a[:,1].max():.1f} ms (budget 34.5)", flush=True)
+                    arr = np.array(stats) * 1000
+                    print(f"[stats] {len(arr)} frames/10s  render p50 {np.percentile(arr[:,0],50):.1f} p95 "
+                          f"{np.percentile(arr[:,0],95):.1f} max {arr[:,0].max():.1f} ms | draw(wait) p50 "
+                          f"{np.percentile(arr[:,1],50):.1f} p95 {np.percentile(arr[:,1],95):.1f} "
+                          f"max {arr[:,1].max():.1f} ms (budget 34.5)", flush=True)
                     stats.clear()
                     stats_t = time.monotonic()
     except KeyboardInterrupt:

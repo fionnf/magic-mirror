@@ -32,8 +32,9 @@ PY = sys.executable or "/usr/bin/python3"
 
 MODES = [
     # id, category, title, description
-    ("lava", "Art", "Lava & Coral", "Lava lamps, brain coral, mercury, neon contours - 10 slow pieces"),
+    ("lava", "Art", "Lava & Coral", "Brain coral, bloom, mitosis, neon contours, bioluminescence - 8 slow pieces"),
     ("shapes", "Art", "Shapes", "Flow dots & lines, node garden, spiral, woven grid, ripples - thin glowing patterns"),
+    ("artsy", "Art", "Artsy", "Marbling, oil slick, watercolour, Kandinsky, op-art stripes, a drifting Mondrian"),
     ("glass", "Art", "Light Art", "Stained glass, Julia fractal, kaleidoscope, long-exposure trails, nebula - soft and filled"),
     ("art", "Art", "Art Gallery", "Ink flow, colour fields, lava, coral, moiré"),
     ("pride", "Shows", "Pride Show", "Disco ball, HOUSE FORTUNA, people nearby, vortex, heart"),
@@ -250,7 +251,7 @@ def make_thumbs():
     os.makedirs(THUMB_DIR, exist_ok=True)
     try:
         from PIL import Image, ImageDraw
-        from display import (art, cards, dewa_story, maeva_story, light_art, pride_show, shapes, welcome)
+        from display import (art, artsy, cards, dewa_story, maeva_story, light_art, pride_show, shapes, welcome)
         from display.pride_show import _emoji
         import config
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
@@ -275,6 +276,7 @@ def make_thumbs():
             "art": lambda: seq(art.Gallery(), 12.0),
             "shapes": lambda: seq(shapes.ShapesGallery(), 60.0),
             "glass": lambda: seq(light_art.LightGallery(), 60.0),
+            "artsy": lambda: seq(artsy.ArtsyGallery(), 60.0),
             "pride": lambda: pride_show.frame(9.5),
             "dewa": lambda: dewa_story.frame(24.5),
             "maeva": lambda: maeva_story.frame(8.0),

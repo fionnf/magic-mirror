@@ -72,7 +72,7 @@ VIBES = {"chill": ("chill and tranquil", 1.0), "dreamy": ("dreamy and floaty", 0
 PROFILES = {
     "chill": dict(
         label="chill, organic and painterly",
-        styles=["aurora", "lava", "coral", "ink", "ripples", "marbling", "oilslick", "watercolour",
+        styles=["aurora", "lava", "coral", "ink", "ripples", "marbling", "oilslick",
                 "nebula", "glass", "harmonograph", "ridges"],
         palettes=["dusk", "ocean", "forest", "moon", "blush", "ember", "gold"],
         layers=("aurora", "ripples", "nebula"), layer_max=0.4, symmetry=("none",),
@@ -178,7 +178,7 @@ def ai_prompt(mode=None):
             "Think soft light, water, ink, clouds and coral: slow, round, organic shapes in gentle colours, "
             "long dreamy fades, scenes of 3-5 minutes, speed 0.4-1.1. The beat is only a gentle breath. "
             "Pick styles by feel: aurora/ripples/nebula for airy, lava/coral/ink for warm and living, "
-            "marbling/oilslick/watercolour/glass for painterly. "
+            "marbling/oilslick/glass for painterly. "
         )
     ranges = (
         f"Allowed ranges: layer (optional second style, one of {', '.join(p['layers'])}) opacity 0-{p['layer_max']}; "
@@ -261,7 +261,7 @@ def _validate(j):
     out["layer_opacity"] = num(j.get("layer_opacity"), 0.0, P["layer_max"], 0.25) if out["layer"] != "none" else 0.0
     out["concept"] = str(j.get("concept", ""))[:120]
     pal = j.get("palette")
-    if pal == "native" and style in ("oilslick", "watercolour"):
+    if pal == "native" and style == "oilslick":
         out["palkey"] = out["palette_desc"] = "native"
     elif pal in P["palettes"]:
         out["palkey"] = out["palette_desc"] = pal

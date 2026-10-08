@@ -185,14 +185,14 @@ class ArtsyGallery(art.Gallery):
         rose = P([(25, 6, 35), (150, 40, 120), (250, 120, 150), (255, 220, 200)])
         wash = P([(60, 120, 220), (220, 70, 120), (250, 190, 70), (60, 190, 160), (60, 120, 220)])
         stripe = P([(10, 10, 20), (20, 40, 120), (240, 90, 120), (250, 240, 220)])
-        self.pieces = [Marbling(W, H, ink), OilSlick(W, H), Watercolour(W, H, wash),
+        self.pieces = [Marbling(W, H, ink), OilSlick(W, H),
                        Kandinsky(W, H), OpArt(W, H, stripe), Marbling(W, H, rose),
                        Mondrian(W, H)]
         self.last_t = None
         self.current = -1
 
 
-LOOP_SEC = art.PIECE_SEC * 7
+LOOP_SEC = art.PIECE_SEC * 6
 _gallery = None
 
 

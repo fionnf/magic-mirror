@@ -35,3 +35,4 @@ tuya-raw.json
 panel_setup/lights.json
 panel_setup/lights_state.json
 gifs/
+panel_setup/lights_cache.json

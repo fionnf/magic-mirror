@@ -197,6 +197,131 @@ class HexStrands(_Piece):
         return self.finish(img)
 
 
+class Truchet(_Piece):
+    """Quarter-circle arc tiles that flip one by one, so long ribbons keep re-forming."""
+
+    def __init__(self, W, H, lut, tile=16):
+        super().__init__(W, H, "Truchet Ribbons", lut)
+        self.tile = tile
+        self.reset()
+
+    def reset(self):
+        n = self.W // self.tile + 1
+        r = np.random.default_rng(11)
+        self.phase = r.uniform(0, 1, (n, n))
+        self.rate = r.uniform(0.01, 0.04, (n, n))
+
+    def render(self, dt, t):
+        img, d = self.canvas()
+        T, n = self.tile, self.W // self.tile + 1
+        for j in range(n):
+            for i in range(n):
+                flip = int(self.phase[j, i] * 1000 + t * self.rate[j, i] * 12) % 2
+                x0, y0 = i * T, j * T
+                col = self.colour(0.2 + 0.7 * ((i * 7 + j * 3) % 10) / 10)
+                if flip:
+                    d.arc([x0 - T / 2, y0 - T / 2, x0 + T / 2, y0 + T / 2], 0, 90, fill=col)
+                    d.arc([x0 + T / 2, y0 + T / 2, x0 + 3 * T / 2, y0 + 3 * T / 2], 180, 270, fill=col)
+                else:
+                    d.arc([x0 + T / 2, y0 - T / 2, x0 + 3 * T / 2, y0 + T / 2], 90, 180, fill=col)
+                    d.arc([x0 - T / 2, y0 + T / 2, x0 + T / 2, y0 + 3 * T / 2], 270, 360, fill=col)
+        return self.finish(img)
+
+
+class Chevrons(_Piece):
+    """Stacked V-shaped bands that slide sideways at different speeds."""
+
+    def __init__(self, W, H, lut, rows=14):
+        super().__init__(W, H, "Chevron Blocks", lut)
+        self.rows = rows
+
+    def render(self, dt, t):
+        W, H, n = self.W, self.H, self.rows
+        img, d = self.canvas()
+        rh = H / n
+        for k in range(n):
+            y = k * rh
+            period = 26 + (k % 3) * 8
+            shift = (t * (6 + k % 4 * 2) * (1 if k % 2 else -1)) % period
+            col = self.colour(0.1 + 0.85 * k / n)
+            x = -period + shift
+            while x < W + period:
+                d.line([(x, y + rh), (x + period / 2, y + 2), (x + period, y + rh)], fill=col, width=1)
+                x += period
+        return self.finish(img)
+
+
+class Harmonograph(_Piece):
+    """Two decaying pendulums drawing a looping rose; the frequencies drift slowly."""
+
+    def __init__(self, W, H, lut):
+        super().__init__(W, H, "Harmonograph", lut)
+
+    def render(self, dt, t):
+        W, H = self.W, self.H
+        img, d = self.canvas()
+        a = 3.0 + 0.5 * math.sin(t * 0.03)
+        b = 5.0 + 0.5 * math.cos(t * 0.021)
+        u = np.linspace(0, 16 * math.pi, 1500)
+        decay = np.exp(-u * 0.02)
+        x = W / 2 + W * 0.46 * decay * (np.sin(a * u + t * 0.1) * 0.7 + np.sin(b * u + 0.5) * 0.3)
+        y = H / 2 + H * 0.46 * decay * (np.sin(b * u + 1.9 + t * 0.07) * 0.7 + np.sin(a * u * 1.01 + 2.2) * 0.3)
+        n = len(u)
+        for k in range(0, n - 1, 6):
+            d.line(list(zip(x[k:k + 7], y[k:k + 7])), fill=self.colour(k / n), width=1)
+        return self.finish(img)
+
+
+class IsoCubes(_Piece):
+    """Isometric cube lattice drawn as wireframes whose heights ripple."""
+
+    def __init__(self, W, H, lut, size=21):
+        super().__init__(W, H, "Iso Cubes", lut)
+        self.size = size
+
+    def render(self, dt, t):
+        W, H, s = self.W, self.H, self.size
+        img, d = self.canvas()
+        dx, dy = s * 0.866, s * 0.5
+        for j in range(-2, int(H / dy) + 3):
+            for i in range(-2, int(W / (2 * dx)) + 3):
+                cx = i * 2 * dx + (dx if j % 2 else 0)
+                cy = j * dy * 1.0
+                h = (0.25 + 0.75 * (0.5 + 0.5 * math.sin(i * 0.7 + j * 0.45 + t * 0.5))) * s * 0.9
+                top = cy - h
+                col = self.colour(0.15 + 0.8 * (0.5 + 0.5 * math.sin(i * 0.3 - j * 0.2 + t * 0.2)))
+                d.line([(cx - dx, top), (cx, top - dy), (cx + dx, top), (cx, top + dy), (cx - dx, top)], fill=col)
+                d.line([(cx - dx, top), (cx - dx, top + h)], fill=col)
+                d.line([(cx + dx, top), (cx + dx, top + h)], fill=col)
+                d.line([(cx, top + dy), (cx, top + dy + h)], fill=col)
+        return self.finish(img)
+
+
+class Ridges(_Piece):
+    """Stacked contour lines of a slowly evolving noise landscape that hide each other
+    (filled black under every line, so near ridges cover far ones)."""
+
+    def __init__(self, W, H, lut, rows=34):
+        super().__init__(W, H, "Night Ridges", lut)
+        self.rows = rows
+
+    def render(self, dt, t):
+        W, H, n = self.W, self.H, self.rows
+        img, d = self.canvas()
+        xs = np.linspace(0, W, 96)
+        for k in range(n):
+            base = H * 0.22 + k * (H * 0.78) / n
+            depth = k / n
+            amp = 6 + depth * 18
+            ys = base - amp * (0.5 + 0.5 * np.sin(xs * 0.05 + t * 0.2 + k * 0.4)
+                               * np.sin(xs * 0.021 - t * 0.13 + k * 0.17)
+                               + 0.35 * np.sin(xs * 0.11 + k * 0.9 - t * 0.3))
+            pts = list(zip(xs, ys))
+            d.polygon(pts + [(W, H + 2), (0, H + 2)], fill=(0, 0, 0))
+            d.line(pts, fill=self.colour(0.15 + 0.8 * depth), width=1)
+        return self.finish(img)
+
+
 class ShapesGallery(art.Gallery):
     def __init__(self):
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
@@ -210,13 +335,15 @@ class ShapesGallery(art.Gallery):
             FlowDots(W, H, ice), WovenGrid(W, H, rose), NodeGarden(W, H, mint),
             FlowDots(W, H, sun, lines=True), SpiralMorph(W, H, gold), RadialRings(W, H, ice),
             HexStrands(W, H, mint), FlowDots(W, H, rose, lines=True, strands=22),
+            Truchet(W, H, sun), Chevrons(W, H, ice), Harmonograph(W, H, gold),
+            IsoCubes(W, H, mint), Ridges(W, H, rose),
         ]
         self.last_t = None
         self.current = -1
 
 
 SHAPES_PIECE_SEC = art.PIECE_SEC
-LOOP_SEC = SHAPES_PIECE_SEC * 8
+LOOP_SEC = SHAPES_PIECE_SEC * 13
 _gallery = None
 
 

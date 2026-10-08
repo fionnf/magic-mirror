@@ -294,7 +294,23 @@ class Listener:
                 self._push(np.frombuffer(data[: len(data) // 2 * 2], "<i2").astype(np.float32)
                            / 32768.0)
 
+    @staticmethod
+    def _raise_capture_volume(dev):
+        """USB webcam mics often start quiet: best-effort raise the capture level of that card."""
+        try:
+            card = dev.split(":")[1].split(",")[0]
+            ctl = subprocess.run(["amixer", "-c", card, "scontrols"], capture_output=True, text=True,
+                                 timeout=5).stdout
+            for line in ctl.splitlines():
+                name = line.split("'")[1] if "'" in line else ""
+                if name.lower() in ("mic", "capture", "mic capture", "headset"):
+                    subprocess.run(["amixer", "-q", "-c", card, "sset", name, "cap", "85%"],
+                                   capture_output=True, timeout=5)
+        except Exception:
+            pass
+
     def _alsa(self, dev):
+        self._raise_capture_volume(dev or "")
         while True:
             p = subprocess.Popen(["arecord", "-q", "-D", dev or "default", "-f", "S16_LE", "-r",
                                   str(SR), "-c", "1", "-t", "raw"], stdout=subprocess.PIPE,

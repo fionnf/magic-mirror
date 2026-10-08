@@ -94,6 +94,9 @@ class MagicMirror:
         self._aura_event = threading.Event()
         self._sparkle = None                       # (cx, cy normalised, until_monotonic)
         self._sparkle_check = 0.0
+        self._last_presence = time.monotonic()      # last time someone/something moved in front
+        self._prev_small = None
+        self._idle_min = (10, 0.0)                  # (minutes, when read) cache of the setting
         self._info = {"names": [], "smiling": False, "faces": 0}   # who/what the last photo saw
 
     # ---- button ----
@@ -128,6 +131,7 @@ class MagicMirror:
             try:
                 frame = self.camera.capture_frame()
                 self._latest_frame = frame
+                self._note_motion(frame)
                 self._look_for_smile(frame)
                 mask = self.camera.extract_silhouette(
                     frame, getattr(self.camera, "_background", None))
@@ -152,6 +156,30 @@ class MagicMirror:
             dt = time.monotonic() - t0
             time.sleep(max(0.0, interval - dt))
 
+    def _note_motion(self, frame):
+        """Presence = the picture is changing (someone moves) - cheap 40x30 frame difference."""
+        try:
+            import cv2
+            small = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (40, 30)).astype("float32")
+            if self._prev_small is not None and abs(small - self._prev_small).mean() > 2.5:
+                self._last_presence = time.monotonic()
+            self._prev_small = small
+        except Exception:
+            self._last_presence = time.monotonic()
+
+    def _idle_art_wanted(self):
+        """True when nobody has been in front of the mirror for the configured time."""
+        mins, read = self._idle_min
+        now = time.monotonic()
+        if now - read > 5.0:
+            try:
+                import mirror_settings
+                mins = mirror_settings.load()["idle_art_minutes"]
+            except Exception:
+                pass
+            self._idle_min = (mins, now)
+        return mins > 0 and now - self._last_presence > mins * 60
+
     def _look_for_smile(self, frame):
         """About 3x a second: if the main face is smiling, sparkle around it for 2 seconds."""
         now = time.monotonic()
@@ -166,6 +194,7 @@ class MagicMirror:
             rows = [r for r in smartcrop.find_face_rows(frame) if min(r[2], r[3]) >= 40]
             if not rows:
                 return
+            self._last_presence = now                    # a face is there
             r = max(rows, key=lambda r: r[2] * r[3])
             if moods.is_smiling(r):
                 h, w = frame.shape[:2]
@@ -240,6 +269,20 @@ class MagicMirror:
             if self._trigger_event.is_set():
                 self._trigger_event.clear()
                 return "short"
+
+            if self._idle_art_wanted():
+                # nobody around for a while: show slow art instead of the (empty) silhouette
+                if not getattr(self, "_art_on", False):
+                    print("[IDLE] nobody around - showing art")
+                    self._art_on = True
+                from display import art
+                self.matrix.draw(art.frame_lava_coral(time.monotonic()))
+                last_key = None
+                time.sleep(1.0 / 15)
+                continue
+            if getattr(self, "_art_on", False):
+                print("[IDLE] someone is back - silhouette")
+                self._art_on = False
 
             # Only recompose + redraw when something visible changed (new
             # silhouette frame or a new overlay) — not on every tick.
@@ -708,6 +751,7 @@ class MagicMirror:
             kind = self._run_idle_until_trigger()
             if self._stop.is_set():
                 break
+            self._last_presence = time.monotonic()
             if kind == "long":
                 self.run_booth_cycle()
             elif kind == "aura":

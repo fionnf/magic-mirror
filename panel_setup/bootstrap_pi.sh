@@ -8,7 +8,15 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-say() { printf '\n==> %s\n' "$*"; }
+say() {
+    printf '\n==> %s\n' "$*"
+    local n="${1%%/*}" total=7
+    if [[ "$n" =~ ^[0-9]+$ ]]; then
+        local filled=$(( n * 20 / total )) bar="" i
+        for ((i = 0; i < 20; i++)); do [ $i -lt $filled ] && bar+="#" || bar+="-"; done
+        printf '    [%s] step %s of %s (%d%%)\n' "$bar" "$n" "$total" $(( n * 100 / total ))
+    fi
+}
 
 say "1/7 system packages"
 sudo apt-get update
@@ -28,7 +36,7 @@ fi
 sudo pip3 install --break-system-packages --root-user-action=ignore "$WORK/rpi-rgb-led-matrix"
 
 say "3/7 python packages (system-wide: the services run as root)"
-sudo pip3 install --break-system-packages --root-user-action=ignore \
+sudo pip3 install --break-system-packages --root-user-action=ignore --ignore-installed \
     openai python-escpos pyusb qrcode \
     google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2 \
     shazamio audioop-lts tinytuya
@@ -43,6 +51,8 @@ if ! grep -q '^dtparam=audio=off' "$CFG"; then
     echo 'dtparam=audio=off' | sudo tee -a "$CFG" >/dev/null
     echo "   added dtparam=audio=off (takes effect after a reboot)"
 fi
+sudo sed -i 's/^dtparam=audio=on/#dtparam=audio=on/' "$CFG"      # the stock line 'audio=on' would re-enable it
+echo "blacklist snd_bcm2835" | sudo tee /etc/modprobe.d/blacklist-rgb-matrix.conf >/dev/null
 grep -q '^camera_auto_detect=1' "$CFG" || echo "   note: camera_auto_detect=1 is not set in $CFG"
 
 say "5/7 secrets file"

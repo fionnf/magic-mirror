@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -477,6 +478,70 @@ def make_app(runner):
             return jsonify(lt.set_schedule(off))
         except ValueError:
             return jsonify({"error": "time must look like 23:30"}), 400
+
+    @app.get("/api/mirror/settings")
+    def mirror_settings_get():
+        import mirror_settings as ms
+        return jsonify({**ms.load(), "languages": list(ms.LANGUAGES)})
+
+    @app.post("/api/mirror/settings")
+    def mirror_settings_set():
+        import mirror_settings as ms
+        d = request.get_json(force=True, silent=True) or {}
+        if "language" in d and d["language"] not in ms.LANGUAGES:
+            return jsonify({"error": "unknown language"}), 400
+        return jsonify(ms.save(d))
+
+    def _book():
+        import faces
+        return faces.FaceBook()
+
+    @app.get("/api/faces")
+    def faces_list():
+        try:
+            import faces
+            ok = faces.available()
+            b = faces.FaceBook()
+            return jsonify({"available": ok, "people": b.people() if ok else {},
+                            "suggestions": b.suggestions() if ok else []})
+        except Exception as e:
+            return jsonify({"available": False, "people": {}, "suggestions": [], "note": str(e)[:80]})
+
+    @app.post("/api/faces/enrol")
+    def faces_enrol():
+        if runner.current != "mirror":
+            return jsonify({"error": "start mirror mode first - the camera is used to learn the face"}), 409
+        d = request.get_json(force=True, silent=True) or {}
+        try:
+            req = urllib.request.Request("http://127.0.0.1:5000/api/faces/enrol", method="POST",
+                                         data=json.dumps({"name": d.get("name", "")}).encode(),
+                                         headers={"Content-Type": "application/json"})
+            return app.response_class(urllib.request.urlopen(req, timeout=20).read(), mimetype="application/json")
+        except urllib.error.HTTPError as e:
+            return app.response_class(e.read(), status=e.code, mimetype="application/json")
+        except Exception as e:
+            return jsonify({"error": f"mirror not ready ({e})"}), 503
+
+    @app.post("/api/faces/forget")
+    def faces_forget():
+        d = request.get_json(force=True, silent=True) or {}
+        if d.get("all"):
+            return jsonify({"removed": _book().forget_everything()})
+        if d.get("learned"):
+            return jsonify({"removed": _book().forget_learned()})
+        return jsonify({"removed": _book().forget(d.get("name", ""))})
+
+    @app.post("/api/faces/name")
+    def faces_name():
+        d = request.get_json(force=True, silent=True) or {}
+        try:
+            return jsonify({"name": _book().name_suggestion(d.get("id", ""), d.get("name", ""))})
+        except (KeyError, ValueError) as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.post("/api/faces/dismiss")
+    def faces_dismiss():
+        return jsonify({"ok": _book().dismiss((request.get_json(force=True, silent=True) or {}).get("id", ""))})
 
     def _mirror_trigger(kind):
         if runner.current != "mirror":

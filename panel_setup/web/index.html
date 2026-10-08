@@ -132,6 +132,33 @@
   </section>
 
   <section>
+    <h2>Mirror voice &amp; people</h2>
+    <div class="box">
+      <b>🗣 How the mirror talks</b>
+      <div class="row" style="margin:10px 0 4px"><span class="sub" style="min-width:48px">Tone</span>
+        <input type="range" id="tone" min="0" max="100" style="flex:1" oninput="$('toneVal').textContent=toneName(this.value)" onchange="mset({tone:+this.value})">
+        <span class="sub" id="toneVal" style="min-width:90px;text-align:right"></span></div>
+      <div class="row" style="margin-bottom:10px"><span class="sub" style="min-width:48px">Speaks</span>
+        <select id="lang" onchange="mset({language:this.value})"></select></div>
+      <div class="toggles">
+        <label><input type="checkbox" id="tSmile" onchange="mset({smile:this.checked})"> ✨ Sparkles when you smile</label>
+        <label><input type="checkbox" id="tRecog" onchange="mset({recognise:this.checked})"> 👋 Greet people by name</label>
+        <label><input type="checkbox" id="tLearn" onchange="mset({learn_faces:this.checked})"> 🔎 Learn frequent faces</label>
+      </div>
+      <div class="sub" style="margin-bottom:10px">Faces stay on the Pi as numbers (no photos of people you have not named). “Learn frequent faces” is off by default; it only suggests someone after they show up several times on different days.</div>
+      <b>👥 People</b>
+      <div id="peopleList" style="margin:8px 0"></div>
+      <div class="row" style="margin-bottom:8px">
+        <input type="text" id="newName" placeholder="Name" style="flex:1;min-width:120px">
+        <button onclick="enrol()">Learn my face</button>
+      </div>
+      <div class="sub" id="peopleNote"></div>
+      <div id="sugList"></div>
+      <div class="row" style="margin-top:8px"><button onclick="forgetLearned()">Forget learned faces</button><button onclick="forgetAll()">Delete all face data</button></div>
+    </div>
+  </section>
+
+  <section>
     <h2>Lights</h2>
     <div class="box">
       <div class="row" style="justify-content:space-between;margin-bottom:8px">
@@ -259,6 +286,43 @@ function show(s) {
   if (!show.init) { $('cam').value = s.camera || 'stream'; $('auto').value = String(s.mirror_auto || 0);
                     $('wheelPrint').checked = s.wheel_print !== false; show.init = true; }
 }
+
+function toneName(v) { v = +v; return v <= 15 ? 'sweet 💗' : v <= 40 ? 'kind' : v <= 65 ? 'cheeky 😉' : v <= 85 ? 'sassy 💅' : 'roast 🔥'; }
+const mset = b => post('/api/mirror/settings', b).catch(e => toast(e.message));
+async function mirrorSettingsLoad() {
+  try {
+    const d = await (await fetch('/api/mirror/settings')).json();
+    if (!$('lang').options.length) $('lang').innerHTML = d.languages.map(l => `<option>${l}</option>`).join('');
+    if (document.activeElement !== $('tone')) { $('tone').value = d.tone; $('toneVal').textContent = toneName(d.tone); }
+    $('lang').value = d.language; $('tSmile').checked = d.smile; $('tRecog').checked = d.recognise; $('tLearn').checked = d.learn_faces;
+  } catch (e) {}
+}
+async function peopleLoad() {
+  try {
+    const d = await (await fetch('/api/faces')).json();
+    if (!d.available) { $('peopleList').innerHTML = ''; $('sugList').innerHTML = ''; $('peopleNote').textContent = 'Face recognition is not installed on this machine (run assets/models/get_models.sh).'; return; }
+    $('peopleNote').textContent = '';
+    const names = Object.keys(d.people);
+    $('peopleList').innerHTML = names.length ? names.map(n => `<span class="chip" style="display:inline-flex;gap:6px;align-items:center;margin:0 6px 6px 0;padding:4px 10px;border-radius:999px;background:var(--card2,#2a2236)">${n.replace(/</g, '&lt;')} <a href="#" onclick="event.preventDefault();forgetPerson(this.dataset.n)" data-n="${n.replace(/"/g, '&quot;')}" title="remove">✕</a></span>`).join('')
+      : '<span class="sub">Nobody yet. Stand in front of the mirror, type your name and press “Learn my face”.</span>';
+    $('sugList').innerHTML = (d.suggestions || []).map(x => `
+      <div class="row" style="margin:8px 0;gap:10px"><img src="data:image/jpeg;base64,${x.thumb}" style="width:48px;height:48px;border-radius:50%;object-fit:cover">
+        <span class="sub" style="flex:1">Seen ${x.count}× on ${x.days} days — who is this?</span>
+        <input type="text" placeholder="Name" id="sg_${x.id}" style="width:110px">
+        <button onclick="nameSug('${x.id}')">Save</button><button onclick="dismissSug('${x.id}')">Not a person to remember</button></div>`).join('');
+  } catch (e) {}
+}
+async function enrol() {
+  const name = $('newName').value.trim(); if (!name) return toast('Type a name first');
+  toast('Look at the mirror for 5 seconds…');
+  try { const r = await post('/api/faces/enrol', {name}); toast(`Learned ${r.name} ✓`); $('newName').value = ''; peopleLoad(); } catch (e) { toast(e.message); }
+}
+const faceAct = (u, b, msg) => post(u, b).then(() => { toast(msg); peopleLoad(); }).catch(e => toast(e.message));
+const forgetPerson = n => confirm('Forget ' + n + '?') && faceAct('/api/faces/forget', {name: n}, 'Forgotten');
+const nameSug = id => faceAct('/api/faces/name', {id, name: $('sg_' + id).value}, 'Saved');
+const dismissSug = id => faceAct('/api/faces/dismiss', {id}, 'Dismissed');
+const forgetLearned = () => faceAct('/api/faces/forget', {learned: true}, 'Learned faces deleted');
+const forgetAll = () => confirm('Delete ALL face data, including named people?') && faceAct('/api/faces/forget', {all: true}, 'All face data deleted');
 async function aura() { try { await post('/api/mirror/aura'); toast('🔮 Look at the mirror…'); } catch (e) { toast(e.message); } }
 async function refresh() { try { show(await (await fetch('/api/status')).json()); } catch (e) {} }
 let bTimer;
@@ -394,6 +458,7 @@ function musicSet(start) {
   musicLoad(true); setInterval(musicLoad, 5000);
   lastPhoto(); setInterval(lastPhoto, 5000);
   lightsLoad(); setInterval(lightsLoad, 15000);
+  mirrorSettingsLoad(); peopleLoad(); setInterval(peopleLoad, 20000);
   MODES = await (await fetch('/api/modes')).json();
   render(); refresh(); setInterval(refresh, 3000);
 })();

@@ -158,6 +158,7 @@ class FaceBook:
     def forget_everything(self):
         """Delete all people and everything learned."""
         with self.lock:
+            self._load()
             n = len(self._people) + len(self._cands)
             self._people, self._cands, self._dirty = {}, [], False
             if os.path.exists(self.path):

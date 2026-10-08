@@ -53,6 +53,26 @@ class MirrorAPI:
             self.mirror._trigger_event.set()
             return jsonify({"triggered": "short"})
 
+        @self.app.route("/api/faces/enrol", methods=["POST"])
+        def faces_enrol():
+            """Look at the camera for ~5 s and remember this face under a name."""
+            name = ((request.get_json(force=True, silent=True) or {}).get("name") or "").strip()
+            if not name:
+                return jsonify({"error": "a name is needed"}), 400
+            try:
+                import faces
+                if not faces.available():
+                    return jsonify({"error": "face models are not installed (assets/models/get_models.sh)"}), 503
+                cam = self.mirror.camera
+                embs = faces.FaceBook().capture(lambda: cam.capture_frame(raw=True))
+                if not embs:
+                    return jsonify({"error": "no face seen - stand in front of the mirror and try again"}), 422
+                saved = faces.FaceBook().add(name, embs)
+                self.mirror._facebook = None            # re-read the people next photo
+                return jsonify({"ok": True, "name": saved, "samples": len(embs)})
+            except Exception as e:
+                return jsonify({"error": str(e)[:120]}), 500
+
         @self.app.route("/api/trigger/aura", methods=["POST"])
         def trigger_aura():
             self.mirror._aura_event.set()

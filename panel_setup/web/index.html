@@ -194,14 +194,9 @@
       </div>
       <div class="row" style="margin-bottom:8px;gap:6px"><b id="musicScene" style="font-size:16px"></b><span id="musicSw"></span></div>
       <div id="musicSong" style="margin:-2px 0 8px;color:var(--pink);font-weight:600"></div>
-      <div class="row" style="margin:4px 0 10px;gap:8px">
-        <span class="seg"><button id="modeAuto" onclick="setMode('auto')">🤖 Auto</button><button id="modeChill" onclick="setMode('chill')">🌿 Chill</button><button id="modeTechno" onclick="setMode('techno')">⚡ Party</button></span>
-      </div>
-      <div class="row" style="gap:10px;align-items:center;margin-bottom:4px">
-        <span class="sub" style="min-width:84px">Party level</span>
-        <div style="flex:1;height:8px;border-radius:4px;background:#2a2236;overflow:hidden"><div id="partyBar" style="height:100%;width:0;transition:width 1s;background:linear-gradient(90deg,#4bd3a8,#ffb347,#ff5fa2)"></div></div>
-        <b id="partyLab" style="min-width:120px;text-align:right"></b>
-      </div>
+      <div class="row" style="justify-content:space-between;margin-top:6px"><span class="sub">Party level</span><b id="partyLab"></b></div>
+      <input type="range" id="party" min="0" max="100" step="5" style="margin-bottom:2px">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="sub">art just breathes</span><span class="sub">dance floor</span></div>
       <div class="row" style="margin:10px 0 6px">
         <input type="text" id="vjPrompt" maxlength="200" style="flex:1;min-width:180px" placeholder="e.g. hot pink and gold, mandalas, make it feel like a festival">
         <button class="primary" onclick="vjSend()">Tell the VJ</button>
@@ -210,6 +205,7 @@
       <div class="sub" id="vjActive" style="margin-bottom:10px"></div>
       <button class="primary big" onclick="musicSet(true)">▶ Play music art</button>
       <details class="more"><summary>More</summary>
+      <div class="toggles"><label><input type="checkbox" id="tAuto" onchange="post('/api/music', {mode: this.checked ? 'auto' : 'manual'}).then(() => musicLoad())"> 👂 Let the wall listen and set the party level itself</label></div>
       <div class="sub" id="partyWhy" style="margin-bottom:10px"></div>
       <div class="toggles">
         <label><input type="checkbox" id="tAi" onchange="toggleSet('ai', this.checked)"> 🤖 AI designer</label>
@@ -405,13 +401,15 @@ async function musicLoad(first) {
     }
     $('tAi').checked = !!m.settings.ai; $('tShz').checked = !!m.settings.shazam;
     $('tWall').checked = !!m.settings.song_on_wall; $('tReact').checked = !!m.settings.art_reacts;
-    for (const [id, v] of [['modeAuto', 'auto'], ['modeChill', 'chill'], ['modeTechno', 'techno']]) $(id).classList.toggle('on', (m.settings.mode || 'auto') === v);
     const pt = m.now && m.now.party, au2 = m.now && m.now.audio || {};
-    if (pt) {
-      $('partyBar').style.width = Math.round(pt.level * 100) + '%';
-      $('partyLab').textContent = Math.round(pt.level * 100) + '% · ' + pt.label;
-      $('partyWhy').textContent = `loudness ${pt.why.db} dB · beat lock ${Math.round(pt.why.beat * 100)}% · ${au2.bpm ? au2.bpm + ' bpm' : 'tempo –'} · ${pt.why.busy ? 'busy ' + Math.round(pt.why.busy * 100) + '%' : 'calm'}${pt.mode !== 'auto' ? ' · (forced by ' + pt.mode + ')' : ''}`;
-    } else { $('partyBar').style.width = '0'; $('partyLab').textContent = ''; $('partyWhy').textContent = ''; }
+    const autoOn = m.settings.mode === 'auto';
+    $('tAuto').checked = autoOn;
+    if (document.activeElement !== $('party')) {
+      const v = autoOn && pt ? Math.round(pt.level * 100) : m.settings.party;
+      $('party').value = v; $('partyLab').textContent = partyName(v) + (autoOn ? ' (auto)' : '');
+    }
+    $('party').disabled = autoOn;
+    $('partyWhy').textContent = pt ? `The room sounds like ${Math.round(pt.measured * 100)}% (${pt.label}): loudness ${pt.why.db} dB · beat lock ${Math.round(pt.why.beat * 100)}% · ${au2.bpm ? au2.bpm + ' bpm' : 'tempo –'}` : '';
     $('brText').classList.toggle('on', m.settings.brain === 'text');
     $('brOpenai').classList.toggle('on', m.settings.brain === 'openai');
     $('brClaude').classList.toggle('on', m.settings.brain === 'claude');
@@ -447,9 +445,13 @@ $('sens').addEventListener('input', e => {
   clearTimeout(sTimer);
   sTimer = setTimeout(() => post('/api/music', {sensitivity: +e.target.value}).then(() => musicLoad()), 300);
 });
-function setMode(mode) {
-  post('/api/music', {mode, start: true}).then(r => { toast(mode === 'techno' ? '⚡ Party' : mode === 'chill' ? '🌿 Chill' : '🤖 Auto'); show(r.status); musicLoad(); }).catch(e => toast(e.message));
-}
+const partyName = v => v <= 10 ? v + '% · breathing' : v <= 35 ? v + '% · quiet evening' : v <= 60 ? v + '% · lively' : v <= 85 ? v + '% · party' : v + '% · dance floor';
+let ptTimer;
+$('party').addEventListener('input', e => {
+  $('partyLab').textContent = partyName(+e.target.value);
+  clearTimeout(ptTimer);
+  ptTimer = setTimeout(() => post('/api/music', {party: +e.target.value, mode: 'manual'}).then(() => musicLoad()), 300);
+});
 function musicSet(start) {
   post('/api/music', {start: !!start})
     .then(r => { if (start) toast('🎵 Music art on'); else toast('Updated'); show(r.status); musicLoad(); })

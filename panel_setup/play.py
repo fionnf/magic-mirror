@@ -88,17 +88,15 @@ class _MusicClock:
         f = self.l.f
         sens = self.st.get("sensitivity", 50)
         react = music.reactivity(sens)
-        lvl = self.inten.update(f, time.time(), sens)                 # quiet evening .. dance floor
+        measured = self.inten.update(f, time.time(), sens)            # quiet evening .. dance floor
+        lvl = measured if self.st.get("mode") == "auto" else self.st.get("party", 15) / 100.0
         P = music.profile("auto", lvl)
         energy = min(1.0, f["energy"] * react)
         tempo = music.tempo_factor(f.get("bpm", 0.0), f.get("bconf", 0.0), "chill" if lvl < 0.5 else "techno")
-        self.t += dt * tempo * (0.9 + 0.6 * energy * lvl)
-        (pulse, self.phase, w), _ = music.beat_pulse(f, time.time(), 0, 1.0, self.phase)
-        self.env = music._ema(self.env, min(1.0, f["kick"] * react), dt, P["smooth"])
-        mix = w * P["pulse"]
-        kick = (1 - mix) * self.env + mix * pulse
+        self.t += dt * tempo * (0.9 + 0.4 * energy * lvl)
+        self.env = music._ema(self.env, energy, dt, 2.5)            # slow breathing only, never per beat
         br = P["breath"]
-        return self.t, 1.0 - 0.1 * br + 0.14 * br * kick
+        return self.t, 0.95 + 0.06 * br * self.env
 
 
 def _boot_frame(progress):

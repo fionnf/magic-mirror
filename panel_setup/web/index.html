@@ -163,6 +163,25 @@
   </section>
 
   <section>
+    <h2>Dedications</h2>
+    <div class="box">
+      <b>💌 Messages from guests</b>
+      <p class="sub">Guests scan a QR code and type a message that scrolls across the bottom of the wall. No filtering — you can delete anything or pause it.</p>
+      <div class="toggles">
+        <label><input type="checkbox" id="dOn" onchange="dSet({enabled:this.checked})"> On the wall</label>
+        <label><input type="checkbox" id="dPause" onchange="dSet({paused:this.checked})"> ⏸ Paused</label>
+        <label><input type="checkbox" id="dQr" onchange="dSet({show_qr:this.checked})"> Show the QR on the wall now and then</label>
+      </div>
+      <div class="row" style="gap:14px;align-items:flex-start;margin-bottom:8px">
+        <a id="dQrLink" href="/d/qr.png" target="_blank"><img src="/d/qr.png" alt="QR" style="width:110px;height:110px;border-radius:8px;background:#fff"></a>
+        <div class="sub">Guests open <b id="dUrl"></b><br>(same Wi-Fi). Tap the QR to print it.</div>
+      </div>
+      <div id="dList"></div>
+      <button onclick="dClear()">Clear all</button>
+    </div>
+  </section>
+
+  <section>
     <h2>Lights</h2>
     <div class="box">
       <div class="row" style="justify-content:space-between;margin-bottom:8px">
@@ -328,6 +347,19 @@ const nameSug = id => faceAct('/api/faces/name', {id, name: $('sg_' + id).value}
 const dismissSug = id => faceAct('/api/faces/dismiss', {id}, 'Dismissed');
 const forgetLearned = () => faceAct('/api/faces/forget', {learned: true}, 'Learned faces deleted');
 const forgetAll = () => confirm('Delete ALL face data, including named people?') && faceAct('/api/faces/forget', {all: true}, 'All face data deleted');
+
+const dSet = b => post('/api/dedications', b).then(dLoad).catch(e => toast(e.message));
+async function dLoad() {
+  try {
+    const d = await (await fetch('/api/dedications')).json();
+    $('dOn').checked = d.enabled; $('dPause').checked = d.paused; $('dQr').checked = d.show_qr; $('dUrl').textContent = d.url;
+    $('dList').innerHTML = d.items.length ? d.items.slice(0, 12).map(i => `<div class="row" style="justify-content:space-between;margin:4px 0">
+      <span>${i.name ? '<b>' + esc(i.name) + ':</b> ' : ''}${esc(i.text)}</span><a href="#" onclick="event.preventDefault();dDel('${i.id}')">✕</a></div>`).join('') : '<div class="sub">No messages yet.</div>';
+  } catch (e) {}
+}
+const esc = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const dDel = id => post('/api/dedications/delete', {id}).then(dLoad);
+const dClear = () => confirm('Delete all messages?') && post('/api/dedications/delete', {all: true}).then(dLoad);
 async function aura() { try { await post('/api/mirror/aura'); toast('🔮 Look at the mirror…'); } catch (e) { toast(e.message); } }
 async function refresh() { try { show(await (await fetch('/api/status')).json()); } catch (e) {} }
 let bTimer;
@@ -463,6 +495,7 @@ function musicSet(start) {
   musicLoad(true); setInterval(musicLoad, 5000);
   lastPhoto(); setInterval(lastPhoto, 5000);
   lightsLoad(); setInterval(lightsLoad, 15000);
+  dLoad(); setInterval(dLoad, 8000);
   mirrorSettingsLoad(); peopleLoad(); setInterval(peopleLoad, 20000);
   MODES = await (await fetch('/api/modes')).json();
   render(); refresh(); setInterval(refresh, 3000);

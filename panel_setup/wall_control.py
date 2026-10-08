@@ -492,6 +492,59 @@ def make_app(runner):
             return jsonify({"error": "unknown language"}), 400
         return jsonify(ms.save(d))
 
+    # ---- dedications: a guest page (/d) anybody on the Wi-Fi can use + admin API for the app
+    GUEST_PAGE = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Say hi to the wall</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#150f1f;color:#fff;font-family:-apple-system,system-ui,sans-serif}
+main{width:min(92vw,420px);text-align:center}h1{font-size:26px;margin:0 0 4px}p{color:#bbb;margin:0 0 18px}
+input,textarea{width:100%;box-sizing:border-box;padding:14px;border-radius:12px;border:1px solid #3a2f4f;background:#211833;color:#fff;font-size:17px;margin-bottom:10px;font-family:inherit}
+button{width:100%;padding:14px;border:0;border-radius:12px;background:linear-gradient(90deg,#ff5fa2,#ffb347);color:#1b0f1f;font-weight:700;font-size:17px}
+#m{min-height:24px;margin-top:12px;color:#ffd36b}</style><main><h1>💌 House Fortuna</h1><p>Write something for the wall</p>
+<textarea id=t maxlength=140 rows=3 placeholder="Happy birthday Dewa!! 🎂"></textarea><input id=n maxlength=24 placeholder="Your name (optional)">
+<button onclick=go()>Send to the wall</button><div id=m></div></main><script>
+async function go(){const r=await fetch('/d/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t.value,name:n.value})});
+const j=await r.json().catch(()=>({}));m.textContent=r.ok?'✨ Sent! Look at the wall.':(j.error||'Something went wrong');if(r.ok)t.value=''}</script>"""
+
+    @app.get("/d")
+    def guest_page():
+        return app.response_class(GUEST_PAGE, mimetype="text/html")
+
+    @app.post("/d/send")
+    def guest_send():
+        from display import dedications
+        d = request.get_json(force=True, silent=True) or {}
+        try:
+            dedications.add(d.get("text", ""), d.get("name", ""), who=request.remote_addr or "?")
+            return jsonify({"ok": True})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 429 if "Slow down" in str(e) else 400
+
+    @app.get("/d/qr.png")
+    def guest_qr():
+        import io
+        from display import dedications
+        buf = io.BytesIO()
+        dedications.qr_image(dedications.guest_url(request.host.split(":")[0]), 360).save(buf, "PNG")
+        return app.response_class(buf.getvalue(), mimetype="image/png")
+
+    @app.get("/api/dedications")
+    def dedications_get():
+        from display import dedications
+        d = dedications.load()
+        return jsonify({**d, "url": dedications.guest_url(request.host.split(":")[0]), "items": d["items"][::-1]})
+
+    @app.post("/api/dedications")
+    def dedications_set():
+        from display import dedications
+        d = request.get_json(force=True, silent=True) or {}
+        dedications.update(**{k: d[k] for k in ("enabled", "show_qr", "paused") if k in d})
+        return dedications_get()
+
+    @app.post("/api/dedications/delete")
+    def dedications_delete():
+        from display import dedications
+        d = request.get_json(force=True, silent=True) or {}
+        return jsonify({"removed": dedications.clear() if d.get("all") else dedications.delete(d.get("id", ""))})
+
     def _book():
         import faces
         return faces.FaceBook()

@@ -64,7 +64,9 @@ def main():
         return
 
     from led_matrix import LedMatrix
+    from display import dedications
     matrix = LedMatrix()
+    overlay = dedications.Overlay()
     interval = 1.0 / a.fps
     t0 = time.monotonic()
     try:
@@ -74,7 +76,7 @@ def main():
                 break
             # each frame held for exactly 2 refreshes (58 Hz -> 29 fps), paced by the
             # panels' own vsync instead of a sleep timer that drifts against it
-            if not matrix.draw(frame_fn(t), frame_fraction=2):
+            if not matrix.draw(overlay.apply(frame_fn(t)), frame_fraction=2):
                 time.sleep(interval)                    # unchanged frame: nothing to pace
     except KeyboardInterrupt:
         pass

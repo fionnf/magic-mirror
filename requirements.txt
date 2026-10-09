@@ -1,16 +1,21 @@
-openai>=1.40.0
-google-api-python-client>=2.120.0
+# Wall + mirror (laptop simulator: also `pip install pygame`; optional GPU shaders: moderngl)
+anthropic>=1.0
+flask>=3.0
+flask-cors>=4.0
+numpy>=1.24.0
+Pillow>=10.0.0
+opencv-python-headless>=4.9.0      # 4.5.4+ for the face models
+python-dotenv>=1.0.0
+qrcode>=7.4
+shazamio                            # song names in music mode
+tinytuya                            # Smart Life lights (optional)
+python-escpos>=3.0                  # receipt printer (optional)
+pyusb>=1.2.1
+google-api-python-client>=2.120.0   # Drive photo archive (optional)
 google-auth>=2.29.0
 google-auth-oauthlib>=1.2.0
 google-auth-httplib2>=0.2.0
-python-escpos>=3.0
-pyusb>=1.2.1
-qrcode>=7.4
-opencv-python-headless>=4.9.0
-Pillow>=10.0.0
-numpy>=1.24.0
-python-dotenv>=1.0.0
-# Pi-only — comment out on Mac/Windows when working in simulator mode only:
+# Pi only (bootstrap_pi.sh installs these and compiles the panel library):
 RPi.GPIO>=0.7.1; platform_machine=="armv7l" or platform_machine=="aarch64"
 picamera2>=0.3.19; platform_machine=="armv7l" or platform_machine=="aarch64"
-rpi_ws281x>=5.0.0; platform_machine=="armv7l" or platform_machine=="aarch64"
+moderngl>=5.8; platform_machine=="aarch64"

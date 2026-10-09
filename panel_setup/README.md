@@ -1,29 +1,33 @@
-# Panel setup (12× 64×64 HUB75, 3 wide × 4 tall)
+# Running the wall (9 × 64×64 HUB75, 3 × 3, 192 × 192 px)
 
-Bring-up tools for the display only — no camera, button, strip or API.
-Everything reads `../config.py` (panel layout, chain order, tuning, power).
+How to install, deploy, run, tune and troubleshoot the wall. Everything reads `../config.py`
+(panel layout, chain order, timing, power). For an overview see the top-level README.
+
+## 0. On a laptop: the simulator
+```bash
+./panel_setup/sim.sh        # http://localhost:8080, panels open in a window
+```
+Same app and modes as on the Pi; music listens to the Mac microphone (`MIC="..."` to choose),
+mirror mode uses the Mac webcam. GPU shaders need `pip install moderngl`.
 
 ## 1. Install on the Pi (once)
-Fresh Pi, from the project folder (after the first deploy):
-```bash
-./install.sh          # builds rpi-rgb-led-matrix, installs deps
-sudo reboot
-```
-Only the display needs: `sudo apt install python3-pil python3-numpy` plus the
-`rgbmatrix` bindings from `install.sh`.
+See *New Pi from scratch* below: deploy, then `./panel_setup/bootstrap_pi.sh` and a reboot.
+It installs the system packages, compiles the panel library, installs the Python packages,
+turns off the onboard audio (it conflicts with the panels), installs the `wall-control`
+service (the app on port 80) and runs a health check.
 
 ## 2. Send code to the Pi (from your laptop)
 ```bash
-./panel_setup/deploy.sh                                   # pi@192.168.1.207
-PI_USER=fionn PI_HOST=192.168.1.50 ./panel_setup/deploy.sh
+PI_USER=pi PI_HOST=192.168.1.129 ./panel_setup/deploy.sh
 ```
-It rsyncs the project to `~/magic-mirror` (skips `.env`, tokens, photos, git).
-Re-run after every edit. Needs SSH access (`ssh pi@192.168.1.207` works).
+It rsyncs the project to `~/magic-mirror` (skips `.env`, tokens, photos, git, and the Pi's own
+settings/state files). Then `sudo systemctl restart wall-control` on the Pi.
 
 ## 3. Run on the Pi
 ```bash
-ssh pi@192.168.1.207
+ssh pi@192.168.1.129
 cd ~/magic-mirror
+sudo systemctl stop wall-control    # the app drives the panels; stop it for the bring-up tools
 ./panel_setup/run.sh walk         # START HERE: one panel at a time
 ```
 Ctrl-C quits (display is cleared).
@@ -44,7 +48,7 @@ Ctrl-C quits (display is cleared).
 Tuning flags (override `config.py` for one run): `--brightness --pwm-bits
 --lsb-ns --slowdown --refresh-limit --multiplexing --row-address --mapping`.
 
-Laptop preview (no Pi): `python3 panel_setup/display_test.py --sim`
+
 
 ## Keeping the load light
 The refresh thread always uses one core (see above); what we control is how hard
@@ -81,7 +85,7 @@ Every test prints a `[PI]` line every 2 s and logs to `panel_setup/monitor.csv`:
 - **Scrambled/striped image** → `--multiplexing 1` (or 2, 4); try `--row-address 3`.
 - **Flicker / low refresh** → lower `--pwm-bits` (7→6), `--lsb-ns` (130→100),
   `--slowdown` (4→2); add `isolcpus=3` to `/boot/firmware/cmdline.txt`;
-  disable onboard audio (done by `install.sh`).
+  disable onboard audio (done by `bootstrap_pi.sh`: it also blacklists `snd_bcm2835`).
 
 ## Power (40 A @ 5 V PSU)
 12 panels at full white ≈ 48 A. Protections:
@@ -89,45 +93,6 @@ Every test prints a `[PI]` line every 2 s and logs to `panel_setup/monitor.csv`:
 - `MATRIX_MAX_AMPS = 28`: the driver estimates current per frame and dims it
   to stay under budget. `MATRIX_AMPS_PER_PANEL = 4.0` is a guess — measure.
 - Give each panel (or pair) its own power lead to the PSU. Share GND with the Pi only.
-
-## Running the whole program without a touch sensor
-```bash
-sudo python3 main.py --no-touch --mock-camera static --no-api     # display + silhouette + text
-sudo python3 main.py --no-touch --auto 20                          # a cycle every 20 s
-sudo python3 main.py --no-touch --auto 20 --auto-booth-every 3     # every 3rd = photobooth
-```
-Without `--auto`, trigger from the dashboard (`http://<pi-ip>:5000`) or
-`curl -X POST http://<pi-ip>:5000/api/trigger/short` (`/long` = photobooth).
-Drop `--mock-camera static` once the Pi camera is attached (`--mock-camera webcam`
-for a USB webcam). The LED strip and printer are optional and skipped if absent.
-
-## Autostart on boot
-```bash
-./panel_setup/install_autostart.sh ambient    # art + tram ticker
-./panel_setup/install_autostart.sh            # lava & coral gallery (current default)
-./panel_setup/install_autostart.sh art        # or any play.py animation
-./panel_setup/install_autostart.sh --remove   # turn it off
-sudo systemctl stop wall-art                  # stop it for now (e.g. to run tests)
-```
-Installs `wall-art.service` (restarts on crash) and disables `magic-mirror.service`
-so only one program drives the panels. Stop it before running other panel tools.
-
-## Music "designer brain": OpenAI or Claude
-The Music card on the website has a **Designer brain** switch:
-- **OpenAI · hears** (default): `gpt-audio` listens to a 10 s clip every 30 s and designs the scene.
-- **Claude · text**: Claude Code (Haiku) designs from text only - the Shazam song title, bass/mid/treble
-  levels, energy, tempo, time of day and its last scenes - every 60 s. It cannot hear audio.
-
-If Claude is selected but not set up, the app says what is missing and the wall carries on
-with the built-in rules. To set it up (steps per Anthropic's docs - verify them, and check the
-usage terms for always-on automated use of a *subscription* before relying on it; an API key is
-the other option):
-1. On the Pi: `curl -fsSL https://claude.ai/install.sh | bash` (installs to `~/.local/bin/claude`)
-2. On your laptop: `claude setup-token` -> copy the token it prints
-3. On the Pi, add to `~/magic-mirror/.env` (never commit it):
-   `CLAUDE_CODE_OAUTH_TOKEN=<token>`   (or `ANTHROPIC_API_KEY=<key>`), optional `CLAUDE_MODEL=haiku`
-4. `sudo systemctl restart wall-control`, then pick "Claude · text" in the app.
-Test the CLI alone first: `claude -p "say hi" --model haiku` on the Pi.
 
 ## New Pi from scratch
 1. Raspberry Pi Imager: Raspberry Pi OS Lite (64-bit), user `pi`, hostname, your **home** Wi-Fi,
@@ -148,25 +113,6 @@ sudo nmcli connection up eduroam
 ```
 A web-login ("captive portal") network cannot be completed on a headless Pi: use eduroam,
 Ethernet, or a phone hotspot instead.
-
-## Free Gemini as the music designer (default brain)
-Music mode's **Gemini · free** brain calls Gemini 3.5 Flash-Lite (fallbacks: `gemini-flash-lite-latest`,
-3.1 Flash-Lite) on Google's free tier. Keep the key's project **without billing** (or set a budget cap), so a
-used-up free quota can never turn into charges. It sends **text only** (Shazam song, bass/mid/treble levels, energy, tempo, time of
-day, its last scenes) - never audio. Free-tier requests may be used by Google to improve their
-products, which is why the room microphone is never sent.
-1. Create a free key at https://aistudio.google.com/apikey (any Google account).
-2. On the Pi add one line to `~/magic-mirror/.env` (never commit it): `GEMINI_API_KEY=<key>`
-   (optional: `GEMINI_MODEL=<model>`)
-3. `sudo systemctl restart wall-control`, then check the Music card: it should say
-   "Gemini free (gemini-3.5-flash-lite) ok". Without a key, or when the free-tier limit is hit
-   (it rests for 10 min), the wall uses the built-in rules - it never falls back to a paid model.
-Quick key test on the Pi:
-```
-curl -s -H "x-goog-api-key: $GEMINI_API_KEY" -H 'Content-Type: application/json' \
-  -d '{"contents":[{"parts":[{"text":"say hi"}]}]}' \
-  https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent
-```
 
 ## Portrait photos that keep people in frame
 Every photo (the picture the AI comments on, the receipt, the photobooth shots) is cut to
@@ -220,11 +166,22 @@ Re-pairing a light in the Smart Life app changes its local key - re-run the wiza
 - **Art**: *Shapes* (13 thin generative line patterns; also available as music styles) and *Light Art* (stained glass,
   Julia set, kaleidoscope, long-exposure trails, nebula).
 
-## Music VJ: the party level
-The VJ measures how much of a party the room is (0-100 %) from loudness, beat lock, tempo, hits per
-second and bass share (`display/intensity.py`), and slides every parameter along it: quiet evening =
-slow painterly art with a barely-there swell; dance party = neon geometry locked to the beat, scene
-changes on 4-bar boundaries, shockwaves on drops. Buttons: 🤖 Auto (follow the room), 🌿 Chill and
-⚡ Party force it. The app shows the level and why (loudness in dBFS is the main gate: tune the
-Sensitivity slider if your room reads too quiet/loud). Gallery art modes run slow ("Art pace").
-All AI calls (mirror one-liner, aura, wheel, VJ text brain) go through the Anthropic API (`ANTHROPIC_API_KEY` in `.env`, model `config.AI_MODEL`).
+## Music mode: the party slider
+The **Party level** slider (0-100 %) sets everything: at 0 the art just breathes (slow painterly
+pieces, a few-percent swell with the bass, never a flash); towards 100 it becomes neon geometry
+whose motion follows the beat, with scene changes on 4-bar boundaries. Brightness never pulses on
+the beat. Optional "let the wall listen" (under More) estimates the level from loudness, beat lock,
+tempo and bass (`display/intensity.py`). The app shows the live microphone (level, bass, detected
+beats) next to the Sensitivity slider: raise it if the trace stays flat while music plays.
+"Video loops only" plays the clip library (pick one, or Auto); "Music affects the loops" sets how.
+
+## AI (Claude)
+All AI features call the Anthropic API through `ai_client.ask()` (model `config.AI_MODEL`, low
+effort, server-side refusal fallbacks, structured JSON where needed). Put `ANTHROPIC_API_KEY=...`
+in `.env` on the laptop and copy it to the Pi (`scp .env pi@<ip>:~/magic-mirror/.env`), then
+restart `wall-control`. Without a key every feature falls back to built-in text/rules.
+
+## Video loops
+`tools/make_loops.py <folders>` converts any video folder to 192 × 192 clips in `assets/loops/`
+(with an index of motion/brightness the curator uses); deploy copies them. The current library is
+abstract Beeple clips (CC) and calm Mixkit footage; originals live in `~/Movies/VJ Loops/`.

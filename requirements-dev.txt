@@ -1,2 +1,3 @@
 -r requirements.txt
-pygame>=2.5.0
+pygame>=2.5.0        # laptop simulator window
+moderngl>=5.8        # GPU shaders on the laptop

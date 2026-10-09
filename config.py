@@ -4,7 +4,8 @@ import os
 PANEL_ROWS = 64
 PANEL_COLS = 64
 PANELS_WIDE = 3
-PANELS_TALL = 3   # 9 panels connected for now (3x3); set to 4 when the last row is added
+PANELS_TALL = int(__import__("os").environ.get("WALL_PANELS_TALL", 3))   # 3 now; the full wall is 4 (192 x 256).
+#                 WALL_PANELS_TALL=4 previews the full wall in the simulator; set 4 here when the row is wired
 CHAIN_LENGTH = PANELS_WIDE * PANELS_TALL
 PARALLEL = 1
 # The built-in rpi-rgb-led-matrix mappers can't do a 3-column serpentine, so
@@ -15,11 +16,11 @@ PIXEL_MAPPER = ""
 # HAT cable plugs into. Currently a row serpentine starting at the bottom-left
 # (see below). Edit to match your wiring; check with
 # panel_setup/display_test.py --pattern numbers.
-PANEL_CHAIN_ORDER = [
-    (0, 2), (1, 2), (2, 2),    # bottom row, left -> right  (chain 0-2)
-    (2, 1), (1, 1), (0, 1),    # middle row, right -> left  (chain 3-5)
-    (0, 0), (1, 0), (2, 0),    # top row, left -> right     (chain 6-8)
+PANEL_CHAIN_ORDER = [            # row serpentine from the bottom-left, any number of rows
+    (c if (PANELS_TALL - 1 - r) % 2 == 0 else PANELS_WIDE - 1 - c, r)
+    for r in range(PANELS_TALL - 1, -1, -1) for c in range(PANELS_WIDE)
 ]
+# 3 rows: (0,2) (1,2) (2,2) | (2,1) (1,1) (0,1) | (0,0) (1,0) (2,0)  - chain 0-2, 3-5, 6-8
 # ^ measured on the wall (photo 2026-10-07): the cable enters at the BOTTOM-LEFT
 #   panel and snakes by rows. Add the 4th row here when it is connected.
 # Per-panel rotation in degrees (0/90/180/270) keyed by chain index, for

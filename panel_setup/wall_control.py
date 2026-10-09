@@ -317,9 +317,87 @@ def make_thumbs():
 
 # ------------------------------------------------------------------- web ---
 
+LOGIN_PAGE = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Fortuna wall</title><style>
+html,body{margin:0;height:100%;background:#17141a;color:#efe8f2;font:16px/1.4 -apple-system,system-ui,sans-serif}
+main{min-height:100%;display:grid;place-items:center;padding:24px;box-sizing:border-box}
+form{width:min(320px,100%);display:grid;gap:12px}
+h1{font:italic 400 34px/1.1 Georgia,serif;margin:0 0 8px}
+input{font:inherit;padding:14px 16px;border-radius:14px;border:1px solid #3a3240;background:#221d26;color:inherit}
+button{font:inherit;font-weight:600;padding:14px;border:0;border-radius:14px;background:#efe8f2;color:#17141a}
+p{color:#a69bab;margin:0;min-height:1.4em}
+</style><main><form method=post action=/login>
+<h1>Fortuna wall</h1>
+<input type=text name=username value=fortuna autocomplete=username hidden>
+<input type=password name=password placeholder=Password autocomplete=current-password autofocus required>
+<button>Open the wall</button><p>{error}</p></form></main>"""
+
+
+def _is_local(req):
+    """On the home network (not through the tunnel)?"""
+    import ipaddress
+    if req.headers.get("Cf-Connecting-Ip") or req.headers.get("X-Forwarded-For"):
+        return False
+    try:
+        ip = ipaddress.ip_address((req.remote_addr or "").split("%")[0])
+        return ip.is_private or ip.is_loopback
+    except ValueError:
+        return False
+
+
+def _secret():
+    path = os.path.join(HERE, ".session_secret")
+    if not os.path.exists(path):
+        import secrets
+        with open(path, "w") as fh:
+            fh.write(secrets.token_hex(32))
+        os.chmod(path, 0o600)
+    with open(path) as fh:
+        return fh.read().strip()
+
+
 def make_app(runner):
-    from flask import Flask, jsonify, request, send_from_directory
+    from flask import Flask, jsonify, request, send_from_directory, redirect, make_response
+    import hmac
+    import hashlib as _hl
     app = Flask(__name__, static_folder=None)
+    SECRET = _secret()
+    TOKEN = hmac.new(SECRET.encode(), b"wall-session-v1", _hl.sha256).hexdigest()
+
+    @app.before_request
+    def require_login():
+        """Remote visitors (through the tunnel) need the password; the home network does not.
+        Guests' dedication page stays open."""
+        if _is_local(request) or request.path.startswith(("/login", "/d")):
+            return None
+        if hmac.compare_digest(request.cookies.get("wall_session", ""), TOKEN):
+            return None
+        if request.path.startswith("/api/") or request.method != "GET":
+            return jsonify({"error": "login needed"}), 401
+        return redirect("/login")
+
+    @app.get("/login")
+    def login_page():
+        return app.response_class(LOGIN_PAGE.replace("{error}", ""), mimetype="text/html")
+
+    @app.post("/login")
+    def login_post():
+        want = os.environ.get("WALL_PASSWORD", "")
+        got = request.form.get("password", "")
+        if not want or not hmac.compare_digest(got.strip().upper(), want.strip().upper()):
+            time.sleep(1.0)                                # slow down guessing
+            msg = "Remote access is not set up yet." if not want else "That password is not right."
+            return app.response_class(LOGIN_PAGE.replace("{error}", msg), mimetype="text/html", status=401)
+        resp = make_response(redirect("/"))
+        resp.set_cookie("wall_session", TOKEN, max_age=180 * 86400, httponly=True, samesite="Lax",
+                        secure=request.headers.get("X-Forwarded-Proto", request.scheme) == "https")
+        return resp
+
+    @app.get("/api/now.jpg")
+    def now_jpg():
+        resp = send_from_directory(HERE, "now.jpg", max_age=0)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
 
     @app.get("/")
     def index():
@@ -511,7 +589,44 @@ def make_app(runner):
 
     @app.get("/photos/<path:name>")
     def photos(name):
-        return send_from_directory(PHOTOS, name, max_age=60)
+        return send_from_directory(PHOTOS, name, max_age=86400)
+
+    @app.get("/api/photos")
+    def photos_list():
+        """Every stored photo, newest first: the mirror's portraits, auras and photobooth strips."""
+        try:
+            names = [x for x in os.listdir(PHOTOS) if x.endswith(".jpg") and not x.endswith("_frame.jpg")
+                     and not x.endswith(".tmp.jpg")]
+        except OSError:
+            names = []
+        names.sort(key=lambda x: os.path.getmtime(os.path.join(PHOTOS, x)), reverse=True)
+        off = int(request.args.get("offset", 0) or 0)
+        lim = min(200, int(request.args.get("limit", 60) or 60))
+        out = []
+        for x in names[off:off + lim]:
+            meta = {}
+            try:
+                with open(os.path.join(PHOTOS, x[:-4] + ".json")) as fh:
+                    meta = json.load(fh)
+            except Exception:
+                pass
+            out.append({"name": x, "url": f"/photos/{x}", "text": meta.get("text", ""),
+                        "kind": meta.get("type", "receipt"), "time": os.path.getmtime(os.path.join(PHOTOS, x))})
+        return jsonify({"total": len(names), "photos": out})
+
+    @app.post("/api/photos/delete")
+    def photos_delete():
+        x = os.path.basename((request.get_json(force=True, silent=True) or {}).get("name", ""))
+        if not x.endswith(".jpg"):
+            return jsonify({"error": "no such photo"}), 404
+        removed = 0
+        for f in (x, x[:-4] + ".json", x[:-4] + "_frame.jpg"):
+            try:
+                os.remove(os.path.join(PHOTOS, f))
+                removed += 1
+            except OSError:
+                pass
+        return jsonify({"removed": removed})
 
     # ---------------------------------------------------------------- lights
     import lights as lt
@@ -729,6 +844,11 @@ def _start_mac_mic():
 
 
 def main():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(os.path.join(ROOT, ".env"))          # WALL_PASSWORD, ANTHROPIC_API_KEY
+    except Exception:
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=None)
     ap.add_argument("--sim", action="store_true", help="laptop: panels in a window, Mac mic, port 8080")

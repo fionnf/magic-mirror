@@ -110,6 +110,11 @@ class LEDSimulator:
             image = image.resize((config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
         if image.mode != "RGB":
             image = image.convert("RGB")
+        try:
+            import led_matrix
+            led_matrix.write_snapshot(image)
+        except Exception:
+            pass
         with self._lock:
             self._latest_image = image
             self._image_dirty = True

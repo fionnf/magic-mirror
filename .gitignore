@@ -38,3 +38,5 @@ gifs/
 panel_setup/lights_cache.json
 assets/loops/*.mp4
 panel_setup/audio_now.json
+panel_setup/now.jpg
+panel_setup/.session_secret

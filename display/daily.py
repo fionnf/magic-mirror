@@ -26,9 +26,10 @@ import config
 
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FOLDER = os.path.join(_HERE, "assets", "daily")
-W = H = 192
+W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
 
-BRIEF = """You are the artist in residence for a 192 x 192 pixel LED art wall in the living room of a
+BRIEF = """You are the artist in residence for a pixel LED art wall (a grid of 64 x 64 panels: 3 x 3 = 192 x 192
+now, 3 wide x 4 tall = 192 x 256 portrait soon - always compose for iResolution and iPanels) in the living room of a
 modern apartment in Zürich (House Fortuna, a gay flatshare). Every day you make ONE new original
 artwork for the wall, written as a GLSL fragment shader. It hangs there all day like a painting:
 people live with it, read, cook and fall asleep in front of it.
@@ -71,10 +72,11 @@ Technical contract (anything else will not compile):
 - write ONLY helper functions plus
       void mainImage(out vec4 fragColor, in vec2 fragCoord)
 - available uniforms (already declared, do not redeclare): float iTime; vec2 iResolution;
-  float iBass, iMid, iTreble, iEnergy, iLevel; vec3 iColA, iColB, iColC
+  float iBass, iMid, iTreble, iEnergy, iLevel; vec3 iColA, iColB, iColC; vec2 iPanels (the grid of
+  physical panels, e.g. 3 x 4 - seams between panels are real edges you may use)
 - GLSL ES 3.00 (WebGL2) rules: no #version, no precision line, no textures, no derivatives, all
   float literals with a decimal point (1.0 not 1), loops with constant bounds <= 64
-- it must run fast on a Raspberry Pi 4 GPU at 192 x 192: keep total loop iterations per pixel
+- it must run fast on a Raspberry Pi 4 GPU at about 50,000 pixels: keep total loop iterations per pixel
   under ~200
 
 Today's date, season and any notes are given by the user message. Let them inspire you, but make
@@ -208,7 +210,7 @@ def generate(date=None, notes="", attempts=4):
                 "attributes": [{"trait_type": "Date", "value": date},
                                {"trait_type": "Season", "value": _season(d)},
                                {"trait_type": "Palette", "value": " ".join(pal)},
-                               {"trait_type": "Medium", "value": "GLSL shader, 192 x 192 LED wall"},
+                               {"trait_type": "Medium", "value": f"GLSL shader, {W} x {H} LED wall"},
                                {"trait_type": "Artist", "value": f"Claude ({config.AI_MODEL})"}],
                 "listening": j.get("listening", "").strip()[:300],
                 "palette": pal, "source_sha256": sha, "model": config.AI_MODEL,

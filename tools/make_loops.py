@@ -4,7 +4,7 @@
     python3 tools/make_loops.py ~/Movies/"VJ Loops"            # every video under that folder
     python3 tools/make_loops.py pack1/ pack2/ --out assets/loops
 
-Each clip becomes assets/loops/<pack>__<name>.mp4 (192x192, 29 fps, H.264, no audio, ~0.3-1 MB)
+Each clip becomes assets/loops/<pack>__<name>.mp4 (wall size from config.py, 29 fps, H.264, no audio)
 and assets/loops/index.json records frames, fps, duration and two measured numbers:
   motion  mean frame-to-frame change (0..1)  -> calm clips for a quiet room, wild ones for a party
   bright  mean brightness (0..1)
@@ -21,7 +21,10 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXT = (".mov", ".mp4", ".avi", ".mkv", ".m4v", ".webm", ".mpg", ".mpeg", ".wmv")
-SIZE, FPS = 192, 29
+FPS = 29
+sys.path.insert(0, HERE)
+import config  # noqa: E402
+SIZE_W, SIZE_H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT     # WALL_PANELS_TALL=4 -> 192 x 256
 
 
 def slug(s):
@@ -29,8 +32,8 @@ def slug(s):
 
 
 def convert(src, dst):
-    vf = (f"scale={SIZE}:{SIZE}:force_original_aspect_ratio=increase:flags=lanczos,"
-          f"crop={SIZE}:{SIZE},fps={FPS},format=yuv420p")
+    vf = (f"scale={SIZE_W}:{SIZE_H}:force_original_aspect_ratio=increase:flags=lanczos,"
+          f"crop={SIZE_W}:{SIZE_H},fps={FPS},format=yuv420p")
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", src, "-vf", vf, "-an",
            "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-movflags", "+faststart", dst]
     return subprocess.run(cmd, capture_output=True, text=True)

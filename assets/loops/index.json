@@ -1,103 +1,4 @@
 {
- "ubersketch__archimedes": {
-  "frames": 619,
-  "fps": 29,
-  "seconds": 21.34,
-  "motion": 0.351,
-  "bright": 0.638,
-  "kb": 2442,
-  "source": "archimedes.mov"
- },
- "ubersketch__atommy": {
-  "frames": 691,
-  "fps": 29,
-  "seconds": 23.83,
-  "motion": 0.291,
-  "bright": 0.344,
-  "kb": 2164,
-  "source": "atommy.mov"
- },
- "ubersketch__building-tubes": {
-  "frames": 871,
-  "fps": 29,
-  "seconds": 30.03,
-  "motion": 0.222,
-  "bright": 0.761,
-  "kb": 3295,
-  "source": "building tubes.mov"
- },
- "ubersketch__firegrid": {
-  "frames": 773,
-  "fps": 29,
-  "seconds": 26.66,
-  "motion": 0.206,
-  "bright": 0.739,
-  "kb": 3394,
-  "source": "firegrid.mov"
- },
- "ubersketch__membrane": {
-  "frames": 757,
-  "fps": 29,
-  "seconds": 26.1,
-  "motion": 0.377,
-  "bright": 0.708,
-  "kb": 3594,
-  "source": "membrane.mov"
- },
- "ubersketch__meta-build": {
-  "frames": 769,
-  "fps": 29,
-  "seconds": 26.52,
-  "motion": 0.328,
-  "bright": 0.504,
-  "kb": 3090,
-  "source": "meta_build.mov"
- },
- "ubersketch__rainbee": {
-  "frames": 871,
-  "fps": 29,
-  "seconds": 30.03,
-  "motion": 0.168,
-  "bright": 0.464,
-  "kb": 3139,
-  "source": "rainbee.mov"
- },
- "ubersketch__triangle-field": {
-  "frames": 581,
-  "fps": 29,
-  "seconds": 20.03,
-  "motion": 0.381,
-  "bright": 0.376,
-  "kb": 2521,
-  "source": "triangle_field.mov"
- },
- "ubersketch__trianglefield-two": {
-  "frames": 568,
-  "fps": 29,
-  "seconds": 19.59,
-  "motion": 0.301,
-  "bright": 0.404,
-  "kb": 1898,
-  "source": "trianglefield_two.mov"
- },
- "ubersketch__worm-parade": {
-  "frames": 300,
-  "fps": 29,
-  "seconds": 10.34,
-  "motion": 0.216,
-  "bright": 0.541,
-  "kb": 1408,
-  "source": "worm parade.mov"
- },
- "beeple-resolume-pack__cycloid": {
-  "frames": 699,
-  "fps": 29,
-  "seconds": 24.1,
-  "motion": 0.188,
-  "bright": 0.476,
-  "kb": 2007,
-  "source": "cycloid.mov"
- },
  "beeple-resolume-pack__gerschwinn": {
   "frames": 844,
   "fps": 29,
@@ -115,24 +16,6 @@
   "bright": 0.169,
   "kb": 1199,
   "source": "glytchghost.mov"
- },
- "beeple-resolume-pack__mocircshii": {
-  "frames": 968,
-  "fps": 29,
-  "seconds": 33.38,
-  "motion": 0.177,
-  "bright": 0.353,
-  "kb": 3078,
-  "source": "mocircshii.mov"
- },
- "beeple-resolume-pack__narrow-gultch": {
-  "frames": 580,
-  "fps": 29,
-  "seconds": 20.0,
-  "motion": 0.237,
-  "bright": 0.321,
-  "kb": 1461,
-  "source": "narrow gultch.mov"
  },
  "beeple-resolume-pack__plugs-slower": {
   "frames": 870,
@@ -152,15 +35,6 @@
   "kb": 1005,
   "source": "space crystals.mov"
  },
- "beeple-resolume-pack__twirlers": {
-  "frames": 579,
-  "fps": 29,
-  "seconds": 19.97,
-  "motion": 0.477,
-  "bright": 0.438,
-  "kb": 2175,
-  "source": "twirlers.mov"
- },
  "beeple-resolume-pack__twisted-hall": {
   "frames": 581,
   "fps": 29,
@@ -169,15 +43,6 @@
   "bright": 0.521,
   "kb": 824,
   "source": "twisted hall.mov"
- },
- "beeple-four-color-process__blockpile-one": {
-  "frames": 423,
-  "fps": 29,
-  "seconds": 14.59,
-  "motion": 0.443,
-  "bright": 0.302,
-  "kb": 1159,
-  "source": "blockpile (one).mov"
  },
  "beeple-four-color-process__blockpile-two": {
   "frames": 297,
@@ -188,33 +53,6 @@
   "kb": 763,
   "source": "blockpile (two).mov"
  },
- "beeple-four-color-process__danny-tannigle": {
-  "frames": 581,
-  "fps": 29,
-  "seconds": 20.03,
-  "motion": 0.399,
-  "bright": 0.302,
-  "kb": 2594,
-  "source": "danny tannigle.mov"
- },
- "beeple-four-color-process__gloablee": {
-  "frames": 581,
-  "fps": 29,
-  "seconds": 20.03,
-  "motion": 0.369,
-  "bright": 0.218,
-  "kb": 2996,
-  "source": "gloablee.mov"
- },
- "beeple-four-color-process__hexgrow": {
-  "frames": 525,
-  "fps": 29,
-  "seconds": 18.1,
-  "motion": 0.517,
-  "bright": 0.573,
-  "kb": 1628,
-  "source": "hexgrow.mov"
- },
  "beeple-four-color-process__midflow": {
   "frames": 529,
   "fps": 29,
@@ -223,42 +61,6 @@
   "bright": 0.325,
   "kb": 987,
   "source": "midflow.mov"
- },
- "beeple-four-color-process__sphere-deamon": {
-  "frames": 581,
-  "fps": 29,
-  "seconds": 20.03,
-  "motion": 0.251,
-  "bright": 0.424,
-  "kb": 2015,
-  "source": "sphere.deamon.mov"
- },
- "beeple-four-color-process__tiestrapstream": {
-  "frames": 291,
-  "fps": 29,
-  "seconds": 10.03,
-  "motion": 0.317,
-  "bright": 0.361,
-  "kb": 938,
-  "source": "tiestrapstream.mov"
- },
- "beeple-four-color-process__tubecam-one": {
-  "frames": 581,
-  "fps": 29,
-  "seconds": 20.03,
-  "motion": 0.392,
-  "bright": 0.447,
-  "kb": 2070,
-  "source": "tubecam (one).mov"
- },
- "beeple-four-color-process__tubecam-two": {
-  "frames": 581,
-  "fps": 29,
-  "seconds": 20.03,
-  "motion": 0.212,
-  "bright": 0.423,
-  "kb": 916,
-  "source": "tubecam (two).mov"
  },
  "mixkit-chill__mixkit-14165": {
   "frames": 435,

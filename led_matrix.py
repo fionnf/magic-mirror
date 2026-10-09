@@ -14,6 +14,23 @@ import config
 
 
 _CH = np.arange(3)
+SNAPSHOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "panel_setup", "now.jpg")
+_snap_t = [0.0]
+
+
+def write_snapshot(image):
+    """What the wall shows, for the app's live preview: a small JPEG at most once a second."""
+    import time
+    now = time.monotonic()
+    if now - _snap_t[0] < 1.0:
+        return
+    _snap_t[0] = now
+    try:
+        tmp = SNAPSHOT + ".tmp.jpg"
+        image.convert("RGB").save(tmp, quality=85)
+        os.replace(tmp, SNAPSHOT)
+    except Exception:
+        pass
 
 
 class LedMatrix:
@@ -146,6 +163,7 @@ class LedMatrix:
             image = image.resize((config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
         if image.mode != "RGB":
             image = image.convert("RGB")
+        write_snapshot(image)
         strip = self._remap(image)
         # Static content (idle text, held frames) costs nothing: skip the
         # upload when nothing changed — the panels keep showing the last frame.

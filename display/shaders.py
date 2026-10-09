@@ -19,7 +19,8 @@ import numpy as np
 
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FOLDER = os.path.join(_HERE, "assets", "shaders")
-W = H = 192
+import config
+W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT     # follows the panel grid (3 x 3 now, 3 x 4 later)
 
 PRELUDE = """#version 300 es
 precision highp float;
@@ -27,7 +28,7 @@ uniform float iTime; uniform vec2 iResolution;
 uniform float iBass; uniform float iMid; uniform float iTreble; uniform float iEnergy; uniform float iLevel;
 uniform vec3 iColA; uniform vec3 iColB; uniform vec3 iColC;
 uniform float iBreath; uniform float iTension; uniform float iKey; uniform float iBright; uniform float iSong;
-uniform float iBeatPhase; uniform float iDay[24];
+uniform float iBeatPhase; uniform float iDay[24]; uniform vec2 iPanels;
 out vec4 _out;
 """
 POSTLUDE = """
@@ -88,6 +89,7 @@ class Renderer:
                 prog[k].value = v
         setu("iTime", float(t))
         setu("iResolution", (float(W), float(H)))
+        setu("iPanels", (float(config.PANELS_WIDE), float(config.PANELS_TALL)))
         for k, key in (("iBass", "bass"), ("iMid", "mid"), ("iTreble", "treble"), ("iEnergy", "energy"),
                        ("iLevel", "level"), ("iBreath", "breath"), ("iTension", "tension"), ("iKey", "key"),
                        ("iBright", "bright"), ("iSong", "song"), ("iBeatPhase", "beat_phase")):
@@ -146,7 +148,9 @@ CURATED = {   # (shadow, mid, highlight) per piece - the gallery's look; the VJ 
     "eclipse": ("#000000", "#3040e0", "#ff6a2a"), "halo": ("#140808", "#b02810", "#ff9a40"),
     "silk": ("#030805", "#26734d", "#d8ffd8"), "veil": ("#0a0518", "#5a3399", "#f2e6ff"),
     "dunes": ("#0f0a05", "#99661a", "#fff2bf"), "lanterns": ("#140510", "#8c2650", "#ffd9cc"),
-    "tide": ("#05081a", "#1a598c", "#ccf2ff"),
+    "tide": ("#05081a", "#1a598c", "#ccf2ff"), "aperture": ("#02020c", "#2a30d0", "#c070ff"),
+    "conic": ("#1a0614", "#2048e0", "#f4ead0"), "prism": ("#ff7a2a", "#e04070", "#7a5cff"),
+    "halftone": ("#08041a", "#5a2cff", "#7cff5a"),
 }
 
 
@@ -157,7 +161,7 @@ def _rgb(h):
 
 def gallery_pieces(Wd, Hd):
     """One piece per shader, each in its curated palette (newest, strongest first)."""
-    order = ["eclipse", "aura", "inkorbs", "cutpaper", "glassblob", "halo", "canvas", "dotsphere",
+    order = ["conic", "aperture", "eclipse", "prism", "halftone", "aura", "inkorbs", "cutpaper", "glassblob", "halo", "canvas", "dotsphere",
              "neonlines", "topo", "silk", "veil", "tide", "lanterns", "dunes"]
     have = names()
     picked = [n for n in order if n in have] + [n for n in have if n not in order]

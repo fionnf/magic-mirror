@@ -1093,9 +1093,9 @@ class Visuals:
                 cw, ch = int(w / z), int(h / z)
                 x0, y0 = (w - cw) // 2, (h - ch) // 2
                 img = cv2.resize(img[y0:y0 + ch, x0:x0 + cw], (w, h), interpolation=cv2.INTER_LINEAR)
-        if img.shape[0] != self.H or img.shape[1] != self.W:
-            from PIL import Image as _I
-            img = np.asarray(_I.fromarray(img.astype(np.uint8)).resize((self.W, self.H)), np.float32)
+        if img.shape[0] != self.H or img.shape[1] != self.W:     # cover-crop to the wall's shape
+            from PIL import Image as _I, ImageOps as _O
+            img = np.asarray(_O.fit(_I.fromarray(img.astype(np.uint8)), (self.W, self.H), _I.BICUBIC), np.float32)
         return img
 
     def shader_(self, name, f, lut):

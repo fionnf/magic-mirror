@@ -119,7 +119,8 @@ class LoopPlayer:
         if self.last is None:
             self._read()
         if self.last is None:
-            return np.zeros((192, 192, 3), np.float32)
+            import config
+            return np.zeros((config.TOTAL_HEIGHT, config.TOTAL_WIDTH, 3), np.float32)
         out = self.last
         frac = self.pos - int(self.pos)
         if rate < 0.7 * self.fps and self.prev is not None and self.idx == target:

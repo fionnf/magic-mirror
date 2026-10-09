@@ -8,7 +8,7 @@ Layers
   - analysis (Pi, ~43x/s): bass / mids / treble, energy, gentle beat detection,
     auto-gain, heavy smoothing so the art breathes rather than jumps
   - five calm styles: lava, coral, ink, aurora, ripples; soft palettes
-  - AI VJ (every 40 s): 8 s of audio to an audio-capable OpenAI model, which
+  - AI VJ (retired by default): Claude designs scenes from the song + measurements, which
     names genre + mood and picks the calmest fitting style and palette;
     falls back to a feature-based choice if the API is unavailable
   - silence for a few seconds: drifts into slow dusk lava
@@ -46,7 +46,7 @@ WIN, HOP = 1024, 256
 AI_EVERY = 150.0          # audio brain: about once per scene hold (it is the expensive one)
 TEXT_EVERY = 45.0         # cheap text brain
 # cheapest-first; the next one is tried if a model is unavailable (override with AI_TEXT_MODEL)
-TEXT_MODELS = ["gpt-4.1-nano", "gpt-4o-mini"]
+TEXT_MODELS = []   # retired: see ai_client (Claude)
 # free-tier Gemini (Google AI Studio key in .env as GEMINI_API_KEY); text only, never audio
 # 2.5 Flash-Lite is retired for new keys (404); "-latest" survives future retirements.
 # Measured with a real key 2026-10-08: ~1.3 s each. Avoid gemini-flash-latest (thinking, ~30 s).
@@ -341,14 +341,14 @@ def _scene_key(c):
     return (c["style"], c["palkey"], c["layer"], c.get("symmetry", "none"))
 
 
-AI_MODELS = ["gpt-audio"]
+AI_MODELS = []     # retired: audio brains
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # written by the app
 AUDIO_FILE = os.path.join(_HERE, "panel_setup", "audio_now.json")          # live meter for the app (4x/s)
 NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # read by the app
 DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "pi",
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
-                    "brain": "text", "beat_offset": 0, "beat_strength": 100, "art_reacts": False,
+                    "brain": "claude", "beat_offset": 0, "beat_strength": 100, "art_reacts": False,
                     "prompt": "", "mode": "manual", "party": 15, "loop": "", "loop_music": "tempo"}
 
 
@@ -371,8 +371,7 @@ def load_settings():
     s["ai"] = False                                        # the AI designer is retired: a rule-based curator picks scenes
     if s.get("brain") == "gemini":                      # retired (the key ran out of credits)
         s["brain"] = "text"
-    if s.get("brain") not in ("text", "openai", "claude"):
-        s["brain"] = "text"
+    s["brain"] = "claude"                                  # every brain is Claude now
     try:
         s["sensitivity"] = max(0, min(100, int(s["sensitivity"])))
     except (TypeError, ValueError):
@@ -755,7 +754,7 @@ class VJ:
     """The AI light designer: listens every AI_EVERY s and designs a whole scene."""
 
     def __init__(self, listener, vibe=lambda: "chill", enabled=lambda: True, song=lambda: None,
-                 brain=lambda: "openai", prompt=lambda: ""):
+                 brain=lambda: "claude", prompt=lambda: ""):
         self.l = listener
         self.prompt = prompt
         self._last_prompt = prompt()
@@ -809,38 +808,8 @@ class VJ:
                 f"the scene; set \"song\" and \"artist\" accordingly. ")
 
     def _ask_ai(self, clip):
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(os.path.join(_HERE, ".env"))
-            from openai import OpenAI
-            client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=40)
-        except Exception as e:
-            print(f"[VJ] no AI client: {e}")
-            return None
-        b64 = self._wav_b64(clip)
-        self._count("openai")
-        vibe = self.vibe()
-        system = ai_prompt()
-        for model in AI_MODELS:
-            try:
-                r = client.chat.completions.create(
-                    model=model, modalities=["text"], max_tokens=350,
-                    messages=[{"role": "system", "content": system},
-                              {"role": "user", "content": [
-                                  {"type": "text", "text": self._context()},
-                                  {"type": "input_audio",
-                                   "input_audio": {"data": b64, "format": "wav"}}]}])
-                txt = r.choices[0].message.content or ""
-                if "{" not in txt:
-                    print(f"[VJ] {model} replied without JSON: {txt[:160]!r}", flush=True)
-                    continue
-                j = _validate(json.loads(txt[txt.index("{"): txt.rindex("}") + 1]))
-                if j:
-                    j["model"] = model
-                    return j
-            except Exception as e:
-                print(f"[VJ] {model}: {str(e)[:120]}")
-        return None
+        """Audio brains are retired: Claude designs from the song + measurements (text)."""
+        return self._ask_text()
 
     def _text_prompt(self):
         """(system, user) for the text-only brains: no audio, just the song and measurements."""
@@ -867,39 +836,36 @@ class VJ:
         _write_json(USAGE_FILE, u)
         self.usage = u
 
+    SCENE_SCHEMA = {"type": "object", "properties": {
+        "song": {"type": ["string", "null"]}, "artist": {"type": ["string", "null"]},
+        "scene": {"type": "string"}, "concept": {"type": "string"}, "genre": {"type": "string"},
+        "mood": {"type": "string"}, "energy": {"type": "number"}, "style": {"type": "string"},
+        "layer": {"type": "string"}, "layer_opacity": {"type": "number"}, "palette": {"type": "string"},
+        "colors": {"type": "array", "items": {"type": "string"}}, "vibe": {"type": "string"},
+        "speed": {"type": "number"}, "scale": {"type": "number"}, "count": {"type": "integer"},
+        "softness": {"type": "number"}, "symmetry": {"type": "string"}, "trails": {"type": "number"},
+        "hue_drift": {"type": "number"}, "accent": {"type": "number"}, "reactivity": {"type": "number"},
+        "hold": {"type": "number"}, "fade": {"type": "number"}},
+        "required": ["scene", "style", "palette"], "additionalProperties": False}
+
     def _ask_text(self):
-        """Cheap text-only designer: a small OpenAI text model (default: the project's AI_MODEL)."""
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(os.path.join(_HERE, ".env"))
-            from openai import OpenAI
-            client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=40)
-        except Exception as e:
-            self.brain_status = f"no OpenAI client: {str(e)[:80]}"
-            return None
-        models = [os.environ["AI_TEXT_MODEL"]] if os.environ.get("AI_TEXT_MODEL") else TEXT_MODELS
+        """Text-only designer on Claude (the song + measurements, never audio)."""
         system, user = self._text_prompt()
         t0 = time.time()
-        self._count("text")
-        last = ""
-        for model in models:
-            try:
-                r = client.chat.completions.create(
-                    model=model, max_tokens=350, temperature=1.0,
-                    response_format={"type": "json_object"},
-                    messages=[{"role": "system", "content": system},
-                              {"role": "user", "content": user}])
-                j = _validate(json.loads(r.choices[0].message.content or "{}"))
-                if not j:
-                    raise RuntimeError("scene was not valid")
-                j["model"] = model
-                self.brain_status = f"text ({model}) ok - {time.time() - t0:.0f} s"
-                return j
-            except Exception as e:
-                last = f"{model}: {str(e)[:90]}"
-                print(f"[VJ] text brain {last}", flush=True)
-        self.brain_status = f"text error: {last}"
-        return None
+        self._count("claude")
+        try:
+            import ai_client
+            j = _validate(ai_client.ask(system, user, max_tokens=2048, effort="low",
+                                        schema=self.SCENE_SCHEMA, timeout=40)[0])
+            if not j:
+                raise RuntimeError("scene was not valid")
+            j["model"] = config.AI_MODEL
+            self.brain_status = f"Claude ({config.AI_MODEL}) ok - {time.time() - t0:.0f} s"
+            return j
+        except Exception as e:
+            self.brain_status = f"Claude error: {str(e)[:120]}"
+            print(f"[VJ] {self.brain_status}", flush=True)
+            return None
 
     def _ask_gemini(self):
         """Free-tier Gemini, text only (song + sensor numbers, never audio)."""
@@ -1040,7 +1006,7 @@ class VJ:
         if now < getattr(self, "_backoff_until", 0.0):
             return False                                   # provider said slow down
         brain = self.brain()
-        gap = {"openai": AI_EVERY, "claude": CLAUDE_EVERY}.get(brain, profile()["every"])
+        gap = profile()["every"]
         sg = self.song()
         title = sg["title"] if sg else None
         if self.prompt() != self._last_prompt and now - self._last_call >= 4.0:
@@ -1083,7 +1049,7 @@ class VJ:
                 else:
                     # normalise the clip so quiet rooms still give the model something to hear
                     j = self._ask_ai(clip * min(8.0, 0.25 / max(level, 1e-4)))
-                    self.brain_status = "OpenAI (hears the clip) ok" if j else "OpenAI did not answer"
+                    self.brain_status = "Claude ok" if j else "Claude did not answer"
                 if j:
                     self.source = j.get("model", "ai")
                     if j.get("song"):

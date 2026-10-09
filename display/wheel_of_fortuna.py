@@ -1,7 +1,7 @@
 """The Wheel of Fortuna — AI-written fates for the flat, spun on the wall,
 printed as an official verdict card.
 
-    fates = generate_fates()                 # 8 x {label, emoji, verdict} via OpenAI
+    fates = generate_fates()                 # 8 x {label, emoji, verdict} via Claude
     frame(u, fates, winner)                  # u = seconds since the spin started
     card = verdict_card(fates[winner])       # greyscale PIL image for the printer
 
@@ -61,17 +61,17 @@ def _short(text, n):
 
 
 def generate_fates():
-    """8 outcomes from OpenAI; falls back to a built-in set on any failure."""
+    """8 outcomes from Claude; falls back to a built-in set on any failure."""
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"),
-                        timeout=config.AI_TIMEOUT_SEC + 10)
-        r = client.chat.completions.create(
-            model=config.AI_MODEL, temperature=1.1, max_tokens=700,
-            response_format={"type": "json_object"},
-            messages=[{"role": "system", "content": PROMPT},
-                      {"role": "user", "content": f"Spin #{random.randint(1, 10**6)}. Go."}])
-        out = json.loads(r.choices[0].message.content)["outcomes"]
+        import ai_client
+        schema = {"type": "object", "properties": {"outcomes": {"type": "array", "items": {
+            "type": "object", "properties": {"label": {"type": "string"}, "emoji": {"type": "string"},
+                                             "verdict": {"type": "string"}},
+            "required": ["label", "emoji", "verdict"], "additionalProperties": False}}},
+            "required": ["outcomes"], "additionalProperties": False}
+        j, _, _ = ai_client.ask(PROMPT, f"Spin #{random.randint(1, 10**6)}. Go.", max_tokens=2048,
+                                effort="low", schema=schema, timeout=config.AI_TIMEOUT_SEC + 10)
+        out = j["outcomes"]
         fates = []
         for o in out[:N]:
             fates.append({"label": _short(str(o["label"]), 18),

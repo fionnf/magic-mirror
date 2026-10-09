@@ -100,8 +100,8 @@ SILHOUETTE_MIRROR = True
 # Dim factor applied to the live silhouette while text is overlaid.
 SILHOUETTE_DIM_FACTOR = 0.2
 
-# AI (OpenAI Chat Completions, vision-capable model)
-AI_MODEL = "gpt-4o-mini"
+# AI (Claude via the Anthropic API; vision-capable). Needs ANTHROPIC_API_KEY in .env
+AI_MODEL = "claude-opus-5-5"
 AI_MAX_TOKENS = 30
 AI_TIMEOUT_SEC = 10
 MIRROR_PERSONA = (

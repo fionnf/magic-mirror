@@ -227,4 +227,4 @@ slow painterly art with a barely-there swell; dance party = neon geometry locked
 changes on 4-bar boundaries, shockwaves on drops. Buttons: 🤖 Auto (follow the room), 🌿 Chill and
 ⚡ Party force it. The app shows the level and why (loudness in dBFS is the main gate: tune the
 Sensitivity slider if your room reads too quiet/loud). Gallery art modes run slow ("Art pace").
-Brains: OpenAI cheap (text, default) / OpenAI audio / Claude; Gemini was retired (402, no credits).
+All AI calls (mirror one-liner, aura, wheel, VJ text brain) go through the Anthropic API (`ANTHROPIC_API_KEY` in `.env`, model `config.AI_MODEL`).

@@ -37,7 +37,7 @@ sudo pip3 install --break-system-packages --root-user-action=ignore "$WORK/rpi-r
 
 say "3/7 python packages (system-wide: the services run as root)"
 sudo pip3 install --break-system-packages --root-user-action=ignore --ignore-installed \
-    openai python-escpos pyusb qrcode \
+    anthropic python-escpos pyusb qrcode \
     google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2 \
     shazamio audioop-lts tinytuya
 # optional hardware extras (touch button, LED strip): fine if they fail
@@ -58,7 +58,7 @@ grep -q '^camera_auto_detect=1' "$CFG" || echo "   note: camera_auto_detect=1 is
 say "5/7 secrets file"
 if [ ! -f .env ]; then
     cp .env.example .env
-    echo "   created .env from .env.example - fill in OPENAI_API_KEY (or copy the old Pi's .env)"
+    echo "   created .env from .env.example - fill in ANTHROPIC_API_KEY (or copy the laptop's .env)"
 else
     echo "   .env already present"
 fi

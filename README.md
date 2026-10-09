@@ -61,7 +61,7 @@ python3 main.py
 
 # Laptop simulator (no hardware needed):
 python3 tests/test_full_sim.py --camera webcam
-python3 tests/test_full_sim.py --camera webcam --no-api   # skip OpenAI calls
+python3 tests/test_full_sim.py --camera webcam --no-api   # skip Claude calls
 python3 tests/test_full_sim.py --camera static            # no webcam
 ```
 
@@ -101,7 +101,7 @@ All tunables live in [`config.py`](config.py). Key sections:
 | LED strip | `LED_STRIP_COUNT`, `LED_STRIP_PIN`, `LED_STRIP_HUE_SPEED` |
 | MQTT | `MQTT_HOST`, `MQTT_PORT`, `MQTT_WS_PORT` |
 
-Environment variables (`.env`): `OPENAI_API_KEY`, `GOOGLE_DRIVE_FOLDER_ID`, `GOOGLE_DRIVE_RECEIPTS_FOLDER_ID`.
+Environment variables (`.env`): `ANTHROPIC_API_KEY`, `GOOGLE_DRIVE_FOLDER_ID`, `GOOGLE_DRIVE_RECEIPTS_FOLDER_ID`.
 
 ---
 
@@ -127,7 +127,7 @@ python3 tools/timelapse.py --date 2025-07-04
 magic-mirror/
 ├── main.py              # State machine entry point
 ├── config.py            # All constants
-├── ai_client.py         # OpenAI vision + booth prompt generation
+├── ai_client.py         # Claude (Anthropic API): vision one-liner, aura, booth prompts
 ├── camera.py            # Camera + silhouette extraction
 ├── led_matrix.py        # HUB75 matrix wrapper
 ├── led_strip.py         # SK6812 strip animation

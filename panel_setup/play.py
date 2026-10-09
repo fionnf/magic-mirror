@@ -115,6 +115,39 @@ class _MusicClock:
         return self.t, 0.95 + 0.06 * br * self.env
 
 
+class _SimMatrix:
+    """The panel wall in a window on a laptop (pygame), with the same draw() contract."""
+
+    def __init__(self):
+        from simulator.led_simulator import LEDSimulator
+        self.sim = LEDSimulator()
+        self.last = 0.0
+
+    def draw(self, image, frame_fraction=1):
+        for ev in self.sim.pump_events():
+            if ev.type == self.sim.pygame.QUIT:
+                raise KeyboardInterrupt
+        self.sim.draw(image)
+        self.sim.tick()
+        # pace like the real wall (29 fps)
+        wait = self.last + frame_fraction / 58.0 - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        self.last = time.monotonic()
+        return True
+
+    def clear(self):
+        self.sim.clear()
+        self.sim.tick()
+
+
+def _matrix():
+    if os.environ.get("WALL_SIM") or sys.platform == "darwin":
+        return _SimMatrix()
+    from led_matrix import LedMatrix
+    return LedMatrix()
+
+
 def _boot_frame(progress):
     """Start-up screen: HOUSE FORTUNA and a progress bar (shown while the animation loads)."""
     from PIL import Image, ImageDraw
@@ -186,9 +219,8 @@ def main():
         print(f"wrote {a.gif} ({n} frames)")
         return
 
-    from led_matrix import LedMatrix
     from display import dedications
-    matrix = LedMatrix()
+    matrix = _matrix()
     overlay = dedications.Overlay()
     interval = 1.0 / a.fps
     booting = bool(os.environ.get("WALL_BOOT"))          # set by wall_control for the first start after power-on only

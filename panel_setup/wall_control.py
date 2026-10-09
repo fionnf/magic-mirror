@@ -94,7 +94,9 @@ class Runner:
             return [PY, "panel_setup/play.py", what, "--fps", "29"]
         if what == "mirror":
             cmd = [PY, "-u", "main.py", "--no-touch", "--no-mqtt"]
-            if self.state.get("camera") == "stream" and self.state.get("camera_url"):
+            if os.environ.get("WALL_SIM"):
+                cmd += ["--sim", "--camera", "webcam"]           # laptop: pygame window + its webcam
+            elif self.state.get("camera") == "stream" and self.state.get("camera_url"):
                 cmd += ["--camera-url", self.state["camera_url"]]
             elif self.state.get("camera") == "pi":
                 pass                                    # real Pi camera
@@ -686,10 +688,34 @@ const j=await r.json().catch(()=>({}));m.textContent=r.ok?'✨ Sent! Look at the
     return app
 
 
+def _start_mac_mic():
+    """Simulator: stream this Mac's microphone to the music engine over UDP (needs ffmpeg)."""
+    import shutil
+    if not shutil.which("ffmpeg"):
+        print("[sim] ffmpeg not found: music mode will have no microphone", flush=True)
+        return
+    mic = os.environ.get("MIC", "MacBook Pro Microphone")
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-fflags", "nobuffer", "-flags", "low_delay",
+           "-f", "avfoundation", "-i", f":{mic}", "-ac", "1", "-ar", "22050", "-flush_packets", "1",
+           "-f", "s16le", "udp://127.0.0.1:9099?pkt_size=512"]
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        print(f"[sim] streaming '{mic}' to the music engine (set MIC=... to change)", flush=True)
+    except Exception as e:
+        print(f"[sim] mic stream failed: {e}", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=80)
+    ap.add_argument("--port", type=int, default=None)
+    ap.add_argument("--sim", action="store_true", help="laptop: panels in a window, Mac mic, port 8080")
     a = ap.parse_args()
+    if a.sim or sys.platform == "darwin":
+        os.environ["WALL_SIM"] = "1"
+        os.environ.setdefault("WALL_AUDIO", "udp:9099")
+        _start_mac_mic()
+    if a.port is None:
+        a.port = 8080 if os.environ.get("WALL_SIM") else 80
     try:
         os.nice(12)                          # the website must never steal time from the panel refresh
     except OSError:

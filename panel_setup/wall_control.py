@@ -32,19 +32,19 @@ PY = sys.executable or "/usr/bin/python3"
 
 MODES = [
     # id, category, title, description
-    ("lava", "Art", "Lava & Coral", "Brain coral, bloom, mitosis, neon contours, bioluminescence - 8 slow pieces"),
-    ("shapes", "Art", "Shapes", "Flow dots & lines, node garden, spiral, woven grid, ripples - thin glowing patterns"),
-    ("daily", "Art", "Art of the day", "A new original piece every day, composed by Claude - today's is the default"),
-    ("shaders", "Art", "Shaders", "GPU shaders: silk, ink veil, dunes, lanterns, tide - slow two-hue pieces"),
-    ("artsy", "Art", "Artsy", "Marbling, oil slick, watercolour, Kandinsky, op-art stripes, a drifting Mondrian"),
-    ("glass", "Art", "Light Art", "Stained glass, Julia fractal, kaleidoscope, long-exposure trails, nebula - soft and filled"),
-    ("art", "Art", "Art Gallery", "Ink flow, colour fields, lava, coral, moiré"),
+    ("lava", "Art", "Lava & Coral", "Coral, bloom, cells and slow bioluminescence"),
+    ("shapes", "Art", "Shapes", "Flow dots, woven grids, ripples: thin glowing lines"),
+    ("daily", "Art", "Art of the day", "A new piece every day, composed by Claude"),
+    ("shaders", "Art", "Shaders", "Conic tiles, aperture, eclipse, halo, glass and more"),
+    ("artsy", "Art", "Artsy", "Marbling, op-art stripes, oil slick, a drifting Mondrian"),
+    ("glass", "Art", "Light Art", "Stained glass, long-exposure trails, nebula"),
+    ("art", "Art", "Art Gallery", "Ink flow, colour fields, moiré"),
     ("pride", "Shows", "Pride Show", "Disco ball, HOUSE FORTUNA, people nearby, vortex, heart"),
     ("dewa", "Shows", "Dewa's Story", "Edelweiss flight attendant, a date at every layover"),
     ("maeva", "Shows", "Maeva in Zürich", "Tram at 8:00:00, the Limmat, Sprüngli, sledging"),
     ("welcome", "Shows", "Welcome", "Welcome to HOUSE FORTUNA, wheel of fortune"),
     ("cow", "Shows", "Dewa is a cow", "A message card"),
-    ("music", "Live", "Music", "Chill art that breathes with the music; an AI VJ picks the vibe (Mac mic for now)"),
+    ("music", "Live", "Music", "Art that breathes with the music in the room"),
     ("ambient", "Live", "Art + trams", "Lava & Coral with a small Rennweg tram strip"),
     ("trams", "Live", "Tram board", "Live departures from Rennweg, split-flap style"),
 ]
@@ -213,6 +213,7 @@ class Runner:
                     "wheel_print": self.state.get("wheel_print", True),
                     "smart_crop": self.state.get("smart_crop", True),
                     "art_speed": self.state.get("art_speed", 0.12),
+                    "wall_w": __import__("config").TOTAL_WIDTH, "wall_h": __import__("config").TOTAL_HEIGHT,
                     "error": self.error, "oneshot": self.oneshot_resume is not None}
 
     # -- watchdog: crashes, one-shots, playlists
@@ -485,7 +486,8 @@ def make_app(runner):
         from display import daily
         return jsonify({"today": __import__("datetime").date.today().isoformat(),
                         "chosen": runner.state.get("daily_date") or "",
-                        "editions": [{"date": d, **{k: m.get(k) for k in ("name", "description", "palette", "source_sha256")}}
+                        "editions": [{"date": d, **{k: m.get(k) for k in ("name", "description", "palette", "source_sha256",
+                                                                          "listening", "final", "caption")}}
                                      for d, m in daily.editions()]})
 
     @app.get("/daily/<path:name>")
@@ -868,6 +870,27 @@ def main():
     if len([f for f in os.listdir(THUMB_DIR)] if os.path.isdir(THUMB_DIR) else []) < len(MODES) + 2:
         threading.Thread(target=make_thumbs, daemon=True).start()   # normally shipped by deploy.sh
 
+    def _publish_pending(daily):
+        """Send new or changed editions to the public gallery (remembers what went out)."""
+        from display import publish
+        if not publish.available():
+            return
+        sent_path = os.path.join(HERE, "gallery_sent.json")
+        try:
+            with open(sent_path) as fh:
+                sent = json.load(fh)
+        except Exception:
+            sent = {}
+        todo = [d for d, m in daily.editions()[:14]
+                if sent.get(d) != ("final" if m.get("final") else "new")]
+        if todo:
+            publish.publish(todo)
+            for d, m in daily.editions()[:14]:
+                if d in todo:
+                    sent[d] = "final" if m.get("final") else "new"
+            with open(sent_path, "w") as fh:
+                json.dump(sent, fh)
+
     def daily_watch():                       # compose the art of the day (once a day, ~05:00 or at boot)
         import datetime as _dt
         from display import daily
@@ -881,6 +904,10 @@ def main():
                     print(f"[daily] {today}: {meta['name']}", flush=True)
                     if runner.current == "daily" and not runner.state.get("daily_date"):
                         runner.restart_current()
+                for d, m in daily.editions():          # past days the wall did not close itself
+                    if d < today and not m.get("final"):
+                        daily.finalise(d)
+                _publish_pending(daily)
             except Exception as e:
                 print(f"[daily] {e}", flush=True)
                 time.sleep(1800)

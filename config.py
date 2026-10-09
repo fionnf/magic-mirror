@@ -102,6 +102,8 @@ SILHOUETTE_MIRROR = True
 SILHOUETTE_DIM_FACTOR = 0.2
 
 # AI (Claude via the Anthropic API; vision-capable). Needs ANTHROPIC_API_KEY in .env
+# The daily artist's mood board: a public Pinterest board, "user/board" (read via its RSS feed)
+MOODBOARD = __import__("os").environ.get("WALL_MOODBOARD", "fionnferreira/motion-graphics")
 AI_MODEL = "claude-opus-5-5"
 AI_MAX_TOKENS = 30
 AI_TIMEOUT_SEC = 10

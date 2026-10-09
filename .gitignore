@@ -40,3 +40,7 @@ assets/loops/*.mp4
 panel_setup/audio_now.json
 panel_setup/now.jpg
 panel_setup/.session_secret
+assets/daily/moodboard.jpg
+panel_setup/gallery_sent.json
+_site/
+assets/daily/*.memory.json

@@ -112,7 +112,7 @@ def editions():
     if not os.path.isdir(FOLDER):
         return out
     for fn in sorted(os.listdir(FOLDER), reverse=True):
-        if fn.endswith(".json"):
+        if fn.endswith(".json") and fn.count(".") == 1:          # 2026-10-09.json, not .memory.json
             try:
                 with open(os.path.join(FOLDER, fn)) as fh:
                     out.append((fn[:-5], json.load(fh)))
@@ -173,7 +173,83 @@ def check(src, palette):
     return True, f"ok (mean {m:.0f}, motion {max(fast):.2f}, {ms:.1f} ms)", still
 
 
-def generate(date=None, notes="", attempts=4):
+CURATOR = """You are the curator of the House Fortuna wall: a pixel LED art wall (64 x 64 panels, seams visible)
+in the living room of a modern apartment in Zurich. Every day an artist proposes one generative piece. You see
+three stills of it (start, a minute later, and while music plays) and, when there is one, the house's mood board.
+
+The house's taste: slow, restrained, elegant light on black or deep colour; one form or one field rather than
+many; many hues of one colour family rather than rainbow; soft gradients, glows, halftone dots, thin lines,
+cut-paper and conic geometry. They dislike busy, multicolour, clip-art, watercolour and lava-lamp looks.
+The piece must be beautiful enough to fall asleep in front of, and must read on a coarse LED grid.
+
+Judge honestly. Score 1-10. 7 means you would hang it; below 7 it goes back with one concrete, actionable
+note for the artist (what to change in form, palette, density or motion). Keep the verdict to two sentences."""
+CURATOR_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["score", "verdict", "note"],
+                  "properties": {"score": {"type": "integer"}, "verdict": {"type": "string"},
+                                 "note": {"type": "string"}}}
+
+
+def _jpeg_block(img, size=384):
+    import base64
+    import io
+    from PIL import Image
+    im = img if isinstance(img, Image.Image) else Image.fromarray(np.asarray(img).astype(np.uint8))
+    im = im.convert("RGB")
+    im.thumbnail((size, size))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=85)
+    return {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                        "data": base64.b64encode(buf.getvalue()).decode("ascii")}}
+
+
+def _moodboard_blocks():
+    try:
+        from display import moodboard
+        data, _ = moodboard.sheet()
+    except Exception:
+        data = None
+    if not data:
+        return []
+    import base64
+    return [{"type": "text", "text": "The house's mood board (their newest Pinterest pins) - take the "
+                                     "feeling, not a copy:"},
+            {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                         "data": base64.b64encode(data).decode("ascii")}}]
+
+
+def _stills(src, pal):
+    """Three stills for the curator: the opening, a minute later, and mid-song."""
+    from display import shaders
+    from PIL import Image
+    r = shaders.renderer()
+    path = os.path.join(FOLDER, ".curate.frag")
+    with open(path, "w") as fh:
+        fh.write(src)
+    r.progs.pop("path:" + path, None)
+    cols = [_hex(c) for c in pal]
+    out = [r.render("path:" + path, t, f, cols) for t, f in
+           ((5.0, {}), (65.0, {}), (125.0, {"bass": 0.6, "energy": 0.5, "breath": 0.7, "level": 0.3,
+                                             "beat_phase": 0.3, "tension": 0.4}))]
+    r.progs.pop("path:" + path, None)
+    os.remove(path)
+    strip = Image.new("RGB", (W * 3 + 16, H), (40, 40, 40))
+    for i, im in enumerate(out):
+        strip.paste(Image.fromarray(im.astype(np.uint8)), (i * (W + 8), 0))
+    return strip
+
+
+def curate(title, statement, src, pal):
+    """-> (score, verdict, note) from Claude looking at the piece."""
+    import ai_client
+    content = _moodboard_blocks() + [
+        {"type": "text", "text": f"Today's proposal: \"{title}\" - {statement}\nPalette {', '.join(pal)}. "
+                                 "Stills (left to right: opening, a minute later, while music plays):"},
+        _jpeg_block(_stills(src, pal), 768)]
+    j, _, _ = ai_client.ask(CURATOR, content, max_tokens=1500, effort="low", schema=CURATOR_SCHEMA, timeout=120)
+    return int(j.get("score", 0)), j.get("verdict", "").strip(), j.get("note", "").strip()
+
+
+def generate(date=None, notes="", attempts=4, min_score=7):
     """Ask Claude for today's piece, check it, save it. -> metadata dict (raises if all attempts fail)."""
     import ai_client
     from PIL import Image
@@ -183,10 +259,15 @@ def generate(date=None, notes="", attempts=4):
     user = (f"Today is {d.strftime('%A %d %B %Y')} ({_season(d)} in Zürich). "
             f"Recent titles (do something different): {', '.join(recent) or 'none yet'}. {notes}").strip()
     feedback = ""
+    board = _moodboard_blocks()
+    best = None                                       # (score, j, src, pal, verdict, attempt) of curated pieces
+    tin = tout = 0
     for attempt in range(1, attempts + 1):
         msg = user + (f"\n\nYour previous attempt was rejected: {feedback}. Fix that and send the "
                       "whole piece again." if feedback else "")
-        j, tin, tout = ai_client.ask(BRIEF, msg, max_tokens=16000, effort="medium", schema=SCHEMA, timeout=300)
+        j, a_in, a_out = ai_client.ask(BRIEF, board + [{"type": "text", "text": msg}] if board else msg,
+                                       max_tokens=16000, effort="medium", schema=SCHEMA, timeout=300)
+        tin, tout = tin + a_in, tout + a_out
         pal = (j.get("palette") or [])[:3]
         try:
             [_hex(c) for c in pal]
@@ -200,26 +281,40 @@ def generate(date=None, notes="", attempts=4):
         if not ok:
             feedback = reason
             continue
-        os.makedirs(FOLDER, exist_ok=True)
-        with open(_path(date, "frag"), "w") as fh:
-            fh.write(f"// {j['title']} - art of the day {date}\n// {j['statement']}\n" + src)
-        Image.fromarray(still).resize((576, 576), Image.NEAREST).save(_path(date, "png"))
-        sha = hashlib.sha256(src.encode()).hexdigest()
-        meta = {"name": j["title"].strip()[:60], "description": j["statement"].strip()[:300],
-                "image": f"{date}.png", "animation_source": f"{date}.frag",
-                "attributes": [{"trait_type": "Date", "value": date},
-                               {"trait_type": "Season", "value": _season(d)},
-                               {"trait_type": "Palette", "value": " ".join(pal)},
-                               {"trait_type": "Medium", "value": f"GLSL shader, {W} x {H} LED wall"},
-                               {"trait_type": "Artist", "value": f"Claude ({config.AI_MODEL})"}],
-                "listening": j.get("listening", "").strip()[:300],
-                "palette": pal, "source_sha256": sha, "model": config.AI_MODEL,
-                "tokens": {"in": tin, "out": tout}, "attempts": attempt, "created": time.time()}
-        with open(_path(date, "json"), "w") as fh:
-            json.dump(meta, fh, indent=1)
-        return meta
-    raise RuntimeError(f"no acceptable piece after {attempts} attempts (last: {feedback})")
-
+        try:
+            score, verdict, note = curate(j["title"], j["statement"], src, pal)
+        except Exception as e:                        # the curator is a bonus, never a blocker
+            print(f"[daily] curator unavailable: {e}", flush=True)
+            score, verdict, note = min_score, "", ""
+        print(f"[daily] curator: {score}/10 - {verdict}", flush=True)
+        if best is None or score > best[0]:
+            best = (score, j, src, pal, verdict, attempt, still)
+        if score >= min_score:
+            break
+        feedback = f"the curator gave it {score}/10: {verdict} Their note: {note}"
+    if best is None:
+        raise RuntimeError(f"no acceptable piece after {attempts} attempts (last: {feedback})")
+    score, j, src, pal, verdict, attempt, still = best   # the best curated try hangs
+    os.makedirs(FOLDER, exist_ok=True)
+    with open(_path(date, "frag"), "w") as fh:
+        fh.write(f"// {j['title']} - art of the day {date}\n// {j['statement']}\n" + src)
+    Image.fromarray(still).resize((W * 3, H * 3), Image.NEAREST).save(_path(date, "png"))
+    sha = hashlib.sha256(src.encode()).hexdigest()
+    meta = {"name": j["title"].strip()[:60], "description": j["statement"].strip()[:600],
+            "image": f"{date}.png", "animation_source": f"{date}.frag",
+            "attributes": [{"trait_type": "Date", "value": date},
+                           {"trait_type": "Season", "value": _season(d)},
+                           {"trait_type": "Palette", "value": " ".join(pal)},
+                           {"trait_type": "Medium", "value": f"GLSL shader, {W} x {H} LED wall"},
+                           {"trait_type": "Artist", "value": f"Claude ({config.AI_MODEL})"},
+                           {"trait_type": "Curator score", "value": score}],
+            "listening": j.get("listening", "").strip()[:800],
+            "palette": pal, "source_sha256": sha, "model": config.AI_MODEL, "size": [W, H],
+            "tokens": {"in": tin, "out": tout}, "attempts": attempt, "created": time.time(),
+            "curator": {"score": score, "verdict": verdict}}
+    with open(_path(date, "json"), "w") as fh:
+        json.dump(meta, fh, indent=1)
+    return meta
 
 def ensure(date=None):
     date = date or datetime.date.today().isoformat()
@@ -260,6 +355,36 @@ def save_memory(date, m):
     os.replace(tmp, _memory_path(date))
 
 
+WRITER = """You write the daily post for the Fortuna gallery: a public feed where one generative LED artwork from
+a living room in Zurich is published every day. People follow it like a quiet art account.
+
+You get the day's piece (its title, statement and the still it settled into at midnight) and what the room
+heard that day: how much music there was, hour by hour (0..1), and how many songs. The piece shapes itself
+around that listening (iDay), so the still is a record of the day.
+
+Write:
+- caption: 2-3 sentences, plain and warm, like a good museum label crossed with a diary entry. Say what the
+  day sounded like through what the piece did (quiet morning, a loud late evening...). Never name songs,
+  people or anything private. No hashtags, no emojis, no exclamation marks.
+- alt: one sentence describing the image for someone who cannot see it."""
+WRITER_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["caption", "alt"],
+                 "properties": {"caption": {"type": "string"}, "alt": {"type": "string"}}}
+
+
+def write_post(meta, mem, still_path):
+    """Claude looks at the finished edition and writes its feed post. -> {'caption', 'alt'}"""
+    import ai_client
+    from PIL import Image
+    hours = ", ".join(f"{h}h {v:.2f}" for h, v in enumerate(mem["hours"]) if v > 0.02) or "silence all day"
+    content = [{"type": "text", "text": f"Piece: \"{meta['name']}\" - {meta['description']}\n"
+                                        f"How it listens: {meta.get('listening', '')}\n"
+                                        f"Music by hour: {hours}. Songs recognised: {len(mem['songs'])}.\n"
+                                        "The still at midnight:"},
+               _jpeg_block(Image.open(still_path), 512)]
+    j, _, _ = ai_client.ask(WRITER, content, max_tokens=1200, effort="low", schema=WRITER_SCHEMA, timeout=120)
+    return {"caption": j["caption"].strip()[:600], "alt": j["alt"].strip()[:300]}
+
+
 def finalise(date):
     """Midnight: bake the day's music into the edition (final still + metadata attributes)."""
     from PIL import Image
@@ -275,7 +400,7 @@ def finalise(date):
     if r.ok:
         img = r.render("path:" + _path(date, "frag"), 3600.0,
                        {"day": mem["hours"], "level": 0.1}, [_hex(c) for c in meta["palette"]])
-        Image.fromarray(img.astype(np.uint8)).resize((576, 576), Image.NEAREST).save(_path(date, "final.png"))
+        Image.fromarray(img.astype(np.uint8)).resize((W * 3, H * 3), Image.NEAREST).save(_path(date, "final.png"))
         meta["image"] = f"{date}.final.png"
     heard = sum(1 for v in mem["hours"] if v > 0.05)
     meta["attributes"] = [a for a in meta.get("attributes", []) if a.get("trait_type") not in
@@ -283,7 +408,12 @@ def finalise(date):
     meta["attributes"] += [{"trait_type": "Hours with music", "value": heard},
                            {"trait_type": "Songs heard", "value": len(mem["songs"])},
                            {"trait_type": "Loudest hour", "value": int(np.argmax(mem["hours"])) if heard else None}]
-    meta["songs"] = mem["songs"][:200]
+    meta["songs"] = mem["songs"][:200]          # stays on the wall's computer; the public gallery drops it
+    meta["hours"] = [round(float(v), 3) for v in mem["hours"]]
+    try:
+        meta["post"] = write_post(meta, mem, _path(date, "final.png" if r.ok else "png"))
+    except Exception as e:
+        print(f"[daily] post writer unavailable: {e}", flush=True)
     meta["final"] = True
     with open(_path(date, "json"), "w") as fh:
         json.dump(meta, fh, indent=1)

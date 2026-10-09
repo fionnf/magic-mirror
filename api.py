@@ -10,7 +10,6 @@ import os
 import threading
 from typing import Any, Dict
 
-_DASHBOARD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard")
 
 try:
     from flask import Flask, jsonify, request, send_from_directory
@@ -229,19 +228,9 @@ class MirrorAPI:
 
         @self.app.route("/", methods=["GET"])
         def index():
-            p = os.path.join(_DASHBOARD, "index.html")
-            if os.path.exists(p):
-                with open(p) as f:
-                    return f.read(), 200, {"Content-Type": "text/html"}
+            # the user-facing app is the wall control site (panel_setup/web, port 80); this is the
+            # mirror process's internal API, proxied by it
             return jsonify({"api": "magic-mirror", "ready": True})
-
-        @self.app.route("/gallery", methods=["GET"])
-        def gallery():
-            p = os.path.join(_DASHBOARD, "photos.html")
-            if os.path.exists(p):
-                with open(p) as f:
-                    return f.read(), 200, {"Content-Type": "text/html"}
-            return jsonify({"error": "photos page not found"}), 404
 
     def start(self) -> None:
         if not self.app:

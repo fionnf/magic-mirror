@@ -19,8 +19,9 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE_URL = os.environ.get("GALLERY_URL", "https://fionnf.github.io/magic-mirror/").rstrip("/") + "/"
 TITLE = "Fortuna"
-TAGLINE = ("One piece of light a day from a living room in Zürich. Each one is composed by Claude, "
-           "hung on a wall of LED panels, and shaped by what the room listens to until midnight.")
+CREDIT = "Dewa and Fionn"
+TAGLINE = ("One piece of light a day from a living room in Zürich, made by Dewa and Fionn for a wall of "
+           "LED panels. Each one is shaped by what the room listens to until midnight.")
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" '
          'href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?'
          'family=Instrument+Sans:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">')
@@ -81,15 +82,16 @@ def page(title, body, prefix, desc=TAGLINE, image=None, canonical=""):
 <link rel="alternate" type="application/rss+xml" title="{TITLE}" href="{SITE_URL}feed.xml">
 <meta name="theme-color" content="#121014">{FONTS}<link rel="stylesheet" href="{prefix}style.css"></head>
 <body><div class="wrap">{body}
-<footer>Made by House Fortuna with Claude. The wall is 64 × 64 LED panels; every piece here is the
-same shader running on it. <a href="{prefix}feed.xml">Follow by RSS</a>.</footer></div>
+<footer>Made by {CREDIT} at House Fortuna. Every piece here is the same program that runs on the
+wall. <a href="{prefix}feed.xml">Follow by RSS</a>.</footer></div>
 <script src="{prefix}gallery.js" defer></script></body></html>"""
 
 
 def header(prefix):
-    return (f'<header class="site"><h1><a href="{prefix or "./"}">{TITLE}</a></h1><p>{e(TAGLINE)}</p>'
+    return (f'<header class="site"><h1><a href="{prefix}art/">{TITLE}</a></h1><p>{e(TAGLINE)}</p>'
             f'<div class="follow"><a href="{prefix}feed.xml">Follow by RSS</a>'
-            f'<a href="https://feedly.com/i/subscription/feed/{SITE_URL}feed.xml">Follow on Feedly</a></div></header>')
+            f'<a href="https://feedly.com/i/subscription/feed/{SITE_URL}feed.xml">Follow on Feedly</a>'
+            f'<a href="{prefix}">Control the wall</a></div></header>')
 
 
 def post_html(m, prefix, full=False):
@@ -108,7 +110,7 @@ def post_html(m, prefix, full=False):
                                                if caption(m) != m.get("description") else []) + [
                  ("Palette", '<span class="swatches">' + "".join(f'<i style="background:{e(c)}" title="{e(c)}"></i>' for c in pal) + "</span>"),
                  ("Medium", f'GLSL shader on a {e(str((m.get("size") or [192,192])[0]))} × {e(str((m.get("size") or [192,192])[1]))} pixel LED wall'),
-                 ("Artist", e(f'Claude ({m.get("model", "")})')),
+                 ("By", CREDIT),
                  ("Source", f'<a href="{prefix}gallery/{m["date"]}.frag">{m["date"]}.frag</a> · sha256 {e(m.get("source_sha256", "")[:12])}')]
         out.append('<dl class="facts">' + "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in facts) + "</dl>")
         hours = m.get("hours")
@@ -161,9 +163,12 @@ def main():
         with open(os.path.join(a.out, "e", m["date"], "index.html"), "w") as fh:
             fh.write(page(f"{m['name']} · {TITLE}", header("../../") + post_html(m, "../../", full=True),
                           "../../", caption(m), still(m), f"e/{m['date']}/"))
-    feed = "".join(post_html(m, "") for m in eds) or '<p class="caption">The first piece is on its way.</p>'
-    with open(os.path.join(a.out, "index.html"), "w") as fh:
-        fh.write(page(TITLE, header("") + feed, "", image=still(eds[0]) if eds else None))
+    feed = "".join(post_html(m, "../") for m in eds) or '<p class="caption">The first piece is on its way.</p>'
+    os.makedirs(os.path.join(a.out, "art"))
+    with open(os.path.join(a.out, "art", "index.html"), "w") as fh:
+        fh.write(page(TITLE, header("../") + feed, "../", image=still(eds[0]) if eds else None, canonical="art/"))
+    # the home page is the wall's control app (it finds the wall through its announced address)
+    shutil.copy(os.path.join(ROOT, "panel_setup", "web", "index.html"), os.path.join(a.out, "index.html"))
     with open(os.path.join(a.out, "feed.xml"), "w") as fh:
         fh.write(rss(eds))
     with open(os.path.join(a.out, ".nojekyll"), "w"):

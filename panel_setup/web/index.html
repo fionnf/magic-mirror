@@ -123,6 +123,12 @@
   nav button svg { width: 22px; height: 22px; }
   nav button[aria-current=page] { color: var(--ink); }
   .view { display: none; } .view.on { display: block; }
+  .gate { display: none; min-height: 100vh; place-items: center; text-align: left; }
+  .gate .wrap, .gate form { display: grid; gap: 14px; max-width: 360px; }
+  .gate h1 { font: italic 400 46px/1 var(--serif); margin: 0; }
+  .gate input[type=password] { padding: 14px 16px; border-radius: 14px; }
+  body.locked #gateLogin, body.away #gateAway { display: grid; }
+  body.locked > :not(#gateLogin):not(.toast), body.away > :not(#gateAway):not(.toast) { display: none !important; }
   .toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0;
            background: var(--ink); color: var(--room); padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; transition: .25s; pointer-events: none; z-index: 9; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -131,6 +137,24 @@
 </head>
 <body>
 
+<div class="gate" id="gateLogin">
+  <form id="login" class="wrap">
+    <h1>Fortuna wall</h1>
+    <p class="hint">Made by Dewa and Fionn. Type the wall's password to control it from anywhere.</p>
+    <input type="text" name="username" value="fortuna" autocomplete="username" hidden>
+    <input type="password" id="loginPw" name="password" placeholder="Password" autocomplete="current-password" required>
+    <button class="btn primary">Open the wall</button>
+    <p class="hint" id="loginMsg" role="alert"></p>
+    <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/">See the gallery</a></p>
+  </form>
+</div>
+<div class="gate" id="gateAway">
+  <div class="wrap">
+    <h1>Fortuna wall</h1>
+    <p class="hint">The wall is not reachable right now. It may be switched off or restarting.</p>
+    <p><a class="btn primary" href="https://fionnf.github.io/magic-mirror/art/">See the gallery</a></p>
+  </div>
+</div>
 <div class="stage wrap">
   <div class="frame" id="frame"><img id="now" alt="What the wall shows now"><div class="grid"></div></div>
   <div class="label">
@@ -154,6 +178,7 @@
       <div class="today" id="today"><div class="empty">Today's piece is being made.</div></div>
       <div class="strip" id="archive" style="margin-top:14px"></div>
     </section>
+    <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/" target="_blank">The public gallery</a> shows every day's piece.</p>
     <section>
       <h2>Collections</h2>
       <div class="list" id="collections"></div>
@@ -259,7 +284,7 @@
       <h2>Guests</h2>
       <div class="switch"><span>Messages from guests on the wall</span><input type="checkbox" id="dOn"></div>
       <div class="row" style="gap:14px;margin-top:10px">
-        <a href="/d/qr.png" target="_blank"><img src="/d/qr.png" alt="QR code for guests" style="width:96px;height:96px;border-radius:10px;background:#fff"></a>
+        <a id="qrLink" href="/d/qr.png" target="_blank"><img id="qrImg" src="/d/qr.png" alt="QR code for guests" style="width:96px;height:96px;border-radius:10px;background:#fff"></a>
         <p class="hint" style="margin:0">Guests scan this on the home Wi-Fi and write a line that scrolls along the bottom of the wall.</p>
       </div>
       <div id="dList" style="margin-top:10px"></div>
@@ -292,9 +317,40 @@
 const $ = id => document.getElementById(id);
 let STATUS = {}, MODES = [], MUSIC = {}, DAILY = {};
 const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2200); };
+/* On the wall's own address the page talks to itself. Anywhere else (GitHub Pages) it finds the wall's
+   current public address, which the wall announces in the repo, and logs in with a token. */
+const REMOTE = !/^(\d+\.){3}\d+$|\.local$|^localhost$/.test(location.hostname) && !location.hostname.endsWith('trycloudflare.com');
+const GALLERY = 'https://fionnf.github.io/magic-mirror/art/';
+let BASE = '', TOKEN = '';
+try { TOKEN = localStorage.getItem('wallToken') || ''; } catch (e) {}
+const u = path => BASE + path + (TOKEN && REMOTE ? (path.includes('?') ? '&' : '?') + 'k=' + TOKEN : '');
+async function findWall() {
+  if (!REMOTE) return true;
+  try {
+    const r = await fetch('https://api.github.com/repos/fionnf/magic-mirror/contents/wall/wall.json', {headers: {Accept: 'application/vnd.github.raw+json'}, cache: 'no-store'});
+    BASE = (await r.json()).url || '';
+    const ping = await fetch(BASE + '/api/printer', {headers: TOKEN ? {Authorization: 'Bearer ' + TOKEN} : {}});
+    return ping.status === 200 || ping.status === 401;
+  } catch (e) { return false; }
+}
+function askLogin(msg) {
+  if (!REMOTE) { location.href = '/login'; return; }
+  $('loginMsg').textContent = msg || ''; document.body.classList.add('locked'); $('loginPw').focus();
+}
+$('login').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  try {
+    const r = await fetch(BASE + '/login?mode=token', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: $('loginPw').value})});
+    const j = await r.json();
+    if (!r.ok) return askLogin(j.error || 'That password is not right.');
+    TOKEN = j.token; try { localStorage.setItem('wallToken', TOKEN); } catch (e) {}
+    document.body.classList.remove('locked'); start();
+  } catch (e) { askLogin('The wall did not answer. Try again in a minute.'); }
+});
 async function api(url, body) {
-  const r = await fetch(url, body === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
-  if (r.status === 401) { location.href = '/login'; throw new Error('login needed'); }
+  const headers = TOKEN && REMOTE ? {Authorization: 'Bearer ' + TOKEN} : {};
+  const r = await fetch(BASE + url, body === undefined ? {headers} : {method: 'POST', headers: {...headers, 'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (r.status === 401) { askLogin(); throw new Error('login needed'); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || 'That did not work.');
   return j;
@@ -317,7 +373,7 @@ function refreshNow() {
   if (document.hidden) return;
   const img = new Image();
   img.onload = () => { nowImg.src = img.src; ambient(img); };
-  img.src = '/api/now.jpg?t=' + Date.now();
+  img.crossOrigin = 'anonymous'; img.src = u('/api/now.jpg?t=' + Date.now());
 }
 function ambient(img) {                 // the page takes the colour of what the wall shows
   try {
@@ -329,7 +385,6 @@ function ambient(img) {                 // the page takes the colour of what the
     document.documentElement.style.setProperty('--glow', [r, g, b].map(v => Math.round(Math.min(255, v / n * k * 0.85))).join(','));
   } catch (e) {}
 }
-setInterval(refreshNow, 1500); refreshNow();
 
 function titleFor(id) {
   if (id === 'daily') return DAILY.chosenMeta ? DAILY.chosenMeta.name : "Today's piece";
@@ -374,12 +429,12 @@ async function loadModes() {
   MODES = await api('/api/modes');
   const row = m => `
     <button data-id="${m.id}" onclick="play('${m.id}')">
-      <img src="/thumbs/${m.id}.png" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
       <span><b>${m.title}</b><small>${m.desc}</small></span><i class="now" hidden></i></button>`;
   $('shows').innerHTML = MODES.filter(m => m.cat !== 'Art' && m.id !== 'music').map(row).join('');
   $('collections').innerHTML = MODES.filter(m => m.id !== 'daily' && m.cat === 'Art').map(m => `
     <button data-id="${m.id}" onclick="play('${m.id}')">
-      <img src="/thumbs/${m.id}.png" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
       <span><b>${m.title}</b><small>${m.desc}</small></span><i class="now" hidden></i></button>`).join('');
   render();
 }
@@ -390,13 +445,13 @@ async function loadDaily() {
   DAILY.chosenMeta = pick;
   if (pick) {
     const img = `/daily/${pick.date}.${pick.final ? 'final.png' : 'png'}`;
-    $('today').innerHTML = `<img src="/daily/${pick.date}.png" alt="${esc(pick.name)}">
+    $('today').innerHTML = `<img src="${u('/daily/' + pick.date + '.png')}" alt="${esc(pick.name)}">
       <div><h3>${esc(pick.name)}</h3><p>${esc(pick.description || '')}</p>
       ${pick.listening ? `<p class="listen">${esc(pick.listening)}</p>` : ''}
       <button class="btn primary" onclick="showDaily('${DAILY.chosen ? pick.date : ''}')">Show it</button></div>`;
   }
   $('archive').innerHTML = eds.map(e => `<button class="${e.date === (pick && pick.date) ? 'sel' : ''}" onclick="showDaily('${e.date === DAILY.today ? '' : e.date}')">
-      <img src="/daily/${e.date}.png" alt="" loading="lazy"><span>${e.date === DAILY.today ? 'Today' : new Date(e.date).toLocaleDateString(undefined, {day: 'numeric', month: 'short'})}</span></button>`).join('');
+      <img src="${u('/daily/' + e.date + '.png')}" alt="" loading="lazy"><span>${e.date === DAILY.today ? 'Today' : new Date(e.date).toLocaleDateString(undefined, {day: 'numeric', month: 'short'})}</span></button>`).join('');
   render();
 }
 async function showDaily(date) { try { STATUS = await api('/api/daily/show', {date}); await loadDaily(); toast('Showing ' + titleFor('daily')); } catch (e) { toast(e.message); } }
@@ -442,7 +497,7 @@ async function loadLoops(sel) {
   if (loopSel === sel && $('loops').children.length) return; loopSel = sel;
   const tile = (name, label, img) => `<button class="${sel === name ? 'sel' : ''}" onclick="api('/api/music',{loop:'${name}'}).then(loadMusic)">
     ${img ? `<img src="${img}" alt="" loading="lazy">` : `<img alt="" style="background:linear-gradient(135deg,rgb(var(--glow)),#000)">`}<span>${label}</span></button>`;
-  $('loops').innerHTML = tile('', 'Any', null) + LOOPS.map(l => tile(l.name, l.name.split('__')[1].replace(/^(beeple-|mixkit-)/, ''), '/loops/thumb/' + l.name + '.jpg')).join('');
+  $('loops').innerHTML = tile('', 'Any', null) + LOOPS.map(l => tile(l.name, l.name.split('__')[1].replace(/^(beeple-|mixkit-)/, ''), u('/loops/thumb/' + l.name + '.jpg'))).join('');
 }
 async function scopeTick() {
   if (!$('v-music').classList.contains('on') || STATUS.current !== 'music') return;
@@ -466,13 +521,13 @@ async function loadPhotos(more) {
   let d; try { d = await api(`/api/photos?offset=${photoOff}&limit=60`); } catch (e) { return; }
   PHOTOS = PHOTOS.concat(d.photos); photoOff += d.photos.length;
   $('photoCount').textContent = d.total ? `${d.total} photos` : 'Photos';
-  $('photos').innerHTML = PHOTOS.length ? PHOTOS.map((p, i) => `<button onclick="openPhoto(${i})" aria-label="Open photo"><img src="${p.url}" alt="" loading="lazy"></button>`).join('')
+  $('photos').innerHTML = PHOTOS.length ? PHOTOS.map((p, i) => `<button onclick="openPhoto(${i})" aria-label="Open photo"><img src="${u(p.url)}" alt="" loading="lazy"></button>`).join('')
     : '<p class="empty" style="grid-column:1/-1">Photos from the mirror appear here.</p>';
   $('morePhotos').hidden = photoOff >= d.total;
 }
 function openPhoto(i) {
   viewing = PHOTOS[i];
-  $('vImg').src = viewing.url; $('vText').textContent = viewing.text || ''; $('vSave').href = viewing.url;
+  $('vImg').src = u(viewing.url); $('vText').textContent = viewing.text || ''; $('vSave').href = u(viewing.url);
   $('vTime').textContent = new Date(viewing.time * 1000).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
   $('viewer').showModal();
 }
@@ -528,13 +583,23 @@ function nameSug(id) { api('/api/faces/name', {id, name: $('sg_' + id).value}).t
 function dismissSug(id) { api('/api/faces/dismiss', {id}).then(loadMore); }
 
 /* ---------- start ---------- */
-(async () => {
+let started = false;
+async function start() {
+  if (started) return;
+  try { await refresh(); await loadModes(); } catch (e) { return; }
+  started = true;
+  $('qrImg').src = $('qrLink').href = u('/d/qr.png');
+  loadDaily(); loadMusic(); refreshNow();
   try { const t = localStorage.getItem('tab'); if (t) document.querySelector(`nav [data-tab="${t}"]`).click(); } catch (e) {}
-  await refresh(); await loadModes(); loadDaily(); loadMusic();
-  setInterval(refresh, 3000); setInterval(loadMusic, 5000); setInterval(loadDaily, 60000);
+  setInterval(refresh, 3000); setInterval(loadMusic, 5000); setInterval(loadDaily, 60000); setInterval(refreshNow, 1500);
   const rows = Math.round((STATUS.wall_h || 192) / 64), cols = Math.round((STATUS.wall_w || 192) / 64);
   document.documentElement.style.setProperty('--aspect', `${cols} / ${rows}`);
   document.documentElement.style.setProperty('--rows', rows); document.documentElement.style.setProperty('--cols', cols);
+}
+(async () => {
+  if (!(await findWall())) { document.body.classList.add('away'); return; }
+  if (REMOTE && !TOKEN) return askLogin();
+  start();
 })();
 </script>
 </body>

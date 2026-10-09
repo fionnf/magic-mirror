@@ -2,7 +2,7 @@ name: Fortuna gallery
 on:
   push:
     branches: [master]
-    paths: ["gallery/**", "site/**", "tools/build_gallery.py", ".github/workflows/gallery.yml"]
+    paths: ["gallery/**", "site/**", "panel_setup/web/index.html", "tools/build_gallery.py", ".github/workflows/gallery.yml"]
   workflow_dispatch:
 permissions:
   contents: read

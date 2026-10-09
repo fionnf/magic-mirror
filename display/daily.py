@@ -73,9 +73,14 @@ Technical contract (anything else will not compile):
       void mainImage(out vec4 fragColor, in vec2 fragCoord)
 - available uniforms (already declared, do not redeclare): float iTime; vec2 iResolution;
   float iBass, iMid, iTreble, iEnergy, iLevel; vec3 iColA, iColB, iColC; vec2 iPanels (the grid of
-  physical panels, e.g. 3 x 4 - seams between panels are real edges you may use)
+  physical panels, e.g. 3 x 4 - seams between panels are real edges you may use); float iClock (hours since
+  local midnight, 0..24, for evolution over the day)
 - GLSL ES 3.00 (WebGL2) rules: no #version, no precision line, no textures, no derivatives, all
   float literals with a decimal point (1.0 not 1), loops with constant bounds <= 64
+- it hangs all day, so it must keep evolving for hours and never visibly loop: drive the form with
+  several very slow drifts at unrelated periods (minutes to hours) and with iClock (hours since
+  midnight, 0..24). Someone glancing at 9 am, 3 pm and 11 pm should see the same piece in clearly
+  different states - light, density or composition moving with the day - never a fast change
 - it must run fast on a Raspberry Pi 4 GPU at about 50,000 pixels: keep total loop iterations per pixel
   under ~200
 
@@ -306,7 +311,7 @@ def generate(date=None, notes="", attempts=4, min_score=7):
                            {"trait_type": "Season", "value": _season(d)},
                            {"trait_type": "Palette", "value": " ".join(pal)},
                            {"trait_type": "Medium", "value": f"GLSL shader, {W} x {H} LED wall"},
-                           {"trait_type": "Artist", "value": f"Claude ({config.AI_MODEL})"},
+                           {"trait_type": "Artist", "value": "Dewa and Fionn"},
                            {"trait_type": "Curator score", "value": score}],
             "listening": j.get("listening", "").strip()[:800],
             "palette": pal, "source_sha256": sha, "model": config.AI_MODEL, "size": [W, H],

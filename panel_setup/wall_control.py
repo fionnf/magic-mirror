@@ -34,7 +34,7 @@ MODES = [
     # id, category, title, description
     ("lava", "Art", "Lava & Coral", "Coral, bloom, cells and slow bioluminescence"),
     ("shapes", "Art", "Shapes", "Flow dots, woven grids, ripples: thin glowing lines"),
-    ("daily", "Art", "Art of the day", "A new piece every day, composed by Claude"),
+    ("daily", "Art", "Art of the day", "A new piece every day, made for this wall"),
     ("shaders", "Art", "Shaders", "Conic tiles, aperture, eclipse, halo, glass and more"),
     ("artsy", "Art", "Artsy", "Marbling, op-art stripes, oil slick, a drifting Mondrian"),
     ("glass", "Art", "Light Art", "Stained glass, long-exposure trails, nebula"),
@@ -363,19 +363,41 @@ def make_app(runner):
     import hashlib as _hl
     app = Flask(__name__, static_folder=None)
     SECRET = _secret()
-    TOKEN = hmac.new(SECRET.encode(), b"wall-session-v1", _hl.sha256).hexdigest()
+    PAGES_ORIGINS = {o.strip() for o in os.environ.get("WALL_APP_ORIGINS", "https://fionnf.github.io").split(",")}
+    fails = []                                            # times of wrong passwords (lockout)
+
+    def token():
+        """Changes when the password changes, so a new password logs every phone out."""
+        return hmac.new(SECRET.encode(), b"wall-session-v1:" + os.environ.get("WALL_PASSWORD", "").upper().encode(),
+                        _hl.sha256).hexdigest()
+
+    def authed():
+        got = (request.cookies.get("wall_session") or request.args.get("k")
+               or request.headers.get("Authorization", "").removeprefix("Bearer ").strip())
+        return bool(got) and hmac.compare_digest(got, token())
 
     @app.before_request
     def require_login():
-        """Remote visitors (through the tunnel) need the password; the home network does not.
-        Guests' dedication page stays open."""
-        if _is_local(request) or request.path.startswith(("/login", "/d")):
+        """Remote visitors (the tunnel, the Pages app) need the password; the home network does not."""
+        if request.method == "OPTIONS" or request.path.startswith("/login"):
             return None
-        if hmac.compare_digest(request.cookies.get("wall_session", ""), TOKEN):
+        if _is_local(request) or authed():
             return None
-        if request.path.startswith("/api/") or request.method != "GET":
+        if request.path.startswith(("/api/", "/d/")) or request.method != "GET":
             return jsonify({"error": "login needed"}), 401
         return redirect("/login")
+
+    @app.after_request
+    def cors(resp):
+        """The control app on GitHub Pages talks to the wall through the tunnel."""
+        origin = request.headers.get("Origin", "")
+        if origin in PAGES_ORIGINS:
+            resp.headers["Access-Control-Allow-Origin"] = origin
+            resp.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+            resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            resp.headers["Access-Control-Max-Age"] = "600"
+            resp.headers["Vary"] = "Origin"
+        return resp
 
     @app.get("/login")
     def login_page():
@@ -383,14 +405,26 @@ def make_app(runner):
 
     @app.post("/login")
     def login_post():
+        """Form post (sets a cookie) or, from the Pages app, ?mode=token (returns the token)."""
         want = os.environ.get("WALL_PASSWORD", "")
-        got = request.form.get("password", "")
-        if not want or not hmac.compare_digest(got.strip().upper(), want.strip().upper()):
-            time.sleep(1.0)                                # slow down guessing
-            msg = "Remote access is not set up yet." if not want else "That password is not right."
+        got = request.form.get("password", "") or (request.get_json(silent=True) or {}).get("password", "")
+        as_token = request.args.get("mode") == "token"
+        now = time.time()
+        fails[:] = [t for t in fails if now - t < 600]
+        locked = len(fails) >= 8
+        if locked or not want or not hmac.compare_digest(got.strip().upper(), want.strip().upper()):
+            if not locked:
+                fails.append(now)
+            time.sleep(1.5)                                # slow down guessing
+            msg = ("Too many wrong passwords. Try again in ten minutes." if locked else
+                   "Remote access is not set up yet." if not want else "That password is not right.")
+            if as_token:
+                return jsonify({"error": msg}), 401
             return app.response_class(LOGIN_PAGE.replace("{error}", msg), mimetype="text/html", status=401)
+        if as_token:
+            return jsonify({"token": token()})
         resp = make_response(redirect("/"))
-        resp.set_cookie("wall_session", TOKEN, max_age=180 * 86400, httponly=True, samesite="Lax",
+        resp.set_cookie("wall_session", token(), max_age=180 * 86400, httponly=True, samesite="Lax",
                         secure=request.headers.get("X-Forwarded-Proto", request.scheme) == "https")
         return resp
 
@@ -896,6 +930,36 @@ def main():
             with open(sent_path, "w") as fh:
                 json.dump(sent, fh)
 
+    def tunnel_watch(port):
+        """A Cloudflare quick tunnel (no account): a public https address for the Pages control app.
+        The address changes on every start, so the wall announces it in the repo (wall/wall.json)."""
+        import re
+        import shutil
+        import subprocess
+        exe = shutil.which("cloudflared")
+        if not exe or os.environ.get("WALL_TUNNEL", "1") == "0" or not os.environ.get("WALL_PASSWORD"):
+            return
+        from display import publish
+        while True:
+            try:
+                p = subprocess.Popen([exe, "tunnel", "--no-autoupdate", "--url", f"http://localhost:{port}"],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                for line in p.stderr:
+                    m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
+                    if m:
+                        print(f"[tunnel] {m.group(0)}", flush=True)
+                        for _ in range(5):
+                            try:
+                                publish.announce_wall(m.group(0))
+                                break
+                            except Exception as e:
+                                print(f"[tunnel] announce failed: {e}", flush=True)
+                                time.sleep(30)
+                p.wait()
+            except Exception as e:
+                print(f"[tunnel] {e}", flush=True)
+            time.sleep(15)
+
     def daily_watch():                       # compose the art of the day (once a day, ~05:00 or at boot)
         import datetime as _dt
         from display import daily
@@ -919,6 +983,8 @@ def main():
             time.sleep(600)
 
     threading.Thread(target=daily_watch, daemon=True).start()
+    if not a.sim:
+        threading.Thread(target=tunnel_watch, args=(a.port,), daemon=True).start()
 
     def lights_watch():                      # fires the daily "lights off at HH:MM"
         import lights

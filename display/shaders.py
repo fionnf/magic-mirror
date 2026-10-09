@@ -28,7 +28,7 @@ uniform float iTime; uniform vec2 iResolution;
 uniform float iBass; uniform float iMid; uniform float iTreble; uniform float iEnergy; uniform float iLevel;
 uniform vec3 iColA; uniform vec3 iColB; uniform vec3 iColC;
 uniform float iBreath; uniform float iTension; uniform float iKey; uniform float iBright; uniform float iSong;
-uniform float iBeatPhase; uniform float iDay[24]; uniform vec2 iPanels;
+uniform float iBeatPhase; uniform float iDay[24]; uniform vec2 iPanels; uniform float iClock;
 out vec4 _out;
 """
 POSTLUDE = """
@@ -90,6 +90,12 @@ class Renderer:
         setu("iTime", float(t))
         setu("iResolution", (float(W), float(H)))
         setu("iPanels", (float(config.PANELS_WIDE), float(config.PANELS_TALL)))
+        if "clock" in feats:
+            clock = float(feats["clock"])
+        else:
+            lt = time.localtime()
+            clock = lt.tm_hour + lt.tm_min / 60.0 + lt.tm_sec / 3600.0
+        setu("iClock", clock)                  # hours since midnight: pieces evolve over the day
         for k, key in (("iBass", "bass"), ("iMid", "mid"), ("iTreble", "treble"), ("iEnergy", "energy"),
                        ("iLevel", "level"), ("iBreath", "breath"), ("iTension", "tension"), ("iKey", "key"),
                        ("iBright", "bright"), ("iSong", "song"), ("iBeatPhase", "beat_phase")):

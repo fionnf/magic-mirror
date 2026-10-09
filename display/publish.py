@@ -59,11 +59,12 @@ def files_for(date):
     return out
 
 
-def publish(dates, message=None):
-    """One commit with these editions' files. Returns the commit sha (None if nothing changed)."""
+def commit_files(files, message):
+    """One commit putting {repo path: bytes} on the branch (unchanged files skipped). -> sha or None."""
+    import hashlib
     tok = _token()
     if not tok:
-        raise RuntimeError("no GALLERY_TOKEN (and no gh login) - the gallery cannot be published")
+        raise RuntimeError("no GALLERY_TOKEN (and no gh login) - cannot publish")
     s = requests.Session()
     s.headers.update({"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json",
                       "X-GitHub-Api-Version": "2022-11-28"})
@@ -74,20 +75,14 @@ def publish(dates, message=None):
             raise RuntimeError(f"GitHub {method} {path}: {r.status_code} {r.text[:160]}")
         return r.json()
 
-    files = {}
-    for d in dates:
-        files.update(files_for(d))
     head = call("GET", f"git/ref/heads/{BRANCH}")["object"]["sha"]
     base_tree = call("GET", f"git/commits/{head}")["tree"]["sha"]
-    # skip files that are already identical on the branch
     existing = {}
     try:
         for e in call("GET", f"git/trees/{base_tree}?recursive=1")["tree"]:
-            if e["path"].startswith("gallery/"):
-                existing[e["path"]] = e["sha"]
+            existing[e["path"]] = e["sha"]
     except RuntimeError:
         pass
-    import hashlib
     tree = []
     for path, data in files.items():
         if existing.get(path) == hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest():
@@ -97,15 +92,30 @@ def publish(dates, message=None):
     if not tree:
         return None
     new_tree = call("POST", "git/trees", json={"base_tree": base_tree, "tree": tree})["sha"]
+    commit = call("POST", "git/commits", json={"message": message, "tree": new_tree, "parents": [head]})["sha"]
+    call("PATCH", f"git/refs/heads/{BRANCH}", json={"sha": commit})
+    return commit
+
+
+def publish(dates, message=None):
+    """One commit with these editions' files. Returns the commit sha (None if nothing changed)."""
+    files = {}
     names = []
     for d in dates:
+        files.update(files_for(d))
         with open(daily._path(d, "json")) as fh:
             names.append(f"{d} {json.load(fh).get('name', '')}")
-    msg = message or "Gallery: " + "; ".join(names)
-    commit = call("POST", "git/commits", json={"message": msg, "tree": new_tree, "parents": [head]})["sha"]
-    call("PATCH", f"git/refs/heads/{BRANCH}", json={"sha": commit})
-    print(f"[gallery] published {', '.join(dates)} ({len(tree)} files) -> {commit[:7]}", flush=True)
-    return commit
+    sha = commit_files(files, message or "Gallery: " + "; ".join(names))
+    if sha:
+        print(f"[gallery] published {', '.join(dates)} -> {sha[:7]}", flush=True)
+    return sha
+
+
+def announce_wall(url):
+    """Tell the Pages control app where the wall is reachable right now (wall/wall.json)."""
+    import time
+    return commit_files({"wall/wall.json": json.dumps({"url": url, "since": int(time.time())}).encode()},
+                        "Wall: new remote address")
 
 
 if __name__ == "__main__":

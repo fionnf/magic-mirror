@@ -7,7 +7,7 @@ uniform float iTime; uniform vec2 iResolution;
 uniform float iBass; uniform float iMid; uniform float iTreble; uniform float iEnergy; uniform float iLevel;
 uniform vec3 iColA; uniform vec3 iColB; uniform vec3 iColC;
 uniform float iBreath; uniform float iTension; uniform float iKey; uniform float iBright; uniform float iSong;
-uniform float iBeatPhase; uniform float iDay[24]; uniform vec2 iPanels;
+uniform float iBeatPhase; uniform float iDay[24]; uniform vec2 iPanels; uniform float iClock;
 out vec4 _out;
 `;
   const POST = `
@@ -78,7 +78,7 @@ in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
       if (glc.width !== p.w || glc.height !== p.h) { glc.width = p.w; glc.height = p.h; }
       gl.viewport(0, 0, p.w, p.h); gl.useProgram(p.prog);
       const u = n => gl.getUniformLocation(p.prog, n), f = ears.f;
-      gl.uniform1f(u('iTime'), t); gl.uniform2f(u('iResolution'), p.w, p.h); gl.uniform2f(u('iPanels'), p.cols, p.rows);
+      gl.uniform1f(u('iTime'), t); { const d = new Date(); gl.uniform1f(u('iClock'), d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600); } gl.uniform2f(u('iResolution'), p.w, p.h); gl.uniform2f(u('iPanels'), p.cols, p.rows);
       gl.uniform1f(u('iBass'), f.bass); gl.uniform1f(u('iMid'), f.mid); gl.uniform1f(u('iTreble'), f.treble);
       gl.uniform1f(u('iEnergy'), f.energy); gl.uniform1f(u('iLevel'), f.level); gl.uniform1f(u('iBreath'), f.breath);
       gl.uniform1f(u('iTension'), f.energy * 0.5); gl.uniform1f(u('iBright'), f.treble);

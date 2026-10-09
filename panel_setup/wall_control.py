@@ -34,6 +34,7 @@ MODES = [
     # id, category, title, description
     ("lava", "Art", "Lava & Coral", "Brain coral, bloom, mitosis, neon contours, bioluminescence - 8 slow pieces"),
     ("shapes", "Art", "Shapes", "Flow dots & lines, node garden, spiral, woven grid, ripples - thin glowing patterns"),
+    ("daily", "Art", "Art of the day", "A new original piece every day, composed by Claude - today's is the default"),
     ("shaders", "Art", "Shaders", "GPU shaders: silk, ink veil, dunes, lanterns, tide - slow two-hue pieces"),
     ("artsy", "Art", "Artsy", "Marbling, oil slick, watercolour, Kandinsky, op-art stripes, a drifting Mondrian"),
     ("glass", "Art", "Light Art", "Stained glass, Julia fractal, kaleidoscope, long-exposure trails, nebula - soft and filled"),
@@ -130,6 +131,7 @@ class Runner:
         if cmd is None:                                 # "off"
             return
         env = dict(os.environ, WALL_BRIGHTNESS=str(int(self.state.get("brightness", 40))),
+                   WALL_DAILY_DATE=str(self.state.get("daily_date") or ""),
                    WALL_ART_SPEED=str(float(self.state.get("art_speed", 0.12))),
                    WALL_SMART_CROP="1" if self.state.get("smart_crop", True) else "0",
                    PYTHONUNBUFFERED="1")
@@ -399,6 +401,27 @@ def make_app(runner):
         except Exception:
             d = {"stale": True}
         return jsonify(d)
+
+    @app.get("/api/daily")
+    def daily_list():
+        from display import daily
+        return jsonify({"today": __import__("datetime").date.today().isoformat(),
+                        "chosen": runner.state.get("daily_date") or "",
+                        "editions": [{"date": d, **{k: m.get(k) for k in ("name", "description", "palette", "source_sha256")}}
+                                     for d, m in daily.editions()]})
+
+    @app.get("/daily/<path:name>")
+    def daily_file(name):
+        from display import daily
+        return send_from_directory(daily.FOLDER, name, max_age=3600)
+
+    @app.post("/api/daily/show")
+    def daily_show():
+        d = (request.get_json(force=True, silent=True) or {}).get("date", "")
+        runner.state["daily_date"] = d                     # "" = always today's
+        save_state(runner.state)
+        runner.play("daily")
+        return jsonify(runner.status())
 
     @app.get("/api/loops")
     def loops_list():
@@ -724,6 +747,26 @@ def main():
     runner.resume_saved()
     if len([f for f in os.listdir(THUMB_DIR)] if os.path.isdir(THUMB_DIR) else []) < len(MODES) + 2:
         threading.Thread(target=make_thumbs, daemon=True).start()   # normally shipped by deploy.sh
+
+    def daily_watch():                       # compose the art of the day (once a day, ~05:00 or at boot)
+        import datetime as _dt
+        from display import daily
+        time.sleep(30)
+        while True:
+            try:
+                today = _dt.date.today().isoformat()
+                if not os.path.exists(os.path.join(daily.FOLDER, today + ".json")) and \
+                        (_dt.datetime.now().hour >= 5 or not daily.editions()):
+                    meta = daily.generate(today)
+                    print(f"[daily] {today}: {meta['name']}", flush=True)
+                    if runner.current == "daily" and not runner.state.get("daily_date"):
+                        runner.restart_current()
+            except Exception as e:
+                print(f"[daily] {e}", flush=True)
+                time.sleep(1800)
+            time.sleep(600)
+
+    threading.Thread(target=daily_watch, daemon=True).start()
 
     def lights_watch():                      # fires the daily "lights off at HH:MM"
         import lights

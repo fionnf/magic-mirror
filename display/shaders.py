@@ -26,6 +26,8 @@ precision highp float;
 uniform float iTime; uniform vec2 iResolution;
 uniform float iBass; uniform float iMid; uniform float iTreble; uniform float iEnergy; uniform float iLevel;
 uniform vec3 iColA; uniform vec3 iColB; uniform vec3 iColC;
+uniform float iBreath; uniform float iTension; uniform float iKey; uniform float iBright; uniform float iSong;
+uniform float iBeatPhase; uniform float iDay[24];
 out vec4 _out;
 """
 POSTLUDE = """
@@ -56,18 +58,25 @@ class Renderer:
             self.error = str(e)[:160]
 
     def _program(self, name):
+        """name = a file stem in assets/shaders, or 'path:/abs/file.frag' for any shader file."""
         if name in self.progs:
             return self.progs[name]
-        with open(os.path.join(FOLDER, name + ".frag")) as fh:
+        path = name[5:] if name.startswith("path:") else os.path.join(FOLDER, name + ".frag")
+        with open(path) as fh:
             src = fh.read()
+        self.progs[name] = self.compile(src)
+        return self.progs[name]
+
+    def compile(self, src):
+        """Compile Shadertoy-style source (a mainImage function) -> (program, vao). Raises with the
+        GLSL compiler's message on errors."""
         fs = PRELUDE + src + POSTLUDE
         if self.ctx.version_code >= 330 and "300 es" in PRELUDE:          # desktop GL: GLSL 330
             fs = fs.replace("#version 300 es\nprecision highp float;", "#version 330")
         prog = self.ctx.program(vertex_shader=VS if self.ctx.version_code < 330 else VS.replace("300 es", "330"),
                                 fragment_shader=fs)
         vao = self.ctx.simple_vertex_array(prog, self.vbo, "p")
-        self.progs[name] = (prog, vao)
-        return self.progs[name]
+        return prog, vao
 
     def render(self, name, t, feats=None, cols=None):
         feats = feats or {}
@@ -79,8 +88,15 @@ class Renderer:
                 prog[k].value = v
         setu("iTime", float(t))
         setu("iResolution", (float(W), float(H)))
-        for k, key in (("iBass", "bass"), ("iMid", "mid"), ("iTreble", "treble"), ("iEnergy", "energy"), ("iLevel", "level")):
+        for k, key in (("iBass", "bass"), ("iMid", "mid"), ("iTreble", "treble"), ("iEnergy", "energy"),
+                       ("iLevel", "level"), ("iBreath", "breath"), ("iTension", "tension"), ("iKey", "key"),
+                       ("iBright", "bright"), ("iSong", "song"), ("iBeatPhase", "beat_phase")):
             setu(k, float(feats.get(key, 0.0)))
+        if "iDay" in prog:
+            day = list(feats.get("day", [0.0] * 24))[:24] + [0.0] * max(0, 24 - len(feats.get("day", [])))
+            u = prog["iDay"]
+            n = max(1, int(getattr(u, "array_length", 24) or 24))     # the compiler trims unused tail elements
+            u.write(np.array(day[:n], "f4").tobytes())
         setu("iColA", tuple(float(v) for v in cols[0]))
         setu("iColB", tuple(float(v) for v in cols[1]))
         setu("iColC", tuple(float(v) for v in cols[2]))
@@ -122,11 +138,28 @@ class ShaderPiece:
         return img
 
 
+CURATED = {   # (shadow, mid, highlight) per piece - the gallery's look; the VJ recolours freely
+    "aura": ("#120806", "#7a3a12", "#f2c98a"), "canvas": ("#0c1450", "#3a3fb0", "#f0a860"),
+    "inkorbs": ("#081a4a", "#3c62a8", "#b8bfc4"), "cutpaper": ("#1a0605", "#a8261c", "#e6dccb"),
+    "topo": ("#1c120c", "#4a3426", "#d8ccb8"), "dotsphere": ("#000000", "#6a5cff", "#66c8ff"),
+    "glassblob": ("#04040a", "#2050c8", "#ff9a5a"), "neonlines": ("#12051c", "#b0281c", "#e070ff"),
+    "eclipse": ("#000000", "#3040e0", "#ff6a2a"), "halo": ("#140808", "#b02810", "#ff9a40"),
+    "silk": ("#030805", "#26734d", "#d8ffd8"), "veil": ("#0a0518", "#5a3399", "#f2e6ff"),
+    "dunes": ("#0f0a05", "#99661a", "#fff2bf"), "lanterns": ("#140510", "#8c2650", "#ffd9cc"),
+    "tide": ("#05081a", "#1a598c", "#ccf2ff"),
+}
+
+
+def _rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+
+
 def gallery_pieces(Wd, Hd):
-    """One piece per shader with a restrained two-hue palette each."""
-    palettes = [((0.02, 0.03, 0.10), (0.10, 0.35, 0.55), (0.80, 0.95, 1.00)),
-                ((0.08, 0.02, 0.06), (0.55, 0.15, 0.30), (1.00, 0.85, 0.80)),
-                ((0.03, 0.05, 0.03), (0.15, 0.45, 0.30), (0.85, 1.00, 0.85)),
-                ((0.06, 0.04, 0.02), (0.60, 0.40, 0.10), (1.00, 0.95, 0.75)),
-                ((0.04, 0.02, 0.10), (0.35, 0.20, 0.60), (0.95, 0.90, 1.00))]
-    return [ShaderPiece(Wd, Hd, n, palettes[i % len(palettes)]) for i, n in enumerate(names())]
+    """One piece per shader, each in its curated palette (newest, strongest first)."""
+    order = ["eclipse", "aura", "inkorbs", "cutpaper", "glassblob", "halo", "canvas", "dotsphere",
+             "neonlines", "topo", "silk", "veil", "tide", "lanterns", "dunes"]
+    have = names()
+    picked = [n for n in order if n in have] + [n for n in have if n not in order]
+    return [ShaderPiece(Wd, Hd, n, tuple(_rgb(c) for c in CURATED.get(n, ("#08060f", "#4a3080", "#efe6ff"))))
+            for n in picked]

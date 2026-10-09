@@ -41,7 +41,7 @@ def _shader_gallery_frame(t):
 
 def _anims():
     from display import (welcome, pride_show, cards, maeva_story, dewa_story, art,
-                         departures, music, shapes, light_art, artsy, shaders)
+                         departures, music, shapes, light_art, artsy, shaders, daily)
     return {
         "music":   (music.frame, 600.0),
         "trams":   (departures.frame, 60.0),
@@ -51,6 +51,7 @@ def _anims():
         "glass":   (light_art.frame, light_art.LOOP_SEC),
         "artsy":   (artsy.frame, artsy.LOOP_SEC),
         "shaders": (_shader_gallery_frame, 60.0 * 5),
+        "daily":   (daily.frame, 3600.0),
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),
         "maeva":   (maeva_story.frame, maeva_story.LOOP_SEC),

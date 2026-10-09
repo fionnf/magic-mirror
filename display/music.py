@@ -539,6 +539,12 @@ class Listener:
                             ((freqs >= 2500) & (freqs < 8000), 0.12)]
         self._band_avg = [1e-3, 1e-3, 1e-3]
         self._all_bins = (freqs >= 30) & (freqs < 8000)
+        # pitch classes (C=0 .. B=11) for the tonal range, for chroma / key colour
+        tonal = (freqs >= 65) & (freqs < 2000)
+        self._tonal = tonal
+        self._pc = (np.round(12 * np.log2(np.maximum(freqs[tonal], 1.0) / 440.0) + 9).astype(int)) % 12
+        self._cent_f = freqs[self._all_bins]
+        self._chroma = np.zeros(12)
         self._rms_slow, self._prev_onset, self._onset_edges = 1e-5, 0.0, []
         last = time.time()
         while True:
@@ -571,6 +577,20 @@ class Listener:
             f["db"] = 20.0 * math.log10(max(self._rms_slow, 1e-6))
             share = float(spec[bands["kickband"]].sum() / (spec[self._all_bins].sum() + 1e-9))
             f["bass_share"] = _ema(f.get("bass_share", 0.0), 0.0 if silent else share, dt, 3.0)
+            if not silent:
+                # chroma (12 pitch classes, ~4 s memory) -> a smooth "key" angle 0..1
+                ch = np.bincount(self._pc, weights=spec[self._tonal] ** 2, minlength=12)
+                ch = ch / (ch.sum() + 1e-12)
+                self._chroma += (ch - self._chroma) * min(1.0, dt / 4.0)
+                ang = 2 * np.pi * np.arange(12) / 12
+                f["key"] = float((math.atan2((self._chroma * np.sin(ang)).sum(),
+                                             (self._chroma * np.cos(ang)).sum()) / (2 * np.pi)) % 1.0)
+                f["chroma"] = [round(float(v), 4) for v in self._chroma]
+                # spectral centroid (brightness of the sound), log-scaled 200 Hz .. 4 kHz -> 0..1
+                sp = spec[self._all_bins]
+                c = float((self._cent_f * sp).sum() / (sp.sum() + 1e-9))
+                cn = min(1.0, max(0.0, math.log(max(c, 200.0) / 200.0) / math.log(20.0)))
+                f["bright"] = _ema(f.get("bright", 0.0), cn, dt, 1.5)
             norm = lambda k: min(1.0, raw[k] / self.bpeak[k])
             f["energy"] = _ema(f["energy"], 0 if silent else min(1.0, rms / self.peak), dt, 2.0)
             f["bass"] = _ema(f["bass"], 0 if silent else norm("bass"), dt, 0.12)

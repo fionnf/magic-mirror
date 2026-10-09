@@ -97,7 +97,12 @@ def ask(system: str, content, max_tokens: int = 2048, effort: str = "low", schem
         kwargs["output_config"]["format"] = {"type": "json_schema", "schema": schema}
     if timeout is not None:
         client = client.with_options(timeout=timeout)
-    resp = client.beta.messages.create(**kwargs)
+    try:
+        resp = client.beta.messages.create(**kwargs)
+    except TypeError:                                   # an older SDK without `fallbacks`
+        kwargs.pop("fallbacks", None)
+        kwargs.pop("betas", None)
+        resp = client.beta.messages.create(**kwargs)
     if resp.stop_reason == "refusal":
         raise RuntimeError("declined: " + str(getattr(resp.stop_details, "category", "") or ""))
     text = _text_of(resp)

@@ -1,67 +1,95 @@
-# LED wall frame – 3 × 4 P4 64×64 panels (256 mm), Pi inside, camera pod
+# Modular LED Wall Frame – 3 × 4 P4 64×64 panels (256 mm)
 
-3D-printable mounting frame for the magic mirror's LED wall: twelve P4 64×64 HUB75 panels
-(256 × 256 mm, `P4-2121-64X64-32S`) in a 3 × 4 grid, 768.6 × 1024.9 mm overall.
-The Raspberry Pi 4/5 + HUB75 shield and the 5 V 40 A supply live inside the 46 mm deep frame;
-a small pod on the top edge holds the Pi Camera Module 3 in portrait, tilted 15° down.
+A fully printable, support-free mounting frame for twelve P4 64×64 HUB75 LED panels
+(256 × 256 mm, e.g. `P4-2121-64X64-32S`) in a 3 × 4 grid. Overall size 768.6 × 1024.9 mm,
+46 mm deep, so a Raspberry Pi 4/5 with HUB75 shield and a 5 V 40 A supply hide inside.
+A small pod on the top edge holds a Raspberry Pi Camera Module 3 (or a Logitech C270).
 
-Everything prints support-free on a Prusa CORE One (250 × 220 mm bed).
+Every part prints flat, with no supports, and fits a 250 × 220 mm bed (Prusa CORE One, Bambu X1/P1/H2, Prusa MK4…).
+The compact Pi holder, camera pod, touch box and test pieces also fit 180 mm beds.
 
-![front](images/01_hero_front.png)
+![front](images/01_front.png)
 
-## Files
+## What's in the box
 
-| Path | What |
+| Folder | Contents |
 |---|---|
-| `p4_frame_v3.scad` | Parametric OpenSCAD source (all parts, plates, assembly preview) |
-| `stl/frame_46mm/` | Complete frame, print plates ready for the CORE One |
-| `stl/addons_for_existing_rails/` | Pi tray, PSU tray and camera pod that clip into the windows of already-printed standard rails |
-| `digital_assembly_FINAL_B.glb` | Full digital assembly (open in Blender / Windows 3D Viewer) |
+| `3mf/` | Ready-to-slice plates, one object per part (open in PrusaSlicer, Bambu Studio, OrcaSlicer) |
+| `stl/` | The same plates as STL |
+| `source/` | Fully parametric OpenSCAD source (`led_wall_frame.scad`, `c270_webcam_box.scad`, `touch_box.scad`) |
 | `images/` | Renders |
 
-### Print list – full frame (`stl/frame_46mm/`)
-- `00_fit_test_PRINT_FIRST`, `00b_DOVETAIL_GAUGE_c005_c010_c015` (set `c` in the SCAD to the socket that fits best)
-- `01_nodes_junction_x6`, `02_nodes_edge_x10_corner_x4`
-- `03_rails_vertical_x7`, `04_rails_vertical_x1_horizontal_x6`, `05_rails_horizontal_x2_outer_x6`, `06_rails_outer_x7_top_mount_x1`
-- one of `07a/07b/07c` – Pi rail (self-tap / heat-set inserts / bolt + nut; Pi 4 and Pi 5 share the 58 × 49 mm M2.5 pattern)
-- `08_camera_pod_body_and_lid`
-- `10_psu_tray_horizontal_A-200AF-5`
-- `OPTIONAL_09_wall_ears_set` – only if using ear brackets instead of keyholes
+## Print list
 
-### Add-ons for rails you already printed (`stl/addons_for_existing_rails/`)
-- one of `C1a/C1b/C1c` – Pi tray (top-middle cell, hooks into the vertical rails' windows)
-- `C2_psu_tray_horizontal_A-200AF-5`
-- `C3_camera_pod_clip_on_body_and_lid` – sits on the standard middle top rail
-- Fit both the earlier trapezoid windows and the current larger ones.
+| File | Qty | Notes |
+|---|---|---|
+| `00_fit_test_PRINT_FIRST` | 1 | Junction node + rail ends: check dovetail fit, M3 screw and wall keyhole |
+| `00b_dovetail_gauge_c005_c010_c015` | 1 | Optional: 3 sockets at 0.05 / 0.10 / 0.15 mm clearance (1–3 dots) |
+| `01_nodes_junction_x6` | 1 | |
+| `02_nodes_edge_x10_corner_x4` | 1 | |
+| `03_rails_vertical_x7` | 1 | |
+| `04_rails_vertical_x1_horizontal_x6` | 1 | |
+| `05_rails_horizontal_x3_outer_x6` | 1 | |
+| `06_rails_outer_x7_top_mount_x1` | 1 | Includes the top-centre rail the camera pod screws to |
+| `07_pi_tray_*` **or** `07_pi_holder_compact_*` | 1 | Pick one: full-width tray (stronger) or compact holder (fits 180 mm beds). `selftap` / `insert` (M2.5 heat-set) / `nut` (M2.5 bolt + nut). Pi 4 and Pi 5 share the hole pattern. |
+| `08_psu_tray_A-200AF-5` | 1 | For a 190 × 84 × 30 mm 5 V 40 A supply (CZCL A-200AF-5) |
+| `09_camera_module3_pod` **or** `10_c270_webcam_box` | 1 | Camera Module 3 (portrait, 15° down) or Logitech C270 (snap-on lid) |
+| `11_touch_box_TTP223` / `11_touch_box_25mm_pad` | optional | 40 × 40 × 10 mm "roaming" capacitive touch button, 0.6 mm skin |
+| `12_OPTIONAL_wall_ears_set` | optional | Only if you prefer ear brackets over the built-in keyholes |
+
+Roughly 2 kg of filament for the full build.
 
 ## Print settings
-PETG · 0.4 mm nozzle · 0.20 mm layers · 5 perimeters · 40 % gyroid · 5 top/bottom ·
-no supports, no brim · keep elephant-foot compensation on · print as laid out (panel side down).
-About 2 kg of filament for the full frame.
+
+- PETG (panels run warm – avoid PLA)
+- 0.4 mm nozzle, 0.20 mm layers
+- 5 perimeters, 40 % gyroid, 5 top / 5 bottom layers
+- No supports, no brim, keep elephant-foot compensation on
+- Print as laid out (panel side down). Touch box: front face down, 100 % infill.
 
 ## Hardware
-- 84 × M3 × 25 flat-head countersunk (DIN 7991 / ISO 10642) + long 2 mm hex key
-- Camera pod: 4 × M3 × 12 countersunk (lid), 4 × M2 × 5 self-tapping (camera); 2 × M3 × 12 to the top-mount rail (full-frame version)
-- Pi: 4 × M2.5 × 6 (+ inserts or nuts for 07b/07c, C1b/C1c)
-- Pi 5 camera cable 22→15 pin, 500 mm (Pi 4: 15→15 pin)
-- CZCL A-200AF-5 (190 × 84 × 30 mm) + 2 zip ties ≥ 300 × 4.8 mm; a few small zip ties for the clip-on trays
-- 6 wall screws, head ≤ 8.2 mm, standing ~5 mm proud, with anchors (keyholes on the 256.3 mm grid)
+
+| Item | Qty |
+|---|---|
+| M3 × 20 flat-head countersunk (DIN 7991 / ISO 10642) – panel screws | 84 (+2 optional) |
+| 2 mm hex key with a long shaft (≥ 35 mm reach) | 1 |
+| M3 × 12 pan/cheese head – camera pod or C270 box to the top rail | 2 |
+| M3 × 12 countersunk – camera pod lid | 4 |
+| M2 × 5 self-tapping – Camera Module 3 | 4 |
+| M2.5 × 6 (+ 4 heat-set inserts for `insert`, or M2.5 × 10 + nuts for `nut`) – Pi | 4 |
+| Zip ties ≥ 300 × 4.8 mm – around the PSU | 2 |
+| Wall screws, pan head ≤ 8.2 mm, standing ~5 mm proud, + anchors (keyholes on a 256.3 mm grid) | 6 |
+| Touch box: M2 × 8 countersunk self-tapping | 4 |
+| Wall ears only: M3 × 50 countersunk at the 8 ear-node screws, 5 mm wall screws | 8 / 12 |
+
+Electronics: 12 × P4 64×64 HUB75 panels, Raspberry Pi 5 (or 4) + active cooler, HUB75 driver shield,
+Camera Module 3 + 500 mm camera cable (Pi 5: 22→15 pin) **or** Logitech C270, CZCL A-200AF-5 5 V 40 A supply,
+HUB75 ribbons, panel power leads, 1.5–2.5 mm² 5 V wiring, mains cable, fuse + switch.
 
 ## Assembly
-1. Panels face down on a soft mat, all arrows on the back pointing the same way.
-2. Nodes on the corner inserts, drop the rails in (dovetails slide down), screw everything (horizontal rails: engraved arrow up).
-3. Pi on its rail/tray behind the top-middle panel; PSU tray hooks into the window pairs either side of the bottom-middle panel.
-4. Camera pod on the top-centre rail, camera cable down through the rail window.
-5. Hang on six wall screws.
+
+1. Lay the panels face down on a soft mat, all "up" arrows on the back pointing the same way.
+2. Place the nodes on the panel corner inserts (8 mm from each edge).
+3. Drop the rails in from above – the dovetails slide down over the node tenons. Horizontal rails: engraved arrow up.
+4. Screw everything down with M3 × 20 (heads sit flush deep inside the posts).
+5. Press the PSU tray and Pi tray into the rail windows: shift ~5 mm sideways, push one end's plugs in, bring the other end in, slide back to centre.
+6. Fit the camera pod (or C270 box) on the top-centre rail; route the cable down through the rail window.
+7. Hang the frame on six wall screws.
+
+The two outer top rails have a mid screw hole at the top-centre of the outer panels – only use it if your panels have an insert there.
+
+## Customising
+
+All key values are at the top of `source/led_wall_frame.scad`:
+`H` (frame depth), `screw_L` (panel screw length), `c` (dovetail clearance), `plug_cl` / `crush` (holder fit),
+`pi_stack` (Pi + shield height), `psu_L` / `psu_Wd` (power supply size).
+
+```
+openscad -D 'part="plate_rails_A"' -o rails.stl source/led_wall_frame.scad
+```
 
 ## Notes
-- Pi + shield stack is assumed ≤ 32 mm above the Pi board (`pi_stack`); frame depth `H = 46`.
-- One 200 W supply is short for 12 panels at full white (~240 W): cap brightness (e.g. `--led-brightness`) or add a second supply.
-- Mains: cover the AC terminals, strain-relieve the cable, fuse/switch outside the frame.
 
-## Regenerating parts
-```
-openscad -D H=46 -D 'variant="B"' -D 'part="plate_rails_A"' -o rails.stl p4_frame_v3.scad
-```
-Parts: `junction edge corner rail_v_inner rail_h_inner rail_outer rail_top_mount rail_h_pi box_B_body box_B_lid psu_tray pi_tray box_C_body box_C_lid`;
-plates: `plate_nodes_A plate_nodes_B plate_rails_A plate_rails_B plate_rails_C2 plate_rails_D_top plate_pi_rail_B plate_cam_pod_B plate_psu_tray plate_pi_tray plate_cam_pod_C plate_ears`.
+- A single 200 W supply is short for 12 panels at full white (~240 W): cap the brightness (e.g. `--led-brightness`) or add a second supply.
+- Mains: cover the AC terminals, strain-relieve the cable, fuse and switch outside the frame.
+- Default Pi + shield stack: ≤ 32 mm above the Pi board.

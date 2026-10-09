@@ -265,6 +265,10 @@
       <div id="dList" style="margin-top:10px"></div>
     </section>
     <section>
+      <h2>Receipt printer</h2>
+      <p class="hint" id="printer" style="margin:0">Checking the printer…</p>
+    </section>
+    <section>
       <h2>Quiet hours</h2>
       <div class="row"><span class="hint" style="margin:0">When nobody is around, show art after</span>
         <select id="idleArt" aria-label="Idle minutes"><option value="0">never</option><option value="5">5 min</option><option value="10">10 min</option><option value="30">30 min</option></select></div>
@@ -495,6 +499,12 @@ async function loadMore() {
       : names.length ? names.map(n => `<button class="btn" onclick="forget('${esc(n)}')" aria-label="Forget ${esc(n)}">${esc(n)} ✕</button>`).join('') : '<p class="hint" style="margin:0">Nobody yet.</p>';
     $('suggestions').innerHTML = (f.suggestions || []).map(x => `<div class="row" style="margin:10px 0"><img src="data:image/jpeg;base64,${x.thumb}" alt="" style="width:44px;height:44px;border-radius:50%">
       <input type="text" id="sg_${x.id}" placeholder="Who is this?" style="flex:1"><button class="btn" onclick="nameSug('${x.id}')">Save</button><button class="btn" onclick="dismissSug('${x.id}')">Skip</button></div>`).join('');
+  } catch (e) {}
+  try {
+    const pr = await api('/api/printer');
+    const at = pr.where === 'usb' ? 'plugged into the wall' : pr.where.startsWith('http') ? 'on another Pi (' + pr.where.replace(/^https?:\/\//, '') + ')'
+      : pr.where.startsWith('tcp') ? 'on Wi-Fi (' + pr.where.slice(6) + ')' : 'over Bluetooth';
+    $('printer').textContent = (pr.ok ? 'Ready, ' : 'Not reachable, ') + at + (pr.ok || !pr.note ? '.' : ': ' + pr.note + '.');
   } catch (e) {}
   try {
     const d = await api('/api/dedications');

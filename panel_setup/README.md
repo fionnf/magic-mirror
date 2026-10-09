@@ -185,3 +185,41 @@ restart `wall-control`. Without a key every feature falls back to built-in text/
 `tools/make_loops.py <folders>` converts any video folder to 192 × 192 clips in `assets/loops/`
 (with an index of motion/brightness the curator uses); deploy copies them. The current library is
 abstract Beeple clips (CC) and calm Mixkit footage; originals live in `~/Movies/VJ Loops/`.
+
+## The Fortuna gallery (public feed)
+
+Every day's piece is published to https://fionnf.github.io/magic-mirror/ (feed, one page per
+piece, RSS at `feed.xml`). Each post runs the piece's own shader live in the visitor's browser.
+
+How a day goes:
+1. Around 05:00 Claude composes the piece after looking at the Pinterest mood board
+   (`WALL_MOODBOARD`, read via the board's public RSS feed).
+2. A second Claude call, the curator, looks at rendered stills. Anything under 7/10 goes back with
+   a note, up to four tries, and the best one is hung.
+3. The wall publishes it (`display/publish.py` writes `gallery/` through the GitHub API, and the
+   Pages workflow rebuilds the site). That needs `GALLERY_TOKEN` in `.env`.
+4. At midnight the piece is finalised with the day's listening. Claude writes the post (caption +
+   alt text) from the final still, and the update is published. Song titles never leave the Pi.
+
+By hand: `python3 -m display.publish 2026-10-09`. Preview the site locally:
+`python3 tools/build_gallery.py --from assets/daily --out /tmp/site`.
+
+## Receipt printer: here, on another Pi, Wi-Fi or Bluetooth
+
+`WALL_PRINTER` in `.env` says where the printer is (default `usb`: plugged into the wall's Pi).
+
+| Setup | `WALL_PRINTER` |
+|---|---|
+| USB on the wall's Pi | `usb` |
+| USB on a second Pi elsewhere in the room | `http://<that-pi>.local:8631` + the same `PRINT_KEY` on both |
+| Wi-Fi / Ethernet ESC/POS printer | `tcp://<printer-ip>:9100` |
+| Bluetooth printer (paired, bound to `/dev/rfcomm0`) | `serial:/dev/rfcomm0` |
+
+Second Pi: copy `print_out.py`, `tools/print_server.py` and `tools/install_print_server.sh` into
+one folder on it and run `PRINT_KEY=<secret> ./install_print_server.sh`. It installs a service
+on port 8631, and the app's More tab shows whether the printer answers.
+
+Quality always beats speed. Paper is 57 mm, so the printable width is 384 dots at 203 dpi, the
+printer's full resolution. Pictures are Atkinson-dithered at exactly that width and sent as native
+raster. The head prints slowly and hot (`PRINTER_HEAT`, `PRINTER_DENSITY`, `PRINTER_DITHER` env
+vars in `print_out.py` if a printer needs tuning).

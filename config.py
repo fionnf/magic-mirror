@@ -186,9 +186,13 @@ SIM_STRIP_BORDER_PX = 18  # thickness of the strip border in the sim window
 # Thermal receipt printer (optional, ESC/POS over USB). Use `lsusb` on the
 # Pi to find the vendor/product IDs of yours; defaults match the GOOJPRT /
 # Xprinter family that your existing slack printer uses.
+# Where the printer is: "usb" (on this Pi), "http://<other-pi>:8631" (another Pi in the room running
+# tools/print_server.py), "tcp://<ip>:9100" (Wi-Fi printer) or "serial:/dev/rfcomm0" (Bluetooth).
+# WALL_PRINTER in .env overrides it. Print quality settings live in print_out.py.
+PRINTER = __import__("os").environ.get("WALL_PRINTER", "usb")
 PRINTER_VENDOR_ID = 0x0416
 PRINTER_PRODUCT_ID = 0x5011
-# 56mm paper @ 203dpi -> 384 printable dots. Drop to 360 if the right edge
+# 57 mm paper: 48 mm printable at 203 dpi = 384 dots, the printer's full resolution. Drop to 360 if the right edge
 # wraps; some clones lie about their printable width.
 PRINTER_WIDTH_DOTS = 384
 # Text wrap column at the chosen size. AI line printed at 1x bold = ~32 cols.

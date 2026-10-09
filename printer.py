@@ -8,8 +8,8 @@ Public surface
 Image processing pipeline (config-driven)
 -----------------------------------------
   greyscale → autocontrast → gamma → brightness/contrast → optional sharpen
-  The processed greyscale image is passed to python-escpos which performs the
-  final 1-bit conversion and Floyd-Steinberg dither internally.
+  The processed greyscale image goes to print_out.py, which dithers it at full printer
+  resolution and sends it to the printer wherever it is (USB, another Pi, Wi-Fi, Bluetooth).
 """
 import datetime
 import io
@@ -259,48 +259,23 @@ def render_booth_pil(frames: List[np.ndarray], label: str = "PHOTOBOOTH",
 # ---------------------------------------------------------------------------
 
 class ReceiptPrinter:
-    """ESC/POS thermal printer over USB (python-escpos)."""
+    """The receipt printer, wherever it is (see print_out.py: USB here, another Pi, Wi-Fi, Bluetooth).
+    Pictures are dithered here at full resolution and printed slowly for the deepest, cleanest black."""
 
-    def __init__(self) -> None:
-        from escpos.printer import Usb as _Usb
-        self._Usb = _Usb
-
-    def _open(self):
-        return self._Usb(
-            config.PRINTER_VENDOR_ID,
-            config.PRINTER_PRODUCT_ID,
-            timeout=config.PRINTER_TIMEOUT_MS,
-        )
+    def _emit(self, img: Image.Image, what: str) -> None:
+        import print_out
+        try:
+            print_out.send(img)
+        except Exception as e:
+            print(f"[PRINTER] {what} failed ({print_out.where()}): {e}")
 
     def print_receipt(self, frame: np.ndarray, text: str) -> None:
-        if frame is None:
-            return
-        img = _receipt_image(frame, text)
-        try:
-            p = self._open()
-            try:
-                p.image(img)
-                p.ln(4)
-                p.cut()
-            finally:
-                p.close()
-        except Exception as e:
-            print(f"[PRINTER] print_receipt failed: {e}")
+        if frame is not None:
+            self._emit(_receipt_image(frame, text), "print_receipt")
 
     def print_strip(self, pil_image: Image.Image) -> None:
-        if pil_image is None:
-            return
-        img = pil_image if pil_image.mode == "L" else pil_image.convert("L")
-        try:
-            p = self._open()
-            try:
-                p.image(img)
-                p.ln(4)
-                p.cut()
-            finally:
-                p.close()
-        except Exception as e:
-            print(f"[PRINTER] print_strip failed: {e}")
+        if pil_image is not None:
+            self._emit(pil_image, "print_strip")
 
     def shutdown(self) -> None:
         pass
@@ -318,7 +293,11 @@ class _NullPrinter:
 
 
 def create_printer():
-    """Return a ReceiptPrinter if python-escpos is available, else _NullPrinter."""
+    """A ReceiptPrinter when a printer can be reached (python-escpos here, or a printer on another
+    machine), else _NullPrinter."""
+    import print_out
+    if print_out.where().startswith(("http://", "https://")):
+        return ReceiptPrinter()
     try:
         import escpos  # noqa: F401
         return ReceiptPrinter()

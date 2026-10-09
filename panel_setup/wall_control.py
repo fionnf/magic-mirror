@@ -394,6 +394,11 @@ def make_app(runner):
                         secure=request.headers.get("X-Forwarded-Proto", request.scheme) == "https")
         return resp
 
+    @app.get("/api/printer")
+    def printer_status():
+        import print_out
+        return jsonify(print_out.status())
+
     @app.get("/api/now.jpg")
     def now_jpg():
         resp = send_from_directory(HERE, "now.jpg", max_age=0)

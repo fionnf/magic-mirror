@@ -1,17 +1,15 @@
-"""Music-reactive art, chill by default, with an AI VJ.
+"""Music mode: art that responds to the room's sound, slow and subtle at the chill end.
 
-Audio comes from a network stream (the Mac mic via panel_setup/stream_mic.sh,
-raw s16le mono 22050 Hz over UDP) or, later, a USB mic through ALSA:
-    WALL_AUDIO=udp:9099 (default)   or   WALL_AUDIO=alsa:plughw:1
+Audio: the Pi's USB microphone through ALSA, or (simulator) the Mac microphone streamed over UDP
+by panel_setup/wall_control.py --sim:   WALL_AUDIO=alsa:plughw:1   or   WALL_AUDIO=udp:9099
 
-Layers
-  - analysis (Pi, ~43x/s): bass / mids / treble, energy, gentle beat detection,
-    auto-gain, heavy smoothing so the art breathes rather than jumps
-  - five calm styles: lava, coral, ink, aurora, ripples; soft palettes
-  - AI VJ (retired by default): Claude designs scenes from the song + measurements, which
-    names genre + mood and picks the calmest fitting style and palette;
-    falls back to a feature-based choice if the API is unavailable
-  - silence for a few seconds: drifts into slow dusk lava
+  - Listener: bass / mids / treble, energy, a beat tracker (display/beat.py) and an adaptive
+    silence gate; Recognizer names the song with Shazam
+  - the party slider (0..1) sets everything: pool of pieces, speed, how much the beat shows
+    (display/intensity.py measures the room if "let the wall listen" is on)
+  - a rule-based curator picks scenes (variety, favourites, hold times); an optional Claude
+    designer (ai_client) can propose scenes from the song + measurements
+  - pieces: generative (art, shapes, organic), GPU shaders, video loops; post effects in vj_fx
 """
 import base64
 import colorsys
@@ -43,16 +41,8 @@ SHADER_STYLES = ["shader:" + n for n in vjshaders.names()]      # GPU shaders (n
 
 SR = 22050
 WIN, HOP = 1024, 256
-AI_EVERY = 150.0          # audio brain: about once per scene hold (it is the expensive one)
-TEXT_EVERY = 45.0         # cheap text brain
 # cheapest-first; the next one is tried if a model is unavailable (override with AI_TEXT_MODEL)
-TEXT_MODELS = []   # retired: see ai_client (Claude)
-# free-tier Gemini (Google AI Studio key in .env as GEMINI_API_KEY); text only, never audio
 # 2.5 Flash-Lite is retired for new keys (404); "-latest" survives future retirements.
-# Measured with a real key 2026-10-08: ~1.3 s each. Avoid gemini-flash-latest (thinking, ~30 s).
-GEMINI_MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.1-flash-lite"]
-GEMINI_EVERY = 45.0
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 SONG_CALL_GAP = 12.0      # a newly recognised song may trigger a call, at most this often
 USAGE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                           "panel_setup", "ai_usage.json")
@@ -341,7 +331,6 @@ def _scene_key(c):
     return (c["style"], c["palkey"], c["layer"], c.get("symmetry", "none"))
 
 
-AI_MODELS = []     # retired: audio brains
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(_HERE, "panel_setup", "music_settings.json")   # written by the app
 AUDIO_FILE = os.path.join(_HERE, "panel_setup", "audio_now.json")          # live meter for the app (4x/s)
@@ -369,8 +358,6 @@ def load_settings():
     for k in ("shazam", "song_on_wall"):
         s[k] = bool(s.get(k, True))
     s["ai"] = False                                        # the AI designer is retired: a rule-based curator picks scenes
-    if s.get("brain") == "gemini":                      # retired (the key ran out of credits)
-        s["brain"] = "text"
     s["brain"] = "claude"                                  # every brain is Claude now
     try:
         s["sensitivity"] = max(0, min(100, int(s["sensitivity"])))
@@ -704,54 +691,10 @@ class Recognizer:
 
 # ------------------------------------------------------ Claude CLI brain ---
 
-CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "haiku")       # alias; any model the plan allows
-CLAUDE_TIMEOUT = 90
-CLAUDE_EVERY = 120.0                                         # go easy on the plan
 
-
-def find_claude():
-    """Path of the Claude Code CLI, or None."""
-    import shutil
-    cands = [os.environ.get("CLAUDE_BIN"), shutil.which("claude"),
-             "/home/pi/.local/bin/claude", os.path.expanduser("~/.local/bin/claude"),
-             "/usr/local/bin/claude"]
-    for c in cands:
-        if c and os.path.exists(c) and os.access(c, os.X_OK):
-            return c
-    return None
-
-
-def claude_credentials():
-    return bool(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY"))
-
-
-def claude_json(stdout):
-    """Pull the scene JSON out of `claude -p --output-format json` output."""
-    text = stdout
-    try:
-        outer = json.loads(stdout)
-        if isinstance(outer, dict) and "result" not in outer and "style" in outer:
-            return outer                                      # the scene itself, not wrapped
-        if isinstance(outer, dict):
-            if outer.get("is_error"):
-                raise RuntimeError(str(outer.get("result") or outer.get("error") or "claude error")[:160])
-            text = outer.get("result", "") or ""
-        elif isinstance(outer, list):                         # stream-style: last result item
-            for item in reversed(outer):
-                if isinstance(item, dict) and item.get("type") == "result":
-                    text = item.get("result", "") or ""
-                    break
-    except json.JSONDecodeError:
-        pass
-    if "{" not in text:
-        raise RuntimeError(f"no JSON in reply: {text[:100]!r}")
-    return json.loads(text[text.index("{"): text.rindex("}") + 1])
-
-
-# --------------------------------------------------------------- AI VJ ---
 
 class VJ:
-    """The AI light designer: listens every AI_EVERY s and designs a whole scene."""
+    """The AI light designer (off by default): Claude designs a scene from the song + measurements."""
 
     def __init__(self, listener, vibe=lambda: "chill", enabled=lambda: True, song=lambda: None,
                  brain=lambda: "claude", prompt=lambda: ""):
@@ -773,9 +716,6 @@ class VJ:
         self.source = "default"
         threading.Thread(target=self._loop, daemon=True).start()
 
-    def _wav_b64(self, x):
-        return base64.b64encode(wav_bytes(x)).decode()
-
     def _context(self):
         lt = time.localtime()
         h = lt.tm_hour
@@ -794,7 +734,7 @@ class VJ:
         ask = self.prompt()
         want = (f"THE HOUSE ASKS FOR THIS (it overrides your own taste - follow it as the art direction): "
                 f"\"{ask}\". " if ask else "")
-        return (f"Here is a {AI_CLIP:.0f}-second clip of what is playing in the hallway now. "
+        return ("You cannot hear the music; here is what the room's microphone measures. "
                 f"Local time {lt.tm_hour:02d}:{lt.tm_min:02d} ({part}). Measured energy "
                 f"{f['energy']:.2f}, {tempo}. Your recent scenes: "
                 f"{hist}. {want}{self._song_line()}Design the next scene. Reply with the JSON only.")
@@ -807,19 +747,11 @@ class VJ:
                 f"that as fact and let the song itself (its mood, era, lyrics, cover art) inspire "
                 f"the scene; set \"song\" and \"artist\" accordingly. ")
 
-    def _ask_ai(self, clip):
-        """Audio brains are retired: Claude designs from the song + measurements (text)."""
-        return self._ask_text()
-
     def _text_prompt(self):
-        """(system, user) for the text-only brains: no audio, just the song and measurements."""
-        f = self.l.f
-        vibe = self.vibe()
+        """(system, user) for the Claude designer: no audio, just the song and measurements."""
         system = ai_prompt()
-        user = self._context().replace(
-            f"Here is a {AI_CLIP:.0f}-second clip of what is playing in the hallway now. ",
-            "You cannot hear the music (you are text only); here is what the hallway sensors "
-            f"measure: bass {f['bass']:.2f}, mids {f['mid']:.2f}, treble {f['treble']:.2f} (0-1). ")
+        f = self.l.f
+        user = self._context() + (f" Bass {f['bass']:.2f}, mids {f['mid']:.2f}, treble {f['treble']:.2f} (0-1).")
         return system, user + "\nIf no song is given, do not invent one: use null."
 
     def _count(self, brain):
@@ -866,113 +798,6 @@ class VJ:
             self.brain_status = f"Claude error: {str(e)[:120]}"
             print(f"[VJ] {self.brain_status}", flush=True)
             return None
-
-    def _ask_gemini(self):
-        """Free-tier Gemini, text only (song + sensor numbers, never audio)."""
-        import urllib.request, urllib.error
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(os.path.join(_HERE, ".env"))
-        except Exception:
-            pass
-        key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        if not key:
-            self.brain_status = "no GEMINI_API_KEY in the Pi's .env (free key: aistudio.google.com/apikey)"
-            return None
-        models = [os.environ["GEMINI_MODEL"]] if os.environ.get("GEMINI_MODEL") else GEMINI_MODELS
-        system, user = self._text_prompt()
-        t0 = time.time()
-        self._count("gemini")
-        last = ""
-        for model in models:
-            for thinking in (True, False):                 # retry once without thinkingConfig
-                cfg = {"responseMimeType": "application/json", "maxOutputTokens": 600,
-                       "temperature": 1.0}
-                if thinking:
-                    cfg["thinkingConfig"] = {"thinkingBudget": 0}
-                body = json.dumps({"systemInstruction": {"parts": [{"text": system}]},
-                                   "contents": [{"role": "user", "parts": [{"text": user}]}],
-                                   "generationConfig": cfg}).encode()
-                req = urllib.request.Request(GEMINI_URL.format(model=model), data=body, method="POST",
-                                             headers={"Content-Type": "application/json",
-                                                      "x-goog-api-key": key})
-                try:
-                    with urllib.request.urlopen(req, timeout=40) as r:
-                        out = json.load(r)
-                    text = out["candidates"][0]["content"]["parts"][0]["text"]
-                    j = _validate(json.loads(text[text.index("{"): text.rindex("}") + 1]))
-                    if not j:
-                        raise RuntimeError("scene was not valid")
-                    j["model"] = model
-                    self.brain_status = f"Gemini free ({model}) ok - {time.time() - t0:.0f} s"
-                    return j
-                except urllib.error.HTTPError as e:
-                    detail = ""
-                    try:
-                        detail = json.load(e).get("error", {}).get("message", "")[:90]
-                    except Exception:
-                        pass
-                    last = f"{model}: HTTP {e.code} {detail}"
-                    if e.code == 429:                      # free-tier limit: rest for a while
-                        self._backoff_until = time.time() + 600
-                        self.brain_status = "Gemini free-tier limit reached - using built-in rules for 10 min"
-                        print(f"[VJ] {self.brain_status}", flush=True)
-                        return None
-                    if e.code in (401, 403):
-                        self.brain_status = f"Gemini key rejected (HTTP {e.code}) - check GEMINI_API_KEY"
-                        print(f"[VJ] {self.brain_status}", flush=True)
-                        return None
-                    if e.code == 400 and thinking:
-                        continue                           # try again without thinkingConfig
-                    break                                  # unknown model etc.: next model
-                except Exception as e:
-                    last = f"{model}: {str(e)[:90]}"
-                    break
-        self.brain_status = f"Gemini error: {last}"
-        print(f"[VJ] {self.brain_status}", flush=True)
-        return None
-
-    def _ask_claude(self):
-        """Text-only designer: the Claude Code CLI (Haiku) sees the song + measurements, not audio."""
-        import subprocess
-        exe = find_claude()
-        if not exe:
-            self.brain_status = "Claude CLI is not installed on the Pi (see panel_setup/README.md)"
-            return None
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(os.path.join(_HERE, ".env"))
-        except Exception:
-            pass
-        if not claude_credentials():
-            self.brain_status = "no CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY in the Pi's .env"
-            return None
-        system, user = self._text_prompt()
-        prompt = system + "\n\n" + user
-        import tempfile
-        wd = os.path.join(tempfile.gettempdir(), "wall_claude_cwd")
-        os.makedirs(wd, exist_ok=True)                 # empty dir: no project files to load
-        t0 = time.time()
-        try:
-            self._count("claude")
-            r = subprocess.run([exe, "-p", prompt, "--model", CLAUDE_MODEL,
-                                "--output-format", "json"],
-                               capture_output=True, text=True, timeout=CLAUDE_TIMEOUT, cwd=wd,
-                               env=dict(os.environ))
-            if r.returncode != 0 and not r.stdout.strip():
-                raise RuntimeError((r.stderr or "claude exited with an error").strip()[:160])
-            j = _validate(claude_json(r.stdout))
-            if not j:
-                raise RuntimeError("scene was not valid")
-            j["model"] = f"claude-{CLAUDE_MODEL}"
-            self.brain_status = f"Claude ({CLAUDE_MODEL}) ok - {time.time() - t0:.0f} s"
-            return j
-        except subprocess.TimeoutExpired:
-            self.brain_status = f"Claude timed out after {CLAUDE_TIMEOUT} s"
-        except Exception as e:
-            self.brain_status = f"Claude error: {str(e)[:120]}"
-        print(f"[VJ] {self.brain_status}", flush=True)
-        return None
 
     def _fallback(self):
         """The curator: a scene from this level's pool with variety (no style or palette from the
@@ -1038,18 +863,7 @@ class VJ:
                 self._last_prompt = prompt_now
                 sg = self.song()
                 self._last_song = sg["title"] if sg else self._last_song
-                if not self.enabled():
-                    j = None
-                elif self.brain() == "claude":
-                    j = self._ask_claude()
-                elif self.brain() == "gemini":
-                    j = self._ask_gemini()
-                elif self.brain() == "text":
-                    j = self._ask_text()
-                else:
-                    # normalise the clip so quiet rooms still give the model something to hear
-                    j = self._ask_ai(clip * min(8.0, 0.25 / max(level, 1e-4)))
-                    self.brain_status = "Claude ok" if j else "Claude did not answer"
+                j = self._ask_text() if self.enabled() else None
                 if j:
                     self.source = j.get("model", "ai")
                     if j.get("song"):
@@ -1212,28 +1026,6 @@ class Visuals:
         out[stars] = np.maximum(out[stars], 0.5)
         return _lut(np.clip(out, 0, 1), lut)
 
-    def glow(self, f, lut):
-        """Soft orbs of light drifting slowly, breathing with the bass."""
-        p, W, H = self.phase, self.W, self.H
-        if not hasattr(self, "_glow_pal"):
-            self._glow_pal = None
-        out = np.zeros((H, W, 3), np.float32)
-        breathe = (1 + 0.35 * f["kick"]) * f.get("d_scale", 1.0)
-        n = f.get("d_count", 6.0)
-        for i in range(8):
-            w = max(0.0, min(1.0, n - i))                  # orbs fade in/out, never pop
-            if w <= 0:
-                continue
-            s = 0.05 + i * 0.012
-            cx = W * (0.5 + 0.42 * math.sin(p * s * 2.2 + i * 2.1))
-            cy = H * (0.5 + 0.42 * math.sin(p * s * 1.7 + i * 1.3))
-            sig = (26 + 10 * math.sin(p * 0.2 + i * 1.7)) * breathe * f.get("d_soft", 1.0)
-            g = np.exp(-((self.x - cx) ** 2 + (self.y - cy) ** 2) / (2 * sig * sig))
-            col = lut[int(150 + 100 * ((i * 0.37) % 1))]
-            out += g[..., None] * col * (0.55 + 0.25 * math.sin(p * 0.5 + i)) * w
-        base = lut[18][None, None, :] * 0.6
-        return np.clip(base + out, 0, 255)
-
     def ripples_(self, f, lut):
         W, H, now = self.W, self.H, time.time()
         v = 0.12 + 0.05 * np.sin(self.x / 11 + self.phase * 2) * np.sin(self.y / 13 - self.phase)
@@ -1350,8 +1142,6 @@ class Visuals:
             return self.aurora(f, lut)
         if style == "ripples":
             return self.ripples_(f, lut)
-        if style == "glow":
-            return self.glow(f, lut)
         return self.lava(f, lut)
 
 

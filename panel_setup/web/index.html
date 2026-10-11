@@ -128,6 +128,11 @@
   .gate h1 { font: italic 400 46px/1 var(--serif); margin: 0; }
   .gate input[type=password] { padding: 14px 16px; border-radius: 14px; }
   body.locked #gateLogin, body.away #gateAway { display: grid; }
+  .welcome { display: grid; gap: 8px; justify-items: start; margin-bottom: 6px; }
+  .welcome canvas { width: min(62vw, 240px); border-radius: 14px; background: #000; display: block;
+                    box-shadow: 0 30px 80px -24px var(--wglow, rgba(120, 90, 200, .6)); }
+  .welcome a { color: var(--muted); font-size: 13px; text-decoration: none; }
+  .welcome a i { font: italic 400 16px var(--serif); color: var(--ink); }
   body.locked > :not(#gateLogin):not(.toast), body.away > :not(#gateAway):not(.toast) { display: none !important; }
   .toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0;
            background: var(--ink); color: var(--room); padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; transition: .25s; pointer-events: none; z-index: 9; }
@@ -335,7 +340,26 @@ async function findWall() {
 }
 function askLogin(msg) {
   if (!REMOTE) { location.href = '/login'; return; }
-  $('loginMsg').textContent = msg || ''; document.body.classList.add('locked'); $('loginPw').focus();
+  $('loginMsg').textContent = msg || ''; document.body.classList.add('locked'); $('loginPw').focus(); welcome($('login'));
+}
+/* At the door (online), today's piece is already lit: the same program, run here in the browser. */
+async function welcome(into) {
+  if (welcome.done) return; welcome.done = true;
+  try {
+    const e = (await (await fetch('editions.json', {cache: 'no-store'})).json())[0]; if (!e) return;
+    await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'gallery.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+    const F = window.Fortuna; if (!F || !F.ledify || F.still) return;
+    const box = document.createElement('div'); box.className = 'welcome';
+    box.innerHTML = `<canvas aria-hidden="true"></canvas><a href="${GALLERY.replace('art/', 'e/' + e.date + '/')}">On the wall today: <i>${esc(e.name)}</i></a>`;
+    into.prepend(box); box.style.setProperty('--wglow', e.palette[1] + 'aa');
+    const cv = box.querySelector('canvas'), x = cv.getContext('2d'), [w, h] = e.size || [192, 192];
+    cv.style.aspectRatio = w + ' / ' + h;            // whole device pixels per LED, or the dots shimmer
+    const cell = Math.max(1, Math.floor(cv.clientWidth * (devicePixelRatio || 1) / w)); cv.width = w * cell; cv.height = h * cell;
+    const piece = F.add(cv, {always: true, w, h, pal: e.palette, day: e.hours || [],
+      draw: src => F.ledify(x, src, w, h, {x: 0, y: 0, w: cv.width, h: cv.height}, {bloom: .25}),
+      onfail: () => box.remove()});
+    F.setSource(piece, await (await fetch(e.frag)).text());
+  } catch (err) {}
 }
 $('login').addEventListener('submit', async ev => {
   ev.preventDefault();
@@ -597,7 +621,7 @@ async function start() {
   document.documentElement.style.setProperty('--rows', rows); document.documentElement.style.setProperty('--cols', cols);
 }
 (async () => {
-  if (!(await findWall())) { document.body.classList.add('away'); return; }
+  if (!(await findWall())) { document.body.classList.add('away'); if (REMOTE) welcome($('gateAway').querySelector('.wrap')); return; }
   if (REMOTE && !TOKEN) return askLogin();
   start();
 })();

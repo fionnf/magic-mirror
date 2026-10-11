@@ -204,6 +204,18 @@ How a day goes:
 By hand: `python3 -m display.publish 2026-10-09`. Preview the site locally:
 `python3 tools/build_gallery.py --from assets/daily --out /tmp/site`.
 
+What visitors can do on the site:
+
+- **The feed** (`/art/`) opens with the year in colour: one cell per day, painted with that day's palette.
+- **Play with it** (each edition's page): sliders for everything the wall hears or knows (bass, energy,
+  treble, breath, tension, key, song, hour of the day), the day's listening drawn by finger, the three
+  colours, and time held still, hurried or run as a whole day in a minute. A version can be shared as a
+  link (`#v=...`) and saved as a postcard (PNG) or an 8-second video, drawn as real LED dots with panel
+  seams. Nothing there touches the wall.
+- **Window** (`/window/`, `?d=<date>`, `&drift`): any screen becomes a small Fortuna wall. Full screen,
+  LED dots, stays awake, controls fade away; arrows change the day, `f` full screen, `l` listen.
+- **The control app's door**: online, the login and "wall not reachable" screens show today's piece live.
+
 ## Receipt printer: here, on another Pi, Wi-Fi or Bluetooth
 
 `WALL_PRINTER` in `.env` says where the printer is (default `usb`: plugged into the wall's Pi).

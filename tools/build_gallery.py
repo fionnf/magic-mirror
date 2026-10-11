@@ -4,8 +4,10 @@
     python3 tools/build_gallery.py               # -> _site/
     python3 tools/build_gallery.py --from assets/daily --out /tmp/site    # preview local editions
 
-Pages: index.html (the feed, newest first), e/<date>/ (one page per edition), feed.xml (RSS, so
-people can follow), plus the editions' files. Every post runs its GLSL live in the browser (site/gallery.js).
+Pages: index.html (the wall's control app), art/ (the feed, newest first, under a calendar of the year
+in colour), e/<date>/ (one page per edition, with a studio to play the piece by hand and make postcards),
+window/ (any screen as a small Fortuna wall), feed.xml (RSS) and editions.json, plus the editions' files.
+Every piece runs its GLSL live in the browser (site/gallery.js).
 """
 import argparse
 import datetime
@@ -72,7 +74,7 @@ def piece(m, prefix):
             f'data-cols="{w // 64}" data-rows="{h // 64}" aria-hidden="true"></canvas></div>')
 
 
-def page(title, body, prefix, desc=TAGLINE, image=None, canonical=""):
+def page(title, body, prefix, desc=TAGLINE, image=None, canonical="", scripts=()):
     og = f'<meta property="og:image" content="{SITE_URL}gallery/{image}">' if image else ""
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -84,14 +86,14 @@ def page(title, body, prefix, desc=TAGLINE, image=None, canonical=""):
 <body><div class="wrap">{body}
 <footer>Made by {CREDIT} at House Fortuna. Every piece here is the same program that runs on the
 wall. <a href="{prefix}feed.xml">Follow by RSS</a>.</footer></div>
-<script src="{prefix}gallery.js" defer></script></body></html>"""
+<script src="{prefix}gallery.js" defer></script>{"".join(f'<script src="{prefix}{x}" defer></script>' for x in scripts)}</body></html>"""
 
 
 def header(prefix):
     return (f'<header class="site"><h1><a href="{prefix}art/">{TITLE}</a></h1><p>{e(TAGLINE)}</p>'
             f'<div class="follow"><a href="{prefix}feed.xml">Follow by RSS</a>'
             f'<a href="https://feedly.com/i/subscription/feed/{SITE_URL}feed.xml">Follow on Feedly</a>'
-            f'<a href="{prefix}">Control the wall</a></div></header>')
+            f'<a href="{prefix}window/">Open as a window</a><a href="{prefix}">Control the wall</a></div></header>')
 
 
 def post_html(m, prefix, full=False):
@@ -103,7 +105,8 @@ def post_html(m, prefix, full=False):
     if m.get("listening"):
         out.append(f'<p class="listens">{e(tidy(m["listening"]))}</p>')
     out.append('<div class="actions"><button class="btn" data-listen>Let it hear your room</button>'
-               + ("" if full else f'<a class="btn" href="{link}">About this piece</a>') + '</div>')
+               + ("" if full else f'<a class="btn" href="{link}">About this piece</a>')
+               + f'<a class="btn" href="{prefix}window/?d={m["date"]}">Open as a window</a></div>')
     if full:
         pal = m.get("palette") or []
         facts = [("Date", nice(m["date"]))] + ([("Statement", e(m.get("description", "")))]
@@ -123,8 +126,75 @@ def post_html(m, prefix, full=False):
         if cur.get("verdict"):
             out.append(f'<p class="listens" style="margin:26px 0 6px">The curator, before it was hung</p>'
                        f'<p class="curator">{e(cur["verdict"])}</p>')
+        out.append(studio(m))
     out.append("</article>")
     return "\n".join(out)
+
+
+KNOBS = [("iBass", "Bass", 1, .01), ("iEnergy", "Energy", 1, .01), ("iTreble", "Treble", 1, .01),
+         ("iBreath", "Breath", 1, .01), ("iTension", "Tension", 1, .01), ("iKey", "Key of the music", 1, .01),
+         ("iSong", "Song", 24, 1)]
+
+
+def studio(m):
+    """Play the piece by hand: everything the wall hears or knows, as controls (wired by site/studio.js)."""
+    pal = m.get("palette") or ["#000000", "#444444", "#ffffff"]
+    meta = json.dumps({"name": m["name"], "date": m["date"], "when": nice(m["date"])})
+    knob = lambda u, label, hi, step: (f'<label class="knob"><span>{label}<output></output></span>'
+                                       f'<input type="range" data-u="{u}" min="0" max="{hi}" step="{step}" value="0"></label>')
+    return (f'<details class="studio" id="studio" data-meta=\'{e(meta)}\'><summary><span>Play with it</span>'
+            '<small>Be the room: the music, the hour, the whole day</small></summary>'
+            '<p class="listens">Every control is something the wall hears or knows. Touch one and it stops listening '
+            'to the room and listens to you. Nothing here changes the wall.</p>'
+            '<div class="speeds" role="group" aria-label="Time">'
+            '<button class="btn" data-speed="still">Hold still</button><button class="btn" data-speed="live">As it is</button>'
+            '<button class="btn" data-speed="fast">Hurry</button><button class="btn" data-speed="day">A day in a minute</button></div>'
+            '<div class="knobs">' + "".join(knob(*k) for k in KNOBS)
+            + '<label class="knob"><span>Hour of the day<output data-hour></output></span>'
+              '<input type="range" data-u="clock" min="0" max="23.99" step="0.05" value="12"></label></div>'
+            '<p class="listens" style="margin:20px 0 6px">The day it remembers. Draw it: one bar for every hour, louder at the top</p>'
+            '<div class="day draw" aria-label="Draw the day\'s listening">' + "<i></i>" * 24 + '</div>'
+            '<div class="day-axis"><span>midnight</span><span>noon</span><span>midnight</span></div>'
+            '<p class="listens" style="margin:20px 0 8px">Its colours</p><div class="paints">'
+            + "".join(f'<input type="color" data-c="{i}" value="{e(c)}" aria-label="Colour {i + 1}">' for i, c in enumerate(pal[:3]))
+            + '</div><div class="actions" style="margin-top:22px">'
+            '<button class="btn" data-still>Postcard</button><button class="btn" data-record>Record 8 seconds</button>'
+            '<button class="btn" data-link>Copy a link to your version</button><button class="btn" data-reset>Back to the room</button></div>'
+            '<p class="said" role="status" aria-live="polite"></p></details>')
+
+
+def year(eds, prefix):
+    """The year in colour: one cell per day, each day painted with its piece's palette."""
+    if not eds:
+        return ""
+    by = {m["date"]: m for m in eds}
+    y = int(eds[0]["date"][:4])
+    rows = []
+    for mo in range(1, 13):
+        cells = []
+        for d in range(1, 32):
+            try:
+                day = datetime.date(y, mo, d)
+            except ValueError:
+                cells.append('<i class="none"></i>')
+                continue
+            m = by.get(day.isoformat())
+            if m:
+                pal = m.get("palette") or ["#000", "#444", "#fff"]
+                cells.append(f'<a href="{prefix}e/{m["date"]}/" title="{e(m["name"])}, {day.strftime("%-d %B")}" '
+                             f'style="background:linear-gradient(135deg,{pal[0]},{pal[1]} 55%,{pal[2]})"></a>')
+            else:
+                cells.append(f'<i title="{day.strftime("%-d %B")}"></i>')
+        rows.append(f'<span>{datetime.date(y, mo, 1).strftime("%b")}</span>' + "".join(cells))
+    return (f'<section class="year" aria-label="{y}, one colour a day"><p class="listens">{y}, one piece a day. '
+            f'The calendar fills in as the wall makes them.</p><div class="cal">' + "".join(rows) + "</div></section>")
+
+
+def index(eds):
+    """editions.json: what the window (and the control app's welcome) need to draw any edition."""
+    return json.dumps([{"date": m["date"], "name": m["name"], "caption": caption(m), "palette": m.get("palette"),
+                        "hours": m.get("hours", []), "size": m.get("size") or [192, 192],
+                        "frag": f"gallery/{m['date']}.frag", "still": f"gallery/{still(m)}"} for m in eds])
 
 
 def rss(eds):
@@ -152,7 +222,7 @@ def main():
     eds = load(a.src) if os.path.isdir(a.src) else []
     shutil.rmtree(a.out, ignore_errors=True)
     os.makedirs(os.path.join(a.out, "gallery"))
-    for fn in ("style.css", "gallery.js"):
+    for fn in ("style.css", "gallery.js", "studio.js"):
         shutil.copy(os.path.join(ROOT, "site", fn), a.out)
     for m in eds:
         for ext in ("frag", "png", "final.png"):
@@ -162,15 +232,19 @@ def main():
         os.makedirs(os.path.join(a.out, "e", m["date"]))
         with open(os.path.join(a.out, "e", m["date"], "index.html"), "w") as fh:
             fh.write(page(f"{m['name']} · {TITLE}", header("../../") + post_html(m, "../../", full=True),
-                          "../../", caption(m), still(m), f"e/{m['date']}/"))
+                          "../../", caption(m), still(m), f"e/{m['date']}/", scripts=("studio.js",)))
     feed = "".join(post_html(m, "../") for m in eds) or '<p class="caption">The first piece is on its way.</p>'
     os.makedirs(os.path.join(a.out, "art"))
     with open(os.path.join(a.out, "art", "index.html"), "w") as fh:
-        fh.write(page(TITLE, header("../") + feed, "../", image=still(eds[0]) if eds else None, canonical="art/"))
+        fh.write(page(TITLE, header("../") + year(eds, "../") + feed, "../", image=still(eds[0]) if eds else None, canonical="art/"))
     # the home page is the wall's control app (it finds the wall through its announced address)
     shutil.copy(os.path.join(ROOT, "panel_setup", "web", "index.html"), os.path.join(a.out, "index.html"))
     with open(os.path.join(a.out, "feed.xml"), "w") as fh:
         fh.write(rss(eds))
+    with open(os.path.join(a.out, "editions.json"), "w") as fh:
+        fh.write(index(eds))
+    os.makedirs(os.path.join(a.out, "window"))
+    shutil.copy(os.path.join(ROOT, "site", "window.html"), os.path.join(a.out, "window", "index.html"))
     with open(os.path.join(a.out, ".nojekyll"), "w"):
         pass
     print(f"gallery: {len(eds)} editions -> {a.out}")

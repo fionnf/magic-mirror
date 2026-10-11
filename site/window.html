@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Fortuna window</title>
+<meta name="description" content="Turn any screen into a small Fortuna wall: the day's piece, live, as LED light.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #f1ebf3; --muted: #a39aa8; --serif: "Instrument Serif", Georgia, serif; --sans: "Instrument Sans", -apple-system, system-ui, sans-serif; }
+  html, body { margin: 0; height: 100%; background: #000; color: var(--ink); font: 16px/1.4 var(--sans); overflow: hidden; }
+  canvas#wall { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  body.idle { cursor: none; }
+  .ui { position: fixed; left: 0; right: 0; bottom: 0; padding: 28px max(16px, env(safe-area-inset-left)) calc(22px + env(safe-area-inset-bottom));
+        background: linear-gradient(transparent, rgba(0,0,0,.75)); display: flex; gap: 16px; align-items: end; justify-content: space-between; flex-wrap: wrap;
+        transition: opacity 1.2s ease, transform 1.2s ease; }
+  body.idle .ui { opacity: 0; transform: translateY(12px); pointer-events: none; }
+  .ui h1 { font: italic 400 clamp(28px, 5vw, 46px)/1 var(--serif); margin: 0; letter-spacing: -.01em; }
+  .ui p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; }
+  button, a.b { font: 500 14px/1 var(--sans); color: var(--ink); background: rgba(20,16,24,.6); border: 1px solid rgba(255,255,255,.18);
+                border-radius: 999px; padding: 11px 15px; cursor: pointer; text-decoration: none; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  button:hover, a.b:hover { border-color: var(--ink); }
+  button[aria-pressed=true] { background: var(--ink); color: #000; }
+  button:disabled { opacity: .5; cursor: default; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .msg { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 16px; }
+  .msg[hidden] { display: none; }
+  @media (prefers-reduced-motion: reduce) { .ui { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="wall" aria-label="The piece, as LED light"></canvas>
+<div class="msg" id="msg">Lighting up…</div>
+<div class="ui" id="ui">
+  <div><h1 id="name">Fortuna</h1><p id="when"></p></div>
+  <div class="bar">
+    <button id="prev" aria-label="The day before">←</button>
+    <button id="next" aria-label="The day after">→</button>
+    <button id="drift" aria-pressed="false" title="A different day every 20 minutes">Drift through the days</button>
+    <button data-listen>Let it hear your room</button>
+    <button id="fs">Full screen</button>
+    <a class="b" href="../art/">Gallery</a>
+  </div>
+</div>
+<script src="../gallery.js"></script>
+<script>
+(() => {
+  const F = window.Fortuna, $ = id => document.getElementById(id), cv = $('wall'), ctx = cv.getContext('2d');
+  if (!F || !F.ledify) { $('msg').textContent = 'This browser cannot draw the wall (it needs WebGL 2).'; return; }
+  let eds = [], i = 0, piece = null, driftTimer = null;
+  const nice = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'});
+
+  function size() { const r = devicePixelRatio || 1; cv.width = Math.round(innerWidth * r); cv.height = Math.round(innerHeight * r); }
+  addEventListener('resize', size); size();
+
+  function draw(src) {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+    const m = Math.round(Math.min(cv.width, cv.height) * 0.04);
+    F.ledify(ctx, src, piece.w, piece.h, {x: m, y: m, w: cv.width - 2 * m, h: cv.height - 2 * m});
+  }
+  function show(k) {
+    i = (k + eds.length) % eds.length; const e = eds[i];
+    const [w, h] = e.size || [192, 192];
+    if (!piece) piece = F.add(cv, {always: true, w, h, pal: e.palette, day: e.hours || [], draw, onfail: () => { $('msg').hidden = false; $('msg').textContent = 'This piece would not draw here.'; }});
+    Object.assign(piece, {w, h, cols: Math.round(w / 64), rows: Math.round(h / 64), pal: e.palette, day: e.hours || []});
+    fetch('../' + e.frag).then(r => r.text()).then(src => { F.setSource(piece, src); $('msg').hidden = true; });
+    $('name').textContent = e.name; $('when').textContent = nice(e.date) + (i === 0 ? ' · today’s piece' : '');
+    document.title = e.name + ' · Fortuna window';
+    history.replaceState(null, '', '?d=' + e.date + (driftTimer ? '&drift' : ''));
+    $('prev').disabled = $('next').disabled = eds.length < 2;
+  }
+  $('prev').onclick = () => show(i + 1);              // editions are newest first
+  $('next').onclick = () => show(i - 1);
+  function drift(on) {
+    clearInterval(driftTimer); driftTimer = on ? setInterval(() => show(Math.floor(Math.random() * eds.length)), 20 * 60 * 1000) : null;
+    $('drift').setAttribute('aria-pressed', !!on); if (eds.length) history.replaceState(null, '', '?d=' + eds[i].date + (on ? '&drift' : ''));
+  }
+  $('drift').onclick = () => drift(!driftTimer);
+  $('fs').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.().catch(() => {});
+  document.addEventListener('fullscreenchange', () => { $('fs').textContent = document.fullscreenElement ? 'Leave full screen' : 'Full screen'; });
+  if (!document.documentElement.requestFullscreen) $('fs').hidden = true;
+
+  // the controls fade away; any touch, move or key brings them back
+  let idle;
+  const wake = () => { document.body.classList.remove('idle'); clearTimeout(idle); idle = setTimeout(() => document.body.classList.add('idle'), 3500); };
+  ['pointermove', 'pointerdown', 'keydown'].forEach(t => addEventListener(t, wake)); wake();
+  addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft') show(i + 1); else if (e.key === 'ArrowRight') show(i - 1);
+    else if (e.key === 'f') $('fs').click(); else if (e.key === 'l') F.listen(document.querySelector('[data-listen]'));
+  });
+
+  // a window should not fall asleep
+  let lock = null;
+  const keepAwake = async () => { try { if (!document.hidden && navigator.wakeLock) lock = await navigator.wakeLock.request('screen'); } catch (e) {} };
+  document.addEventListener('visibilitychange', keepAwake); keepAwake();
+
+  fetch('../editions.json').then(r => r.json()).then(list => {
+    eds = list; if (!eds.length) { $('msg').textContent = 'The first piece is on its way.'; return; }
+    const q = new URLSearchParams(location.search), at = eds.findIndex(e => e.date === q.get('d'));
+    show(at >= 0 ? at : 0); if (q.has('drift')) drift(true);
+  }).catch(() => { $('msg').textContent = 'The gallery could not be reached.'; });
+})();
+</script>
+</body>
+</html>

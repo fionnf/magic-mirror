@@ -969,7 +969,8 @@ def main():
                 today = _dt.date.today().isoformat()
                 if not os.path.exists(os.path.join(daily.FOLDER, today + ".json")) and \
                         (_dt.datetime.now().hour >= 5 or not daily.editions()):
-                    meta = daily.generate(today)
+                    # the cloud artist (daily workflow) may have made it already: hang the same piece
+                    meta = daily.fetch(today) or daily.generate(today)
                     print(f"[daily] {today}: {meta['name']}", flush=True)
                     if runner.current == "daily" and not runner.state.get("daily_date"):
                         runner.restart_current()

@@ -57,7 +57,7 @@ Then open `http://<pi-ip>/` on your phone. Details, tuning and troubleshooting:
 
 | Variable | For |
 |---|---|
-| `ANTHROPIC_API_KEY` | All AI features (mirror lines, aura, booth prompts, wheel, music designer) - model `config.AI_MODEL` |
+| `ANTHROPIC_API_KEY` | All AI features (mirror lines, aura, booth prompts, wheel, music designer) - model `config.AI_MODEL`. Also a repository secret, so the art of the day is made in the cloud every morning even when the wall is off |
 | `GOOGLE_DRIVE_FOLDER_ID`, `GOOGLE_DRIVE_RECEIPTS_FOLDER_ID` | Optional photo archive (`tools/auth_drive.py` once) |
 
 Panel layout, timing, brightness and the power budget live in `config.py`.

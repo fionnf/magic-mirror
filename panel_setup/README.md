@@ -201,6 +201,15 @@ How a day goes:
 4. At midnight the piece is finalised with the day's listening. Claude writes the post (caption +
    alt text) from the final still, and the update is published. Song titles never leave the Pi.
 
+**Without the wall:** the "Art of the day" workflow (`.github/workflows/daily.yml`) makes the piece in
+the cloud every morning at 04:40 Zürich time, on a software GPU, with the same artist brief, check and
+curator; it commits to `gallery/` + `assets/daily/` and rebuilds the site. At 05:00 the wall fetches the
+piece from the gallery (`daily.fetch`) and hangs it instead of making its own, so wall and site always
+show the same edition. If the wall never closes a day (offline), the next morning's run closes it with a
+post written from the still. It needs one repository secret, `ANTHROPIC_API_KEY` (Settings → Secrets and
+variables → Actions); `WALL_MOODBOARD` may be set as a repository variable. Run it by hand from the Actions
+tab ("Run workflow", optionally with a date), or locally: `xvfb-run -a python3 tools/make_today.py`.
+
 By hand: `python3 -m display.publish 2026-10-09`. Preview the site locally:
 `python3 tools/build_gallery.py --from assets/daily --out /tmp/site`.
 

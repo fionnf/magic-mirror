@@ -1,0 +1,44 @@
+name: Art of the day
+on:
+  schedule:
+    - cron: "40 2 * * *"          # 04:40 in Zürich in summer, 03:40 in winter: before the wall wakes at 05:00
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Make the piece for this date (YYYY-MM-DD, default today)"
+        required: false
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: daily
+  cancel-in-progress: false
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: A software GPU for the shader check
+        run: sudo apt-get update -q && sudo apt-get install -y -q xvfb libgl1 libglx-mesa0 libegl1 libgl1-mesa-dri
+      - run: pip install -q anthropic numpy Pillow moderngl opencv-python-headless python-dotenv requests
+      - name: Compose, check, curate
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          WALL_MOODBOARD: ${{ vars.WALL_MOODBOARD }}
+        run: xvfb-run -a python3 tools/make_today.py ${{ inputs.date }}
+      - name: Publish
+        id: publish
+        run: |
+          git add assets/daily gallery
+          if git diff --cached --quiet; then echo "nothing new"; exit 0; fi
+          what=$(git diff --cached --name-only gallery | sed 's#gallery/##' | tr '\n' ' ')
+          git -c user.name=fortuna-wall -c user.email=wall@users.noreply.github.com commit -q -m "Gallery: $what"
+          git pull --rebase -q origin master && git push -q origin HEAD:master
+          echo "pushed=1" >> "$GITHUB_OUTPUT"
+      - name: Rebuild the gallery site
+        if: steps.publish.outputs.pushed == '1'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh workflow run gallery.yml --ref master

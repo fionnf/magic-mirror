@@ -321,6 +321,36 @@ def generate(date=None, notes="", attempts=4, min_score=7):
         json.dump(meta, fh, indent=1)
     return meta
 
+GALLERY_RAW = os.environ.get("GALLERY_RAW", "https://raw.githubusercontent.com/fionnf/magic-mirror/master/gallery/")
+
+
+def fetch(date):
+    """Today's piece may already have been made in the cloud (the daily workflow): pull it from the
+    public gallery into assets/daily so the wall hangs the same piece. -> metadata or None."""
+    import requests
+    try:
+        r = requests.get(f"{GALLERY_RAW}{date}.json", timeout=20)
+        if r.status_code != 200:
+            return None
+        meta = r.json()
+        files = {}
+        for ext in ("frag", "png") + (("final.png",) if meta.get("final") else ()):
+            fr = requests.get(f"{GALLERY_RAW}{date}.{ext}", timeout=30)
+            fr.raise_for_status()
+            files[ext] = fr.content
+    except Exception as e:
+        print(f"[daily] gallery fetch {date}: {e}", flush=True)
+        return None
+    os.makedirs(FOLDER, exist_ok=True)
+    for ext, data in files.items():
+        with open(_path(date, ext), "wb") as fh:
+            fh.write(data)
+    with open(_path(date, "json"), "w") as fh:
+        json.dump(meta, fh, indent=1)
+    print(f"[daily] {date}: fetched {meta.get('name')!r} from the gallery", flush=True)
+    return meta
+
+
 def ensure(date=None):
     date = date or datetime.date.today().isoformat()
     if os.path.exists(_path(date, "json")) and os.path.exists(_path(date, "frag")):
@@ -376,11 +406,13 @@ WRITER_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["
                  "properties": {"caption": {"type": "string"}, "alt": {"type": "string"}}}
 
 
-def write_post(meta, mem, still_path):
+def write_post(meta, mem, still_path, note=""):
     """Claude looks at the finished edition and writes its feed post. -> {'caption', 'alt'}"""
     import ai_client
     from PIL import Image
     hours = ", ".join(f"{h}h {v:.2f}" for h, v in enumerate(mem["hours"]) if v > 0.02) or "silence all day"
+    if note:
+        hours = note
     content = [{"type": "text", "text": f"Piece: \"{meta['name']}\" - {meta['description']}\n"
                                         f"How it listens: {meta.get('listening', '')}\n"
                                         f"Music by hour: {hours}. Songs recognised: {len(mem['songs'])}.\n"

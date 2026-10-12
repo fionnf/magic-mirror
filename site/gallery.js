@@ -19,9 +19,47 @@ in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
   const SCALARS = ['iBass', 'iMid', 'iTreble', 'iEnergy', 'iLevel', 'iBreath', 'iTension', 'iKey', 'iBright', 'iSong', 'iBeatPhase'];
 
   const F = window.Fortuna = {pieces: [], hex};
+  /* Draw a native frame as the wall really looks: one round diode per pixel, a little black between
+     them, light blooming into the gaps, and the seams where the 64 x 64 panels meet. */
+  const masks = new Map();
+  function mask(cell) {
+    if (!masks.has(cell)) {
+      const t = document.createElement('canvas'); t.width = t.height = cell;
+      const x = t.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, cell, cell);
+      x.globalCompositeOperation = 'destination-out';
+      const g = x.createRadialGradient(cell / 2, cell / 2, 0, cell / 2, cell / 2, cell * 0.5);
+      g.addColorStop(0, '#000'); g.addColorStop(0.62, '#000'); g.addColorStop(0.9, 'rgba(0,0,0,0)');
+      x.fillStyle = g; x.fillRect(0, 0, cell, cell);
+      masks.set(cell, x.createPattern(t, 'repeat'));
+    }
+    return masks.get(cell);
+  }
+  F.ledify = function (ctx, src, sw, sh, box, opt = {}) {
+    const cell = Math.max(1, Math.floor(Math.min(box.w / sw, box.h / sh)));
+    const w = sw * cell, h = sh * cell, x = Math.round(box.x + (box.w - w) / 2), y = Math.round(box.y + (box.h - h) / 2);
+    ctx.save(); ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, 0, 0, sw, sh, x, y, w, h);
+    if (cell >= 3) {
+      ctx.translate(x, y); ctx.fillStyle = mask(cell); ctx.fillRect(0, 0, w, h);
+      if (opt.seams !== false) {
+        ctx.fillStyle = 'rgba(0,0,0,.6)';
+        for (let c = 64; c < sw; c += 64) ctx.fillRect(c * cell - 1, 0, 2, h);
+        for (let r = 64; r < sh; r += 64) ctx.fillRect(0, r * cell - 1, w, 2);
+      }
+      if (opt.bloom !== false && 'filter' in ctx) {
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = opt.bloom || 0.35;
+        ctx.filter = `blur(${Math.max(2, cell * 1.4)}px)`; ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(src, 0, 0, sw, sh, 0, 0, w, h);
+      }
+    }
+    ctx.restore();
+    return {x, y, w, h, cell};
+  };
+
   const glc = document.createElement('canvas');
   const gl = glc.getContext('webgl2', {preserveDrawingBuffer: true, antialias: false});
-  if (!gl) { document.documentElement.classList.add('no-gl'); F.add = () => null; return; }
+  if (!gl) { document.documentElement.classList.add('no-gl'); F.add = () => null; F.gl = false; return; }
+  F.gl = true;
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
 
@@ -100,43 +138,6 @@ in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
     if (p.draw) p.draw(glc); else p.ctx.drawImage(glc, 0, 0);
     p.taps.forEach(fn => fn(glc, p));
   }
-
-  /* Draw a native frame as the wall really looks: one round diode per pixel, a little black between
-     them, light blooming into the gaps, and the seams where the 64 x 64 panels meet. */
-  const masks = new Map();
-  function mask(cell) {
-    if (!masks.has(cell)) {
-      const t = document.createElement('canvas'); t.width = t.height = cell;
-      const x = t.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, cell, cell);
-      x.globalCompositeOperation = 'destination-out';
-      const g = x.createRadialGradient(cell / 2, cell / 2, 0, cell / 2, cell / 2, cell * 0.5);
-      g.addColorStop(0, '#000'); g.addColorStop(0.62, '#000'); g.addColorStop(0.9, 'rgba(0,0,0,0)');
-      x.fillStyle = g; x.fillRect(0, 0, cell, cell);
-      masks.set(cell, x.createPattern(t, 'repeat'));
-    }
-    return masks.get(cell);
-  }
-  F.ledify = function (ctx, src, sw, sh, box, opt = {}) {
-    const cell = Math.max(1, Math.floor(Math.min(box.w / sw, box.h / sh)));
-    const w = sw * cell, h = sh * cell, x = Math.round(box.x + (box.w - w) / 2), y = Math.round(box.y + (box.h - h) / 2);
-    ctx.save(); ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(src, 0, 0, sw, sh, x, y, w, h);
-    if (cell >= 3) {
-      ctx.translate(x, y); ctx.fillStyle = mask(cell); ctx.fillRect(0, 0, w, h);
-      if (opt.seams !== false) {
-        ctx.fillStyle = 'rgba(0,0,0,.6)';
-        for (let c = 64; c < sw; c += 64) ctx.fillRect(c * cell - 1, 0, 2, h);
-        for (let r = 64; r < sh; r += 64) ctx.fillRect(0, r * cell - 1, w, 2);
-      }
-      if (opt.bloom !== false && 'filter' in ctx) {
-        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = opt.bloom || 0.35;
-        ctx.filter = `blur(${Math.max(2, cell * 1.4)}px)`; ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(src, 0, 0, sw, sh, 0, 0, w, h);
-      }
-    }
-    ctx.restore();
-    return {x, y, w, h, cell};
-  };
 
   /* Postcards: a still (PNG) or a few seconds of the living piece (video), as LED dots with a label. */
   F.card = function (ctx, p, W, H, meta) {

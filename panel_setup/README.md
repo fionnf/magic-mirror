@@ -219,6 +219,12 @@ which lists your boards and prints the secrets to add (`PINTEREST_APP_ID`, `PINT
 By hand: `python3 -m display.publish 2026-10-09`. Preview the site locally:
 `python3 tools/build_gallery.py --from assets/daily --out /tmp/site`.
 
+In the control app: **Scenes** (Dinner, Party, Reading, Sleep, plus your own: "+ Save this" keeps the
+wall as it is now, optionally with the room lights; hold one you made to remove it), a **sleep timer**
+(the moon button: off in 30 min / 1 h / 2 h or at a time; the wall shows "off in 42 min"), the live
+preview drawn as **real LED dots** (swipe it left or right for the next collection), and the **hour
+scrubber** under Today: any edition at any hour, or a whole day in a minute, before you hang it.
+
 What visitors can do on the site:
 
 - **The feed** (`/art/`) opens with the year in colour: one cell per day, painted with that day's palette.

@@ -11,6 +11,7 @@ crashes, runs playlists, and remembers the choice across reboots
 panel_setup/install_control.sh.
 """
 import argparse
+import datetime
 import json
 import os
 import signal
@@ -190,6 +191,61 @@ class Runner:
             if self.current in ("art", "lava", "shapes", "glass", "artsy", "ambient", "shaders"):
                 self._start(self.current)
 
+    # -- scenes: one tap sets the whole room
+    SCENES = {"Dinner": {"mode": "lava", "brightness": 30, "art_speed": 0.08},
+              "Party": {"mode": "music", "brightness": 70, "party": 80},
+              "Reading": {"mode": "shapes", "brightness": 25, "art_speed": 0.05},
+              "Sleep": {"mode": "daily", "brightness": 10, "art_speed": 0.03, "sleep_minutes": 45}}
+
+    def scenes(self):
+        return {**self.SCENES, **self.state.get("scenes", {})}
+
+    def scene_from_now(self):
+        """What the wall is doing now, as a scene."""
+        sc = {"mode": self.current if self.current not in (None, "off", "mirror") else self.state.get("mode", "lava"),
+              "brightness": self.state.get("brightness", 40), "art_speed": self.state.get("art_speed", 0.12)}
+        if sc["mode"] == "music":
+            try:
+                from display import music as mu
+                sc["party"] = mu.load_settings().get("party", 50)
+            except Exception:
+                pass
+        return sc
+
+    def apply_scene(self, name):
+        sc = self.scenes().get(name)
+        if not sc:
+            raise KeyError(name)
+        with self.lock:
+            self.state["brightness"] = max(5, min(100, int(sc.get("brightness", self.state.get("brightness", 40)))))
+            if "art_speed" in sc:
+                self.state["art_speed"] = max(0.03, min(1.0, float(sc["art_speed"])))
+            if sc.get("sleep_minutes"):                 # a scene may bring its own sleep timer
+                self.state["off_at"] = time.time() + 60 * sc["sleep_minutes"]
+            save_state(self.state)
+            if sc.get("mode") == "music" and "party" in sc:
+                try:
+                    from display import music as mu
+                    st = mu.load_settings()
+                    st.update(party=int(sc["party"]), mode="manual")
+                    mu._write_json(mu.SETTINGS_FILE, st)
+                except Exception:
+                    pass
+            self.play(sc.get("mode", "lava"))
+        if "lights" in sc:
+            try:
+                import lights
+                if lights.installed() and lights.devices():
+                    lights.set_group(lights.room(), bool(sc["lights"]))
+            except Exception as e:
+                print(f"[scene] lights: {e}", flush=True)
+
+    def sleep_at(self, when):
+        """Turn the wall off at this unix time (None cancels)."""
+        with self.lock:
+            self.state["off_at"] = float(when) if when else None
+            save_state(self.state)
+
     def resume_saved(self):
         with self.lock:
             self.boot_pending = True
@@ -213,6 +269,7 @@ class Runner:
                     "wheel_print": self.state.get("wheel_print", True),
                     "smart_crop": self.state.get("smart_crop", True),
                     "art_speed": self.state.get("art_speed", 0.12),
+                    "off_at": self.state.get("off_at"),
                     "wall_w": __import__("config").TOTAL_WIDTH, "wall_h": __import__("config").TOTAL_HEIGHT,
                     "error": self.error, "oneshot": self.oneshot_resume is not None}
 
@@ -236,6 +293,13 @@ class Runner:
                         continue
                     self.error = f"'{self.current}' restarted after exit code {p.returncode}"
                     self._start(self.current)
+                    continue
+                off_at = self.state.get("off_at")
+                if off_at and time.time() >= off_at:          # the sleep timer
+                    self.state["off_at"] = None
+                    save_state(self.state)
+                    if self.current not in (None, "off"):
+                        self.play("off")
                     continue
                 pl = self.state.get("playlist")
                 if (self.state.get("mode") == "playlist" and pl and self.oneshot_resume is None
@@ -442,6 +506,57 @@ def make_app(runner):
     @app.get("/")
     def index():
         return send_from_directory(WEB_DIR, "index.html")
+
+    @app.get("/gallery.js")
+    def gallery_js():                      # the site's shader renderer, so the app can preview pieces
+        return send_from_directory(os.path.join(ROOT, "site"), "gallery.js", max_age=600)
+
+    @app.get("/api/scenes")
+    def scenes_get():
+        return jsonify({"scenes": runner.scenes(), "builtin": list(runner.SCENES), "now": runner.scene_from_now()})
+
+    @app.post("/api/scenes")
+    def scenes_set():
+        d = request.get_json(force=True, silent=True) or {}
+        name = str(d.get("name", "")).strip()[:24]
+        if not name:
+            return jsonify({"error": "a scene needs a name"}), 400
+        own = runner.state.setdefault("scenes", {})
+        if d.get("delete"):
+            own.pop(name, None)
+            save_state(runner.state)
+        elif d.get("save"):
+            sc = runner.scene_from_now()
+            if d.get("lights") is not None:
+                sc["lights"] = bool(d["lights"])
+            if d.get("sleep_minutes"):
+                sc["sleep_minutes"] = int(d["sleep_minutes"])
+            own[name] = sc
+            save_state(runner.state)
+        else:
+            try:
+                runner.apply_scene(name)
+            except KeyError:
+                return jsonify({"error": "no such scene"}), 404
+        return jsonify({"scenes": runner.scenes(), "builtin": list(runner.SCENES), "status": runner.status()})
+
+    @app.post("/api/sleep")
+    def sleep_set():
+        d = request.get_json(force=True, silent=True) or {}
+        if d.get("minutes"):
+            runner.sleep_at(time.time() + 60 * float(d["minutes"]))
+        elif d.get("at"):
+            try:
+                h, m = (int(x) for x in str(d["at"]).split(":"))
+                t = datetime.datetime.now().replace(hour=h, minute=m, second=0, microsecond=0)
+                if t.timestamp() <= time.time():
+                    t += datetime.timedelta(days=1)
+                runner.sleep_at(t.timestamp())
+            except ValueError:
+                return jsonify({"error": "time must look like 23:30"}), 400
+        else:
+            runner.sleep_at(None)
+        return jsonify(runner.status())
 
     @app.get("/thumbs/<path:name>")
     def thumbs(name):

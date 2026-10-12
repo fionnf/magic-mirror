@@ -39,7 +39,10 @@
     position: relative;
   }
   .frame img { width: 100%; height: 100%; object-fit: cover; display: block; filter: blur(2px) saturate(1.15); transform: scale(1.04); }
-  .frame.off img { opacity: 0; }
+  .frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; }
+  .frame.led img { visibility: hidden; }
+  .frame.off img, .frame.off canvas { opacity: 0; }
+  .frame img, .frame canvas { transition: opacity .6s; }
   .frame .grid { position: absolute; inset: 0; pointer-events: none;
     background: linear-gradient(transparent 99%, rgba(0,0,0,.35) 99%) 0 0 / 100% calc(100% / var(--rows, 3)),
                 linear-gradient(90deg, transparent 99.4%, rgba(0,0,0,.35) 99.4%) 0 0 / calc(100% / var(--cols, 3)) 100%; }
@@ -78,10 +81,33 @@
   .switch input:checked::after { transform: translateX(18px); }
   select, input[type=text] { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 
+  /* scenes: one tap sets the room */
+  .scenes { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: none; }
+  .scenes::-webkit-scrollbar { display: none; }
+  .scenes button { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 9px 14px; font-weight: 500; font-size: 14px; }
+  .scenes button.on { background: var(--ink); color: var(--room); border-color: var(--ink); }
+  .scenes button.add { color: var(--muted); border-style: dashed; }
+
+  /* the sleep timer */
+  .moon.on { background: rgb(var(--glow)); border-color: rgb(var(--glow)); color: var(--room); }
+  .sheet { display: grid; gap: 8px; padding: 18px; }
+  .sheet h3 { font: italic 400 24px/1.1 var(--serif); margin: 0 0 6px; }
+  .sheet .btn { text-align: left; }
+
+  /* the scrubber: a piece at any hour, before it hangs */
+  .preview { position: relative; width: 100%; aspect-ratio: var(--aspect, 1); border-radius: 14px; overflow: hidden; background: #000; }
+  .preview canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+  .preview img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .preview canvas.failed, .preview.gl img { display: none; }
+  .hour { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .hour output { font: italic 400 22px/1 var(--serif); min-width: 3.2em; }
+  .hour input { flex: 1; }
+  .hour button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 7px 12px; font-size: 13px; }
+  .hour button.on { background: var(--ink); color: var(--room); border-color: var(--ink); }
+
   /* today's piece: a wall label */
-  .today { display: grid; grid-template-columns: 112px 1fr; gap: 16px; align-items: start; }
-  .today img { width: 112px; aspect-ratio: var(--aspect, 1); object-fit: cover; border-radius: 10px; background: #000; }
-  .today h3 { font: italic 400 24px/1.1 var(--serif); margin: 0 0 6px; }
+  .today { display: grid; gap: 10px; }
+  .today h3 { font: italic 400 26px/1.1 var(--serif); margin: 8px 0 4px; }
   .today p { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
   .today .listen { font-size: 13px; }
   .strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 6px; scroll-snap-type: x mandatory; }
@@ -161,7 +187,7 @@
   </div>
 </div>
 <div class="stage wrap">
-  <div class="frame" id="frame"><img id="now" alt="What the wall shows now"><div class="grid"></div></div>
+  <div class="frame" id="frame"><img id="now" alt="What the wall shows now"><canvas id="nowLed" aria-hidden="true"></canvas><div class="grid"></div></div>
   <div class="label">
     <h1 id="title">Fortuna wall</h1>
     <p id="sub"></p>
@@ -171,6 +197,9 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>
     </button>
     <input type="range" id="bright" min="5" max="100" step="5" aria-label="Brightness">
+    <button class="round moon" id="moon" aria-label="Sleep timer" onclick="sleepSheet.showModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+    </button>
   </div>
 </div>
 
@@ -178,6 +207,11 @@
 
   <!-- ART -->
   <div class="view on" id="v-art">
+    <section>
+      <h2>Scenes</h2>
+      <div class="scenes" id="scenes"></div>
+      <p class="hint" id="sceneHint">One tap sets the piece, the light and the pace. Hold a scene you made to remove it.</p>
+    </section>
     <section>
       <h2>Today</h2>
       <div class="today" id="today"><div class="empty">Today's piece is being made.</div></div>
@@ -316,6 +350,16 @@
 
 <dialog id="viewer"><img id="vImg" alt=""><div class="body"><p class="quote" id="vText"></p><p class="hint" id="vTime"></p>
   <div class="row" style="margin-top:12px"><a class="btn" id="vSave" download>Save</a><button class="btn" onclick="deletePhoto()">Delete</button><button class="btn primary" onclick="viewer.close()" style="margin-left:auto">Close</button></div></div></dialog>
+<dialog id="sleepSheet"><div class="sheet">
+  <h3>Sleep</h3>
+  <p class="hint" id="sleepNow" style="margin:0 0 6px"></p>
+  <button class="btn" onclick="sleepIn(30)">Off in 30 minutes</button>
+  <button class="btn" onclick="sleepIn(60)">Off in an hour</button>
+  <button class="btn" onclick="sleepIn(120)">Off in two hours</button>
+  <div class="row"><input type="time" id="sleepAt" value="23:30" aria-label="Off at" style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 12px"><button class="btn" onclick="sleepAtTime()">Off at this time</button></div>
+  <button class="btn" onclick="sleepCancel()" id="sleepOff">Stay on</button>
+  <button class="btn primary" onclick="sleepSheet.close()">Close</button>
+</div></dialog>
 <div class="toast" id="toast" role="status"></div>
 
 <script>
@@ -396,9 +440,30 @@ const nowImg = $('now');
 function refreshNow() {
   if (document.hidden) return;
   const img = new Image();
-  img.onload = () => { nowImg.src = img.src; ambient(img); };
+  img.onload = () => { nowImg.src = img.src; ambient(img); leds(img); };
   img.crossOrigin = 'anonymous'; img.src = u('/api/now.jpg?t=' + Date.now());
 }
+function leds(img) {                    // the preview as the wall really looks: round diodes, glow, seams
+  const F = window.Fortuna; if (!F || !F.ledify) return;
+  const cv = $('nowLed'), w = STATUS.wall_w || 192, h = STATUS.wall_h || 192, r = devicePixelRatio || 1;
+  const cell = Math.max(1, Math.floor(cv.clientWidth * r / w));
+  if (cv.width !== w * cell) { cv.width = w * cell; cv.height = h * cell; }
+  const x = cv.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, cv.width, cv.height);
+  try { F.ledify(x, img, w, h, {x: 0, y: 0, w: cv.width, h: cv.height}, {bloom: .3}); $('frame').classList.add('led'); } catch (e) {}
+}
+/* swipe the wall left or right: the next or previous collection */
+(() => {
+  let x0 = null, y0 = null;
+  const f = $('frame');
+  f.addEventListener('pointerdown', e => { x0 = e.clientX; y0 = e.clientY; });
+  f.addEventListener('pointerup', e => {
+    if (x0 == null) return; const dx = e.clientX - x0, dy = e.clientY - y0; x0 = null;
+    if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx)) return;
+    const art = MODES.filter(m => m.cat === 'Art').map(m => m.id); if (!art.length) return;
+    const i = art.indexOf(STATUS.current), n = i < 0 ? 0 : (i + (dx < 0 ? 1 : art.length - 1)) % art.length;
+    play(art[n]);
+  });
+})();
 function ambient(img) {                 // the page takes the colour of what the wall shows
   try {
     const c = ambient.c || (ambient.c = document.createElement('canvas')); c.width = c.height = 8;
@@ -424,10 +489,16 @@ function subFor(id) {
   if (STATUS.saved === 'playlist') return 'On tour';
   const m = MODES.find(m => m.id === id); return m ? m.desc : '';
 }
+const minsLeft = t => Math.max(1, Math.round((t * 1000 - Date.now()) / 60000));
+const offIn = s => !s.off_at ? '' : minsLeft(s.off_at) >= 90 ? 'off at ' + new Date(s.off_at * 1000).toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'}) : 'off in ' + minsLeft(s.off_at) + ' min';
 function render() {
   const s = STATUS, cur = s.current;
   $('title').textContent = titleFor(cur);
-  $('sub').textContent = s.error ? s.error : subFor(cur);
+  $('sub').textContent = s.error ? s.error : subFor(cur) + (s.off_at && cur && cur !== 'off' ? ' · ' + offIn(s) : '');
+  $('moon').classList.toggle('on', !!s.off_at);
+  $('sleepNow').textContent = s.off_at ? 'The wall goes ' + offIn(s) + '.' : 'The wall stays on until you turn it off.';
+  $('sleepOff').hidden = !s.off_at;
+  document.querySelectorAll('#scenes button[data-scene]').forEach(b => b.classList.toggle('on', SCENE_ON === b.dataset.scene));
   $('frame').classList.toggle('off', cur === 'off' || !cur);
   $('power').classList.toggle('on', cur && cur !== 'off');
   $('power').setAttribute('aria-label', cur && cur !== 'off' ? 'Turn the wall off' : 'Turn the wall on');
@@ -467,16 +538,26 @@ async function loadDaily() {
   const eds = DAILY.editions || [];
   const pick = eds.find(e => e.date === (DAILY.chosen || DAILY.today)) || eds[0];
   DAILY.chosenMeta = pick;
-  if (pick) {
-    const img = `/daily/${pick.date}.${pick.final ? 'final.png' : 'png'}`;
-    $('today').innerHTML = `<img src="${u('/daily/' + pick.date + '.png')}" alt="${esc(pick.name)}">
-      <div><h3>${esc(pick.name)}</h3><p>${esc(pick.description || '')}</p>
-      ${pick.listening ? `<p class="listen">${esc(pick.listening)}</p>` : ''}
-      <button class="btn primary" onclick="showDaily('${DAILY.chosen ? pick.date : ''}')">Show it</button></div>`;
-  }
-  $('archive').innerHTML = eds.map(e => `<button class="${e.date === (pick && pick.date) ? 'sel' : ''}" onclick="showDaily('${e.date === DAILY.today ? '' : e.date}')">
+  if (pick && !SCRUB.date) describeDaily(pick);
+  $('archive').innerHTML = eds.map(e => `<button class="${e.date === (SCRUB.date || (pick && pick.date)) ? 'sel' : ''}" onclick="pickDaily('${e.date}')">
       <img src="${u('/daily/' + e.date + '.png')}" alt="" loading="lazy"><span>${e.date === DAILY.today ? 'Today' : new Date(e.date).toLocaleDateString(undefined, {day: 'numeric', month: 'short'})}</span></button>`).join('');
   render();
+}
+function describeDaily(ed) {
+  const hanging = DAILY.chosenMeta && DAILY.chosenMeta.date === ed.date && STATUS.current === 'daily';
+  $('today').innerHTML = `<div class="preview" id="preview"><img src="${u('/daily/' + ed.date + '.png')}" alt=""><canvas aria-hidden="true"></canvas></div>
+    <div class="hour"><output id="hourOut">now</output><input type="range" id="hour" min="0" max="23.99" step="0.05" value="${new Date().getHours()}" aria-label="Hour of the day">
+      <button data-hm="now" class="on" onclick="setHourMode('now')">Now</button><button data-hm="day" onclick="setHourMode('day')">Whole day</button></div>
+    <h3>${esc(ed.name)}</h3><p>${esc(ed.description || '')}</p>${ed.listening ? `<p class="listen">${esc(ed.listening)}</p>` : ''}
+    <div class="row"><button class="btn primary" onclick="showDaily('${ed.date === DAILY.today ? '' : ed.date}')">${hanging ? 'On the wall now' : 'Hang it'}</button>
+      <span class="hint" style="margin:0">${ed.date === DAILY.today ? "Today's piece" : 'From ' + new Date(ed.date).toLocaleDateString(undefined, {day: 'numeric', month: 'long'})}</span></div>`;
+  $('hour').addEventListener('input', () => setHourMode('pick'));
+  previewDaily(ed);
+}
+function pickDaily(date) {
+  const ed = (DAILY.editions || []).find(e => e.date === date); if (!ed) return;
+  SCRUB.piece = null; describeDaily(ed);
+  document.querySelectorAll('#archive button').forEach(b => b.classList.toggle('sel', b.textContent.trim() === (date === DAILY.today ? 'Today' : new Date(date).toLocaleDateString(undefined, {day: 'numeric', month: 'short'}))));
 }
 async function showDaily(date) { try { STATUS = await api('/api/daily/show', {date}); await loadDaily(); toast('Showing ' + titleFor('daily')); } catch (e) { toast(e.message); } }
 function tour(kind) {
@@ -486,6 +567,75 @@ function tour(kind) {
   api('/api/playlist', {ids, minutes: +$('tourMins').value}).then(s => { STATUS = s; render(); toast('Touring'); }).catch(e => toast(e.message));
 }
 const esc = t => String(t || '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
+/* ---------- scenes ---------- */
+let SCENES = {}, BUILTIN = [], SCENE_ON = null;
+async function loadScenes() {
+  let d; try { d = await api('/api/scenes'); } catch (e) { return; }
+  SCENES = d.scenes; BUILTIN = d.builtin;
+  const chip = n => `<button data-scene="${esc(n)}" class="${SCENE_ON === n ? 'on' : ''}">${esc(n)}</button>`;
+  $('scenes').innerHTML = Object.keys(SCENES).map(chip).join('') + '<button class="add" onclick="saveScene()">+ Save this</button>';
+  document.querySelectorAll('#scenes button[data-scene]').forEach(b => {
+    let hold;
+    b.addEventListener('pointerdown', () => { hold = setTimeout(() => { hold = null; forgetScene(b.dataset.scene); }, 650); });
+    b.addEventListener('pointerup', () => { if (hold) { clearTimeout(hold); applyScene(b.dataset.scene); } hold = null; });
+    b.addEventListener('pointerleave', () => { clearTimeout(hold); hold = null; });
+  });
+}
+async function applyScene(n) {
+  try { const r = await api('/api/scenes', {name: n}); STATUS = r.status; SCENE_ON = n; render(); loadMusic(); toast(n); if (navigator.vibrate) navigator.vibrate(8); }
+  catch (e) { toast(e.message); }
+}
+async function saveScene() {
+  const n = prompt('A name for how the wall is right now:'); if (!n) return;
+  const lights = confirm('Should this scene also switch the room lights on? (Cancel: leave the lights alone)');
+  try { await api('/api/scenes', {name: n.trim().slice(0, 24), save: true, lights: lights ? true : null}); SCENE_ON = n.trim().slice(0, 24); loadScenes(); toast('Saved ' + n); } catch (e) { toast(e.message); }
+}
+async function forgetScene(n) {
+  if (BUILTIN.includes(n)) return toast(n + ' is built in');
+  if (!confirm('Remove the scene ' + n + '?')) return;
+  await api('/api/scenes', {name: n, delete: true}); if (SCENE_ON === n) SCENE_ON = null; loadScenes();
+}
+document.addEventListener('click', e => { if (e.target.closest('.list button, .strip button, #power')) SCENE_ON = null; });
+
+/* ---------- sleep ---------- */
+async function sleepIn(m) { try { STATUS = await api('/api/sleep', {minutes: m}); render(); sleepSheet.close(); toast('Off in ' + (m >= 60 ? m / 60 + ' h' : m + ' min')); } catch (e) { toast(e.message); } }
+async function sleepAtTime() { try { STATUS = await api('/api/sleep', {at: $('sleepAt').value}); render(); sleepSheet.close(); toast('Off at ' + $('sleepAt').value); } catch (e) { toast(e.message); } }
+async function sleepCancel() { STATUS = await api('/api/sleep', {}); render(); sleepSheet.close(); toast('Staying on'); }
+
+/* ---------- the scrubber: see a piece at any hour before it hangs ---------- */
+let SCRUB = {piece: null, date: null, mode: 'now'};
+async function shaderLib() {
+  if (window.Fortuna) return window.Fortuna;
+  await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'gallery.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); }).catch(() => {});
+  return window.Fortuna;
+}
+async function previewDaily(ed) {
+  SCRUB.date = ed.date;
+  const F = await shaderLib(), box = $('preview'), cv = box.querySelector('canvas');
+  if (!F || !F.gl) return;
+  const [w, h] = [STATUS.wall_w || 192, STATUS.wall_h || 192];
+  if (!SCRUB.piece) {
+    cv.width = w; cv.height = h;
+    SCRUB.piece = F.add(cv, {always: true, w, h, pal: ed.palette || ['#000', '#444', '#fff'], day: ed.hours || [], onfail: () => box.classList.remove('gl')});
+  }
+  const p = SCRUB.piece; p.pal = ed.palette || p.pal; p.day = ed.hours || []; p.failed = false; cv.classList.remove('failed');
+  try { F.setSource(p, await (await fetch(u('/daily/' + ed.date + '.frag'))).text()); box.classList.add('gl'); } catch (e) { box.classList.remove('gl'); }
+  setHourMode(SCRUB.mode);
+}
+const hh = h => { const m = Math.round(h * 60) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+function setHourMode(mode) {
+  SCRUB.mode = mode; const p = SCRUB.piece; if (!p) return;
+  document.querySelectorAll('.hour button').forEach(b => b.classList.toggle('on', b.dataset.hm === mode));
+  if (mode === 'now') { delete p.over.clock; p.speed = 1; $('hourOut').textContent = 'now'; }
+  if (mode === 'pick') { p.over.clock = +$('hour').value; p.speed = 1; $('hourOut').textContent = hh(p.over.clock); }
+  if (mode === 'day') { p.over.clock = p.over.clock ?? new Date().getHours(); p.speed = 20; }
+}
+(function tickHour(last) {
+  const now = performance.now(), p = SCRUB.piece;
+  if (p && SCRUB.mode === 'day') { p.over.clock = (p.over.clock + (now - last) / 1000 * 24 / 60) % 24; $('hour').value = p.over.clock; $('hourOut').textContent = hh(p.over.clock); }
+  requestAnimationFrame(() => tickHour(now));
+})(performance.now());
 
 /* ---------- music ---------- */
 const partyName = v => v <= 10 ? 'Breathing' : v <= 35 ? 'A quiet evening' : v <= 60 ? 'Lively' : v <= 85 ? 'A party' : 'Dance floor';
@@ -613,9 +763,9 @@ async function start() {
   try { await refresh(); await loadModes(); } catch (e) { return; }
   started = true;
   $('qrImg').src = $('qrLink').href = u('/d/qr.png');
-  loadDaily(); loadMusic(); refreshNow();
+  shaderLib(); loadScenes(); loadDaily(); loadMusic(); refreshNow();
   try { const t = localStorage.getItem('tab'); if (t) document.querySelector(`nav [data-tab="${t}"]`).click(); } catch (e) {}
-  setInterval(refresh, 3000); setInterval(loadMusic, 5000); setInterval(loadDaily, 60000); setInterval(refreshNow, 1500);
+  setInterval(refresh, 3000); setInterval(loadMusic, 5000); setInterval(loadDaily, 60000); setInterval(refreshNow, 1500); setInterval(loadScenes, 30000);
   const rows = Math.round((STATUS.wall_h || 192) / 64), cols = Math.round((STATUS.wall_w || 192) / 64);
   document.documentElement.style.setProperty('--aspect', `${cols} / ${rows}`);
   document.documentElement.style.setProperty('--rows', rows); document.documentElement.style.setProperty('--cols', cols);

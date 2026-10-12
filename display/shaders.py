@@ -157,6 +157,15 @@ CURATED = {   # (shadow, mid, highlight) per piece - the gallery's look; the VJ 
     "tide": ("#05081a", "#1a598c", "#ccf2ff"), "aperture": ("#02020c", "#2a30d0", "#c070ff"),
     "conic": ("#1a0614", "#2048e0", "#f4ead0"), "prism": ("#ff7a2a", "#e04070", "#7a5cff"),
     "halftone": ("#08041a", "#5a2cff", "#7cff5a"),
+    # the second collection: light fields, one form in space, cut paper, fine lines, water and weather
+    "moonpath": ("#05081a", "#5a6aa8", "#fff1c8"), "lantern": ("#140808", "#b8441c", "#ffd9a0"),
+    "ribbon": ("#0a0714", "#5a2c8c", "#f0d6ff"), "rothko": ("#2a0a08", "#9a2a1a", "#f08a48"),
+    "arches": ("#120c08", "#c8603a", "#ecd8b8"), "ridges": ("#141a2a", "#4a5a84", "#d8e0f0"),
+    "orbit": ("#06060c", "#3850b8", "#c8d8ff"), "threads": ("#0a1210", "#2e7a62", "#cfffe8"),
+    "ember": ("#120606", "#b03a18", "#ffd48a"), "rain": ("#06080f", "#2c4a7a", "#b8d0ff"),
+    "poolglass": ("#04101a", "#1a6a8a", "#c8f4ff"), "strata": ("#1a0a10", "#b03a4a", "#ffc8a0"),
+    "dandelion": ("#0a0a12", "#6a5a9a", "#fff4d8"), "bokeh": ("#0a0608", "#a8486a", "#ffd0a8"),
+    "seahorizon": ("#1a1030", "#c05848", "#ffd890"),
 }
 
 
@@ -167,8 +176,10 @@ def _rgb(h):
 
 def gallery_pieces(Wd, Hd):
     """One piece per shader, each in its curated palette (newest, strongest first)."""
-    order = ["conic", "aperture", "eclipse", "prism", "halftone", "aura", "inkorbs", "cutpaper", "glassblob", "halo", "canvas", "dotsphere",
-             "neonlines", "topo", "silk", "veil", "tide", "lanterns", "dunes"]
+    order = ["conic", "moonpath", "aperture", "rothko", "eclipse", "orbit", "prism", "ridges", "halftone", "lantern", "aura",
+             "arches", "inkorbs", "ember", "cutpaper", "seahorizon", "glassblob", "poolglass", "halo", "ribbon", "canvas",
+             "dandelion", "dotsphere", "strata", "neonlines", "rain", "topo", "threads", "silk", "bokeh", "veil", "tide",
+             "lanterns", "dunes"]
     have = names()
     picked = [n for n in order if n in have] + [n for n in have if n not in order]
     return [ShaderPiece(Wd, Hd, n, tuple(_rgb(c) for c in CURATED.get(n, ("#08060f", "#4a3080", "#efe6ff"))))

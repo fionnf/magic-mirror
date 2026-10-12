@@ -37,11 +37,21 @@ jobs:
           git add assets/daily gallery
           if git diff --cached --quiet; then echo "nothing new"; exit 0; fi
           what=$(git diff --cached --name-only gallery | sed 's#gallery/##' | tr '\n' ' ')
+          new=$(git diff --cached --name-only --diff-filter=A gallery | grep '\.frag$' | sed 's#gallery/##; s#\.frag##' | head -1)
           git commit -q -m "Gallery: $what"
           git pull --rebase -q origin master
           git push -q origin HEAD:master
           echo "pushed=1" >> "$GITHUB_OUTPUT"
+          echo "new=$new" >> "$GITHUB_OUTPUT"
       - name: Rebuild the gallery site
         if: steps.publish.outputs.pushed == '1'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: gh workflow run gallery.yml --ref master
+      - name: Pin it to Pinterest
+        if: steps.publish.outputs.new != '' && env.PINTEREST_REFRESH_TOKEN != ''
+        env:
+          PINTEREST_APP_ID: ${{ secrets.PINTEREST_APP_ID }}
+          PINTEREST_APP_SECRET: ${{ secrets.PINTEREST_APP_SECRET }}
+          PINTEREST_REFRESH_TOKEN: ${{ secrets.PINTEREST_REFRESH_TOKEN }}
+          PINTEREST_BOARD_ID: ${{ secrets.PINTEREST_BOARD_ID }}
+        run: python3 tools/pinterest.py pin ${{ steps.publish.outputs.new }}

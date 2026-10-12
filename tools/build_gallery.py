@@ -207,8 +207,10 @@ def rss(eds):
         items.append(f"<item><title>{e(m['name'])}</title><link>{url}</link><guid isPermaLink=\"true\">{url}</guid>"
                      f"<pubDate>{email.utils.format_datetime(when)}</pubDate>"
                      f"<description>{e(body)}</description>"
-                     f"<enclosure url=\"{img}\" type=\"image/png\" length=\"0\"/></item>")
-    return ('<?xml version="1.0" encoding="utf-8"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">'
+                     f"<enclosure url=\"{img}\" type=\"image/png\" length=\"0\"/>"
+                     f"<media:content url=\"{img}\" type=\"image/png\" medium=\"image\"/></item>")
+    return ('<?xml version="1.0" encoding="utf-8"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" '
+            'xmlns:media="http://search.yahoo.com/mrss/">'
             f"<channel><title>{TITLE}</title><link>{SITE_URL}</link><description>{e(TAGLINE)}</description>"
             f'<atom:link href="{SITE_URL}feed.xml" rel="self" type="application/rss+xml"/><language>en</language>'
             + "".join(items) + "</channel></rss>")

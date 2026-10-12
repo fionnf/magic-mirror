@@ -210,6 +210,12 @@ post written from the still. It needs one repository secret, `ANTHROPIC_API_KEY`
 variables → Actions); `WALL_MOODBOARD` may be set as a repository variable. Run it by hand from the Actions
 tab ("Run workflow", optionally with a date), or locally: `xvfb-run -a python3 tools/make_today.py`.
 
+**Pinterest:** the workflow pins each new piece (still, title, statement, link to its page) to a board.
+Make an app at https://developers.pinterest.com/ (any name; redirect URI `https://localhost/fortuna`),
+then once on a laptop `PINTEREST_APP_ID=... PINTEREST_APP_SECRET=... python3 tools/pinterest.py login`,
+which lists your boards and prints the secrets to add (`PINTEREST_APP_ID`, `PINTEREST_APP_SECRET`,
+`PINTEREST_REFRESH_TOKEN`, `PINTEREST_BOARD_ID`). Without them the step is skipped.
+
 By hand: `python3 -m display.publish 2026-10-09`. Preview the site locally:
 `python3 tools/build_gallery.py --from assets/daily --out /tmp/site`.
 

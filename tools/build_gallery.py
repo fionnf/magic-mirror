@@ -74,6 +74,18 @@ def piece(m, prefix):
             f'data-cols="{w // 64}" data-rows="{h // 64}" aria-hidden="true"></canvas></div>')
 
 
+def day_strip(m, prefix):
+    """The same piece at 9 am, 3 pm and 11 pm, live (gallery.js holds each frame's clock still)."""
+    w, h = m.get("size") or [192, 192]
+    pal = m.get("palette") or ["#000000", "#444444", "#ffffff"]
+    cells = "".join(
+        f'<figure><canvas width="{w}" height="{h}" style="aspect-ratio:{w}/{h}" data-frag="{prefix}gallery/{m["date"]}.frag" data-clock="{hr}" '
+        f'data-palette=\'{json.dumps(pal)}\' data-day=\'{json.dumps(m.get("hours") or [0.5 if 10 <= k < hr else 0 for k in range(24)])}\' '
+        f'data-cols="{w // 64}" data-rows="{h // 64}" aria-hidden="true"></canvas><figcaption>{lab}</figcaption></figure>'
+        for hr, lab in ((9, "9 am"), (15, "3 pm"), (23, "11 pm")))
+    return f'<div class="dayStrip" aria-label="The piece through its day">{cells}</div>'
+
+
 def page(title, body, prefix, desc=TAGLINE, image=None, canonical="", scripts=()):
     og = f'<meta property="og:image" content="{SITE_URL}gallery/{image}">' if image else ""
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -98,7 +110,7 @@ def header(prefix):
 
 def post_html(m, prefix, full=False):
     link = f'{prefix}e/{m["date"]}/'
-    out = [f'<article class="post">', piece(m, prefix),
+    out = [f'<article class="post">', piece(m, prefix), day_strip(m, prefix),
            f'<p class="when">{nice(m["date"])}{"" if m.get("final") else " · on the wall now"}</p>',
            "<h2>" + (e(m["name"]) if full else f'<a href="{link}">{e(m["name"])}</a>') + "</h2>",
            f'<p class="caption">{e(caption(m))}</p>']

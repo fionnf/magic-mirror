@@ -81,6 +81,13 @@ Technical contract (anything else will not compile):
   several very slow drifts at unrelated periods (minutes to hours) and with iClock (hours since
   midnight, 0..24). Someone glancing at 9 am, 3 pm and 11 pm should see the same piece in clearly
   different states - light, density or composition moving with the day - never a fast change
+- THE DAY IS THE PIECE'S STORY. Give it an arc with iClock, like weather or a tide, not a dimmer:
+  decide what the piece is at dawn, at noon, in the evening and late at night, and let something
+  real change between them - a form grows, travels across the wall, multiplies, thins out, settles,
+  dissolves; a horizon rises; a colour family turns from the shadow tone towards the highlight; a
+  composition accumulates (with iDay) until by night it is full. The 9 am and 11 pm stills must be
+  recognisably the same work and clearly different pictures. A piece that only drifts a little or
+  only changes brightness over the day will be sent back
 - it must run fast on a Raspberry Pi 4 GPU at about 50,000 pixels: keep total loop iterations per pixel
   under ~200
 
@@ -159,8 +166,17 @@ def check(src, palette):
                           {"bass": 0.0, "energy": 0.0, "level": 0.2}, cols) for k in range(58)]
         fast.append(max(float(np.abs(burst[k + 1] - burst[k]).mean()) for k in range(57)))
         pulse.append(float(np.std([b.mean() for b in burst])))
+    # the day's arc: the same moment at 8, 14, 20 and 23 h must give clearly different pictures
+    hours = [r.render(key, 400.0, {"clock": float(h), "level": 0.2,
+                                   "day": [0.5 if 9 <= k < h else 0.0 for k in range(24)]}, cols) for h in (8, 14, 20, 23)]
+    arc = min(float(np.abs(hours[i + 1] - hours[i]).mean()) for i in range(3))
+    span = float(np.abs(hours[3] - hours[0]).mean())
     del r.progs[key]
     m = float(np.mean(means))
+    if span < 9.0 or arc < 2.5:
+        return False, (f"it barely evolves over the day (8 am vs 11 pm differ by {span:.1f}/255, smallest step "
+                       f"between 8, 14, 20 and 23 h {arc:.1f}/255); use iClock to change the composition, "
+                       "the form's size or place, its density or its colour family through the day - not just brightness"), None
     if max(fast) > 2.5:
         return False, (f"it moves or changes too fast (frame-to-frame change {max(fast):.1f}/255 at 29 fps); "
                        "slow iTime down a lot and remove any pulsing"), None
@@ -180,7 +196,8 @@ def check(src, palette):
 
 CURATOR = """You are the curator of the House Fortuna wall: a pixel LED art wall (64 x 64 panels, seams visible)
 in the living room of a modern apartment in Zurich. Every day an artist proposes one generative piece. You see
-three stills of it (start, a minute later, and while music plays) and, when there is one, the house's mood board.
+four stills of it through its day (9 am, 3 pm, 8 pm with music, 11 pm) and, when there is one, the house's mood
+board. The piece hangs all day, so it should have a day's arc: the same work, clearly different pictures.
 
 The house's taste: slow, restrained, elegant light on black or deep colour; one form or one field rather than
 many; many hues of one colour family rather than rainbow; soft gradients, glows, halftone dots, thin lines,
@@ -223,7 +240,7 @@ def _moodboard_blocks():
 
 
 def _stills(src, pal):
-    """Three stills for the curator: the opening, a minute later, and mid-song."""
+    """Four stills for the curator: the piece at 9 am, 3 pm, 8 pm (with music) and 11 pm."""
     from display import shaders
     from PIL import Image
     r = shaders.renderer()
@@ -232,12 +249,14 @@ def _stills(src, pal):
         fh.write(src)
     r.progs.pop("path:" + path, None)
     cols = [_hex(c) for c in pal]
+    day = lambda h: [0.5 if 10 <= k < h else 0.0 for k in range(24)]
     out = [r.render("path:" + path, t, f, cols) for t, f in
-           ((5.0, {}), (65.0, {}), (125.0, {"bass": 0.6, "energy": 0.5, "breath": 0.7, "level": 0.3,
-                                             "beat_phase": 0.3, "tension": 0.4}))]
+           ((300.0, {"clock": 9.0, "day": day(9)}), (900.0, {"clock": 15.0, "day": day(15)}),
+            (1500.0, {"clock": 20.0, "day": day(20), "bass": 0.6, "energy": 0.5, "breath": 0.7, "level": 0.3,
+                      "beat_phase": 0.3, "tension": 0.4}), (2100.0, {"clock": 23.0, "day": day(23)}))]
     r.progs.pop("path:" + path, None)
     os.remove(path)
-    strip = Image.new("RGB", (W * 3 + 16, H), (40, 40, 40))
+    strip = Image.new("RGB", (W * 4 + 24, H), (40, 40, 40))
     for i, im in enumerate(out):
         strip.paste(Image.fromarray(im.astype(np.uint8)), (i * (W + 8), 0))
     return strip
@@ -248,8 +267,8 @@ def curate(title, statement, src, pal):
     import ai_client
     content = _moodboard_blocks() + [
         {"type": "text", "text": f"Today's proposal: \"{title}\" - {statement}\nPalette {', '.join(pal)}. "
-                                 "Stills (left to right: opening, a minute later, while music plays):"},
-        _jpeg_block(_stills(src, pal), 768)]
+                                 "Stills (left to right: 9 am, 3 pm, 8 pm while music plays, 11 pm):"},
+        _jpeg_block(_stills(src, pal), 1024)]
     j, _, _ = ai_client.ask(CURATOR, content, max_tokens=1500, effort="low", schema=CURATOR_SCHEMA, timeout=120)
     return int(j.get("score", 0)), j.get("verdict", "").strip(), j.get("note", "").strip()
 

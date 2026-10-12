@@ -29,6 +29,12 @@ header.site p { color: var(--muted); margin: 14px 0 0; max-width: 40ch; }
   background: radial-gradient(circle at center, transparent 52%, rgba(0,0,0,.55) 72%) 0 0 / var(--pitch) var(--pitch);
 }
 html.still .piece canvas, html.no-gl .piece canvas { display: none; }
+.dayStrip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 0; }
+.dayStrip figure { margin: 0; }
+.dayStrip canvas { width: 100%; display: block; border-radius: 6px; background: #000; image-rendering: pixelated; }
+.dayStrip canvas.failed { visibility: hidden; }
+.dayStrip figcaption { color: var(--muted); font-size: 12px; margin-top: 4px; text-align: center; }
+html.still .dayStrip, html.no-gl .dayStrip { display: none; }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn { font: 500 14px/1 var(--sans); color: var(--ink); background: none; border: 1px solid var(--line);
        border-radius: 999px; padding: 10px 14px; cursor: pointer; text-decoration: none; }

@@ -189,9 +189,15 @@ in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
   };
 
   // the feed's pieces
-  for (const el of document.querySelectorAll('canvas[data-frag]'))
-    el.piece = F.add(el, {frag: el.dataset.frag, pal: JSON.parse(el.dataset.palette), day: JSON.parse(el.dataset.day || '[]'),
-                          w: +el.width, h: +el.height, cols: +el.dataset.cols || 0, rows: +el.dataset.rows || 0});
+  const sources = {};                      // one fetch per shader, shared by the piece and its day strip
+  for (const el of document.querySelectorAll('canvas[data-frag]')) {
+    const o = {pal: JSON.parse(el.dataset.palette), day: JSON.parse(el.dataset.day || '[]'), src: null,
+               w: +el.width, h: +el.height, cols: +el.dataset.cols || 0, rows: +el.dataset.rows || 0};
+    if (el.dataset.clock != null) { o.over = {clock: +el.dataset.clock}; o.speed = 0.15; }   // a held hour, barely moving
+    el.piece = F.add(el, o);
+    (sources[el.dataset.frag] = sources[el.dataset.frag] || fetch(el.dataset.frag).then(r => r.text()))
+      .then(src => { el.piece.src = src; }).catch(() => {});
+  }
 
   let last = performance.now();
   function frame(now) {

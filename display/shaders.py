@@ -166,6 +166,14 @@ CURATED = {   # (shadow, mid, highlight) per piece - the gallery's look; the VJ 
     "poolglass": ("#04101a", "#1a6a8a", "#c8f4ff"), "strata": ("#1a0a10", "#b03a4a", "#ffc8a0"),
     "dandelion": ("#0a0a12", "#6a5a9a", "#fff4d8"), "bokeh": ("#0a0608", "#a8486a", "#ffd0a8"),
     "seahorizon": ("#1a1030", "#c05848", "#ffd890"),
+    # remade from the mood board: light through frosted glass, an ink orb on paper, a disc with a burning
+    # rim, light escaping round dark shapes, cut-paper curves, topographic lines, a neon tube, a sphere of
+    # points, one lit orb, light through blinds
+    "frosted": ("#0a0812", "#4a3a8a", "#f4e6ff"), "inkdrop": ("#0c1a3a", "#2c4a80", "#efe6d2"),
+    "burningrim": ("#060404", "#b03a10", "#ffc070"), "escape": ("#0c0a10", "#5a4a9a", "#fff0d8"),
+    "cutcurves": ("#1a1410", "#d85a3a", "#efe2c6"), "contours": ("#0e1410", "#3a6a52", "#d8f0dc"),
+    "neonarc": ("#120610", "#c0287a", "#ff9ad0"), "pointcloud": ("#04060c", "#3a5ad0", "#d8e8ff"),
+    "orb": ("#0a0a0e", "#8a4a3a", "#ffd8b0"), "blinds": ("#140e0a", "#a8602a", "#ffd8a0"),
 }
 
 
@@ -176,10 +184,11 @@ def _rgb(h):
 
 def gallery_pieces(Wd, Hd):
     """One piece per shader, each in its curated palette (newest, strongest first)."""
-    order = ["conic", "moonpath", "aperture", "rothko", "eclipse", "orbit", "prism", "ridges", "halftone", "lantern", "aura",
-             "arches", "inkorbs", "ember", "cutpaper", "seahorizon", "glassblob", "poolglass", "halo", "ribbon", "canvas",
-             "dandelion", "dotsphere", "strata", "neonlines", "rain", "topo", "threads", "silk", "bokeh", "veil", "tide",
-             "lanterns", "dunes"]
+    order = ["frosted", "conic", "burningrim", "moonpath", "cutcurves", "aperture", "orb", "rothko", "escape", "eclipse",
+             "inkdrop", "orbit", "neonarc", "prism", "contours", "ridges", "pointcloud", "halftone", "blinds", "lantern",
+             "aura", "arches", "inkorbs", "ember", "cutpaper", "seahorizon", "glassblob", "poolglass", "halo", "ribbon",
+             "canvas", "dandelion", "dotsphere", "strata", "neonlines", "rain", "topo", "threads", "silk", "bokeh", "veil",
+             "tide", "lanterns", "dunes"]
     have = names()
     picked = [n for n in order if n in have] + [n for n in have if n not in order]
     return [ShaderPiece(Wd, Hd, n, tuple(_rgb(c) for c in CURATED.get(n, ("#08060f", "#4a3080", "#efe6ff"))))

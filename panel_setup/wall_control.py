@@ -36,7 +36,7 @@ MODES = [
     ("lava", "Art", "Lava & Coral", "Coral, bloom, cells and slow bioluminescence"),
     ("shapes", "Art", "Shapes", "Flow dots, woven grids, ripples: thin glowing lines"),
     ("daily", "Art", "Art of the day", "A new piece every day, made for this wall"),
-    ("shaders", "Art", "Shaders", "Moon path, lantern, arches, ridges, orbit, pool light, rain, bokeh and 26 more"),
+    ("shaders", "Art", "Shaders", "Frosted light, burning rim, ink drop, cut curves, neon arc, moon path and 38 more"),
     ("artsy", "Art", "Artsy", "Marbling, op-art stripes, oil slick, a drifting Mondrian"),
     ("glass", "Art", "Light Art", "Stained glass, long-exposure trails, nebula"),
     ("art", "Art", "Art Gallery", "Ink flow, colour fields, moiré"),

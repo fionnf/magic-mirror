@@ -1,0 +1,54 @@
+{
+ "name": "A Rod Keeping Hours",
+ "description": "A single thin rod of warm neon hangs in an autumn dusk, casting a soft fan of light onto the wall below, and along its upper edge it quietly notches every hour of music the house has heard today.",
+ "image": "2026-10-12.png",
+ "animation_source": "2026-10-12.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-12"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#140a10 #8a3a2a #f2b27a"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 192 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "The bass breathes the rod a little longer, rising tension narrows and gathers its fan, treble thins the haze into a fine grain, the key leans the glow between rust and apricot, each song re-angles the fan's skew, the beat only sways it by a hair, and iDay grows one tick per hour so by midnight the rod is a ruler of the day's music.",
+ "palette": [
+  "#140a10",
+  "#8a3a2a",
+  "#f2b27a"
+ ],
+ "source_sha256": "a0981784ce39287b01c437eda2f031c12c7930f99d6965ccf386287bc04802fd",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  192
+ ],
+ "tokens": {
+  "in": 2046,
+  "out": 3384
+ },
+ "attempts": 1,
+ "created": 1791790404.8245976,
+ "curator": {
+  "score": 7,
+  "verdict": "A single warm neon line casting a soft fan of rust light onto near-black is exactly the restrained, one-form, one-family piece this wall is for, and the slow tilt reads calmly across the stills. I would hang it, though the promised hour notches are invisible and the fan's gradient is so faint it may band or vanish on a 64x64 LED grid."
+ }
+}

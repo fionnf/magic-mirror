@@ -355,6 +355,8 @@ def fetch(date):
         files = {}
         for ext in ("frag", "png") + (("final.png",) if meta.get("final") else ()):
             fr = requests.get(f"{GALLERY_RAW}{date}.{ext}", timeout=30)
+            if ext == "final.png" and fr.status_code == 404:      # a day closed without its picture
+                continue
             fr.raise_for_status()
             files[ext] = fr.content
     except Exception as e:
@@ -454,8 +456,8 @@ def finalise(date):
     mem = load_memory(date)
     r = shaders.renderer()
     if r.ok:
-        img = r.render("path:" + _path(date, "frag"), 3600.0,
-                       {"day": mem["hours"], "level": 0.1}, [_hex(c) for c in meta["palette"]])
+        img = r.render("path:" + _path(date, "frag"), 3600.0,             # the piece as it ends the day
+                       {"day": mem["hours"], "level": 0.1, "clock": 23.95}, [_hex(c) for c in meta["palette"]])
         Image.fromarray(img.astype(np.uint8)).resize((W * 3, H * 3), Image.NEAREST).save(_path(date, "final.png"))
         meta["image"] = f"{date}.final.png"
     heard = sum(1 for v in mem["hours"] if v > 0.05)

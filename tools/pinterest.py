@@ -41,6 +41,14 @@ def token_from(grant):
 
 def access_token():
     t = token_from({"grant_type": "refresh_token", "refresh_token": os.environ["PINTEREST_REFRESH_TOKEN"]})
+    # The stored refresh token cannot be rotated from inside the workflow, so say so well before it runs out.
+    left = int(t.get("refresh_token_expires_in") or 0) // 86400
+    if t.get("refresh_token") and t["refresh_token"] != os.environ["PINTEREST_REFRESH_TOKEN"]:
+        print("::notice::Pinterest issued a new refresh token; run `python3 tools/pinterest.py login` "
+              "and update the PINTEREST_REFRESH_TOKEN secret when convenient.")
+    if 0 < left <= 14:
+        print(f"::warning::The Pinterest login runs out in {left} days: run `python3 tools/pinterest.py login` "
+              "and update the PINTEREST_REFRESH_TOKEN secret.")
     return t["access_token"]
 
 
@@ -67,6 +75,11 @@ def login():
 
 
 def pin(date):
+    need = ("PINTEREST_APP_ID", "PINTEREST_APP_SECRET", "PINTEREST_REFRESH_TOKEN", "PINTEREST_BOARD_ID")
+    missing = [k for k in need if not os.environ.get(k)]
+    if missing:
+        print(f"Pinterest is not set up ({', '.join(missing)} missing) - not pinning {date}")
+        return
     with open(os.path.join(ROOT, "gallery", f"{date}.json")) as fh:
         m = json.load(fh)
     still = f"{date}.final.png" if m.get("final") else f"{date}.png"

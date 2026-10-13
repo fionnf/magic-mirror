@@ -115,7 +115,11 @@ in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
     if (o.always) piece.visible = true; else io.observe(el);
     return piece;
   };
-  F.setSource = (p, src) => { p.src = src; p.prog = null; p.failed = false; p.el.classList.remove('failed'); };
+  F.setSource = (p, src) => { p.src = src; p.prog = null; p.failed = false; p.drawn = false; p.el.classList.remove('failed'); };
+  F.remove = p => {                         // stop rendering a piece for good (the app swaps pieces often)
+    if (!p) return; const k = F.pieces.indexOf(p); if (k >= 0) F.pieces.splice(k, 1);
+    try { io.unobserve(p.el); } catch (e) {} p.taps.clear();
+  };
   const io = new IntersectionObserver(es => es.forEach(e => {
     const p = F.pieces.find(p => p.el === e.target); if (p) p.visible = e.isIntersecting; }), {rootMargin: '200px'});
 
@@ -165,8 +169,12 @@ in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
   F.postcard = async function (p, meta) {
     await document.fonts?.ready;
     const c = document.createElement('canvas'); c.width = 1080; c.height = 1350;
-    await new Promise(res => { p.taps.add(function once() { p.taps.delete(once); F.card(c.getContext('2d'), p, 1080, 1350, meta); res(); });
-                               if (F.still) render(p, 0); });
+    await new Promise((res, rej) => {
+      if (p.failed || !p.src) return rej(new Error('This piece cannot draw here.'));
+      const once = () => { clearTimeout(t); p.taps.delete(once); F.card(c.getContext('2d'), p, 1080, 1350, meta); res(); };
+      const t = setTimeout(() => { p.taps.delete(once); rej(new Error('This piece did not draw in time.')); }, 6000);
+      p.taps.add(once);
+    });
     const blob = await new Promise(res => c.toBlob(res, 'image/png'));
     await share(blob, `fortuna-${meta.slug}.png`);
   };
@@ -203,13 +211,15 @@ in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    for (const p of F.pieces) {
+    for (const p of F.pieces.slice()) {
       if (!(p.visible || p.taps.size) || !p.src || p.failed) continue;
-      try { render(p, dt); } catch (err) { p.failed = true; p.el.classList.add('failed'); console.warn(err); if (p.onfail) p.onfail(err); }
+      if (F.still && p.drawn && !p.taps.size && !p.dirty) continue;   // reduced motion: one still frame each
+      try { render(p, F.still ? 0 : dt); p.drawn = true; p.dirty = false; }
+      catch (err) { p.failed = true; p.el.classList.add('failed'); console.warn(err); if (p.onfail) p.onfail(err); }
     }
     requestAnimationFrame(frame);
   }
   F.still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!F.still) requestAnimationFrame(frame);
-  else document.documentElement.classList.add('still');
+  requestAnimationFrame(frame);
+  if (F.still) document.documentElement.classList.add('still');
 })();

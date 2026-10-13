@@ -37,6 +37,7 @@ def load(folder):
             with open(os.path.join(folder, fn)) as fh:
                 m = json.load(fh)
             m["date"] = fn[:-5]
+            m["_has_final"] = os.path.exists(os.path.join(folder, m["date"] + ".final.png"))
             if os.path.exists(os.path.join(folder, m["date"] + ".frag")):
                 eds.append(m)
     return eds
@@ -47,7 +48,8 @@ def nice(d):
 
 
 def still(m):
-    return m["date"] + (".final.png" if m.get("final") else ".png")
+    """The closing picture when the day was closed with one, else the morning still."""
+    return m["date"] + (".final.png" if m.get("final") and m.get("_has_final", True) else ".png")
 
 
 def tidy(t):
@@ -70,7 +72,7 @@ def piece(m, prefix):
     return (f'<div class="piece" style="aspect-ratio:{w}/{h};--pitch:calc(100% / {w});--glow:{e(pal[1])}">'
             f'<img src="{prefix}gallery/{still(m)}" alt="{e(alt)}" loading="lazy">'
             f'<canvas width="{w}" height="{h}" data-frag="{prefix}gallery/{m["date"]}.frag" '
-            f'data-palette=\'{json.dumps(pal)}\' data-day=\'{json.dumps(m.get("hours", []))}\' '
+            f'data-palette="{e(json.dumps(pal))}" data-day="{e(json.dumps(m.get("hours", [])))}" '
             f'data-cols="{w // 64}" data-rows="{h // 64}" aria-hidden="true"></canvas></div>')
 
 
@@ -80,7 +82,7 @@ def day_strip(m, prefix):
     pal = m.get("palette") or ["#000000", "#444444", "#ffffff"]
     cells = "".join(
         f'<figure><canvas width="{w}" height="{h}" style="aspect-ratio:{w}/{h}" data-frag="{prefix}gallery/{m["date"]}.frag" data-clock="{hr}" '
-        f'data-palette=\'{json.dumps(pal)}\' data-day=\'{json.dumps(m.get("hours") or [0.5 if 10 <= k < hr else 0 for k in range(24)])}\' '
+        f'data-palette="{e(json.dumps(pal))}" data-day="{e(json.dumps(m.get("hours") or [0.5 if 10 <= k < hr else 0 for k in range(24)]))}" '
         f'data-cols="{w // 64}" data-rows="{h // 64}" aria-hidden="true"></canvas><figcaption>{lab}</figcaption></figure>'
         for hr, lab in ((9, "9 am"), (15, "3 pm"), (23, "11 pm")))
     return f'<div class="dayStrip" aria-label="The piece through its day">{cells}</div>'
@@ -176,35 +178,37 @@ def studio(m):
 
 
 def year(eds, prefix):
-    """The year in colour: one cell per day, each day painted with its piece's palette."""
+    """The year in colour: one calendar per year, newest first, each day painted with its piece's palette."""
     if not eds:
         return ""
     by = {m["date"]: m for m in eds}
-    y = int(eds[0]["date"][:4])
-    rows = []
-    for mo in range(1, 13):
-        cells = []
-        for d in range(1, 32):
-            try:
-                day = datetime.date(y, mo, d)
-            except ValueError:
-                cells.append('<i class="none"></i>')
-                continue
-            m = by.get(day.isoformat())
-            if m:
-                pal = m.get("palette") or ["#000", "#444", "#fff"]
-                cells.append(f'<a href="{prefix}e/{m["date"]}/" title="{e(m["name"])}, {day.strftime("%-d %B")}" '
-                             f'style="background:linear-gradient(135deg,{pal[0]},{pal[1]} 55%,{pal[2]})"></a>')
-            else:
-                cells.append(f'<i title="{day.strftime("%-d %B")}"></i>')
-        rows.append(f'<span>{datetime.date(y, mo, 1).strftime("%b")}</span>' + "".join(cells))
-    return (f'<section class="year" aria-label="{y}, one colour a day"><p class="listens">{y}, one piece a day. '
-            f'The calendar fills in as the wall makes them.</p><div class="cal">' + "".join(rows) + "</div></section>")
+    out = []
+    for y in sorted({int(m["date"][:4]) for m in eds}, reverse=True):
+        rows = []
+        for mo in range(1, 13):
+            cells = []
+            for d in range(1, 32):
+                try:
+                    day = datetime.date(y, mo, d)
+                except ValueError:
+                    cells.append('<i class="none"></i>')
+                    continue
+                m = by.get(day.isoformat())
+                if m:
+                    pal = [e(c) for c in (m.get("palette") or ["#000", "#444", "#fff"])]
+                    cells.append(f'<a href="{prefix}e/{m["date"]}/" title="{e(m["name"])}, {day.strftime("%-d %B")}" '
+                                 f'style="background:linear-gradient(135deg,{pal[0]},{pal[1]} 55%,{pal[2]})"></a>')
+                else:
+                    cells.append(f'<i title="{day.strftime("%-d %B")}"></i>')
+            rows.append(f'<span>{datetime.date(y, mo, 1).strftime("%b")}</span>' + "".join(cells))
+        out.append(f'<section class="year" aria-label="{y}, one colour a day"><p class="listens">{y}, one piece a day. '
+                   f'The calendar fills in as the wall makes them.</p><div class="cal">' + "".join(rows) + "</div></section>")
+    return "".join(out)
 
 
 def index(eds):
     """editions.json: what the window (and the control app's welcome) need to draw any edition."""
-    return json.dumps([{"date": m["date"], "name": m["name"], "caption": caption(m), "palette": m.get("palette"),
+    return json.dumps([{"date": m["date"], "name": m["name"], "caption": caption(m), "palette": m.get("palette") or ["#08060f", "#4a3080", "#efe6ff"],
                         "hours": m.get("hours", []), "size": m.get("size") or [192, 192],
                         "frag": f"gallery/{m['date']}.frag", "still": f"gallery/{still(m)}"} for m in eds])
 

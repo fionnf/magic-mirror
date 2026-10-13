@@ -202,7 +202,8 @@ class Runner:
 
     def scene_from_now(self):
         """What the wall is doing now, as a scene."""
-        sc = {"mode": self.current if self.current not in (None, "off", "mirror") else self.state.get("mode", "lava"),
+        passing = self.current in (None, "off", "mirror", "wheel") or self.oneshot_resume is not None
+        sc = {"mode": self.state.get("mode", "lava") if passing else self.current,     # never a one-shot
               "brightness": self.state.get("brightness", 40), "art_speed": self.state.get("art_speed", 0.12)}
         if sc["mode"] == "music":
             try:
@@ -220,8 +221,8 @@ class Runner:
             self.state["brightness"] = max(5, min(100, int(sc.get("brightness", self.state.get("brightness", 40)))))
             if "art_speed" in sc:
                 self.state["art_speed"] = max(0.03, min(1.0, float(sc["art_speed"])))
-            if sc.get("sleep_minutes"):                 # a scene may bring its own sleep timer
-                self.state["off_at"] = time.time() + 60 * sc["sleep_minutes"]
+            # a scene sets the whole room: its own sleep timer, or none (an earlier timer is cancelled)
+            self.state["off_at"] = time.time() + 60 * sc["sleep_minutes"] if sc.get("sleep_minutes") else None
             save_state(self.state)
             if sc.get("mode") == "music" and "party" in sc:
                 try:
@@ -421,6 +422,16 @@ def _secret():
         return fh.read().strip()
 
 
+def _minutes(v):
+    """A sane number of minutes (1..1440) from user input, else None (rejects text, NaN, infinity)."""
+    import math
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return round(f, 2) if math.isfinite(f) and 1 <= f <= 1440 else None
+
+
 def make_app(runner):
     from flask import Flask, jsonify, request, send_from_directory, redirect, make_response
     import hmac
@@ -526,11 +537,16 @@ def make_app(runner):
             own.pop(name, None)
             save_state(runner.state)
         elif d.get("save"):
+            if name in runner.SCENES:
+                return jsonify({"error": f"{name} is a built-in scene; pick another name"}), 400
             sc = runner.scene_from_now()
             if d.get("lights") is not None:
                 sc["lights"] = bool(d["lights"])
             if d.get("sleep_minutes"):
-                sc["sleep_minutes"] = int(d["sleep_minutes"])
+                mins = _minutes(d["sleep_minutes"])
+                if mins is None:
+                    return jsonify({"error": "sleep minutes must be between 1 and 1440"}), 400
+                sc["sleep_minutes"] = mins
             own[name] = sc
             save_state(runner.state)
         else:
@@ -544,7 +560,10 @@ def make_app(runner):
     def sleep_set():
         d = request.get_json(force=True, silent=True) or {}
         if d.get("minutes"):
-            runner.sleep_at(time.time() + 60 * float(d["minutes"]))
+            mins = _minutes(d["minutes"])
+            if mins is None:
+                return jsonify({"error": "minutes must be between 1 and 1440"}), 400
+            runner.sleep_at(time.time() + 60 * mins)
         elif d.get("at"):
             try:
                 h, m = (int(x) for x in str(d["at"]).split(":"))
@@ -641,7 +660,7 @@ def make_app(runner):
         return jsonify({"today": __import__("datetime").date.today().isoformat(),
                         "chosen": runner.state.get("daily_date") or "",
                         "editions": [{"date": d, **{k: m.get(k) for k in ("name", "description", "palette", "source_sha256",
-                                                                          "listening", "final", "caption")}}
+                                                                          "listening", "final", "caption", "hours")}}
                                      for d, m in daily.editions()]})
 
     @app.get("/daily/<path:name>")
@@ -1084,11 +1103,16 @@ def main():
                 today = _dt.date.today().isoformat()
                 if not os.path.exists(os.path.join(daily.FOLDER, today + ".json")) and \
                         (_dt.datetime.now().hour >= 5 or not daily.editions()):
-                    # the cloud artist (daily workflow) may have made it already: hang the same piece
-                    meta = daily.fetch(today) or daily.generate(today)
-                    print(f"[daily] {today}: {meta['name']}", flush=True)
-                    if runner.current == "daily" and not runner.state.get("daily_date"):
-                        runner.restart_current()
+                    # the cloud artist (daily workflow) makes the piece; the wall hangs the same one.
+                    # Only if the cloud has not delivered by 10:00 does the wall compose its own, so
+                    # the gallery never gets two different pieces for one day.
+                    meta = daily.fetch(today)
+                    if meta is None and (_dt.datetime.now().hour >= 10 or not daily.editions()):
+                        meta = daily.generate(today)
+                    if meta:
+                        print(f"[daily] {today}: {meta['name']}", flush=True)
+                        if runner.current == "daily" and not runner.state.get("daily_date"):
+                            runner.restart_current()
                 for d, m in daily.editions():          # past days the wall did not close itself
                     if d < today and not m.get("final"):
                         daily.finalise(d)

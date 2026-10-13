@@ -49,7 +49,9 @@
 <script>
 (() => {
   const F = window.Fortuna, $ = id => document.getElementById(id), cv = $('wall'), ctx = cv.getContext('2d');
-  if (!F || !F.ledify) { $('msg').textContent = 'This browser cannot draw the wall (it needs WebGL 2).'; return; }
+  if (!F || !F.ledify || F.gl === false) { $('msg').textContent = 'This browser cannot draw the wall (it needs WebGL 2).'; return; }
+  const DEFAULT_PAL = ['#08060f', '#4a3080', '#efe6ff'];
+  let showing = 0;                             // only the newest request may set the shader
   let eds = [], i = 0, piece = null, driftTimer = null;
   const nice = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'});
 
@@ -63,10 +65,12 @@
   }
   function show(k) {
     i = (k + eds.length) % eds.length; const e = eds[i];
-    const [w, h] = e.size || [192, 192];
-    if (!piece) piece = F.add(cv, {always: true, w, h, pal: e.palette, day: e.hours || [], draw, onfail: () => { $('msg').hidden = false; $('msg').textContent = 'This piece would not draw here.'; }});
-    Object.assign(piece, {w, h, cols: Math.round(w / 64), rows: Math.round(h / 64), pal: e.palette, day: e.hours || []});
-    fetch('../' + e.frag).then(r => r.text()).then(src => { F.setSource(piece, src); $('msg').hidden = true; });
+    const [w, h] = e.size || [192, 192], pal = e.palette || DEFAULT_PAL, ticket = ++showing;
+    if (!piece) piece = F.add(cv, {always: true, w, h, pal, day: e.hours || [], draw, onfail: () => { $('msg').hidden = false; $('msg').textContent = 'This piece would not draw here.'; }});
+    if (!piece) { $('msg').textContent = 'This browser cannot draw the wall (it needs WebGL 2).'; return; }
+    Object.assign(piece, {w, h, cols: Math.round(w / 64), rows: Math.round(h / 64), pal, day: e.hours || []});
+    fetch('../' + e.frag).then(r => r.text()).then(src => { if (ticket !== showing) return; F.setSource(piece, src); $('msg').hidden = true; })
+      .catch(() => { if (ticket === showing) { $('msg').hidden = false; $('msg').textContent = 'This piece could not be loaded.'; } });
     $('name').textContent = e.name; $('when').textContent = nice(e.date) + (i === 0 ? ' · today’s piece' : '');
     document.title = e.name + ' · Fortuna window';
     history.replaceState(null, '', '?d=' + e.date + (driftTimer ? '&drift' : ''));

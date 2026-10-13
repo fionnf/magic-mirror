@@ -87,7 +87,10 @@
   const card = () => ({name: meta.name, slug: meta.date + (Object.keys(p.over).length ? '-remix' : ''),
                       line: `${meta.when} · Fortuna, made by Dewa and Fionn` + (Object.keys(p.over).length ? ' · your version' : '')});
   $('[data-still]').addEventListener('click', async ev => {
-    const b = ev.currentTarget; b.disabled = true; try { await F.postcard(p, card()); } finally { b.disabled = false; }
+    const b = ev.currentTarget, label = b.textContent; b.disabled = true;
+    try { await F.postcard(p, card()); }
+    catch (e) { b.textContent = e.message; setTimeout(() => { b.textContent = label; }, 3000); }
+    finally { b.disabled = false; }
   });
   const rec = $('[data-record]');
   if (!F.canRecord || F.still) rec.hidden = true;

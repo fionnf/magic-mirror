@@ -399,7 +399,7 @@ async function welcome(into) {
     const cv = box.querySelector('canvas'), x = cv.getContext('2d'), [w, h] = e.size || [192, 192];
     cv.style.aspectRatio = w + ' / ' + h;            // whole device pixels per LED, or the dots shimmer
     const cell = Math.max(1, Math.floor(cv.clientWidth * (devicePixelRatio || 1) / w)); cv.width = w * cell; cv.height = h * cell;
-    const piece = F.add(cv, {always: true, w, h, pal: e.palette, day: e.hours || [],
+    const piece = welcome.piece = F.add(cv, {always: true, w, h, pal: e.palette, day: e.hours || [],
       draw: src => F.ledify(x, src, w, h, {x: 0, y: 0, w: cv.width, h: cv.height}, {bloom: .25}),
       onfail: () => box.remove()});
     F.setSource(piece, await (await fetch(e.frag)).text());
@@ -538,28 +538,40 @@ async function loadDaily() {
   const eds = DAILY.editions || [];
   const pick = eds.find(e => e.date === (DAILY.chosen || DAILY.today)) || eds[0];
   DAILY.chosenMeta = pick;
-  if (pick && !SCRUB.date) describeDaily(pick);
+  if (pick && !SCRUB.browsing && pick.date !== SCRUB.date) describeDaily(pick);   // first load, or a new day
+  updateHang();
   $('archive').innerHTML = eds.map(e => `<button class="${e.date === (SCRUB.date || (pick && pick.date)) ? 'sel' : ''}" onclick="pickDaily('${e.date}')">
       <img src="${u('/daily/' + e.date + '.png')}" alt="" loading="lazy"><span>${e.date === DAILY.today ? 'Today' : new Date(e.date).toLocaleDateString(undefined, {day: 'numeric', month: 'short'})}</span></button>`).join('');
   render();
 }
 function describeDaily(ed) {
+  if (SCRUB.piece && window.Fortuna) window.Fortuna.remove(SCRUB.piece);   // its canvas is about to be replaced
+  SCRUB.piece = null;
   const hanging = DAILY.chosenMeta && DAILY.chosenMeta.date === ed.date && STATUS.current === 'daily';
   $('today').innerHTML = `<div class="preview" id="preview"><img src="${u('/daily/' + ed.date + '.png')}" alt=""><canvas aria-hidden="true"></canvas></div>
     <div class="hour"><output id="hourOut">now</output><input type="range" id="hour" min="0" max="23.99" step="0.05" value="${new Date().getHours()}" aria-label="Hour of the day">
       <button data-hm="now" class="on" onclick="setHourMode('now')">Now</button><button data-hm="day" onclick="setHourMode('day')">Whole day</button></div>
     <h3>${esc(ed.name)}</h3><p>${esc(ed.description || '')}</p>${ed.listening ? `<p class="listen">${esc(ed.listening)}</p>` : ''}
-    <div class="row"><button class="btn primary" onclick="showDaily('${ed.date === DAILY.today ? '' : ed.date}')">${hanging ? 'On the wall now' : 'Hang it'}</button>
-      <span class="hint" style="margin:0">${ed.date === DAILY.today ? "Today's piece" : 'From ' + new Date(ed.date).toLocaleDateString(undefined, {day: 'numeric', month: 'long'})}</span></div>`;
+    <div class="row"><button class="btn primary" id="hangBtn" onclick="showDaily('${ed.date === DAILY.today ? '' : ed.date}')">${hanging ? 'On the wall now' : 'Hang it'}</button>
+      <span class="hint" id="hangHint" style="margin:0"></span></div>`;
+  SCRUB.date = ed.date; updateHang();
   $('hour').addEventListener('input', () => setHourMode('pick'));
   previewDaily(ed);
 }
+function updateHang() {                    // the label under the preview follows the wall and the date
+  const b = $('hangBtn'), h = $('hangHint'); if (!b || !SCRUB.date) return;
+  const hanging = DAILY.chosenMeta && DAILY.chosenMeta.date === SCRUB.date && STATUS.current === 'daily';
+  b.textContent = hanging ? 'On the wall now' : 'Hang it';
+  b.setAttribute('onclick', `showDaily('${SCRUB.date === DAILY.today ? '' : SCRUB.date}')`);
+  h.textContent = SCRUB.date === DAILY.today ? "Today's piece" : 'From ' + new Date(SCRUB.date).toLocaleDateString(undefined, {day: 'numeric', month: 'long'});
+}
 function pickDaily(date) {
   const ed = (DAILY.editions || []).find(e => e.date === date); if (!ed) return;
-  SCRUB.piece = null; describeDaily(ed);
+  SCRUB.browsing = date !== (DAILY.chosenMeta && DAILY.chosenMeta.date);
+  describeDaily(ed);
   document.querySelectorAll('#archive button').forEach(b => b.classList.toggle('sel', b.textContent.trim() === (date === DAILY.today ? 'Today' : new Date(date).toLocaleDateString(undefined, {day: 'numeric', month: 'short'}))));
 }
-async function showDaily(date) { try { STATUS = await api('/api/daily/show', {date}); await loadDaily(); toast('Showing ' + titleFor('daily')); } catch (e) { toast(e.message); } }
+async function showDaily(date) { try { STATUS = await api('/api/daily/show', {date}); SCRUB.browsing = false; await loadDaily(); toast('Showing ' + titleFor('daily')); } catch (e) { toast(e.message); } }
 function tour(kind) {
   const art = ['daily', 'shaders', 'artsy', 'glass', 'shapes', 'lava'];
   const ids = kind === 'all' ? art.concat(['music']) : art;
@@ -572,6 +584,9 @@ const esc = t => String(t || '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '
 let SCENES = {}, BUILTIN = [], SCENE_ON = null;
 async function loadScenes() {
   let d; try { d = await api('/api/scenes'); } catch (e) { return; }
+  const sig = JSON.stringify(Object.keys(d.scenes));
+  if (sig === loadScenes.sig) return;          // unchanged: keep the buttons (a press may be under way)
+  loadScenes.sig = sig;
   SCENES = d.scenes; BUILTIN = d.builtin;
   const chip = n => `<button data-scene="${esc(n)}" class="${SCENE_ON === n ? 'on' : ''}">${esc(n)}</button>`;
   $('scenes').innerHTML = Object.keys(SCENES).map(chip).join('') + '<button class="add" onclick="saveScene()">+ Save this</button>';
@@ -582,21 +597,22 @@ async function loadScenes() {
     b.addEventListener('pointerleave', () => { clearTimeout(hold); hold = null; });
   });
 }
+function markScene() { document.querySelectorAll('#scenes [data-scene]').forEach(b => b.classList.toggle('on', b.dataset.scene === SCENE_ON)); }
 async function applyScene(n) {
-  try { const r = await api('/api/scenes', {name: n}); STATUS = r.status; SCENE_ON = n; render(); loadMusic(); toast(n); if (navigator.vibrate) navigator.vibrate(8); }
+  try { const r = await api('/api/scenes', {name: n}); STATUS = r.status; SCENE_ON = n; markScene(); render(); loadMusic(); toast(n); if (navigator.vibrate) navigator.vibrate(8); }
   catch (e) { toast(e.message); }
 }
 async function saveScene() {
   const n = prompt('A name for how the wall is right now:'); if (!n) return;
   const lights = confirm('Should this scene also switch the room lights on? (Cancel: leave the lights alone)');
-  try { await api('/api/scenes', {name: n.trim().slice(0, 24), save: true, lights: lights ? true : null}); SCENE_ON = n.trim().slice(0, 24); loadScenes(); toast('Saved ' + n); } catch (e) { toast(e.message); }
+  try { await api('/api/scenes', {name: n.trim().slice(0, 24), save: true, lights: lights ? true : null}); SCENE_ON = n.trim().slice(0, 24); loadScenes.sig = null; loadScenes(); toast('Saved ' + n); } catch (e) { toast(e.message); }
 }
 async function forgetScene(n) {
   if (BUILTIN.includes(n)) return toast(n + ' is built in');
   if (!confirm('Remove the scene ' + n + '?')) return;
-  await api('/api/scenes', {name: n, delete: true}); if (SCENE_ON === n) SCENE_ON = null; loadScenes();
+  await api('/api/scenes', {name: n, delete: true}); if (SCENE_ON === n) SCENE_ON = null; loadScenes.sig = null; loadScenes();
 }
-document.addEventListener('click', e => { if (e.target.closest('.list button, .strip button, #power')) SCENE_ON = null; });
+document.addEventListener('click', e => { if (e.target.closest('.list button, .strip button, #power')) { SCENE_ON = null; markScene(); } });
 
 /* ---------- sleep ---------- */
 async function sleepIn(m) { try { STATUS = await api('/api/sleep', {minutes: m}); render(); sleepSheet.close(); toast('Off in ' + (m >= 60 ? m / 60 + ' h' : m + ' min')); } catch (e) { toast(e.message); } }
@@ -762,6 +778,7 @@ async function start() {
   if (started) return;
   try { await refresh(); await loadModes(); } catch (e) { return; }
   started = true;
+  if (welcome.piece && window.Fortuna) { window.Fortuna.remove(welcome.piece); welcome.piece = null; }   // the door piece stops once inside
   $('qrImg').src = $('qrLink').href = u('/d/qr.png');
   shaderLib(); loadScenes(); loadDaily(); loadMusic(); refreshNow();
   try { const t = localStorage.getItem('tab'); if (t) document.querySelector(`nav [data-tab="${t}"]`).click(); } catch (e) {}

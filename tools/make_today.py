@@ -44,6 +44,20 @@ def close(date):
                                         note="not recorded (the wall was offline that day); write about the piece itself")
     except Exception as e:
         print(f"[daily] post writer unavailable: {e}", flush=True)
+    try:                                       # the closing picture, as the wall would have made it
+        import numpy as np
+        from PIL import Image
+        from display import shaders
+        r = shaders.renderer()
+        if r.ok:
+            img = r.render("path:" + daily._path(date, "frag"), 3600.0, {"level": 0.1, "clock": 23.95},
+                           [daily._hex(c) for c in meta["palette"]])
+            big = Image.fromarray(img.astype(np.uint8)).resize((daily.W * 3, daily.H * 3), Image.NEAREST)
+            for folder in (GALLERY, daily.FOLDER):
+                big.save(os.path.join(folder, f"{date}.final.png"))
+            meta["image"] = f"{date}.final.png"
+    except Exception as e:
+        print(f"[daily] closing picture unavailable: {e}", flush=True)
     meta["final"] = True
     meta["closed_by"] = "cloud"
     for path in (p, daily._path(date, "json")):

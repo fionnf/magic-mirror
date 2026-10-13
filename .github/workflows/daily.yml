@@ -1,7 +1,8 @@
 name: Art of the day
 on:
   schedule:
-    - cron: "40 2 * * *"          # 04:40 in Zürich in summer, 03:40 in winter: before the wall wakes at 05:00
+    - cron: "40 2 * * *"          # 04:40 in Zürich in summer, 03:40 in winter
+    - cron: "15 6 * * *"          # a second try: GitHub sometimes skips scheduled runs (the wall waits until 10:00)
   workflow_dispatch:
     inputs:
       date:
@@ -27,6 +28,7 @@ jobs:
       - name: Compose, check, curate
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TZ: Europe/Zurich                 # "today" is Zürich's date, also for runs by hand late at night
           WALL_MOODBOARD: ${{ vars.WALL_MOODBOARD }}
         run: xvfb-run -a python3 tools/make_today.py ${{ inputs.date }}
       - name: Publish
@@ -34,7 +36,7 @@ jobs:
         run: |
           git config user.name fortuna-wall
           git config user.email wall@users.noreply.github.com
-          git add assets/daily gallery
+          git add gallery                   # gallery/ holds only public fields; assets/daily stays out
           if git diff --cached --quiet; then echo "nothing new"; exit 0; fi
           what=$(git diff --cached --name-only gallery | sed 's#gallery/##' | tr '\n' ' ')
           new=$(git diff --cached --name-only --diff-filter=A gallery | grep '\.frag$' | sed 's#gallery/##; s#\.frag##' | head -1)
@@ -48,7 +50,7 @@ jobs:
         env: { GH_TOKEN: "${{ github.token }}" }
         run: gh workflow run gallery.yml --ref master
       - name: Pin it to Pinterest
-        if: steps.publish.outputs.new != '' && env.PINTEREST_REFRESH_TOKEN != ''
+        if: steps.publish.outputs.new != ''          # the tool skips quietly when Pinterest is not set up
         env:
           PINTEREST_APP_ID: ${{ secrets.PINTEREST_APP_ID }}
           PINTEREST_APP_SECRET: ${{ secrets.PINTEREST_APP_SECRET }}

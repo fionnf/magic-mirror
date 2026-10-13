@@ -1,67 +1,4 @@
 {
- "beeple-resolume-pack__gerschwinn": {
-  "frames": 844,
-  "fps": 29,
-  "seconds": 29.1,
-  "motion": 0.11,
-  "bright": 0.661,
-  "kb": 2037,
-  "source": "gerschwinn.mov"
- },
- "beeple-resolume-pack__glytchghost": {
-  "frames": 581,
-  "fps": 29,
-  "seconds": 20.03,
-  "motion": 0.141,
-  "bright": 0.169,
-  "kb": 1199,
-  "source": "glytchghost.mov"
- },
- "beeple-resolume-pack__plugs-slower": {
-  "frames": 870,
-  "fps": 29,
-  "seconds": 30.0,
-  "motion": 0.054,
-  "bright": 0.284,
-  "kb": 1968,
-  "source": "plugs slower.mov"
- },
- "beeple-resolume-pack__space-crystals": {
-  "frames": 1160,
-  "fps": 29,
-  "seconds": 40.0,
-  "motion": 0.118,
-  "bright": 0.361,
-  "kb": 1005,
-  "source": "space crystals.mov"
- },
- "beeple-resolume-pack__twisted-hall": {
-  "frames": 581,
-  "fps": 29,
-  "seconds": 20.03,
-  "motion": 0.13,
-  "bright": 0.521,
-  "kb": 824,
-  "source": "twisted hall.mov"
- },
- "beeple-four-color-process__blockpile-two": {
-  "frames": 297,
-  "fps": 29,
-  "seconds": 10.24,
-  "motion": 0.157,
-  "bright": 0.259,
-  "kb": 763,
-  "source": "blockpile (two).mov"
- },
- "beeple-four-color-process__midflow": {
-  "frames": 529,
-  "fps": 29,
-  "seconds": 18.24,
-  "motion": 0.147,
-  "bright": 0.325,
-  "kb": 987,
-  "source": "midflow.mov"
- },
  "mixkit-chill__mixkit-14165": {
   "frames": 435,
   "fps": 29,
@@ -169,15 +106,6 @@
   "bright": 0.232,
   "kb": 180,
   "source": "mixkit-4038.mp4"
- },
- "mixkit-chill__mixkit-4040": {
-  "frames": 337,
-  "fps": 29,
-  "seconds": 11.62,
-  "motion": 0.024,
-  "bright": 0.396,
-  "kb": 209,
-  "source": "mixkit-4040.mp4"
  },
  "mixkit-chill__mixkit-44818": {
   "frames": 504,

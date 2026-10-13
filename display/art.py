@@ -202,8 +202,7 @@ class Interference:
 class Gallery:
     def __init__(self):
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
-        self.pieces = [InkFlow(W, H), ColourField(W, H), Lava(W, H), Coral(W, H),
-                       Interference(W, H)]
+        self.pieces = [InkFlow(W, H), ColourField(W, H), Interference(W, H)]   # lava lamp and coral blobs removed (review 2026-10-13)
         self.last_t = None
         self.current = -1
 
@@ -228,7 +227,7 @@ class Gallery:
         return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
 
 
-LOOP_SEC = PIECE_SEC * 5
+LOOP_SEC = PIECE_SEC * 3
 _gallery = None
 
 
@@ -368,21 +367,15 @@ class LavaCoralGallery(Gallery):
         bloom = _palette([(5, 10, 30), (40, 30, 110), (230, 90, 140), (255, 210, 160)])
         self.pieces = [
             CoralPlus(W, H, "3D Brain Coral", 0.0545, 0.062, brain, relief=True),
-            LavaPlus(W, H, "Neon Topography", "contour", n=6, speed=0.8),
-            CoralPlus(W, H, "Bloom", 0.0545, 0.062, bloom, seed="centre", relief=True),
-            CoralPlus(W, H, "Mitosis", 0.0367, 0.0649, pink),
-            LavaPlus(W, H, "Bioluminescence", "glow", bio, n=7, speed=0.7),
             CoralPlus(W, H, "Gold Labyrinth", 0.029, 0.057, gold, relief=True),
-            Lava(W, H),
-            Coral(W, H),
-        ]
+        ]   # lava lamps, coral blobs, Bloom, Mitosis, Neon Topography, Bioluminescence removed (review 2026-10-13)
         from display import organic
-        self.pieces += organic.pieces(W, H)
+        self.pieces += [p for p in organic.pieces(W, H) if type(p).__name__ != "Cells"]
         self.last_t = None
         self.current = -1
 
 
-LAVA_CORAL_LOOP_SEC = PIECE_SEC * 11
+LAVA_CORAL_LOOP_SEC = PIECE_SEC * 4
 _lc_gallery = None
 
 

@@ -429,16 +429,16 @@ class ShapesGallery(art.Gallery):
         rose = P([(30, 6, 40), (170, 40, 140), (255, 120, 180), (255, 230, 240)])
         gold = P([(20, 10, 0), (150, 90, 10), (240, 180, 60), (255, 245, 190)])
         self.pieces = [
-            FlowDots(W, H, ice), FlowDots(W, H, sun, lines=True), NodeGarden(W, H, mint),
-            SpiralMorph(W, H, gold), Truchet(W, H, rose), Harmonograph(W, H, gold),
-            FlowPoles(W, H, ice), Ridges(W, H, rose), FlowDots(W, H, rose, lines=True, strands=22),
+            FlowDots(W, H, ice), FlowDots(W, H, sun, lines=True), SpiralMorph(W, H, gold),
+            Harmonograph(W, H, gold), Ridges(W, H, rose), FlowDots(W, H, rose, lines=True, strands=22),
+            # Node Garden, Truchet and Flow Poles removed (review 2026-10-13)
         ]
         self.last_t = None
         self.current = -1
 
 
 SHAPES_PIECE_SEC = art.PIECE_SEC
-LOOP_SEC = SHAPES_PIECE_SEC * 9
+LOOP_SEC = SHAPES_PIECE_SEC * 6
 _gallery = None
 
 

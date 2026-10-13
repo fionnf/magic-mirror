@@ -9,7 +9,7 @@ and may use these uniforms:
   iColA, iColB, iColC                the scene's colours (dark, mid, light) - keep to these
 
     r = Renderer()                      # r.ok is False if there is no GPU/EGL (laptop, old Pi)
-    img = r.render("silk", t, feats)    # float32 HxWx3
+    img = r.render(t, feats)    # float32 HxWx3
 """
 import glob
 import os
@@ -147,33 +147,21 @@ class ShaderPiece:
 
 
 CURATED = {   # (shadow, mid, highlight) per piece - the gallery's look; the VJ recolours freely
-    "aura": ("#120806", "#7a3a12", "#f2c98a"), "canvas": ("#0c1450", "#3a3fb0", "#f0a860"),
     "inkorbs": ("#081a4a", "#3c62a8", "#b8bfc4"), "cutpaper": ("#1a0605", "#a8261c", "#e6dccb"),
-    "topo": ("#1c120c", "#4a3426", "#d8ccb8"), "dotsphere": ("#000000", "#6a5cff", "#66c8ff"),
-    "glassblob": ("#04040a", "#2050c8", "#ff9a5a"), "neonlines": ("#12051c", "#b0281c", "#e070ff"),
+    "dotsphere": ("#000000", "#6a5cff", "#66c8ff"),
     "eclipse": ("#000000", "#3040e0", "#ff6a2a"), "halo": ("#140808", "#b02810", "#ff9a40"),
-    "silk": ("#030805", "#26734d", "#d8ffd8"), "veil": ("#0a0518", "#5a3399", "#f2e6ff"),
-    "dunes": ("#0f0a05", "#99661a", "#fff2bf"), "lanterns": ("#140510", "#8c2650", "#ffd9cc"),
     "tide": ("#05081a", "#1a598c", "#ccf2ff"), "aperture": ("#02020c", "#2a30d0", "#c070ff"),
     "conic": ("#1a0614", "#2048e0", "#f4ead0"), "prism": ("#ff7a2a", "#e04070", "#7a5cff"),
-    "halftone": ("#08041a", "#5a2cff", "#7cff5a"),
     # the second collection: light fields, one form in space, cut paper, fine lines, water and weather
-    "moonpath": ("#05081a", "#5a6aa8", "#fff1c8"), "lantern": ("#140808", "#b8441c", "#ffd9a0"),
     "ribbon": ("#0a0714", "#5a2c8c", "#f0d6ff"), "rothko": ("#2a0a08", "#9a2a1a", "#f08a48"),
     "arches": ("#120c08", "#c8603a", "#ecd8b8"), "ridges": ("#141a2a", "#4a5a84", "#d8e0f0"),
-    "orbit": ("#06060c", "#3850b8", "#c8d8ff"), "threads": ("#0a1210", "#2e7a62", "#cfffe8"),
-    "ember": ("#120606", "#b03a18", "#ffd48a"), "rain": ("#06080f", "#2c4a7a", "#b8d0ff"),
-    "poolglass": ("#04101a", "#1a6a8a", "#c8f4ff"), "strata": ("#1a0a10", "#b03a4a", "#ffc8a0"),
-    "dandelion": ("#0a0a12", "#6a5a9a", "#fff4d8"), "bokeh": ("#0a0608", "#a8486a", "#ffd0a8"),
-    "seahorizon": ("#1a1030", "#c05848", "#ffd890"),
-    # remade from the mood board: light through frosted glass, an ink orb on paper, a disc with a burning
+    "orbit": ("#06060c", "#3850b8", "#c8d8ff"), "ember": ("#120606", "#b03a18", "#ffd48a"), "poolglass": ("#04101a", "#1a6a8a", "#c8f4ff"), "dandelion": ("#0a0a12", "#6a5a9a", "#fff4d8"), # remade from the mood board: light through frosted glass, an ink orb on paper, a disc with a burning
     # rim, light escaping round dark shapes, cut-paper curves, topographic lines, a neon tube, a sphere of
     # points, one lit orb, light through blinds
-    "frosted": ("#0a0812", "#4a3a8a", "#f4e6ff"), "inkdrop": ("#0c1a3a", "#2c4a80", "#efe6d2"),
-    "burningrim": ("#060404", "#b03a10", "#ffc070"), "escape": ("#0c0a10", "#5a4a9a", "#fff0d8"),
+    "inkdrop": ("#0c1a3a", "#2c4a80", "#efe6d2"),
     "cutcurves": ("#1a1410", "#d85a3a", "#efe2c6"), "contours": ("#0e1410", "#3a6a52", "#d8f0dc"),
     "neonarc": ("#120610", "#c0287a", "#ff9ad0"), "pointcloud": ("#04060c", "#3a5ad0", "#d8e8ff"),
-    "orb": ("#0a0a0e", "#8a4a3a", "#ffd8b0"), "blinds": ("#140e0a", "#a8602a", "#ffd8a0"),
+    "blinds": ("#140e0a", "#a8602a", "#ffd8a0"),
     # recreated from the house's own reference images (Pinterest board + pictures sent in chat)
     "glassorb": ("#140a3a", "#3a3cff", "#ece8ff"),
     "halftonewave": ("#8a2cff", "#2a6cff", "#7cff4a"),
@@ -197,11 +185,11 @@ def _rgb(h):
 
 def gallery_pieces(Wd, Hd):
     """One piece per shader, each in its curated palette (newest, strongest first)."""
-    order = ["glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "frosted", "conic", "burningrim", "moonpath", "cutcurves", "aperture", "orb", "rothko", "escape", "eclipse",
-             "inkdrop", "orbit", "neonarc", "prism", "contours", "ridges", "pointcloud", "halftone", "blinds", "lantern",
-             "aura", "arches", "inkorbs", "ember", "cutpaper", "seahorizon", "glassblob", "poolglass", "halo", "ribbon",
-             "canvas", "dandelion", "dotsphere", "strata", "neonlines", "rain", "topo", "threads", "silk", "bokeh", "veil",
-             "tide", "lanterns", "dunes"]
+    order = ["glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "conic", "cutcurves", "aperture", "rothko", "eclipse",
+             "inkdrop", "orbit", "neonarc", "prism", "contours", "ridges", "pointcloud", "blinds",
+             "arches", "inkorbs", "ember", "cutpaper", "poolglass", "halo", "ribbon",
+             "dandelion", "dotsphere",
+             "tide"]
     have = names()
     picked = [n for n in order if n in have] + [n for n in have if n not in order]
     return [ShaderPiece(Wd, Hd, n, tuple(_rgb(c) for c in CURATED.get(n, ("#08060f", "#4a3080", "#efe6ff"))))

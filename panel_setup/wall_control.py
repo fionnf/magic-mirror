@@ -33,12 +33,12 @@ PY = sys.executable or "/usr/bin/python3"
 
 MODES = [
     # id, category, title, description
-    ("lava", "Art", "Lava & Coral", "Coral, bloom, cells and slow bioluminescence"),
-    ("shapes", "Art", "Shapes", "Flow dots, woven grids, ripples: thin glowing lines"),
+    ("lava", "Art", "Lava & Coral", "Brain coral, a gold labyrinth, a jellyfish, breathing rings"),
+    ("shapes", "Art", "Shapes", "Flow lines, a spiral, a harmonograph, night ridges"),
     ("daily", "Art", "Art of the day", "A new piece every day, made for this wall"),
     ("shaders", "Art", "Shaders", "Frosted light, burning rim, ink drop, cut curves, neon arc, moon path and 38 more"),
     ("artsy", "Art", "Artsy", "Marbling, op-art stripes, oil slick, a drifting Mondrian"),
-    ("glass", "Art", "Light Art", "Stained glass, long-exposure trails, nebula"),
+    ("glass", "Art", "Light Art", "Stained glass and long-exposure light trails"),
     ("art", "Art", "Art Gallery", "Ink flow, colour fields, moiré"),
     ("pride", "Shows", "Pride Show", "Disco ball, HOUSE FORTUNA, people nearby, vortex, heart"),
     ("dewa", "Shows", "Dewa's Story", "Edelweiss flight attendant, a date at every layover"),

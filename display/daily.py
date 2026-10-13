@@ -34,13 +34,12 @@ modern apartment in Zürich (House Fortuna, a gay flatshare). Every day you make
 artwork for the wall, written as a GLSL fragment shader. It hangs there all day like a painting:
 people live with it, read, cook and fall asleep in front of it.
 
-The house's taste (from the residents' own references): soft light fields - blurred gradients with
-one glowing core, like light through frosted glass; a single form in a lot of space (an ink orb on
-paper, one glass blob, a sphere of light points, a dark disc with a burning rim, a dark shape with
-light escaping round its edges); flat two-colour mid-century cut-paper curves; fine topographic
-lines in one hue family; thin rods of neon light casting soft coloured fans. Few colours, soft
-edges, depth through glow and a little static grain. Make your own piece in this spirit - never a
-copy of these.
+The house's taste (from the residents' own references) is wide: soft light fields and glowing cores,
+a single form in a lot of space, flat mid-century cut paper, Bauhaus geometry, op-art stripes and
+moire, conic gradient tiles, halftone dot fields, fine topographic lines, neon rods casting coloured
+fans, ink on paper, Rothko and Turrell colour fields. Few colours per piece, but the wall should
+range widely from day to day: cold and warm, pale and deep, colour fields as well as glows. Each
+day comes with a DIRECTION (below) - follow it. Make your own piece, never a copy of a reference.
 
 What makes a good piece here:
 - one clear idea, generous negative space or calm fields, beautiful at a glance and rewarding
@@ -50,7 +49,8 @@ What makes a good piece here:
   nothing may flash, strobe, blink or pulse quickly
 - colour: use ONLY the scene colours iColA (deep shadow), iColB (mid tone), iColC (highlight),
   mixed and tinted - many tints of one or two neighbouring hues, never a rainbow
-- it is shown on LEDs: avoid large areas of full brightness; dark is a colour
+- it is shown on LEDs: avoid large areas of glaring pure white; full colour fields and pale grounds
+  are welcome when the day's direction asks for them
 - it LISTENS to the room, and you decide how. Invent a musical idea for this piece - how it hears -
   using these smooth signals (all 0..1, all 0 in silence; the piece must be complete and beautiful
   in silence):
@@ -199,10 +199,12 @@ in the living room of a modern apartment in Zurich. Every day an artist proposes
 four stills of it through its day (9 am, 3 pm, 8 pm with music, 11 pm) and, when there is one, the house's mood
 board. The piece hangs all day, so it should have a day's arc: the same work, clearly different pictures.
 
-The house's taste: slow, restrained, elegant light on black or deep colour; one form or one field rather than
-many; many hues of one colour family rather than rainbow; soft gradients, glows, halftone dots, thin lines,
-cut-paper and conic geometry. They dislike busy, multicolour, clip-art, watercolour and lava-lamp looks.
-The piece must be beautiful enough to fall asleep in front of, and must read on a coarse LED grid.
+The house's taste: slow, restrained and elegant; one idea per piece; few colours rather than rainbow. Within
+that the wall should range widely - colour fields, pale paper grounds, cut paper, Bauhaus, op-art, halftone,
+neon, ink - not the same dim warm glow on black every day. They dislike busy, multicolour, clip-art,
+watercolour and lava-lamp looks. It must be beautiful enough to fall asleep in front of and read on a coarse
+LED grid. Each day has a DIRECTION; a piece that ignores it, or looks like one of the recent days you are
+shown, cannot score above 5.
 
 Judge honestly. Score 1-10. 7 means you would hang it; below 7 it goes back with one concrete, actionable
 note for the artist (what to change in form, palette, density or motion). Keep the verdict to two sentences."""
@@ -262,26 +264,57 @@ def _stills(src, pal):
     return strip
 
 
-def curate(title, statement, src, pal):
+def _recent_strip(n=5):
+    """The last few days' pieces side by side, so the curator can see repetition."""
+    from PIL import Image
+    ims = []
+    for d, _ in editions()[:n]:
+        p = _path(d, "png")
+        if os.path.exists(p):
+            ims.append(Image.open(p).convert("RGB").resize((160, round(160 * H / W))))
+    if not ims:
+        return None
+    strip = Image.new("RGB", (len(ims) * 168, ims[0].height), (40, 40, 40))
+    for i, im in enumerate(ims):
+        strip.paste(im, (i * 168, 0))
+    return strip
+
+
+def curate(title, statement, src, pal, direction=None):
     """-> (score, verdict, note) from Claude looking at the piece."""
     import ai_client
-    content = _moodboard_blocks() + [
-        {"type": "text", "text": f"Today's proposal: \"{title}\" - {statement}\nPalette {', '.join(pal)}. "
+    from display import directions
+    recent = _recent_strip()
+    content = _moodboard_blocks()
+    if recent is not None:
+        content += [{"type": "text", "text": "The wall's recent days (newest first) - today must look clearly different:"},
+                    _jpeg_block(recent, 1024)]
+    content += [
+        {"type": "text", "text": (directions.brief(direction) + "\n\n" if direction else "")
+                                 + f"Today's proposal: \"{title}\" - {statement}\nPalette {', '.join(pal)}. "
                                  "Stills (left to right: 9 am, 3 pm, 8 pm while music plays, 11 pm):"},
         _jpeg_block(_stills(src, pal), 1024)]
     j, _, _ = ai_client.ask(CURATOR, content, max_tokens=1500, effort="low", schema=CURATOR_SCHEMA, timeout=120)
     return int(j.get("score", 0)), j.get("verdict", "").strip(), j.get("note", "").strip()
 
 
-def generate(date=None, notes="", attempts=4, min_score=7):
+def generate(date=None, notes="", attempts=6, min_score=7):
     """Ask Claude for today's piece, check it, save it. -> metadata dict (raises if all attempts fail)."""
     import ai_client
     from PIL import Image
     d = datetime.date.fromisoformat(date) if date else datetime.date.today()
     date = d.isoformat()
-    recent = [m.get("name", "") for _, m in editions()[:10]]
-    user = (f"Today is {d.strftime('%A %d %B %Y')} ({_season(d)} in Zürich). "
-            f"Recent titles (do something different): {', '.join(recent) or 'none yet'}. {notes}").strip()
+    from display import directions
+    past = [m for dd, m in editions() if dd < date][:10]
+    recent = [m.get("name", "") for m in past]
+    recent_pals = [m["palette"] for m in past if len(m.get("palette") or []) == 3]
+    direction = directions.pick(d, used=[m.get("direction") for m in past[:8]])
+    print(f"[daily] {date}: direction {direction['name']!r}", flush=True)
+    user = (f"Today is {d.strftime('%A %d %B %Y')} ({_season(d)} in Zürich; the season is background, "
+            "not a subject - do not reach for autumn ambers).\n\n" + directions.brief(direction) +
+            f"\n\nRecent titles (do something different): {', '.join(recent) or 'none yet'}. "
+            f"Recent palettes (stay well away from these): {'; '.join(' '.join(p) for p in recent_pals[:5]) or 'none'}. "
+            f"{notes}").strip()
     feedback = ""
     board = _moodboard_blocks()
     best = None                                       # (score, j, src, pal, verdict, attempt) of curated pieces
@@ -299,14 +332,24 @@ def generate(date=None, notes="", attempts=4, min_score=7):
         except Exception:
             feedback = "the palette must be exactly three #rrggbb colours"
             continue
+        why = directions.palette_problem(pal, direction, recent_pals)
+        if why:
+            print(f"[daily] attempt {attempt}: {j.get('title')!r} -> {why}", flush=True)
+            feedback = why
+            continue
         src = j["glsl"].replace("#version 300 es", "").replace("precision highp float;", "")
         ok, reason, still = check(src, pal)
         print(f"[daily] attempt {attempt}: {j.get('title')!r} -> {reason}", flush=True)
+        if ok:
+            why = directions.brightness_problem(float(still.mean()), direction)
+            if why:
+                ok, reason = False, why
+                print(f"[daily] attempt {attempt}: {why}", flush=True)
         if not ok:
             feedback = reason
             continue
         try:
-            score, verdict, note = curate(j["title"], j["statement"], src, pal)
+            score, verdict, note = curate(j["title"], j["statement"], src, pal, direction)
         except Exception as e:                        # the curator is a bonus, never a blocker
             print(f"[daily] curator unavailable: {e}", flush=True)
             score, verdict, note = min_score, "", ""
@@ -335,7 +378,7 @@ def generate(date=None, notes="", attempts=4, min_score=7):
             "listening": j.get("listening", "").strip()[:800],
             "palette": pal, "source_sha256": sha, "model": config.AI_MODEL, "size": [W, H],
             "tokens": {"in": tin, "out": tout}, "attempts": attempt, "created": time.time(),
-            "curator": {"score": score, "verdict": verdict}}
+            "curator": {"score": score, "verdict": verdict}, "direction": direction["name"]}
     with open(_path(date, "json"), "w") as fh:
         json.dump(meta, fh, indent=1)
     return meta

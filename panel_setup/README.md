@@ -192,7 +192,10 @@ Every day's piece is published to https://fionnf.github.io/magic-mirror/ (feed, 
 piece, RSS at `feed.xml`). Each post runs the piece's own shader live in the visitor's browser.
 
 How a day goes:
-1. Around 05:00 Claude composes the piece after looking at the Pinterest mood board
+1. Around 05:00 Claude composes the piece after looking at the Pinterest mood board. Each day
+   also gets an art direction (`display/directions.py`: a colour family, a light, mid or dark ground,
+   and a kind of form), dealt so neighbouring days differ. Pieces that stray from it, or whose colours
+   repeat the last few days, are sent back
    (`WALL_MOODBOARD`, read via the board's public RSS feed).
 2. A second Claude call, the curator, looks at rendered stills. Anything under 7/10 goes back with
    a note, up to four tries, and the best one is hung.

@@ -174,6 +174,19 @@ CURATED = {   # (shadow, mid, highlight) per piece - the gallery's look; the VJ 
     "cutcurves": ("#1a1410", "#d85a3a", "#efe2c6"), "contours": ("#0e1410", "#3a6a52", "#d8f0dc"),
     "neonarc": ("#120610", "#c0287a", "#ff9ad0"), "pointcloud": ("#04060c", "#3a5ad0", "#d8e8ff"),
     "orb": ("#0a0a0e", "#8a4a3a", "#ffd8b0"), "blinds": ("#140e0a", "#a8602a", "#ffd8a0"),
+    # recreated from the house's own reference images (Pinterest board + pictures sent in chat)
+    "glassorb": ("#140a3a", "#3a3cff", "#ece8ff"),
+    "halftonewave": ("#8a2cff", "#2a6cff", "#7cff4a"),
+    "dotring": ("#ff3aa0", "#ff8a2a", "#7a3cff"),
+    "emberweb": ("#ff3a1a", "#2a4cff", "#ffa040"),
+    "linewave": ("#30d060", "#2a8cff", "#9a40ff"),
+    "slats": ("#2a1060", "#40c0ff", "#ff60c0"),
+    "pixelfield": ("#ff3020", "#c8e020", "#2070ff"),
+    "dotsea": ("#020a30", "#0a2a8a", "#60c0ff"),
+    "crossglow": ("#0a1aa0", "#a060ff", "#ffc040"),
+    "pill": ("#141c1a", "#ff8aa0", "#80ffd0"),
+    "linefan": ("#c01848", "#ff60a0", "#9a50ff"),
+    "bluering": ("#ff7040", "#20a0ff", "#a0f0ff"),
 }
 
 
@@ -184,7 +197,7 @@ def _rgb(h):
 
 def gallery_pieces(Wd, Hd):
     """One piece per shader, each in its curated palette (newest, strongest first)."""
-    order = ["frosted", "conic", "burningrim", "moonpath", "cutcurves", "aperture", "orb", "rothko", "escape", "eclipse",
+    order = ["glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "frosted", "conic", "burningrim", "moonpath", "cutcurves", "aperture", "orb", "rothko", "escape", "eclipse",
              "inkdrop", "orbit", "neonarc", "prism", "contours", "ridges", "pointcloud", "halftone", "blinds", "lantern",
              "aura", "arches", "inkorbs", "ember", "cutpaper", "seahorizon", "glassblob", "poolglass", "halo", "ribbon",
              "canvas", "dandelion", "dotsphere", "strata", "neonlines", "rain", "topo", "threads", "silk", "bokeh", "veil",

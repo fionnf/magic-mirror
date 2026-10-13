@@ -1,0 +1,50 @@
+{
+ "name": "Embers Along the Walk",
+ "description": "A single lamp crosses the wall in one long arc from dawn to midnight, and every three hours it sets down a soft ember that glows with the music of that hour and slowly cools, so by night the day reads as a few dimming coals behind one warm light.",
+ "image": "2026-10-13.png",
+ "animation_source": "2026-10-13.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-13"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#1a0c1e #b8572a #ffc77a"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 192 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 8
+  }
+ ],
+ "listening": "Slow bass breath gently widens the lamp's halo, rising tension draws its core tighter, the key leans its amber toward gold or rust, treble thickens a faint frosted haze and the grain, the beat lends a barely visible sway, and each ember's size and glow is the remembered energy of its hour.",
+ "palette": [
+  "#1a0c1e",
+  "#b8572a",
+  "#ffc77a"
+ ],
+ "source_sha256": "737d3d9943144410cb768f9593c5fe7031e762c385a1c57447839249a5d472af",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  192
+ ],
+ "attempts": 3,
+ "created": 1791883538.3018475,
+ "curator": {
+  "score": 8,
+  "verdict": "A single warm light tracing an arc over deep plum, leaving cooling embers behind, gives a clear day's arc in one restrained colour family, and the 11 pm still is something you could fall asleep to. It reads well as soft glows on a coarse grid, though the 8 pm frame barely shows the music and the dimmest embers risk vanishing into the black."
+ }
+}

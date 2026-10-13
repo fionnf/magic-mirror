@@ -1,7 +1,7 @@
 {
  "name": "A Rod Keeping Hours",
  "description": "A single thin rod of warm neon hangs in an autumn dusk, casting a soft fan of light onto the wall below, and along its upper edge it quietly notches every hour of music the house has heard today.",
- "image": "2026-10-12.png",
+ "image": "2026-10-12.final.png",
  "animation_source": "2026-10-12.frag",
  "attributes": [
   {
@@ -46,5 +46,11 @@
  "curator": {
   "score": 7,
   "verdict": "A single warm neon line casting a soft fan of rust light onto near-black is exactly the restrained, one-form, one-family piece this wall is for, and the slow tilt reads calmly across the stills. I would hang it, though the promised hour notches are invisible and the fan's gradient is so faint it may band or vanish on a 64x64 LED grid."
- }
+ },
+ "post": {
+  "caption": "The wall was offline today, so the rod kept no hours and carries no notches along its edge, just a clean line of warm neon tilted gently upward. Without music to gather or skew it, the fan of light fell loose and wide onto the wall below, a soft rust glow settling into the dark. A day left unmeasured, and the piece simply resting in its own dusk.",
+  "alt": "A thin, glowing apricot neon rod angles slightly upward from left to right near the top of a dark frame, casting a broad, faint reddish-brown haze of light down the wall beneath it."
+ },
+ "final": true,
+ "closed_by": "cloud"
 }

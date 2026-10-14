@@ -265,12 +265,16 @@ def main():
     clock = _MusicClock() if a.anim != "music" else None
     stats = [] if os.environ.get("WALL_STATS") else None
     stats_t = time.monotonic()
+    # 58 fps (a new frame every panel refresh) when the mode is light enough, else 29 fps (each frame
+    # held for 2 refreshes). Halving the step between frames is what makes slow motion stop quivering.
+    ff = 1 if a.fps >= 50 else 2
+    recent = []
     try:
         while True:
             t = time.monotonic() - t0
             if a.seconds and t > a.seconds:
                 break
-            # each frame held for exactly 2 refreshes (58 Hz -> 29 fps), paced by the
+            # each frame held for exactly ff refreshes (58 Hz -> 58 or 29 fps), paced by the
             # panels' own vsync instead of a sleep timer that drifts against it
             c0 = time.perf_counter()
             gain = 1.0
@@ -282,8 +286,20 @@ def main():
             if gain < 0.999 or gain > 1.001:
                 img = img.point([min(255, int(i * gain)) for i in range(256)] * 3)
             c1 = time.perf_counter()
-            if not matrix.draw(img, frame_fraction=2):
-                time.sleep(interval)                    # unchanged frame: nothing to pace
+            if not matrix.draw(img, frame_fraction=ff):
+                time.sleep(interval / (2 if ff == 1 else 1))   # unchanged frame: nothing to pace
+            if a.fps >= 50:                             # adapt: heavy moments fall back to 29 fps
+                recent.append(c1 - c0)                  # the frame's own work, not the vsync wait
+                if len(recent) >= 60:
+                    worst = sorted(recent)[int(len(recent) * 0.9)] * 1000
+                    if ff == 1 and worst > 11.0:      # + ~3 ms to send it: keep under 17 ms
+                        ff = 2
+                        print(f"[fps] 29 fps (frames take {worst:.0f} ms)", flush=True)
+                    elif ff == 2 and worst < 7.0 and len(recent) >= 300:
+                        ff = 1
+                        print(f"[fps] 58 fps (frames take {worst:.0f} ms)", flush=True)
+                    if ff == 1 or len(recent) >= 300:
+                        recent.clear()
             if stats is not None:
                 stats.append((c1 - c0, time.perf_counter() - c1))
                 if time.monotonic() - stats_t > 10.0:
@@ -292,7 +308,7 @@ def main():
                     print(f"[stats] {len(arr)} frames/10s  render p50 {np.percentile(arr[:,0],50):.1f} p95 "
                           f"{np.percentile(arr[:,0],95):.1f} max {arr[:,0].max():.1f} ms | draw(wait) p50 "
                           f"{np.percentile(arr[:,1],50):.1f} p95 {np.percentile(arr[:,1],95):.1f} "
-                          f"max {arr[:,1].max():.1f} ms (budget 34.5)", flush=True)
+                          f"max {arr[:,1].max():.1f} ms (budget {ff * 17.2:.1f}, {58 // ff} fps)", flush=True)
                     stats.clear()
                     stats_t = time.monotonic()
     except KeyboardInterrupt:

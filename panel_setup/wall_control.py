@@ -94,7 +94,8 @@ class Runner:
     # -- commands
     def _cmd(self, what):
         if what in MODE_IDS:
-            return [PY, "panel_setup/play.py", what, "--fps", "29"]
+            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva")
+            return [PY, "panel_setup/play.py", what, "--fps", "29" if heavy else "58"]   # art: 58 fps when it can
         if what == "mirror":
             cmd = [PY, "-u", "main.py", "--no-touch", "--no-mqtt"]
             if os.environ.get("WALL_SIM"):

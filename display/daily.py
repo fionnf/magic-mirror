@@ -39,7 +39,9 @@ a single form in a lot of space, flat mid-century cut paper, Bauhaus geometry, o
 moire, conic gradient tiles, halftone dot fields, fine topographic lines, neon rods casting coloured
 fans, ink on paper, Rothko and Turrell colour fields. Few colours per piece, but the wall should
 range widely from day to day: cold and warm, pale and deep, colour fields as well as glows. Each
-day comes with a DIRECTION (below) - follow it. Make your own piece, never a copy of a reference.
+day comes with a DIRECTION (below) - follow it. Make your own piece, never a copy of a reference. Above all the house loves ONE luminous form in calm
+space - like a violet glass orb with a white rim light, a halftone dot ring, a soft out-of-focus blue
+ring - never busy patterns.
 
 What makes a good piece here:
 - one clear idea, generous negative space or calm fields, beautiful at a glance and rewarding
@@ -203,8 +205,10 @@ The house's taste: slow, restrained and elegant; one idea per piece; few colours
 that the wall should range widely - colour fields, pale paper grounds, cut paper, Bauhaus, op-art, halftone,
 neon, ink - not the same dim warm glow on black every day. They dislike busy, multicolour, clip-art,
 watercolour and lava-lamp looks. It must be beautiful enough to fall asleep in front of and read on a coarse
-LED grid. Each day has a DIRECTION; a piece that ignores it, or looks like one of the recent days you are
-shown, cannot score above 5.
+LED grid. The residents' favourites are single glowing forms: a violet glass orb with a white rim light, a
+halftone dot ring, a soft out-of-focus blue ring. Busy pieces - stripes, checkerboards, many small elements,
+fine high-contrast patterns that shimmer on LEDs - cannot score above 5. Each day has a DIRECTION; a piece
+that ignores it, or looks like one of the recent days you are shown, cannot score above 5.
 
 Judge honestly. Score 1-10. 7 means you would hang it; below 7 it goes back with one concrete, actionable
 note for the artist (what to change in form, palette, density or motion). Keep the verdict to two sentences."""

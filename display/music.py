@@ -602,6 +602,8 @@ class Listener:
             norm = lambda k: min(1.0, raw[k] / self.bpeak[k])
             f["energy"] = _ema(f["energy"], 0 if silent else min(1.0, rms / self.peak), dt, 2.0)
             f["bass"] = _ema(f["bass"], 0 if silent else norm("bass"), dt, 0.12)
+            bl0, bl = f.get("bass_live", 0.0), 0.0 if silent else max(norm("bass"), norm("kickband"))
+            f["bass_live"] = _ema(bl0, bl, dt, 0.02 if bl > bl0 else 0.15)   # the live bass: instant in, quick out
             kin = 0.0 if silent else norm("kickband") ** 1.2
             k0 = f.get("kick", 0.0)
             f["kick"] = _ema(k0, kin, dt, 0.09 if kin > k0 else 0.6)     # ease in, slow fade
@@ -1001,7 +1003,8 @@ class Visuals:
         # drift speed follows the music only slowly - no speeding up on every bass note
         target = (0.35 + 0.6 * f["energy"]) * f.get("vibe_speed", 1.0) * f.get("d_speed", 1.0)
         self.speed = _ema(getattr(self, "speed", target), target, dt, f.get("speed_tc", 3.0))
-        self.phase += dt * self.speed * (1.0 + 0.45 * f.get("groove", 0.0) + 0.25 * f.get("kick", 0.0))
+        self.phase += dt * self.speed * (1.0 + 0.15 * f.get("groove", 0.0) + 0.15 * f.get("kick", 0.0)
+                                         + 1.2 * f.get("swell", 0.0))
         if f["beat"] and (not self.ripples or time.time() - self.ripples[-1][2] > 1.2):
             rs = random.random
             self.ripples.append([rs() * self.W, rs() * self.H * 0.9, time.time()])
@@ -1128,8 +1131,8 @@ class Visuals:
         if not r.ok:
             return self.aurora(f, lut)
         cols = tuple(tuple(float(v) / 255.0 for v in lut[i]) for i in (25, 140, 245))
-        feats = {"bass": f.get("kick", 0.0), "mid": f.get("mid", 0.0), "treble": f.get("treble", 0.0),
-                 "energy": f.get("energy", 0.0), "level": CURRENT_LEVEL}
+        feats = {"bass": max(f.get("kick", 0.0), f.get("swell", 0.0)), "mid": f.get("mid", 0.0),
+                 "treble": f.get("treble", 0.0), "energy": f.get("energy", 0.0), "level": CURRENT_LEVEL}
         return r.render(name, self.phase * 2.0, feats, cols)
 
     def art_(self, pid, f, dt):
@@ -1411,6 +1414,10 @@ class MusicShow:
         for key in ("energy", "bass", "kick", "mid", "treble"):
             f[key] = min(1.0, f[key] * react)
         f["kick_fast"] = f["kick"]                                     # the quick kick (for motion only)
+        # PUNCH: the live bass, for motion that answers each bass note. A soft knee keeps a steady
+        # bass hum from wobbling the picture; only the notes above it move things.
+        bl = max(0.0, (min(1.0, f.get("bass_live", 0.0) * react) - 0.18) / 0.82)
+        f["punch"] = 0.0 if f["silent"] else bl ** 1.3
         self.ks = _ema(self.ks, f["kick"], dt, P["smooth"])          # organic: a smoothed bass envelope
         env = self.ks
         c = self.vj.choice
@@ -1466,6 +1473,11 @@ class MusicShow:
         f["d_speed"] = min(f["d_speed"], 0.6 + 0.8 * L)   # never frantic; near-still when quiet
         f["speed_tc"] = max(2.0, P["tc"])
         f["loop_music"] = self.settings.get("loop_music", "tempo")
+        # the live bass as a smooth swell: rises with a bass note in ~0.1 s, eases off over ~0.5 s.
+        # It pushes the flow forward (motion only - no zoom: resampling makes LED lines shimmer, and
+        # no light pulses: they read as flicker). The app's beat strength (0..200%) scales it.
+        self.swell = _ema(getattr(self, "swell", 0.0), f["punch"], dt, 0.1 if f["punch"] > getattr(self, "swell", 0.0) else 0.5)
+        f["swell"] = self.swell * (0.5 + 0.7 * L) * self.settings.get("beat_strength", 100) / 100.0
         if self.cur[0] == "wave" or (self.prev and self.prev[0] == "wave") or self._target()[0] == "wave":
             raw = self.l.recent(0.07)                                   # the last 70 ms of sound
             if len(raw) >= self.W:

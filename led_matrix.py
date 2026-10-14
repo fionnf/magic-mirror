@@ -16,21 +16,38 @@ import config
 _CH = np.arange(3)
 SNAPSHOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "panel_setup", "now.jpg")
 _snap_t = [0.0]
+_snap_q = []
+
+
+def _snap_writer():
+    import time
+    while True:
+        time.sleep(0.2)
+        if not _snap_q:
+            continue
+        image = _snap_q.pop()
+        _snap_q.clear()
+        try:
+            tmp = SNAPSHOT + ".tmp.jpg"
+            image.save(tmp, quality=85)
+            os.replace(tmp, SNAPSHOT)
+        except Exception:
+            pass
 
 
 def write_snapshot(image):
-    """What the wall shows, for the app's live preview: a small JPEG at most once a second."""
+    """What the wall shows, for the app's live preview: a small JPEG at most once a second. The JPEG
+    is encoded and written on a side thread, so the frame loop never waits on it (a late frame is a
+    visible hitch)."""
+    import threading
     import time
     now = time.monotonic()
     if now - _snap_t[0] < 1.0:
         return
+    if _snap_t[0] == 0.0:
+        threading.Thread(target=_snap_writer, daemon=True).start()
     _snap_t[0] = now
-    try:
-        tmp = SNAPSHOT + ".tmp.jpg"
-        image.convert("RGB").save(tmp, quality=85)
-        os.replace(tmp, SNAPSHOT)
-    except Exception:
-        pass
+    _snap_q.append(image.copy())
 
 
 class LedMatrix:

@@ -1191,6 +1191,8 @@ def main():
     signal.signal(signal.SIGTERM, bye)
     signal.signal(signal.SIGINT, bye)
     app = make_app(runner)
+    import logging                                      # no line per request (the app polls every 1.5 s)
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
     app.run(host="0.0.0.0", port=a.port, threaded=True, debug=False, use_reloader=False)
 
 

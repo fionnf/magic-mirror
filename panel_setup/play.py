@@ -269,9 +269,23 @@ def main():
     # held for 2 refreshes). Halving the step between frames is what makes slow motion stop quivering.
     ff = 1 if a.fps >= 50 else 2
     recent = []
+    # The animation's clock runs on the panels' refresh, not on when Python gets round to a frame:
+    # each frame is drawn for the moment it will be on screen (last swap + ff refreshes), so motion
+    # advances in exactly equal steps. The refresh period is measured; a dropped refresh or a long
+    # pause pulls the clock back to real time.
+    period, shown, tv, late = 1 / 58.1, None, 0.0, 0
+    import gc
+    gc.collect()
+    gc.freeze()                                         # start-up objects never rescanned mid-frame
     try:
         while True:
-            t = time.monotonic() - t0
+            now = time.monotonic()
+            if shown is None or now - shown > 0.25:
+                tv = now - t0
+            else:
+                tv += ff * period
+                tv += 0.02 * ((now - t0) - tv)          # slow pull towards real time, never a jump
+            t = tv
             if a.seconds and t > a.seconds:
                 break
             # each frame held for exactly ff refreshes (58 Hz -> 58 or 29 fps), paced by the
@@ -288,6 +302,16 @@ def main():
             c1 = time.perf_counter()
             if not matrix.draw(img, frame_fraction=ff):
                 time.sleep(interval / (2 if ff == 1 else 1))   # unchanged frame: nothing to pace
+                shown = None
+            else:
+                ts = time.monotonic()
+                if shown is not None:
+                    gap = (ts - shown) / ff
+                    if abs(gap - period) < 0.15 * period:  # a normal swap: refine the refresh period
+                        period += 0.01 * (gap - period)
+                    elif gap > 1.5 * period:
+                        late += 1
+                shown = ts
             if a.fps >= 50:                             # adapt: heavy moments fall back to 29 fps
                 recent.append(c1 - c0)                  # the frame's own work, not the vsync wait
                 if len(recent) >= 60:
@@ -308,8 +332,10 @@ def main():
                     print(f"[stats] {len(arr)} frames/10s  render p50 {np.percentile(arr[:,0],50):.1f} p95 "
                           f"{np.percentile(arr[:,0],95):.1f} max {arr[:,0].max():.1f} ms | draw(wait) p50 "
                           f"{np.percentile(arr[:,1],50):.1f} p95 {np.percentile(arr[:,1],95):.1f} "
-                          f"max {arr[:,1].max():.1f} ms (budget {ff * 17.2:.1f}, {58 // ff} fps)", flush=True)
+                          f"max {arr[:,1].max():.1f} ms (budget {ff * 17.2:.1f}, {58 // ff} fps) | late {late} | "
+                          f"refresh {1 / period:.2f} Hz", flush=True)
                     stats.clear()
+                    late = 0
                     stats_t = time.monotonic()
     except KeyboardInterrupt:
         pass

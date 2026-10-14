@@ -1,6 +1,6 @@
 {
- "name": "Interference in Cobalt",
- "description": "A field of Riley-like cobalt and cream stripes that wakes straight and quiet, then through the day lets a slow set of concentric rings drift in across it, until by night the two systems lean, widen and cross into a full, breathing moire.",
+ "name": "Jade Lantern, Eclipsed",
+ "description": "A single emerald glass orb hangs in deep green dark: at morning it is lit from the front like a lantern, and through the afternoon its light slips behind it, until late at night only a pale mint rim and a wide breath of halo remain around a dark jade disc.",
  "image": "2026-10-14.png",
  "animation_source": "2026-10-14.frag",
  "attributes": [
@@ -14,7 +14,7 @@
   },
   {
    "trait_type": "Palette",
-   "value": "#0a1033 #2433b8 #efe3c4"
+   "value": "#020d09 #137a56 #b8f5d6"
   },
   {
    "trait_type": "Medium",
@@ -26,26 +26,26 @@
   },
   {
    "trait_type": "Curator score",
-   "value": 7
+   "value": 8
   }
  ],
- "listening": "The bass breath gently deepens the sway of the stripes, rising tension tightens the ring spacing towards the stripe spacing so the moire gathers before a chorus, treble sharpens the edges, the key leans the cream slightly towards the cobalt, each song sets a faintly different ring ellipse, and every hour's music energy is written into the thickness of the stripes at its own height, so by midnight the wall carries a stratified record of the day.",
+ "listening": "The bass breathes the orb's size and the warmth of its halo, rising tension draws the halo in close around the rim, the key leans the glass between jade and mint, treble sharpens the highlight, each song turns the light to its own angle, and the day's music widens the halo hour by hour so the night state carries the whole day's sound.",
  "palette": [
-  "#0a1033",
-  "#2433b8",
-  "#efe3c4"
+  "#020d09",
+  "#137a56",
+  "#b8f5d6"
  ],
- "source_sha256": "e4328864ad0adcfc48ee04ae35c7762be99a94a5462777523f44c75101373230",
+ "source_sha256": "651b67fd91c45424d8a59650ca0b3a416ba415ba267ec38c37ba4f5affd74aca",
  "model": "claude-opus-5-5",
  "size": [
   192,
   192
  ],
- "attempts": 4,
- "created": 1791979679.55306,
+ "attempts": 2,
+ "created": 1791981448.296849,
  "curator": {
-  "score": 7,
-  "verdict": "A true op-art piece in cobalt and cream that breaks cleanly from the recent warm-glow-on-black run, with a legible arc from quiet stripes to full moire. It's bold for falling asleep to, and the 3 pm and 8 pm stills already read as dense checkerboards, so the arc peaks too early, but I would hang it."
+  "score": 8,
+  "verdict": "A single emerald orb that moves from front-lit lantern to eclipsed mint rim gives a real day's arc, and it sits squarely inside the direction while breaking cleanly from the recent warm dim glows. It echoes the residents' glass-orb and eclipse favourites, reads boldly on a coarse grid, and is calm enough to sleep in front of."
  },
- "direction": "Op-art"
+ "direction": "Emerald orb"
 }

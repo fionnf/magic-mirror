@@ -37,8 +37,49 @@ def _token():
         return ""
 
 
+DEPLOY_KEY = os.path.expanduser(os.environ.get("GALLERY_DEPLOY_KEY", "~/.ssh/fortuna_deploy"))
+CLONE = os.path.expanduser(os.environ.get("GALLERY_CLONE", "~/fortuna-gallery"))
+
+
+def _git(*args, cwd=CLONE):
+    env = dict(os.environ, GIT_SSH_COMMAND=f"ssh -i {DEPLOY_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new")
+    r = subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, timeout=180)
+    if r.returncode != 0:
+        raise RuntimeError(f"git {args[0]}: {(r.stderr or r.stdout).strip()[:200]}")
+    return r.stdout
+
+
+def _commit_with_deploy_key(files, message):
+    """The wall's way: a small sparse clone pushed over SSH with a deploy key (write access to this
+    one repository only), so no personal token has to live on the Pi."""
+    if not os.path.isdir(os.path.join(CLONE, ".git")):
+        _git("clone", "--depth", "1", "--filter=blob:none", "--sparse", "--branch", BRANCH,
+             f"git@github.com:{REPO}.git", CLONE, cwd=os.path.dirname(CLONE))
+        _git("sparse-checkout", "set", "gallery", "wall")
+        _git("config", "user.name", "fortuna-wall")
+        _git("config", "user.email", "wall@users.noreply.github.com")
+    for attempt in range(3):
+        _git("fetch", "--depth", "1", "origin", BRANCH)
+        _git("reset", "--hard", f"origin/{BRANCH}")
+        for path, data in files.items():
+            full = os.path.join(CLONE, path)
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full, "wb") as fh:
+                fh.write(data)
+        _git("add", "--sparse", *files)
+        if not _git("status", "--porcelain").strip():
+            return None
+        _git("commit", "-q", "-m", message)
+        try:
+            _git("push", "-q", "origin", f"HEAD:{BRANCH}")
+            return _git("rev-parse", "HEAD").strip()
+        except RuntimeError:                      # someone pushed in between: fetch and try again
+            continue
+    raise RuntimeError("could not push to the gallery after 3 tries")
+
+
 def available():
-    return bool(_token())
+    return bool(_token()) or os.path.exists(DEPLOY_KEY)
 
 
 def public_meta(meta):
@@ -64,7 +105,9 @@ def commit_files(files, message):
     import hashlib
     tok = _token()
     if not tok:
-        raise RuntimeError("no GALLERY_TOKEN (and no gh login) - cannot publish")
+        if os.path.exists(DEPLOY_KEY):
+            return _commit_with_deploy_key(files, message)
+        raise RuntimeError("no GALLERY_TOKEN, gh login or deploy key - cannot publish")
     s = requests.Session()
     s.headers.update({"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json",
                       "X-GitHub-Api-Version": "2022-11-28"})

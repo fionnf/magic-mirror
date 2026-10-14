@@ -27,7 +27,6 @@ class CastWatcher:
         self.lock = threading.Lock()
         self.browser = None
         self.error = ""
-        self.only = None                               # speakers that count (set by the server)
 
     def start(self):
         try:
@@ -74,7 +73,6 @@ class CastWatcher:
                 "image": img, "app": app,
                 "since": old.get("since") if old.get("playing") == playing else time.time(),
                 "seen": time.time()}
-        self._write()
 
     # -- reading
     def names(self):
@@ -85,16 +83,20 @@ class CastWatcher:
             infos = []
         return sorted({(getattr(i, "friendly_name", "") or "").strip() for i in infos} - {""})
 
-    def chosen(self, settings):
-        """The speakers that count: the app's choice, else every one not in a room like the bathroom."""
-        pick = settings.get("cast_devices")
-        if isinstance(pick, list):
-            return set(pick)
-        return {n for n in self.names() if not any(r in n.lower() for r in OTHER_ROOMS)}
+    def chosen(self, settings, extra=(), home=()):
+        """The devices that count. Default: every Cast speaker not in another room (bathroom...), plus
+        `home` (Spotify devices that are a TV or speaker). settings["cast_devices"] = {name: bool}
+        holds only what was switched by hand, so a newly found device still gets the default."""
+        pick = settings.get("cast_devices") or {}
+        default = {n for n in list(self.names()) + list(home) if not any(r in n.lower() for r in OTHER_ROOMS)}
+        return {n for n in self.all_names(extra) if pick.get(n, n in default)}
 
-    def speakers(self, settings):
-        ch = self.chosen(settings)
-        return [{"name": n, "on": n in ch} for n in self.names()]
+    def all_names(self, extra=()):
+        return sorted(set(self.names()) | set(extra))
+
+    def speakers(self, settings, extra=(), home=()):
+        ch = self.chosen(settings, extra, home)
+        return [{"name": n, "on": n in ch} for n in self.all_names(extra)]
 
     def now(self, chosen=None):
         """The device that matters most: playing music > playing anything > paused; newest first.
@@ -109,14 +111,17 @@ class CastWatcher:
             return None
         return dict(best)
 
-    def _write(self):
-        try:
-            tmp = NOW_FILE + ".tmp"
-            with open(tmp, "w") as fh:
-                json.dump(self.now(chosen=self.only) or {}, fh)
-            os.replace(tmp, NOW_FILE)
-        except Exception:
-            pass
+
+
+def write_now(d):
+    """The playing music the house cares about (written by the server, read by the music mode)."""
+    try:
+        tmp = NOW_FILE + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump({**d, "written": time.time()} if d else {}, fh)
+        os.replace(tmp, NOW_FILE)
+    except Exception:
+        pass
 
 
 def read_now(max_age=900.0):
@@ -126,7 +131,7 @@ def read_now(max_age=900.0):
             d = json.load(fh)
     except Exception:
         return None
-    if d.get("playing") and d.get("music") and d.get("title") and time.time() - d.get("seen", 0) < max_age:
+    if d.get("playing") and d.get("music") and d.get("title") and time.time() - d.get("written", 0) < max_age:
         return d
     return None
 

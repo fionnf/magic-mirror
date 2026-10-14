@@ -75,7 +75,22 @@ def save_state(s):
 
 
 from display.cast import CastWatcher
-CAST = CastWatcher()
+from display.spotify import SpotifyWatcher
+CAST, SPOT = CastWatcher(), SpotifyWatcher()
+
+
+def speaker_now(settings):
+    """-> (the playing source that counts or None, chosen device names). Cast speakers push their
+    state; Spotify (the TV's own app) is read by cast_watch every few seconds."""
+    extra, home = list(SPOT.devices), SPOT.home_devices()
+    ch = CAST.chosen(settings, extra, home)
+    cands = [CAST.now(chosen=ch)]
+    if SPOT.last and SPOT.last["device"] in ch:
+        cands.append(SPOT.last)
+    cands = [c for c in cands if c]
+    if not cands:
+        return None, ch
+    return max(cands, key=lambda d: (d["playing"] and d["music"], d["playing"], d["since"] or 0)), ch
 
 # ----------------------------------------------------------------- runner ---
 
@@ -772,7 +787,9 @@ def make_app(runner):
         except Exception:
             now = None
         return jsonify({"settings": mu.load_settings(), "now": now,
-                        "speakers": CAST.speakers(mu.load_settings()), "speaker_now": CAST.now(),
+                        "speakers": CAST.speakers(mu.load_settings(), list(SPOT.devices), SPOT.home_devices()),
+                        "speaker_now": speaker_now(mu.load_settings())[0],
+                        "spotify": {"linked": SPOT.linked(), "error": SPOT.error},
                         "styles": mu.STYLES, "palettes": list(mu.PALETTES),
                         "vibes": list(mu.VIBES)})
 
@@ -1201,17 +1218,28 @@ def main():
         threading.Thread(target=tunnel_watch, args=(a.port,), daemon=True).start()
 
     def cast_watch():                        # "follow the speakers" (Music tab switch, off by default)
+        from display import cast as castmod
         CAST.start()
-        on_since, off_since = None, None
+        on_since, off_since, spot_t, written = None, None, 0.0, None
         while True:
             time.sleep(1.0)
             try:
                 from display import music as mu
                 st = mu.load_settings()
-                CAST.only = CAST.chosen(st)
-                c = CAST.now(chosen=CAST.only)
-                music_on = bool(c and c["playing"] and c["music"])
                 now = time.time()
+                if st["cast_follow"] and SPOT.linked():   # Spotify only asked while the switch is on
+                    busy = SPOT.last and SPOT.last["playing"]
+                    if now - spot_t >= (4 if busy else 10):
+                        spot_t = now
+                        SPOT.poll()
+                elif not st["cast_follow"]:
+                    SPOT.last = None
+                c, _ = speaker_now(st)
+                music_on = bool(c and c["playing"] and c["music"])
+                key = (c or {}).get("title"), music_on, int(now / 120)
+                if key != written:
+                    written = key
+                    castmod.write_now(c)
                 if not st["cast_follow"]:
                     on_since = off_since = None
                     continue

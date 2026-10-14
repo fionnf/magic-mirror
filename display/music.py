@@ -339,7 +339,7 @@ DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source"
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
                     "brain": "claude", "beat_offset": 0, "beat_strength": 100, "art_reacts": False,
                     "prompt": "", "mode": "manual", "party": 15, "loop": "", "loop_music": "tempo", "art": "",
-                    "cast_follow": False, "cast_devices": None}
+                    "cast_follow": False, "cast_devices": {}}
 
 
 def load_settings():
@@ -376,8 +376,8 @@ def load_settings():
     s["loop"] = str(s.get("loop", "") or "")[:80]
     s["art"] = str(s.get("art", "") or "")[:80]                 # a library piece for the "art" style ("" = rotate)
     s["cast_follow"] = bool(s.get("cast_follow", False))    # off unless switched on in the app
-    cd = s.get("cast_devices")                                # None = every speaker but the bathroom etc.
-    s["cast_devices"] = [str(x)[:80] for x in cd][:20] if isinstance(cd, list) else None
+    cd = s.get("cast_devices")                                # {name: on} switched by hand; others: default
+    s["cast_devices"] = {str(k)[:80]: bool(v) for k, v in list(cd.items())[:30]} if isinstance(cd, dict) else {}
     if s.get("loop_music") not in ("off", "tempo", "bass"):
         s["loop_music"] = "tempo"
     try:

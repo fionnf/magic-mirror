@@ -738,13 +738,14 @@ async function loadMusic() {
   $('castChips').hidden = !s.cast_follow || !sp.length;
   $('castChips').innerHTML = sp.map(x => `<button class="${x.on ? 'on' : ''}" data-cast="${esc(x.name)}">${esc(x.name)}</button>`).join('');
   $('castChips').querySelectorAll('[data-cast]').forEach(b => b.onclick = () => {
-    const on = sp.filter(x => x.on).map(x => x.name), n = b.dataset.cast;
-    api('/api/music', {cast_devices: on.includes(n) ? on.filter(x => x !== n) : on.concat(n)}).then(loadMusic).catch(e => toast(e.message));
+    const n = b.dataset.cast, x = sp.find(y => y.name === n);
+    api('/api/music', {cast_devices: {...(s.cast_devices || {}), [n]: !(x && x.on)}}).then(loadMusic).catch(e => toast(e.message));
   });
   $('castHint').textContent = !s.cast_follow ? 'Off. Switch it on and the wall shows music art whenever the chosen speakers play music.'
     : !sp.length ? 'Looking for speakers on the home network…'
     : sn && sn.playing && sn.music ? `${sn.device} is playing ${sn.title}${sn.artist ? ' by ' + sn.artist : ''}.`
-    : 'Tap a speaker to choose whether it counts. Music on a chosen one turns on the music art; when it stops, the wall goes back.';
+    : 'Tap a speaker to choose whether it counts. Music on a chosen one turns on the music art; when it stops, the wall goes back.'
+      + (MUSIC.spotify && MUSIC.spotify.linked ? ' Spotify on the TV counts too.' : '');
   const n = MUSIC.now;
   $('song').textContent = n && n.song && !n.silent ? n.song + (n.artist ? ' · ' + n.artist : '') : '';
   render();

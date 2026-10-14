@@ -46,3 +46,5 @@ _site/
 assets/daily/*.memory.json
 panel_setup/artthumbs/
 panel_setup/cast_now.json
+panel_setup/spotify_token.json
+panel_setup/spotify_devices.json

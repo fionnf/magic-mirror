@@ -1,6 +1,6 @@
 {
- "name": "Cobalt Aperture, Slowly Opening",
- "description": "A Turrell-like opening in a lit cobalt wall wakes as a small high window at dawn, swells into a pale sky-filled field at noon, sinks and widens through the evening, and narrows to a single blue slit by night, while faint inset frames record each hour of the day's music.",
+ "name": "Interference in Cobalt",
+ "description": "A field of Riley-like cobalt and cream stripes that wakes straight and quiet, then through the day lets a slow set of concentric rings drift in across it, until by night the two systems lean, widen and cross into a full, breathing moire.",
  "image": "2026-10-14.png",
  "animation_source": "2026-10-14.frag",
  "attributes": [
@@ -14,7 +14,7 @@
   },
   {
    "trait_type": "Palette",
-   "value": "#0c1838 #2c4cae #86c4e6"
+   "value": "#0a1033 #2433b8 #efe3c4"
   },
   {
    "trait_type": "Medium",
@@ -29,23 +29,23 @@
    "value": 7
   }
  ],
- "listening": "The bass breath gently swells the aperture, rising tension sharpens its edges as if the room were coming into focus, treble widens the spill of light onto the wall, the key leans the field between cobalt and pale cyan, each song nudges where the opening hangs, and every hour's energy is drawn as a faint frame around it.",
+ "listening": "The bass breath gently deepens the sway of the stripes, rising tension tightens the ring spacing towards the stripe spacing so the moire gathers before a chorus, treble sharpens the edges, the key leans the cream slightly towards the cobalt, each song sets a faintly different ring ellipse, and every hour's music energy is written into the thickness of the stripes at its own height, so by midnight the wall carries a stratified record of the day.",
  "palette": [
-  "#0c1838",
-  "#2c4cae",
-  "#86c4e6"
+  "#0a1033",
+  "#2433b8",
+  "#efe3c4"
  ],
- "source_sha256": "cc58fc12bd8ffb81a9b7678a73bdafc95d4c7e33658bfe233754cfcb6ddd4e58",
+ "source_sha256": "e4328864ad0adcfc48ee04ae35c7762be99a94a5462777523f44c75101373230",
  "model": "claude-opus-5-5",
  "size": [
   192,
   192
  ],
- "attempts": 1,
- "created": 1791964819.6985319,
+ "attempts": 4,
+ "created": 1791979679.55306,
  "curator": {
   "score": 7,
-  "verdict": "A genuine Turrell-like aperture on a fully lit cobalt ground, clearly unlike the recent warm-on-black days, with a legible day arc from window to field to slit. The faint inset frames are the weak point: on a 64x64 grid the thin concentric rings read as moir\u00e9 and shimmer, and the hue barely travels beyond blue to pale blue."
+  "verdict": "A true op-art piece in cobalt and cream that breaks cleanly from the recent warm-glow-on-black run, with a legible arc from quiet stripes to full moire. It's bold for falling asleep to, and the 3 pm and 8 pm stills already read as dense checkerboards, so the arc peaks too early, but I would hang it."
  },
- "direction": "Turrell room"
+ "direction": "Op-art"
 }

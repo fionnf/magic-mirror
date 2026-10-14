@@ -110,6 +110,16 @@
   .today h3 { font: italic 400 26px/1.1 var(--serif); margin: 8px 0 4px; }
   .today p { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
   .today .listen { font-size: 13px; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; }
+  .chips button { flex: none; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 7px 12px; font-size: 14px; }
+  .chips button.on { background: var(--ink); color: var(--room); border-color: var(--ink); }
+  .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 8px; }
+  .gallery button { border: 0; padding: 0; background: none; text-align: left; }
+  .gallery img { width: 100%; aspect-ratio: var(--aspect, 1); object-fit: cover; border-radius: 8px; display: block; background: #000;
+                 outline: 2px solid transparent; outline-offset: 2px; }
+  .gallery .sel img { outline-color: var(--ink); }
+  .gallery span { display: block; font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.25; }
+  .gallery .any img { background: linear-gradient(135deg, rgb(var(--glow)), #000); }
   .strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 6px; scroll-snap-type: x mandatory; }
   .strip button { flex: 0 0 auto; width: 74px; border: 0; padding: 0; background: none; text-align: left; scroll-snap-align: start; }
   .strip img { width: 74px; aspect-ratio: 1; object-fit: cover; border-radius: 8px; display: block; background: #000; outline: 2px solid transparent; outline-offset: 2px; }
@@ -219,7 +229,13 @@
     </section>
     <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/" target="_blank">The public gallery</a> shows every day's piece.</p>
     <section>
-      <h2>Collections</h2>
+      <h2 id="galleryHead">Gallery</h2>
+      <div class="chips" id="artChips"></div>
+      <div class="gallery" id="artGrid"></div>
+      <p class="hint">Tap a piece to hang it. It stays until you choose something else.</p>
+    </section>
+    <section>
+      <h2>Slideshows</h2>
       <div class="list" id="collections"></div>
     </section>
     <section>
@@ -261,8 +277,13 @@
       <div class="ends"><span>less sensitive</span><span>more sensitive</span></div>
     </section>
     <section>
-      <h2>Video loops</h2>
-      <div class="switch"><span>Play only the video loops</span><input type="checkbox" id="tLoops"></div>
+      <h2>What the wall shows</h2>
+      <span class="seg" id="musicShow"><button data-ms2="auto">Chosen for the music</button><button data-ms2="art">Art</button><button data-ms2="loops">Video loops</button></span>
+      <div id="musicArtBox" hidden style="margin-top:12px">
+        <p class="hint" style="margin:0 0 10px">Pieces from the gallery, in their own colours, moving with the music. Pick one or let them change.</p>
+        <div class="chips" id="musicArtChips"></div>
+        <div class="gallery" id="musicArtGrid"></div>
+      </div>
       <div id="loopBox" hidden>
         <div class="row between" style="margin:10px 0">
           <span class="hint" style="margin:0">Music moves them</span>
@@ -476,6 +497,7 @@ function ambient(img) {                 // the page takes the colour of what the
 }
 
 function titleFor(id) {
+  if (id === 'piece') { const p = ART && ART.pieces.find(x => x.id === STATUS.piece); return p ? p.title : 'One piece'; }
   if (id === 'daily') return DAILY.chosenMeta ? DAILY.chosenMeta.name : "Today's piece";
   if (id === 'music') return MUSIC.now && MUSIC.now.scene && MUSIC.now.scene !== 'untitled' ? MUSIC.now.scene : 'Listening';
   if (id === 'mirror') return 'The mirror';
@@ -485,6 +507,7 @@ function titleFor(id) {
 function subFor(id) {
   if (id === 'daily') return DAILY.chosenMeta && DAILY.chosenMeta.date !== DAILY.today
     ? 'Art of the day, ' + new Date(DAILY.chosenMeta.date).toLocaleDateString(undefined, {day: 'numeric', month: 'long'}) : 'Art of the day';
+  if (id === 'piece') { const p = ART && ART.pieces.find(x => x.id === STATUS.piece); return p ? p.collection_title : ''; }
   if (id === 'music') { const p = MUSIC.settings ? MUSIC.settings.party : 0; return 'Music · party level ' + p + '%'; }
   if (STATUS.saved === 'playlist') return 'On tour';
   const m = MODES.find(m => m.id === id); return m ? m.desc : '';
@@ -526,7 +549,7 @@ async function loadModes() {
     <button data-id="${m.id}" onclick="play('${m.id}')">
       <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
       <span><b>${m.title}</b><small>${m.desc}</small></span><i class="now" hidden></i></button>`;
-  $('shows').innerHTML = MODES.filter(m => m.cat !== 'Art' && m.id !== 'music').map(row).join('');
+  $('shows').innerHTML = MODES.filter(m => m.cat !== 'Art' && m.cat !== 'Piece' && m.id !== 'music').map(row).join('');
   $('collections').innerHTML = MODES.filter(m => m.id !== 'daily' && m.cat === 'Art').map(m => `
     <button data-id="${m.id}" onclick="play('${m.id}')">
       <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
@@ -653,6 +676,38 @@ function setHourMode(mode) {
   requestAnimationFrame(() => tickHour(now));
 })(performance.now());
 
+/* ---------- the gallery: every piece, one tap to hang ---------- */
+let ART = null, artFilter = 'all', musicArtFilter = 'all';
+async function loadArt() {
+  if (!ART) { try { ART = await api('/api/art'); } catch (e) { return; } }
+  const chips = (sel, fn) => [{key: 'all', title: 'All'}].concat(ART.collections)
+    .map(c => `<button class="${sel === c.key ? 'on' : ''}" onclick="${fn}('${c.key}')">${esc(c.title)}</button>`).join('');
+  $('artChips').innerHTML = chips(artFilter, 'filterArt');
+  const cur = STATUS.current === 'piece' ? STATUS.piece : null;
+  const list = ART.pieces.filter(p => artFilter === 'all' || p.collection === artFilter);
+  $('galleryHead').textContent = `Gallery · ${ART.pieces.length} pieces`;
+  $('artGrid').innerHTML = list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
+      <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
+  if (MUSIC.settings && MUSIC.settings.style === 'art') {
+    $('musicArtChips').innerHTML = chips(musicArtFilter, 'filterMusicArt');
+    const mcur = MUSIC.settings.art || '';
+    const mlist = ART.pieces.filter(p => musicArtFilter === 'all' || p.collection === musicArtFilter);
+    $('musicArtGrid').innerHTML = `<button class="any ${mcur ? '' : 'sel'}" onclick="musicArt('')"><img alt=""><span>Let them change</span></button>` +
+      mlist.map(p => `<button class="${p.id === mcur ? 'sel' : ''}" onclick="musicArt('${p.id}')">
+        <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
+  }
+}
+function filterArt(k) { artFilter = k; loadArt(); }
+function filterMusicArt(k) { musicArtFilter = k; loadArt(); }
+async function hangPiece(id) {
+  try { STATUS = await api('/api/art/play', {id}); render(); loadArt(); const p = ART.pieces.find(x => x.id === id); toast('Hanging ' + (p ? p.title : 'it')); }
+  catch (e) { toast(e.message); }
+}
+async function musicArt(id) {
+  try { await api('/api/music', {art: id}); await loadMusic(); const p = ART.pieces.find(x => x.id === id); toast(p ? p.title + ' with the music' : 'The art will change with the music'); }
+  catch (e) { toast(e.message); }
+}
+
 /* ---------- music ---------- */
 const partyName = v => v <= 10 ? 'Breathing' : v <= 35 ? 'A quiet evening' : v <= 60 ? 'Lively' : v <= 85 ? 'A party' : 'Dance floor';
 async function loadMusic() {
@@ -666,7 +721,10 @@ async function loadMusic() {
   $('party').disabled = autoOn;
   if (document.activeElement !== $('sens')) $('sens').value = s.sensitivity;
   $('tAuto').checked = autoOn; $('tShz').checked = !!s.shazam; $('tWall').checked = !!s.song_on_wall; $('tReact').checked = !!s.art_reacts;
-  $('tLoops').checked = s.style === 'loops'; $('loopBox').hidden = s.style !== 'loops';
+  const show = s.style === 'loops' ? 'loops' : s.style === 'art' ? 'art' : 'auto';
+  document.querySelectorAll('[data-ms2]').forEach(b => b.classList.toggle('on', b.dataset.ms2 === show));
+  $('loopBox').hidden = show !== 'loops'; $('musicArtBox').hidden = show !== 'art';
+  if (show === 'art') loadArt();
   document.querySelectorAll('[data-lm]').forEach(b => b.classList.toggle('on', b.dataset.lm === s.loop_music));
   if (s.style === 'loops') loadLoops(s.loop || '');
   const n = MUSIC.now;
@@ -679,7 +737,8 @@ $('party').addEventListener('input', debounce(e => api('/api/music', {party: +e.
 $('sens').addEventListener('input', debounce(e => api('/api/music', {sensitivity: +e.target.value}), 300));
 const musicSwitch = (id, key, val = c => c) => $(id).addEventListener('change', e => api('/api/music', {[key]: val(e.target.checked)}).then(loadMusic).catch(err => toast(err.message)));
 musicSwitch('tAuto', 'mode', c => c ? 'auto' : 'manual'); musicSwitch('tShz', 'shazam'); musicSwitch('tWall', 'song_on_wall'); musicSwitch('tReact', 'art_reacts');
-$('tLoops').addEventListener('change', e => api('/api/music', {style: e.target.checked ? 'loops' : 'auto', start: true}).then(r => { STATUS = r.status || STATUS; loadMusic(); }));
+document.querySelectorAll('[data-ms2]').forEach(b => b.onclick = () =>
+  api('/api/music', {style: b.dataset.ms2, start: true}).then(r => { STATUS = r.status || STATUS; loadMusic(); }).catch(e => toast(e.message)));
 document.querySelectorAll('[data-lm]').forEach(b => b.onclick = () => api('/api/music', {loop_music: b.dataset.lm}).then(loadMusic));
 let LOOPS = null, loopSel = null;
 async function loadLoops(sel) {
@@ -780,7 +839,7 @@ async function start() {
   started = true;
   if (welcome.piece && window.Fortuna) { window.Fortuna.remove(welcome.piece); welcome.piece = null; }   // the door piece stops once inside
   $('qrImg').src = $('qrLink').href = u('/d/qr.png');
-  shaderLib(); loadScenes(); loadDaily(); loadMusic(); refreshNow();
+  shaderLib(); loadScenes(); loadDaily(); loadMusic(); refreshNow(); loadArt();
   try { const t = localStorage.getItem('tab'); if (t) document.querySelector(`nav [data-tab="${t}"]`).click(); } catch (e) {}
   setInterval(refresh, 3000); setInterval(loadMusic, 5000); setInterval(loadDaily, 60000); setInterval(refreshNow, 1500); setInterval(loadScenes, 30000);
   const rows = Math.round((STATUS.wall_h || 192) / 64), cols = Math.round((STATUS.wall_w || 192) / 64);

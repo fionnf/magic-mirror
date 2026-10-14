@@ -1,42 +1,39 @@
-// Cobalt Aperture, Slowly Opening - art of the day 2026-10-14
-// A Turrell-like opening in a lit cobalt wall wakes as a small high window at dawn, swells into a pale sky-filled field at noon, sinks and widens through the evening, and narrows to a single blue slit by night, while faint inset frames record each hour of the day's music.
-float sdRR(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
-float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+// Interference in Cobalt - art of the day 2026-10-14
+// A field of Riley-like cobalt and cream stripes that wakes straight and quiet, then through the day lets a slow set of concentric rings drift in across it, until by night the two systems lean, widen and cross into a full, breathing moire.
+float tri(float p){return abs(fract(p)-0.5)*2.0;}
 void mainImage(out vec4 fragColor, in vec2 fragCoord){
-  vec2 R = iResolution;
-  vec2 uv = (fragCoord - 0.5 * R) / R.y;
-  float a = R.x / R.y;
-  float s = min(a, 1.0);
-  float c = iClock;
-  float day = smoothstep(5.0, 12.0, c) * (1.0 - smoothstep(15.0, 22.0, c));
-  float eve = smoothstep(14.0, 19.0, c) * (1.0 - smoothstep(21.0, 24.0, c));
-  vec2 hs = vec2((0.10 + 0.16 * day + 0.14 * eve) * s, max(0.022, 0.025 + 0.30 * day - 0.04 * eve));
-  hs.x += 0.015 * sin(iTime * 0.0043) * s;
-  hs.y *= 1.0 + 0.06 * sin(iTime * 0.0027 + 1.3);
-  hs *= 1.0 + 0.04 * iBreath;
-  vec2 cen = vec2(0.03 * sin(iTime * 0.011 + iSong * 6.2832) + 0.02 * sin(iTime * 0.0031), 0.16 - 0.16 * smoothstep(4.0, 12.0, c) - 0.12 * smoothstep(13.0, 21.0, c) + 0.012 * sin(iTime * 0.007));
-  cen.x *= s;
-  cen.x += 0.003 * sin(iBeatPhase * 6.2832);
-  float soft = mix(0.035, 0.012, iTension) + 0.008 * sin(iTime * 0.017);
-  float d = sdRR(uv - cen, hs, 0.02);
-  float inside = 1.0 - smoothstep(-soft, soft, d);
-  vec3 ground = mix(iColA, iColB, clamp(0.42 + 0.18 * day + 0.12 * eve + 0.18 * uv.y, 0.0, 1.0));
-  float spill = exp(-max(d, 0.0) * mix(9.0, 5.0, iBright));
-  ground = mix(ground, iColB * 1.12, spill * 0.35);
-  float k = 0.22 + 0.48 * day + 0.08 * eve + 0.07 * sin(iKey) + 0.05 * sin(iTime * 0.0021);
-  vec3 ap = mix(iColB, iColC, clamp(k, 0.0, 0.8));
-  ap *= 0.9 + 0.1 * smoothstep(-0.25, 0.0, d);
-  float rings = 0.0;
-  for (int i = 0; i < 24; i++) {
-    float hr = float(i);
-    float on = step(hr, c);
-    float r = 0.035 + hr * 0.011;
-    float x = (d - r) / 0.0035;
-    rings += exp(-x * x) * iDay[i] * on;
-  }
-  ground = mix(ground, mix(iColB, iColC, 0.5), clamp(rings * 0.18, 0.0, 0.3));
-  vec3 col = mix(ground, ap, inside);
-  col += (hash(fragCoord + fract(iTime * 0.01)) - 0.5) * 0.01;
-  col = clamp(col, 0.0, 0.92);
-  fragColor = vec4(col, 1.0);
+ vec2 R=iResolution;
+ vec2 uv=(fragCoord-0.5*R)/R.y;
+ float t=iTime;
+ float c=iClock;
+ float k=smoothstep(7.0,17.0,c);
+ float night=clamp(smoothstep(21.0,24.0,c)+1.0-smoothstep(0.0,5.0,c),0.0,1.0);
+ float ang=0.42*smoothstep(6.0,23.0,c)+0.06*sin(t*0.0013);
+ float ca=cos(ang); float sa=sin(ang);
+ vec2 q=vec2(ca*uv.x-sa*uv.y, sa*uv.x+ca*uv.y);
+ float f1=mix(15.0,10.0,night);
+ float warp=(0.045+0.012*iBreath)*sin(q.y*3.1+t*0.011)+0.022*sin(q.y*6.3-t*0.007+1.3)+0.03*sin(q.y*1.7+t*0.0041+c*0.2);
+ float p1=(q.x+warp)*f1;
+ vec2 c2=vec2(0.36*sin(t*0.0021+c*0.26),0.30*cos(t*0.0016+c*0.19));
+ c2.y+=0.08*(R.y/R.x-1.0)*sin(c*0.3);
+ vec2 d=uv-c2;
+ d.x*=1.0+0.012*(fract(iSong*7.31)-0.5);
+ float f2=f1*1.045-0.25*iTension;
+ float p2=length(d)*f2-t*0.004;
+ float hy=clamp(fragCoord.y/R.y,0.0,0.9999)*23.0;
+ int i0=int(floor(hy));
+ int i1=min(i0+1,23);
+ float e=mix(iDay[i0],iDay[i1],smoothstep(0.0,1.0,fract(hy)));
+ float duty=0.44+0.24*clamp(e,0.0,1.0);
+ float aa=0.10-0.03*iBright+0.6*f1/R.y;
+ float s1=smoothstep(duty-aa,duty+aa,tri(p1));
+ float s2=smoothstep(0.5-aa,0.5+aa,tri(p2));
+ float x=s1*s2+(1.0-s1)*(1.0-s2);
+ float s=mix(s1,x,k);
+ vec3 cream=mix(iColC,iColB,0.08+0.06*sin(iKey));
+ vec3 ground=mix(iColB,iColA,0.12+0.1*night);
+ vec3 col=mix(ground,cream*0.9,s);
+ float vig=smoothstep(0.35,1.0,length(uv*vec2(R.y/R.x,1.0))*1.3);
+ col=mix(col,iColA,0.3*vig);
+ fragColor=vec4(col,1.0);
 }

@@ -298,7 +298,7 @@ def curate(title, statement, src, pal, direction=None):
     return int(j.get("score", 0)), j.get("verdict", "").strip(), j.get("note", "").strip()
 
 
-def generate(date=None, notes="", attempts=6, min_score=7):
+def generate(date=None, notes="", attempts=6, min_score=7, direction=None):
     """Ask Claude for today's piece, check it, save it. -> metadata dict (raises if all attempts fail)."""
     import ai_client
     from PIL import Image
@@ -308,7 +308,9 @@ def generate(date=None, notes="", attempts=6, min_score=7):
     past = [m for dd, m in editions() if dd < date][:10]
     recent = [m.get("name", "") for m in past]
     recent_pals = [m["palette"] for m in past if len(m.get("palette") or []) == 3]
-    direction = directions.pick(d, used=[m.get("direction") for m in past[:8]])
+    if isinstance(direction, str):
+        direction = next(x for x in directions.DIRECTIONS if x["name"] == direction)
+    direction = direction or directions.pick(d, used=[m.get("direction") for m in past[:8]])
     print(f"[daily] {date}: direction {direction['name']!r}", flush=True)
     user = (f"Today is {d.strftime('%A %d %B %Y')} ({_season(d)} in Zürich; the season is background, "
             "not a subject - do not reach for autumn ambers).\n\n" + directions.brief(direction) +
@@ -384,6 +386,24 @@ def generate(date=None, notes="", attempts=6, min_score=7):
     return meta
 
 GALLERY_RAW = os.environ.get("GALLERY_RAW", "https://raw.githubusercontent.com/fionnf/magic-mirror/master/gallery/")
+
+
+def refresh(date):
+    """If the gallery's piece for this date has been replaced (a better one hung), fetch it again.
+    -> new metadata, or None when nothing changed."""
+    import requests
+    if not os.path.exists(_path(date, "json")):
+        return None
+    try:
+        with open(_path(date, "json")) as fh:
+            mine = json.load(fh).get("source_sha256")
+        r = requests.get(f"{GALLERY_RAW}{date}.json", timeout=20)
+        if r.status_code != 200 or r.json().get("source_sha256") in (None, mine):
+            return None
+    except Exception:
+        return None
+    print(f"[daily] {date}: the gallery has a new piece", flush=True)
+    return fetch(date)
 
 
 def fetch(date):

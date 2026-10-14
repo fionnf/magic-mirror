@@ -338,7 +338,7 @@ NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # re
 DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "pi",
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
                     "brain": "claude", "beat_offset": 0, "beat_strength": 100, "art_reacts": False,
-                    "prompt": "", "mode": "manual", "party": 15, "loop": "", "loop_music": "tempo"}
+                    "prompt": "", "mode": "manual", "party": 15, "loop": "", "loop_music": "tempo", "art": ""}
 
 
 def load_settings():
@@ -347,7 +347,7 @@ def load_settings():
             s = {**DEFAULT_SETTINGS, **json.load(fh)}
     except Exception:
         s = dict(DEFAULT_SETTINGS)
-    if s["style"] != "auto" and s["style"] not in STYLES:
+    if s["style"] != "auto" and s["style"] != "art" and s["style"] not in STYLES:
         s["style"] = "auto"                                 # ("loops" is in STYLES: video loops only)
     if s["palette"] != "auto" and s["palette"] not in PALETTES:
         s["palette"] = "auto"
@@ -373,6 +373,7 @@ def load_settings():
     if s.get("mode") not in MODES:
         s["mode"] = "manual"
     s["loop"] = str(s.get("loop", "") or "")[:80]
+    s["art"] = str(s.get("art", "") or "")[:80]                 # a library piece for the "art" style ("" = rotate)
     if s.get("loop_music") not in ("off", "tempo", "bass"):
         s["loop_music"] = "tempo"
     try:
@@ -1107,6 +1108,36 @@ class Visuals:
                  "energy": f.get("energy", 0.0), "level": CURRENT_LEVEL}
         return r.render(name, self.phase * 2.0, feats, cols)
 
+    def art_(self, pid, f, dt):
+        """A library piece in its own colours. Shaders hear the music through their uniforms; the
+        other pieces simply move a little faster with the music's energy (never flashing)."""
+        from display import library
+        cache = self.__dict__.setdefault("_art", {})
+        if pid not in cache:
+            p = library.make(pid, self.W, self.H)
+            if p is None:
+                return np.zeros((self.H, self.W, 3), np.float32)
+            p.reset()
+            cache.clear()                                  # one piece at a time (cross-fades render both)
+            cache[pid] = [p, 0.0]
+        p, t = cache[pid]
+        self._art_breath = getattr(self, "_art_breath", 0.0) * 0.96 + 0.04 * f.get("kick", 0.0)   # a slow bass swell
+        speed = 0.12 * (1.0 + 1.5 * f.get("energy", 0.0) * CURRENT_LEVEL + 0.4 * f.get("energy", 0.0))
+        t += dt * speed
+        cache[pid][1] = t
+        if hasattr(p, "cols") and hasattr(p, "name") and not hasattr(p, "pieces"):   # a shader piece
+            r = vjshaders.renderer()
+            if r.ok:
+                feats = {"bass": f.get("kick", 0.0), "mid": f.get("mid", 0.0), "treble": f.get("treble", 0.0),
+                         "energy": f.get("energy", 0.0), "level": CURRENT_LEVEL, "breath": self._art_breath,
+                         "beat_phase": f.get("beat_phase", 0.0) if CURRENT_LEVEL > 0.4 else 0.0}
+                img = r.render(p.name, 30.0 + t * 8.0, feats, p.cols)
+                if img.shape[0] != self.H or img.shape[1] != self.W:
+                    from PIL import Image as _I
+                    img = np.asarray(_I.fromarray(img.astype(np.uint8)).resize((self.W, self.H)), np.float32)
+                return img
+        return np.clip(p.render(dt * speed, 30.0 + t), 0, 255).astype(np.float32)
+
     LINE_STYLES = {"spiral", "harmonograph", "poles", "opart"}
 
     def _thicken(self, img, f):
@@ -1149,6 +1180,8 @@ class Visuals:
             return self.shader_(style[7:], f, lut)
         if style.startswith("loop:"):
             return self.loop_(style[5:], f, dt)
+        if style.startswith("art:"):
+            return self.art_(style[4:], f, dt)
         if style in vj_fx.PIECE_STYLES:
             img = self.bank.render(style, self.phase * 1.5, lut, native)
             return self._thicken(img, f) if style in self.LINE_STYLES else img
@@ -1249,6 +1282,23 @@ class MusicShow:
             style = "loop:" + st["loop"]                    # a clip chosen in the app
             if st["palette"] == "auto":
                 pal = "native"
+        elif style == "art":                                # the art library, in its own colours, moving with the music
+            from display import library
+            if st.get("art") and library.find(st["art"]):
+                self._art_pick = "art:" + st["art"]
+            else:
+                hold = float(c.get("hold", 180.0))
+                if not getattr(self, "_art_pick", None) or now - getattr(self, "_art_pick_t", 0) > hold \
+                        or self._art_pick == "art:" + (getattr(self, "_art_fixed", "") or ""):
+                    ids = [e["id"] for e in library.catalogue()]
+                    if not vjshaders.renderer().ok:
+                        ids = [i for i in ids if not i.startswith("shader-")]
+                    recent = getattr(self, "_art_recent", [])
+                    pick = random.choice([i for i in ids if i not in recent] or ids)
+                    self._art_recent = (recent + [pick])[-8:]
+                    self._art_pick, self._art_pick_t = "art:" + pick, now
+            self._art_fixed = st.get("art", "")
+            return (self._art_pick, "native", "none", "none")
         elif style == "loops":                              # "video loops only": a clip that fits the level
             hold = float(c.get("hold", 150.0))
             if not getattr(self, "_loop_pick", None) or now - self._loop_pick_t > hold:

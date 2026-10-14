@@ -39,6 +39,24 @@ def _shader_gallery_frame(t):
     return _sg(t)
 
 
+_pc = {"piece": None, "last": None}
+
+
+def _piece_frame(t):
+    """One piece from the library, chosen in the app (WALL_PIECE), on the wall for as long as you like."""
+    from PIL import Image
+    import numpy as np
+    from display import library
+    if _pc["piece"] is None:
+        pid = os.environ.get("WALL_PIECE", "") or library.catalogue()[0]["id"]
+        _pc["piece"] = library.make(pid) or library.make(library.catalogue()[0]["id"])
+        _pc["piece"].reset()
+    dt = 0.04 if _pc["last"] is None else max(0.0, min(0.2, t - _pc["last"]))
+    _pc["last"] = t
+    img = _pc["piece"].render(dt, t)
+    return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
+
+
 def _anims():
     from display import (welcome, pride_show, cards, maeva_story, dewa_story, art,
                          departures, music, shapes, light_art, artsy, shaders, daily)
@@ -51,6 +69,7 @@ def _anims():
         "glass":   (light_art.frame, light_art.LOOP_SEC),
         "artsy":   (artsy.frame, artsy.LOOP_SEC),
         "shaders": (_shader_gallery_frame, 60.0 * 5),
+        "piece":   (_piece_frame, 3600.0),
         "daily":   (daily.frame, 3600.0),
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),
@@ -61,7 +80,7 @@ def _anims():
     }
 
 
-ART_MODES = {"art", "lava", "shapes", "glass", "artsy", "ambient", "shaders"}   # galleries: art for the house, slow
+ART_MODES = {"art", "lava", "shapes", "glass", "artsy", "ambient", "shaders", "piece"}   # galleries: art for the house, slow
 ART_SPEED = float(os.environ.get("WALL_ART_SPEED", "0.12"))         # 1.0 = the old pace; sleep-friendly by default
 
 

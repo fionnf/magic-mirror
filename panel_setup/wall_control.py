@@ -36,7 +36,8 @@ MODES = [
     ("lava", "Art", "Lava & Coral", "Brain coral, a gold labyrinth, a jellyfish, breathing rings"),
     ("shapes", "Art", "Shapes", "Flow lines, a spiral, a harmonograph, night ridges"),
     ("daily", "Art", "Art of the day", "A new piece every day, made for this wall"),
-    ("shaders", "Art", "Shaders", "Frosted light, burning rim, ink drop, cut curves, neon arc, moon path and 38 more"),
+    ("piece", "Piece", "One piece", "A single piece from the gallery, as long as you like"),
+    ("shaders", "Art", "Shaders", "Glass orb, halftone wave, conic tiles, eclipse, prism and 30 more"),
     ("artsy", "Art", "Artsy", "Marbling, op-art stripes, oil slick, a drifting Mondrian"),
     ("glass", "Art", "Light Art", "Stained glass and long-exposure light trails"),
     ("art", "Art", "Art Gallery", "Ink flow, colour fields, moiré"),
@@ -133,6 +134,7 @@ class Runner:
             return
         env = dict(os.environ, WALL_BRIGHTNESS=str(int(self.state.get("brightness", 40))),
                    WALL_DAILY_DATE=str(self.state.get("daily_date") or ""),
+                   WALL_PIECE=str(self.state.get("piece") or ""),
                    WALL_ART_SPEED=str(float(self.state.get("art_speed", 0.12))),
                    WALL_SMART_CROP="1" if self.state.get("smart_crop", True) else "0",
                    PYTHONUNBUFFERED="1")
@@ -269,7 +271,7 @@ class Runner:
                     "mirror_auto": self.state.get("mirror_auto", 0),
                     "wheel_print": self.state.get("wheel_print", True),
                     "smart_crop": self.state.get("smart_crop", True),
-                    "art_speed": self.state.get("art_speed", 0.12),
+                    "art_speed": self.state.get("art_speed", 0.12), "piece": self.state.get("piece", ""),
                     "off_at": self.state.get("off_at"),
                     "wall_w": __import__("config").TOTAL_WIDTH, "wall_h": __import__("config").TOTAL_HEIGHT,
                     "error": self.error, "oneshot": self.oneshot_resume is not None}
@@ -503,6 +505,37 @@ def make_app(runner):
                         secure=request.headers.get("X-Forwarded-Proto", request.scheme) == "https")
         return resp
 
+    ART_LOCK = threading.Lock()                     # one GPU context in this process: one render at a time
+
+    @app.get("/api/art")
+    def art_list():
+        from display import library
+        return jsonify({"collections": [{"key": k, "title": t} for k, t, _ in library.COLLECTIONS],
+                        "pieces": library.public(), "current": runner.state.get("piece", "")})
+
+    @app.get("/art/thumb/<pid>.jpg")
+    def art_thumb(pid):
+        from display import library
+        if library.find(pid) is None:
+            return jsonify({"error": "no such piece"}), 404
+        path = library._thumb_path(pid)
+        if not os.path.exists(path):
+            with ART_LOCK:                                 # made in a helper process (GPU contexts are per thread)
+                library.thumbs_in_subprocess([pid], timeout=120)
+        if not os.path.exists(path):
+            return jsonify({"error": "no thumbnail"}), 503
+        return send_from_directory(os.path.dirname(path), os.path.basename(path), max_age=86400)
+
+    @app.post("/api/art/play")
+    def art_play():
+        from display import library
+        pid = str((request.get_json(force=True, silent=True) or {}).get("id", ""))
+        if library.find(pid) is None:
+            return jsonify({"error": "no such piece"}), 404
+        runner.state["piece"] = pid
+        runner.play("piece")
+        return jsonify(runner.status())
+
     @app.get("/api/printer")
     def printer_status():
         import print_out
@@ -724,7 +757,7 @@ def make_app(runner):
         st = mu.load_settings()
         old_source = st.get("source")
         for k in ("style", "palette", "vibe", "source", "sensitivity", "ai", "shazam",
-                  "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt", "mode", "party", "loop", "loop_music"):
+                  "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt", "mode", "party", "loop", "loop_music", "art"):
             if k in d:
                 st[k] = d[k]
         mu._write_json(mu.SETTINGS_FILE, st)
@@ -1113,6 +1146,9 @@ def main():
                         print(f"[daily] {today}: {meta['name']}", flush=True)
                         if runner.current == "daily" and not runner.state.get("daily_date"):
                             runner.restart_current()
+                elif daily.refresh(today):                  # today's piece was replaced in the gallery
+                    if runner.current == "daily" and not runner.state.get("daily_date"):
+                        runner.restart_current()
                 for d, m in daily.editions():          # past days the wall did not close itself
                     if d < today and not m.get("final"):
                         daily.finalise(d)
@@ -1123,6 +1159,16 @@ def main():
             time.sleep(600)
 
     threading.Thread(target=daily_watch, daemon=True).start()
+
+    def art_thumbs():                        # every gallery thumbnail, once, in a helper process
+        time.sleep(20)
+        try:
+            from display import library
+            left = library.thumbs_in_subprocess()
+            print(f"[art] thumbnails ready ({len(left)} missing)", flush=True)
+        except Exception as e:
+            print(f"[art] thumbnails: {e}", flush=True)
+    threading.Thread(target=art_thumbs, daemon=True).start()
     if not a.sim:
         threading.Thread(target=tunnel_watch, args=(a.port,), daemon=True).start()
 

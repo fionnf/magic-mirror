@@ -74,6 +74,9 @@ def save_state(s):
     os.replace(tmp, STATE_FILE)
 
 
+from display.cast import CastWatcher
+CAST = CastWatcher()
+
 # ----------------------------------------------------------------- runner ---
 
 class Runner:
@@ -88,6 +91,7 @@ class Runner:
         self.oneshot_resume = None
         self.playlist_idx = 0
         self.playlist_next = 0.0
+        self.cast_resume = None      # "follow the speakers": what to go back to when the music stops
         os.makedirs(LOG_DIR, exist_ok=True)
         threading.Thread(target=self._watch, daemon=True).start()
 
@@ -151,6 +155,7 @@ class Runner:
     def play(self, what, remember=True):
         with self.lock:
             self.oneshot_resume = None
+            self.cast_resume = None                    # a choice by hand wins over the speakers
             if remember:
                 self.state["mode"] = what
                 self.state["playlist"] = None
@@ -164,6 +169,7 @@ class Runner:
         with self.lock:
             self.state["playlist"] = {"ids": ids, "minutes": max(1, int(minutes))}
             self.state["mode"] = "playlist"
+            self.cast_resume = None
             save_state(self.state)
             self.playlist_idx = 0
             self.playlist_next = time.time() + self.state["playlist"]["minutes"] * 60
@@ -174,6 +180,22 @@ class Runner:
             resume = self.state["mode"]
             self._start(what)
             self.oneshot_resume = resume
+
+    def cast_music(self, on):
+        """Speakers started (on=True) or stopped music: switch to music art and back again later.
+        Never wakes a wall that is off, never interrupts a sleep timer, a one-shot or the mirror."""
+        with self.lock:
+            if on:
+                if (self.cast_resume is None and self.current not in (None, "off", "music", "mirror", "wheel")
+                        and self.oneshot_resume is None and not self.state.get("off_at")):
+                    self.cast_resume = self.current
+                    print(f"[cast] music on the speakers: music art (was {self.current})", flush=True)
+                    self._start("music")
+            elif self.cast_resume is not None:
+                back, self.cast_resume = self.cast_resume, None
+                if self.current == "music":
+                    print(f"[cast] music stopped: back to {back}", flush=True)
+                    self._start(back)
 
     def restart_current(self):
         with self.lock:
@@ -275,7 +297,8 @@ class Runner:
                     "art_speed": self.state.get("art_speed", 0.12), "piece": self.state.get("piece", ""),
                     "off_at": self.state.get("off_at"),
                     "wall_w": __import__("config").TOTAL_WIDTH, "wall_h": __import__("config").TOTAL_HEIGHT,
-                    "error": self.error, "oneshot": self.oneshot_resume is not None}
+                    "error": self.error, "oneshot": self.oneshot_resume is not None,
+                    "cast_resume": self.cast_resume}
 
     # -- watchdog: crashes, one-shots, playlists
     def _watch(self):
@@ -302,6 +325,7 @@ class Runner:
                 if off_at and time.time() >= off_at:          # the sleep timer
                     self.state["off_at"] = None
                     save_state(self.state)
+                    self.cast_resume = None
                     if self.current not in (None, "off"):
                         self.play("off")
                     continue
@@ -748,6 +772,7 @@ def make_app(runner):
         except Exception:
             now = None
         return jsonify({"settings": mu.load_settings(), "now": now,
+                        "speakers": CAST.speakers(mu.load_settings()), "speaker_now": CAST.now(),
                         "styles": mu.STYLES, "palettes": list(mu.PALETTES),
                         "vibes": list(mu.VIBES)})
 
@@ -758,10 +783,12 @@ def make_app(runner):
         st = mu.load_settings()
         old_source = st.get("source")
         for k in ("style", "palette", "vibe", "source", "sensitivity", "ai", "shazam",
-                  "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt", "mode", "party", "loop", "loop_music", "art"):
+                  "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt", "mode", "party", "loop", "loop_music", "art", "cast_follow", "cast_devices"):
             if k in d:
                 st[k] = d[k]
         mu._write_json(mu.SETTINGS_FILE, st)
+        if "cast_follow" in d and not d["cast_follow"]:
+            runner.cast_music(False)                      # switched off mid-song: go back now
         if d.get("start") and runner.current != "music":
             runner.play("music")
         elif runner.current == "music" and mu.load_settings()["source"] != old_source:
@@ -1172,6 +1199,37 @@ def main():
     threading.Thread(target=art_thumbs, daemon=True).start()
     if not a.sim:
         threading.Thread(target=tunnel_watch, args=(a.port,), daemon=True).start()
+
+    def cast_watch():                        # "follow the speakers" (Music tab switch, off by default)
+        CAST.start()
+        on_since, off_since = None, None
+        while True:
+            time.sleep(1.0)
+            try:
+                from display import music as mu
+                st = mu.load_settings()
+                CAST.only = CAST.chosen(st)
+                c = CAST.now(chosen=CAST.only)
+                music_on = bool(c and c["playing"] and c["music"])
+                now = time.time()
+                if not st["cast_follow"]:
+                    on_since = off_since = None
+                    continue
+                if music_on:
+                    off_since = None
+                    on_since = on_since or now
+                    if now - on_since >= 4:            # a few seconds in: not a notification chime
+                        runner.cast_music(True)
+                else:
+                    on_since = None
+                    off_since = off_since or now
+                    paused = bool(c and c["state"] == "PAUSED")
+                    if now - off_since >= (180 if paused else 45):     # a pause is not the end
+                        runner.cast_music(False)
+            except Exception as e:
+                print(f"[cast] {e}", flush=True)
+                time.sleep(30)
+    threading.Thread(target=cast_watch, daemon=True).start()
 
     def lights_watch():                      # fires the daily "lights off at HH:MM"
         import lights

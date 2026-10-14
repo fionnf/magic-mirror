@@ -263,6 +263,12 @@
       <button class="btn primary" style="width:100%;padding:14px" onclick="playMusic()" id="musicBtn">Let the wall listen</button>
       <p class="hint" id="song"></p>
     </section>
+    <section>
+      <h2>Speakers</h2>
+      <div class="switch"><span>Follow the speakers</span><input type="checkbox" id="tCast"></div>
+      <p class="hint" id="castHint">When one of these speakers plays music, the wall shows music art. When the music stops, it goes back to what it was showing.</p>
+      <div class="chips" id="castChips"></div>
+    </section>
     <section class="party">
       <h2>Party level</h2>
       <output id="partyLab">Breathing</output>
@@ -727,6 +733,18 @@ async function loadMusic() {
   if (show === 'art') loadArt();
   document.querySelectorAll('[data-lm]').forEach(b => b.classList.toggle('on', b.dataset.lm === s.loop_music));
   if (s.style === 'loops') loadLoops(s.loop || '');
+  $('tCast').checked = !!s.cast_follow;
+  const sp = MUSIC.speakers || [], sn = MUSIC.speaker_now;
+  $('castChips').hidden = !s.cast_follow || !sp.length;
+  $('castChips').innerHTML = sp.map(x => `<button class="${x.on ? 'on' : ''}" data-cast="${esc(x.name)}">${esc(x.name)}</button>`).join('');
+  $('castChips').querySelectorAll('[data-cast]').forEach(b => b.onclick = () => {
+    const on = sp.filter(x => x.on).map(x => x.name), n = b.dataset.cast;
+    api('/api/music', {cast_devices: on.includes(n) ? on.filter(x => x !== n) : on.concat(n)}).then(loadMusic).catch(e => toast(e.message));
+  });
+  $('castHint').textContent = !s.cast_follow ? 'Off. Switch it on and the wall shows music art whenever the chosen speakers play music.'
+    : !sp.length ? 'Looking for speakers on the home network…'
+    : sn && sn.playing && sn.music ? `${sn.device} is playing ${sn.title}${sn.artist ? ' by ' + sn.artist : ''}.`
+    : 'Tap a speaker to choose whether it counts. Music on a chosen one turns on the music art; when it stops, the wall goes back.';
   const n = MUSIC.now;
   $('song').textContent = n && n.song && !n.silent ? n.song + (n.artist ? ' · ' + n.artist : '') : '';
   render();
@@ -736,7 +754,7 @@ $('party').addEventListener('input', e => { $('partyLab').textContent = partyNam
 $('party').addEventListener('input', debounce(e => api('/api/music', {party: +e.target.value, mode: 'manual'}).then(loadMusic), 300));
 $('sens').addEventListener('input', debounce(e => api('/api/music', {sensitivity: +e.target.value}), 300));
 const musicSwitch = (id, key, val = c => c) => $(id).addEventListener('change', e => api('/api/music', {[key]: val(e.target.checked)}).then(loadMusic).catch(err => toast(err.message)));
-musicSwitch('tAuto', 'mode', c => c ? 'auto' : 'manual'); musicSwitch('tShz', 'shazam'); musicSwitch('tWall', 'song_on_wall'); musicSwitch('tReact', 'art_reacts');
+musicSwitch('tAuto', 'mode', c => c ? 'auto' : 'manual'); musicSwitch('tShz', 'shazam'); musicSwitch('tWall', 'song_on_wall'); musicSwitch('tReact', 'art_reacts'); musicSwitch('tCast', 'cast_follow');
 document.querySelectorAll('[data-ms2]').forEach(b => b.onclick = () =>
   api('/api/music', {style: b.dataset.ms2, start: true}).then(r => { STATUS = r.status || STATUS; loadMusic(); }).catch(e => toast(e.message)));
 document.querySelectorAll('[data-lm]').forEach(b => b.onclick = () => api('/api/music', {loop_music: b.dataset.lm}).then(loadMusic));

@@ -263,6 +263,10 @@ def main():
             print(f"[boot] welcome skipped: {e}")
     t0 = time.monotonic()
     clock = _MusicClock() if a.anim != "music" else None
+    presence = None                                     # people on the art (app switch, off by default)
+    if os.environ.get("WALL_PRESENCE") == "1" and a.anim in ART_MODES | {"music", "daily"}:
+        from display.presence import Presence
+        presence = Presence(config.TOTAL_WIDTH, config.TOTAL_HEIGHT)
     stats = [] if os.environ.get("WALL_STATS") else None
     stats_t = time.monotonic()
     # 58 fps (a new frame every panel refresh) when the mode is light enough, else 29 fps (each frame
@@ -296,7 +300,10 @@ def main():
                 t, gain = clock.step(t)
             if a.anim in ART_MODES:
                 t *= ART_SPEED                               # house art: slow
-            img = overlay.apply(frame_fn(t))
+            img = frame_fn(t)
+            if presence is not None:
+                img = presence.apply(img, ff / 58.0)
+            img = overlay.apply(img)
             if gain < 0.999 or gain > 1.001:
                 img = img.point([min(255, int(i * gain)) for i in range(256)] * 3)
             c1 = time.perf_counter()

@@ -156,6 +156,7 @@ class Runner:
                    WALL_DAILY_DATE=str(self.state.get("daily_date") or ""),
                    WALL_PIECE=str(self.state.get("piece") or ""),
                    WALL_ART_SPEED=str(float(self.state.get("art_speed", 0.12))),
+                   WALL_PRESENCE="1" if self.state.get("presence") else "0",
                    WALL_SMART_CROP="1" if self.state.get("smart_crop", True) else "0",
                    PYTHONUNBUFFERED="1")
         if getattr(self, "boot_pending", False) and self.state.get("boot_welcome", True):
@@ -310,6 +311,7 @@ class Runner:
                     "wheel_print": self.state.get("wheel_print", True),
                     "smart_crop": self.state.get("smart_crop", True),
                     "art_speed": self.state.get("art_speed", 0.12), "piece": self.state.get("piece", ""),
+                    "presence": bool(self.state.get("presence")),
                     "off_at": self.state.get("off_at"),
                     "wall_w": __import__("config").TOTAL_WIDTH, "wall_h": __import__("config").TOTAL_HEIGHT,
                     "error": self.error, "oneshot": self.oneshot_resume is not None,
@@ -813,6 +815,15 @@ def make_app(runner):
         return jsonify({"settings": mu.load_settings(), "status": runner.status()})
 
     PHOTOS = os.path.join(ROOT, "photos")
+
+    @app.post("/api/presence")
+    def presence_set():
+        """People on the art: the camera's silhouettes as a slight colour shift over the art."""
+        runner.state["presence"] = bool((request.get_json(force=True, silent=True) or {}).get("on", False))
+        save_state(runner.state)
+        if runner.current not in (None, "off", "mirror", "wheel"):
+            runner.restart_current()
+        return jsonify(runner.status())
 
     @app.post("/api/mirror/crop")
     def mirror_crop():

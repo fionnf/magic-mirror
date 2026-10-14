@@ -255,6 +255,11 @@
       <input type="range" id="pace" min="3" max="100" step="1" aria-label="Art pace">
       <div class="ends"><span>barely moving</span><span>lively</span></div>
     </section>
+    <section>
+      <h2>People</h2>
+      <div class="switch"><span>Show people on the art</span><input type="checkbox" id="tPresence"></div>
+      <p class="hint">The camera sees who is in the room, and the art's colours shift slightly where they are. Nothing is recorded.</p>
+    </section>
   </div>
 
   <!-- MUSIC -->
@@ -525,6 +530,7 @@ const minsLeft = t => Math.max(1, Math.round((t * 1000 - Date.now()) / 60000));
 const offIn = s => !s.off_at ? '' : minsLeft(s.off_at) >= 90 ? 'off at ' + new Date(s.off_at * 1000).toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'}) : 'off in ' + minsLeft(s.off_at) + ' min';
 function render() {
   const s = STATUS, cur = s.current;
+  if ($('tPresence')) $('tPresence').checked = !!s.presence;
   $('title').textContent = titleFor(cur);
   $('sub').textContent = s.error ? s.error : subFor(cur) + (s.off_at && cur && cur !== 'off' ? ' · ' + offIn(s) : '');
   $('moon').classList.toggle('on', !!s.off_at);
@@ -758,7 +764,8 @@ $('party').addEventListener('input', e => { $('partyLab').textContent = partyNam
 $('party').addEventListener('input', debounce(e => api('/api/music', {party: +e.target.value, mode: 'manual'}).then(loadMusic), 300));
 $('sens').addEventListener('input', debounce(e => api('/api/music', {sensitivity: +e.target.value}), 300));
 const musicSwitch = (id, key, val = c => c) => $(id).addEventListener('change', e => api('/api/music', {[key]: val(e.target.checked)}).then(loadMusic).catch(err => toast(err.message)));
-musicSwitch('tAuto', 'mode', c => c ? 'auto' : 'manual'); musicSwitch('tShz', 'shazam'); musicSwitch('tWall', 'song_on_wall'); musicSwitch('tReact', 'art_reacts'); musicSwitch('tCast', 'cast_follow'); musicSwitch('tCover', 'cover_show'); musicSwitch('tCoverCol', 'cover_colours');
+musicSwitch('tAuto', 'mode', c => c ? 'auto' : 'manual'); musicSwitch('tShz', 'shazam'); musicSwitch('tWall', 'song_on_wall'); musicSwitch('tReact', 'art_reacts'); musicSwitch('tCast', 'cast_follow');
+$('tPresence').addEventListener('change', e => api('/api/presence', {on: e.target.checked}).then(r => { STATUS = r; render(); toast(e.target.checked ? 'People on the art' : 'People off'); }).catch(err => toast(err.message))); musicSwitch('tCover', 'cover_show'); musicSwitch('tCoverCol', 'cover_colours');
 document.querySelectorAll('[data-ms2]').forEach(b => b.onclick = () =>
   api('/api/music', {style: b.dataset.ms2, start: true}).then(r => { STATUS = r.status || STATUS; loadMusic(); }).catch(e => toast(e.message)));
 document.querySelectorAll('[data-lm]').forEach(b => b.onclick = () => api('/api/music', {loop_music: b.dataset.lm}).then(loadMusic));

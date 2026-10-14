@@ -90,8 +90,8 @@ MODES = ("manual", "auto")               # manual = the app's party slider; auto
 CURRENT_MODE = "manual"                   # set by MusicShow from the app's setting
 CURRENT_LEVEL = 0.2                       # set by MusicShow every frame (0 quiet .. 1 rave)
 FAVOURITES = ["opart", "marbling"]
-# Scenes drawn on the CPU that take 12-26 ms a frame on the Pi (measured 2026-10-14). Their memory
-# traffic slows the panels' refresh and the light visibly jitters, so with a GPU they are left out.
+# Scenes drawn on the CPU that take 12-26 ms a frame on the Pi (measured 2026-10-14). Drawn every
+# frame they slow the panels' refresh and the light jitters, so they are keyframed (Visuals.render).
 HEAVY = {"poles", "jelly", "flowdots", "ridges", "flowlines", "spiral", "harmonograph", "truchet", "weave",
          "nebula", "rings", "garden", "opart", "glass", "cells"}
 QUIET = "shader:halo"                                  # the soft glow for a quiet room (1.3 ms on the GPU)                    # the house loves these: offered in every pool
@@ -139,9 +139,6 @@ def profile(mode=None, level=None):
         pool = [x for x in pool if x != "loops"]
     if SHADER_STYLES and vjshaders.renderer().ok:
         pool = pool + (SHADER_STYLES if L < 0.65 else SHADER_STYLES[:2])   # silk/veil also at a party
-    if vjshaders.renderer().ok:
-        pool = [x for x in pool if x not in HEAVY]
-        out["layers"] = tuple(x for x in out["layers"] if x not in HEAVY)
     out["styles"], out["palettes"] = pool, pals
     out["label"] = ("quiet evening, organic and painterly" if L < 0.4 else
                     "lively living room: organic shapes with a clear groove" if L <= 0.65 else
@@ -875,6 +872,16 @@ class VJ:
                                          "palette": j["palette_desc"]}])[-6:]
         return j
 
+    def new_scene(self, why):
+        """Something in the music changed (a new song, a new section): a fresh scene now."""
+        cur = _scene_key(self.choice)
+        for _ in range(6):
+            j = self._fallback()
+            if _scene_key(j)[0] != cur[0]:
+                break
+        self.choice, self.changed = j, time.time()
+        print(f"[VJ] {why} -> {j['style']} + {j['palkey']}", flush=True)
+
     def reset_for_mode(self):
         """The app switched chill <-> techno: change the scene now, then let the AI refine it."""
         self.choice, self.changed = self._fallback(), time.time()
@@ -1011,8 +1018,10 @@ class Visuals:
         # drift speed follows the music only slowly - no speeding up on every bass note
         target = (0.35 + 0.6 * f["energy"]) * f.get("vibe_speed", 1.0) * f.get("d_speed", 1.0)
         self.speed = _ema(getattr(self, "speed", target), target, dt, f.get("speed_tc", 3.0))
-        self.phase += dt * self.speed * (1.0 + 0.15 * f.get("groove", 0.0) + 0.15 * f.get("kick", 0.0)
-                                         + 1.2 * f.get("swell", 0.0))
+        # a smooth sway locked to the beat once the tempo is known (a sine on the beat phase: rhythmic
+        # but never a jerk), stronger the livelier the room
+        sway = f.get("sway", 0.0) * 0.5 * (1.0 + math.cos(2 * math.pi * f.get("beat_phase", 0.0)))
+        self.phase += dt * self.speed * (1.0 + 0.15 * f.get("kick", 0.0) + 1.2 * f.get("swell", 0.0) + sway)
         if f["beat"] and (not self.ripples or time.time() - self.ripples[-1][2] > 1.2):
             rs = random.random
             self.ripples.append([rs() * self.W, rs() * self.H * 0.9, time.time()])
@@ -1134,14 +1143,15 @@ class Visuals:
             img = np.asarray(_O.fit(_I.fromarray(img.astype(np.uint8)), (self.W, self.H), _I.BICUBIC), np.float32)
         return img
 
-    def shader_(self, name, f, lut):
+    def shader_(self, name, f, lut, t=None):
         r = vjshaders.renderer()
         if not r.ok:
             return self.aurora(f, lut)
         cols = tuple(tuple(float(v) / 255.0 for v in lut[i]) for i in (25, 140, 245))
         feats = {"bass": max(f.get("kick", 0.0), f.get("swell", 0.0)), "mid": f.get("mid", 0.0),
-                 "treble": f.get("treble", 0.0), "energy": f.get("energy", 0.0), "level": CURRENT_LEVEL}
-        return r.render(name, self.phase * 2.0, feats, cols)
+                 "treble": f.get("treble", 0.0), "energy": f.get("energy", 0.0), "level": CURRENT_LEVEL,
+                 "zoom": 1.0 + f.get("zoom", 0.0)}
+        return r.render(name, self.phase * 2.0 if t is None else t, feats, cols)
 
     def art_(self, pid, f, dt):
         """A library piece in its own colours. Shaders hear the music through their uniforms; the
@@ -1207,6 +1217,42 @@ class Visuals:
         return _lut(np.clip(base + v * 0.92, 0, 1), lut)
 
     def render(self, style, f, lut, dt, beat, native=False):
+        """One frame of a style. A heavy CPU scene (HEAVY) draws a new picture only every 2nd-3rd
+        frame and the wall glides between the last two: a third to half the work, so the panel
+        refresh stays steady (heavy frames made the light jitter), and slow motion looks the same
+        or smoother. Its simulation still gets all the elapsed time."""
+        if style not in HEAVY:
+            return self._render(style, f, lut, dt, beat, native)
+        if self._gpu_port(style):                          # ported to the GPU: ~1.5 ms, same look
+            try:
+                return self.shader_("vj/" + style, f, lut, t=self.phase * 1.5)
+            except Exception as e:
+                print(f"[VJ] gpu {style}: {str(e)[:120]}", flush=True)
+                self._no_port = self.__dict__.get("_no_port", set()) | {style}
+        keys = self.__dict__.setdefault("_keys", {})
+        key, now = (style, id(lut), native), time.monotonic()
+        k = keys.get(key)
+        every = 3 if CURRENT_LEVEL < 0.5 else 2
+        if k is not None and now - k["t"] > 0.5:           # not shown for a while: start afresh
+            k = None
+        if k is None or k["n"] >= every:
+            new = self._render(style, f, lut, (k["dt"] + dt) if k else dt, beat, native)
+            if k is None and len(keys) > 6:
+                keys.clear()
+            k = keys[key] = {"a": k["b"] if k else new, "b": new, "n": 0, "dt": 0.0}
+        else:
+            k["dt"] += dt
+        k["n"] += 1
+        k["t"] = now
+        w = k["n"] / every
+        return k["a"] * (1.0 - w) + k["b"] * w if w < 1.0 else k["b"]
+
+    def _gpu_port(self, style):
+        if style in self.__dict__.get("_no_port", ()) or not vjshaders.renderer().ok:
+            return False
+        return os.path.exists(os.path.join(vjshaders.FOLDER, "vj", style + ".frag"))
+
+    def _render(self, style, f, lut, dt, beat, native=False):
         if style in self.organic:
             return self.organic_(style, f, lut, dt)
         if style == "wave":
@@ -1218,7 +1264,7 @@ class Visuals:
         if style.startswith("art:"):
             return self.art_(style[4:], f, dt)
         if style in vj_fx.PIECE_STYLES:
-            img = self.bank.render(style, self.phase * 1.5, lut, native)
+            img = self.bank.render(style, self.phase * 1.5, lut, native, dt=dt)
             return self._thicken(img, f) if style in self.LINE_STYLES else img
         if style in SHAPE_STYLES:
             return self.shape_(style, f, lut)
@@ -1350,11 +1396,6 @@ class MusicShow:
         if st.get("cover_colours") and self.covers.palette_key():
             pal = self.covers.palette_key()                  # the song's own colours
         layer = c["layer"] if auto_style else "none"
-        if auto_style and vjshaders.renderer().ok:          # never a heavy CPU scene when a GPU exists
-            if style in HEAVY:
-                style = QUIET if QUIET in SHADER_STYLES else "lava"
-            if layer in HEAVY:
-                layer = "none"
         sym = c.get("symmetry", "none") if auto_style else "none"
         if f["silent"]:
             self.silent_since = self.silent_since or now
@@ -1365,6 +1406,40 @@ class MusicShow:
         else:
             self.silent_since = None
         return (style, pal, layer, sym)
+
+    def _watch_changes(self, f, now, dt):
+        """New art when the music moves on: the speaker/Spotify names a new song (exact), sound
+        returns after a short gap (a new track, heard through the mic), or the music's character
+        shifts and stays shifted (energy, bass, brightness, how busy it is: a new section)."""
+        sg = self.rec.current()
+        title = sg["title"] if sg else None
+        last = getattr(self, "_t_last", 0.0)
+        why = None
+        if title and title != getattr(self, "_title", None):
+            if getattr(self, "_title", None) is not None:
+                why = f"new song ({title})"
+            self._title = title
+        if f["silent"]:
+            self._quiet_t = getattr(self, "_quiet_t", 0.0) + dt
+        else:
+            q = getattr(self, "_quiet_t", 0.0)
+            if 1.2 <= q <= 30 and not title:                 # a gap between tracks (no song names)
+                why = why or "new track after a pause"
+            self._quiet_t = 0.0
+        vec = np.array([f["energy"], f.get("bass_share", 0.0), f.get("bright", 0.0), min(1.0, f.get("busy", 0.0) / 3)])
+        if not f["silent"]:
+            fast = getattr(self, "_c_fast", None)
+            self._c_fast = vec if fast is None else fast + (vec - fast) * min(1.0, dt / 3.0)
+            slow = getattr(self, "_c_slow", None)
+            self._c_slow = vec if slow is None else slow + (vec - slow) * min(1.0, dt / 25.0)
+            d = float(np.abs(self._c_fast - self._c_slow).sum())
+            self._c_over = getattr(self, "_c_over", 0.0) + dt if d > 0.32 else 0.0
+            if self._c_over > 2.5 and now - last > 45:
+                why = why or f"the music changed ({d:.2f})"
+        if why and now - last > (8 if why.startswith("new song") else 30) and self.settings["style"] == "auto":
+            self._t_last, self._moved, self._c_over = now, True, 0.0
+            self._c_slow = getattr(self, "_c_fast", None)
+            self.vj.new_scene(why)
 
     def _publish(self):
         c = self.vj.choice
@@ -1463,6 +1538,8 @@ class MusicShow:
             f["beat_pulse"] = pulse[2] * soft * bar_w             # 0..1, peaks on every beat (motion only)
             f["groove"] = g * soft * bar_w
         self.vis_last_groove = f["groove"]
+        f["beat_phase"] = pulse[1]
+        f["sway"] = 0.9 * _smoothstep(L, 0.4, 0.9) * pulse[2] * self.settings.get("beat_strength", 100) / 100.0
         downbeat = wrapped and int(f.get("bar_pos", 1)) == 0 and g > 0.3
         if beat and now - getattr(self, "_last_beat_evt", 0.0) < 2.5:
             beat = False                                   # pieces that react to "a beat" get one every few seconds at most
@@ -1484,14 +1561,18 @@ class MusicShow:
                             tempo_factor(f.get("bpm", 0.0), f.get("bconf", 0.0), "chill" if L < 0.5 else "techno"),
                             dt, 6.0)
         f["d_speed"] *= self.tempo_f * (1.0 + 0.3 * self.rise + 0.6 * self.surge)
-        f["d_speed"] = min(f["d_speed"], 0.6 + 0.8 * L)   # never frantic; near-still when quiet
+        f["d_speed"] = min(f["d_speed"], 0.6 + 1.1 * L)   # never frantic; near-still when quiet
         f["speed_tc"] = max(2.0, P["tc"])
         f["loop_music"] = self.settings.get("loop_music", "tempo")
         # the live bass as a smooth swell: rises with a bass note in ~0.1 s, eases off over ~0.5 s.
         # It pushes the flow forward (motion only - no zoom: resampling makes LED lines shimmer, and
         # no light pulses: they read as flicker). The app's beat strength (0..200%) scales it.
         self.swell = _ema(getattr(self, "swell", 0.0), f["punch"], dt, 0.1 if f["punch"] > getattr(self, "swell", 0.0) else 0.5)
-        f["swell"] = self.swell * (0.5 + 0.7 * L) * self.settings.get("beat_strength", 100) / 100.0
+        bs = self.settings.get("beat_strength", 100) / 100.0
+        f["swell"] = min(1.5, self.swell * (0.5 + 1.3 * L) * bs)
+        # the shaders breathe with the bass: the scene is redrawn a few % larger (computed per pixel
+        # on the GPU, so lines stay crisp) - 1-2% when quiet, up to ~7% on the dance floor
+        f["zoom"] = self.swell * (0.015 + 0.055 * L) * bs
         if self.cur[0] == "wave" or (self.prev and self.prev[0] == "wave") or self._target()[0] == "wave":
             raw = self.l.recent(0.07)                                   # the last 70 ms of sound
             if len(raw) >= self.W:
@@ -1504,11 +1585,14 @@ class MusicShow:
         self.layer_op = _ema(self.layer_op, float(c.get("layer_opacity", 0.0)) if auto else 0.0, dt, P["glide"])
         self.vis.step(f, dt)
         # --- scene changes: whenever, when it is quiet; on a 4-bar boundary when the party is on
+        self._watch_changes(f, now, dt)
         tgt = self._target()
         held = now - self.switched
         hold = float(c.get("hold", 150.0)) if auto else self.HOLD
         urgent = self.vj.urgent
-        want = tgt != self.cur and (held >= hold or self.force or urgent or (self.surge > 0.6 and held > 20))
+        moved = getattr(self, "_moved", False)                  # the music changed: go, gently
+        want = tgt != self.cur and (held >= hold or self.force or urgent or moved
+                                    or (self.surge > 0.6 and held > 20))
         pp = int(f.get("phrase_pos", 0)) % 16
         boundary = pp < self._last_pp
         self._last_pp = pp
@@ -1520,6 +1604,8 @@ class MusicShow:
         if want:
             if self.force or urgent:
                 self.xfade = 3.5
+            elif moved:
+                self.xfade = 5.0 if L > 0.6 else 7.0
             elif musical:
                 self.xfade = max(6.0, 8 * f.get("period", 0.5))       # lands on the phrase, but eases in
             elif self.surge > 0.3:
@@ -1527,7 +1613,7 @@ class MusicShow:
             else:
                 self.xfade = float(c.get("fade", self.XFADE))
             self.prev, self.cur, self.switched = self.cur, tgt, now
-            self.vj.urgent, self._pending = False, None
+            self.vj.urgent, self._pending, self._moved = False, None, False
         self.force = False
         if now - getattr(self, "_published", 0) > 3:
             self._published = now

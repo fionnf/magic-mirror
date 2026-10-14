@@ -92,12 +92,12 @@ class PieceBank:
                 pass
             time.sleep(0.4)
 
-    def render(self, name, t, lut=None, native=False):
+    def render(self, name, t, lut=None, native=False, dt=0.04):
         """float32 HxWx3. Recoloured with `lut` (luminance -> palette) unless native."""
         piece = self._p.get(name)
         if piece is None:
             piece = self._p[name] = self._build(name)
-        img = np.asarray(piece.render(0.04, t), np.float32)
+        img = np.asarray(piece.render(dt, t), np.float32)
         if native or lut is None:
             return img
         lum = (img[..., 0] * 0.3 + img[..., 1] * 0.59 + img[..., 2] * 0.11) / 255.0

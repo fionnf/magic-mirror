@@ -7,6 +7,7 @@ and may use these uniforms:
   iBass, iMid, iTreble, iEnergy      music features 0..1 (0 in art mode)
   iLevel                             party level 0..1
   iColA, iColB, iColC                the scene's colours (dark, mid, light) - keep to these
+  (iZoom is applied outside mainImage: music mode redraws the scene slightly larger on the bass)
 
     r = Renderer()                      # r.ok is False if there is no GPU/EGL (laptop, old Pi)
     img = r.render(t, feats)    # float32 HxWx3
@@ -29,10 +30,13 @@ uniform float iBass; uniform float iMid; uniform float iTreble; uniform float iE
 uniform vec3 iColA; uniform vec3 iColB; uniform vec3 iColC;
 uniform float iBreath; uniform float iTension; uniform float iKey; uniform float iBright; uniform float iSong;
 uniform float iBeatPhase; uniform float iDay[24]; uniform vec2 iPanels; uniform float iClock;
+uniform float iZoom;
 out vec4 _out;
 """
 POSTLUDE = """
-void main(){ vec4 c = vec4(0.0); mainImage(c, gl_FragCoord.xy); _out = vec4(clamp(c.rgb, 0.0, 1.0), 1.0); }
+void main(){
+    vec2 m = 0.5 * iResolution, p = m + (gl_FragCoord.xy - m) / max(iZoom, 0.5);   // music: breathe with the bass
+    vec4 c = vec4(0.0); mainImage(c, p); _out = vec4(clamp(c.rgb, 0.0, 1.0), 1.0); }
 """
 VS = "#version 300 es\nin vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }"
 
@@ -95,7 +99,8 @@ class Renderer:
         else:
             lt = time.localtime()
             clock = lt.tm_hour + lt.tm_min / 60.0 + lt.tm_sec / 3600.0
-        setu("iClock", clock)                  # hours since midnight: pieces evolve over the day
+        setu("iClock", clock)
+        setu("iZoom", float(feats.get("zoom", 1.0)))         # 1 = as drawn (music mode zooms gently on the bass)                  # hours since midnight: pieces evolve over the day
         for k, key in (("iBass", "bass"), ("iMid", "mid"), ("iTreble", "treble"), ("iEnergy", "energy"),
                        ("iLevel", "level"), ("iBreath", "breath"), ("iTension", "tension"), ("iKey", "key"),
                        ("iBright", "bright"), ("iSong", "song"), ("iBeatPhase", "beat_phase")):

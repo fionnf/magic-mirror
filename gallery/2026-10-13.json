@@ -1,7 +1,7 @@
 {
  "name": "Embers Along the Walk",
  "description": "A single lamp crosses the wall in one long arc from dawn to midnight, and every three hours it sets down a soft ember that glows with the music of that hour and slowly cools, so by night the day reads as a few dimming coals behind one warm light.",
- "image": "2026-10-13.png",
+ "image": "2026-10-13.final.png",
  "animation_source": "2026-10-13.frag",
  "attributes": [
   {
@@ -46,5 +46,11 @@
  "curator": {
   "score": 8,
   "verdict": "A single warm light tracing an arc over deep plum, leaving cooling embers behind, gives a clear day's arc in one restrained colour family, and the 11 pm still is something you could fall asleep to. It reads well as soft glows on a coarse grid, though the 8 pm frame barely shows the music and the dimmest embers risk vanishing into the black."
- }
+ },
+ "post": {
+  "caption": "The wall was offline today, so nothing was heard and nothing was remembered; the lamp walked its arc anyway and set down only the faintest embers. What remains at midnight is one soft amber light near the top of the wall and two small coals fading below it, like a path walked in silence. A quiet day, kept honestly.",
+  "alt": "A dark plum-black square with one soft, glowing peach-amber light in the upper left, and two much fainter, blurred reddish glows trailing down and to the left beneath it."
+ },
+ "final": true,
+ "closed_by": "cloud"
 }

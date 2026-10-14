@@ -1,0 +1,51 @@
+{
+ "name": "Cobalt Aperture, Slowly Opening",
+ "description": "A Turrell-like opening in a lit cobalt wall wakes as a small high window at dawn, swells into a pale sky-filled field at noon, sinks and widens through the evening, and narrows to a single blue slit by night, while faint inset frames record each hour of the day's music.",
+ "image": "2026-10-14.png",
+ "animation_source": "2026-10-14.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-14"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#0c1838 #2c4cae #86c4e6"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 192 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "The bass breath gently swells the aperture, rising tension sharpens its edges as if the room were coming into focus, treble widens the spill of light onto the wall, the key leans the field between cobalt and pale cyan, each song nudges where the opening hangs, and every hour's energy is drawn as a faint frame around it.",
+ "palette": [
+  "#0c1838",
+  "#2c4cae",
+  "#86c4e6"
+ ],
+ "source_sha256": "cc58fc12bd8ffb81a9b7678a73bdafc95d4c7e33658bfe233754cfcb6ddd4e58",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  192
+ ],
+ "attempts": 1,
+ "created": 1791964819.6985319,
+ "curator": {
+  "score": 7,
+  "verdict": "A genuine Turrell-like aperture on a fully lit cobalt ground, clearly unlike the recent warm-on-black days, with a legible day arc from window to field to slit. The faint inset frames are the weak point: on a 64x64 grid the thin concentric rings read as moir\u00e9 and shimmer, and the hue barely travels beyond blue to pale blue."
+ },
+ "direction": "Turrell room"
+}

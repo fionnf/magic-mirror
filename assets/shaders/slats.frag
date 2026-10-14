@@ -6,8 +6,8 @@ void mainImage(out vec4 o, in vec2 fc){
   vec2 uv = (fc - 0.5 * iResolution) / min(iResolution.x, iResolution.y);
   float t = iTime * 0.02 + iClock * 0.15;
   vec3 col = vec3(0.0);
-  for (int i = 0; i < 44; i++){
-    float fi = float(i) / 44.0;
+  for (int i = 0; i < 32; i++){
+    float fi = float(i) / 32.0;
     float ang = fi * 6.2832 + t;
     float x = 0.3 * cos(ang) * (1.0 + 0.15 * sin(ang * 2.0 + t)), z = sin(ang);              // the blade's place on the loop
     float hgt = 0.26 + 0.08 * sin(ang * 2.0 + t);

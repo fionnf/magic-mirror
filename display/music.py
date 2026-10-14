@@ -89,7 +89,12 @@ PROFILES = {
 MODES = ("manual", "auto")               # manual = the app's party slider; auto = follow the room
 CURRENT_MODE = "manual"                   # set by MusicShow from the app's setting
 CURRENT_LEVEL = 0.2                       # set by MusicShow every frame (0 quiet .. 1 rave)
-FAVOURITES = ["opart", "marbling"]                    # the house loves these: offered in every pool
+FAVOURITES = ["opart", "marbling"]
+# Scenes drawn on the CPU that take 12-26 ms a frame on the Pi (measured 2026-10-14). Their memory
+# traffic slows the panels' refresh and the light visibly jitters, so with a GPU they are left out.
+HEAVY = {"poles", "jelly", "flowdots", "ridges", "flowlines", "spiral", "harmonograph", "truchet", "weave",
+         "nebula", "rings", "garden", "opart", "glass", "cells"}
+QUIET = "shader:halo"                                  # the soft glow for a quiet room (1.3 ms on the GPU)                    # the house loves these: offered in every pool
 
 
 def _lerp(a, b, k):
@@ -134,6 +139,9 @@ def profile(mode=None, level=None):
         pool = [x for x in pool if x != "loops"]
     if SHADER_STYLES and vjshaders.renderer().ok:
         pool = pool + (SHADER_STYLES if L < 0.65 else SHADER_STYLES[:2])   # silk/veil also at a party
+    if vjshaders.renderer().ok:
+        pool = [x for x in pool if x not in HEAVY]
+        out["layers"] = tuple(x for x in out["layers"] if x not in HEAVY)
     out["styles"], out["palettes"] = pool, pals
     out["label"] = ("quiet evening, organic and painterly" if L < 0.4 else
                     "lively living room: organic shapes with a clear groove" if L <= 0.65 else
@@ -1257,7 +1265,7 @@ class MusicShow:
         self.covers, self.cover_mix = Covers(W, H), 0.0
         self.luts = {k: _palette(v) for k, v in PALETTES.items()}
         self.prev = None
-        self.cur = ("nebula", "dusk", "none", "none")
+        self.cur = (QUIET if QUIET in SHADER_STYLES else "nebula", "dusk", "none", "none")
         self.switched = 0.0
         self.last_t = None
         self.silent_since = None
@@ -1342,11 +1350,17 @@ class MusicShow:
         if st.get("cover_colours") and self.covers.palette_key():
             pal = self.covers.palette_key()                  # the song's own colours
         layer = c["layer"] if auto_style else "none"
+        if auto_style and vjshaders.renderer().ok:          # never a heavy CPU scene when a GPU exists
+            if style in HEAVY:
+                style = QUIET if QUIET in SHADER_STYLES else "lava"
+            if layer in HEAVY:
+                layer = "none"
         sym = c.get("symmetry", "none") if auto_style else "none"
         if f["silent"]:
             self.silent_since = self.silent_since or now
             if now - self.silent_since > 30:               # quiet room: soft dusk glow
-                return ("nebula" if auto_style else style,
+                quiet = QUIET if vjshaders.renderer().ok and "shader:halo" in SHADER_STYLES else "nebula"
+                return (quiet if auto_style else style,
                         "dusk" if st["palette"] == "auto" else pal, "none", "none")
         else:
             self.silent_since = None

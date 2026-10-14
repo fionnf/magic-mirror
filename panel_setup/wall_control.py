@@ -487,7 +487,7 @@ def make_app(runner):
         now = time.time()
         fails[:] = [t for t in fails if now - t < 600]
         locked = len(fails) >= 8
-        if locked or not want or not hmac.compare_digest(got.strip().upper(), want.strip().upper()):
+        if locked or not want or not hmac.compare_digest(got.strip().encode(), want.strip().encode()):
             if not locked:
                 fails.append(now)
             time.sleep(1.5)                                # slow down guessing

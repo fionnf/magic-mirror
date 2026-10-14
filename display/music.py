@@ -339,7 +339,8 @@ DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source"
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
                     "brain": "claude", "beat_offset": 0, "beat_strength": 100, "art_reacts": False,
                     "prompt": "", "mode": "manual", "party": 15, "loop": "", "loop_music": "tempo", "art": "",
-                    "cast_follow": False, "cast_devices": {}}
+                    "cast_follow": False, "cast_devices": {},
+                    "cover_show": False, "cover_colours": False}
 
 
 def load_settings():
@@ -376,6 +377,8 @@ def load_settings():
     s["loop"] = str(s.get("loop", "") or "")[:80]
     s["art"] = str(s.get("art", "") or "")[:80]                 # a library piece for the "art" style ("" = rotate)
     s["cast_follow"] = bool(s.get("cast_follow", False))    # off unless switched on in the app
+    for k in ("cover_show", "cover_colours"):                 # the album cover: on the wall / in the colours
+        s[k] = bool(s.get(k, False))
     cd = s.get("cast_devices")                                # {name: on} switched by hand; others: default
     s["cast_devices"] = {str(k)[:80]: bool(v) for k, v in list(cd.items())[:30]} if isinstance(cd, dict) else {}
     if s.get("loop_music") not in ("off", "tempo", "bass"):
@@ -1247,6 +1250,8 @@ class MusicShow:
         self.accents = vj_fx.Accents(W, H)
         self.surge, self.prev_out = 0.0, None
         self.vis = Visuals(W, H)
+        from display.cover import Covers
+        self.covers, self.cover_mix = Covers(W, H), 0.0
         self.luts = {k: _palette(v) for k, v in PALETTES.items()}
         self.prev = None
         self.cur = ("nebula", "dusk", "none", "none")
@@ -1331,6 +1336,8 @@ class MusicShow:
             if st["palette"] == "auto":
                 pal = "native"
         pal = c["palkey"] if st["palette"] == "auto" else st["palette"]
+        if st.get("cover_colours") and self.covers.palette_key():
+            pal = self.covers.palette_key()                  # the song's own colours
         layer = c["layer"] if auto_style else "none"
         sym = c.get("symmetry", "none") if auto_style else "none"
         if f["silent"]:
@@ -1536,6 +1543,15 @@ class MusicShow:
                 if not getattr(self, "_audio_err", False):
                     self._audio_err = True
                     print(f"[audio meter] {type(e).__name__}: {e}", flush=True)
+        self.covers.update()
+        comp = self.covers.frame() if self.settings.get("cover_show") else None
+        self.cover_mix = _ema(self.cover_mix, 1.0 if comp is not None else 0.0, dt, 1.2)   # ~3 s fade
+        if comp is not None:
+            self._cover_last = comp
+        if self.cover_mix > 0.995 and comp is not None:   # the cover alone: nothing else to draw
+            self.glow = _ema(getattr(self, "glow", 0.0), f["energy"], dt, 2.5)
+            img = comp * (0.95 + 0.06 * P["breath"] * self.glow)
+            return self._song_overlay(Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB"))
         slow = getattr(self, "cost", 0.0) > 26.0
         lop = 0.0 if slow else self.layer_op                  # too slow: drop the second layer
         if slow and self.xfade > 2.5:
@@ -1559,6 +1575,9 @@ class MusicShow:
         self.glow = _ema(getattr(self, "glow", 0.0), f["energy"], dt, 2.5)
         br = P["breath"]
         img = img * (0.95 + 0.06 * br * self.glow)
+        if self.cover_mix > 0.005 and getattr(self, "_cover_last", None) is not None:
+            m = self.cover_mix * self.cover_mix * (3 - 2 * self.cover_mix)
+            img = img * (1 - m) + self._cover_last * m        # cross-fade art <-> cover
         out = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
         return self._song_overlay(out)
 

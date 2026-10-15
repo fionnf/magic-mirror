@@ -1,7 +1,7 @@
 {
  "name": "Jade Lantern, Eclipsed",
  "description": "A single emerald glass orb hangs in deep green dark: at morning it is lit from the front like a lantern, and through the afternoon its light slips behind it, until late at night only a pale mint rim and a wide breath of halo remain around a dark jade disc.",
- "image": "2026-10-14.png",
+ "image": "2026-10-14.final.png",
  "animation_source": "2026-10-14.frag",
  "attributes": [
   {
@@ -47,5 +47,11 @@
   "score": 8,
   "verdict": "A single emerald orb that moves from front-lit lantern to eclipsed mint rim gives a real day's arc, and it sits squarely inside the direction while breaking cleanly from the recent warm dim glows. It echoes the residents' glass-orb and eclipse favourites, reads boldly on a coarse grid, and is calm enough to sleep in front of."
  },
- "direction": "Emerald orb"
+ "direction": "Emerald orb",
+ "post": {
+  "caption": "The wall was offline today, so the room's listening went unrecorded and the lantern kept its own hours. Without a day of sound to widen its halo, it settled at midnight still lit almost from the front, a jade orb with a single bright highlight and only a soft, close glow at its rim. A quiet entry, more lantern than eclipse.",
+  "alt": "A glossy emerald-green sphere glows against a near-black green background, lit from the upper right with a small bright mint highlight, its edge ringed by a faint pale halo."
+ },
+ "final": true,
+ "closed_by": "cloud"
 }

@@ -1,0 +1,51 @@
+{
+ "name": "Azure Ring, Ember Edge",
+ "description": "A single ring of cyan light hangs in deep night-blue, drifting from a soft dawn blur into sharp noon focus and back into a gentle evening bloom, always rimmed on its outer edge by a thin breath of peach, like the last warmth caught on cold glass.",
+ "image": "2026-10-15.png",
+ "animation_source": "2026-10-15.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-15"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#050c1c #1f7fc8 #8fe8ff"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 192 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "The bass breathes the ring's radius by a hair, rising tension pulls it into focus, treble sharpens the warm fringe, the key leans the cyan within its azure family, each song turns where the light gathers, and the day's music is recorded as a slow, smooth brightness swell travelling around the circumference.",
+ "palette": [
+  "#050c1c",
+  "#1f7fc8",
+  "#8fe8ff"
+ ],
+ "source_sha256": "cea634dc40ad42afd7e104bdb1ca6cbdfb71976c2fce0f4ebfedcf1d8ebda698",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  192
+ ],
+ "attempts": 2,
+ "created": 1792050261.5526383,
+ "curator": {
+  "score": 7,
+  "verdict": "A clean, single luminous ring that follows the direction exactly and breaks clearly from the recent run of dim warm glows; the focus arc from soft to crisp to bloomed gives the day a real shape. The peach fringe reads more as a muddy grey-brown halo than a warm edge, and the 3 pm and 9 am stills are close cousins, but it would hang."
+ },
+ "direction": "Azure ring"
+}

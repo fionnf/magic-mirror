@@ -1,0 +1,51 @@
+{
+ "name": "Ultraviolet Hour Ring",
+ "description": "A single thin ultraviolet line slowly draws itself around an empty centre over the day, rising at dawn as a low sliver, opening into a breathing arc by evening, and closing at midnight into a quiet lilac ring wrapped in a faint halo of soft light.",
+ "image": "2026-10-17.png",
+ "animation_source": "2026-10-17.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-17"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#0a0614 #5a2ad0 #d9b8ff"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 192 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 8
+  }
+ ],
+ "listening": "The bass breath swells the soft violet light that spills inward from the arc (most of all in the evening), rising tension lengthens the line a little, treble sharpens and thins it, the key tilts its tint between violet and lilac, each song nudges its angle slightly, and every hour's music leaves a faint bead of light on a clock-face ring around it.",
+ "palette": [
+  "#0a0614",
+  "#5a2ad0",
+  "#d9b8ff"
+ ],
+ "source_sha256": "2add90f91ead8f34f2d20fa6f0c47b64fe0897d60f954f6590d62130fd5582dd",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  192
+ ],
+ "attempts": 3,
+ "created": 1792221178.0521486,
+ "curator": {
+  "score": 8,
+  "verdict": "A single thin ultraviolet arc that grows from a sliver to a near-closed ring over the day: one form, luminous and calm, squarely on direction and clearly different from the recent warm, dim days. The arc's growth gives a real daily progression, and the 8 pm violet bloom reads well on a coarse grid, though the faint dotted specks around the lower edge add needless clutter."
+ },
+ "direction": "Ultraviolet arc"
+}

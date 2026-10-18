@@ -1,0 +1,51 @@
+{
+ "name": "Eclipse of a Cold Stone",
+ "description": "A single dark stone sits in deep night while a cold glacier light leaks around its whole rim, a halo that widens to a pale corona at midday and tightens to a hairline of ice as the stone grows into full eclipse by midnight.",
+ "image": "2026-10-18.png",
+ "animation_source": "2026-10-18.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-18"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#04080f #3f7fae #e4f3fb"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 192 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "The bass breathes the halo wider and gathering tension tightens it, the key leans its tint between ice blue and glacier white, treble lifts a faint cold haze, each song re-carves the stone's silhouette, and the day's music is written into the halo itself as a clock face where louder hours glow a little wider at their angle around the rim.",
+ "palette": [
+  "#04080f",
+  "#3f7fae",
+  "#e4f3fb"
+ ],
+ "source_sha256": "8679df0e0630a5a8f7c07bc3e918e3ad9fd3f1befc17c92df8c967f96cb23a40",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  192
+ ],
+ "attempts": 2,
+ "created": 1792308381.8795402,
+ "curator": {
+  "score": 7,
+  "verdict": "A single dark stone ringed by a cold blue-white halo sits squarely in the Ice halo direction and reads as clean, luminous and calm, and it is clearly different from the recent warm glows. The arc is real but gentle: the corona widens at 3 pm and tightens to a hairline by 11 pm, though the 8 pm and 11 pm stills look nearly identical."
+ },
+ "direction": "Ice halo"
+}

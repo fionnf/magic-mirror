@@ -1,7 +1,7 @@
 {
  "name": "Ultraviolet Hour Ring",
  "description": "A single thin ultraviolet line slowly draws itself around an empty centre over the day, rising at dawn as a low sliver, opening into a breathing arc by evening, and closing at midnight into a quiet lilac ring wrapped in a faint halo of soft light.",
- "image": "2026-10-17.png",
+ "image": "2026-10-17.final.png",
  "animation_source": "2026-10-17.frag",
  "attributes": [
   {
@@ -47,5 +47,11 @@
   "score": 8,
   "verdict": "A single thin ultraviolet arc that grows from a sliver to a near-closed ring over the day: one form, luminous and calm, squarely on direction and clearly different from the recent warm, dim days. The arc's growth gives a real daily progression, and the 8 pm violet bloom reads well on a coarse grid, though the faint dotted specks around the lower edge add needless clutter."
  },
- "direction": "Ultraviolet arc"
+ "direction": "Ultraviolet arc",
+ "post": {
+  "caption": "The wall was offline today, so the ring drew itself without hearing the room, no beads on the clock face, no songs to turn its angle. What remains is the piece at rest: a single ultraviolet line that rose and stopped partway, an arc on the right side holding a soft violet glow around an empty centre. A day left unrecorded, kept anyway.",
+  "alt": "A thin, bright lilac arc curves down the right side of a near-black square, about a quarter of a circle, with a faint violet haze spilling inward toward an empty dark centre."
+ },
+ "final": true,
+ "closed_by": "cloud"
 }

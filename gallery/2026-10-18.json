@@ -1,7 +1,7 @@
 {
  "name": "Eclipse of a Cold Stone",
  "description": "A single dark stone sits in deep night while a cold glacier light leaks around its whole rim, a halo that widens to a pale corona at midday and tightens to a hairline of ice as the stone grows into full eclipse by midnight.",
- "image": "2026-10-18.png",
+ "image": "2026-10-18.final.png",
  "animation_source": "2026-10-18.frag",
  "attributes": [
   {
@@ -47,5 +47,11 @@
   "score": 7,
   "verdict": "A single dark stone ringed by a cold blue-white halo sits squarely in the Ice halo direction and reads as clean, luminous and calm, and it is clearly different from the recent warm glows. The arc is real but gentle: the corona widens at 3 pm and tightens to a hairline by 11 pm, though the 8 pm and 11 pm stills look nearly identical."
  },
- "direction": "Ice halo"
+ "direction": "Ice halo",
+ "post": {
+  "caption": "The wall was offline today, so the stone kept its own counsel, with no songs to re-carve its outline and no loud hours to widen the halo at their place on the clock. What remains is the piece at rest: a dark, slightly uneven stone in full eclipse, ringed by an even hairline of glacier light that fades softly into the night. A quiet record of a day the room kept to itself.",
+  "alt": "A dark, slightly irregular round stone sits at the center of a deep navy-black field, encircled by a thin, bright ice-blue rim of light that fades outward into a soft, pale glow."
+ },
+ "final": true,
+ "closed_by": "cloud"
 }

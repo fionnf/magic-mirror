@@ -45,6 +45,9 @@ def compose(img, W, H):
     bg = bg.crop(((bg.width - W) // 2, (bg.height - H) // 2, (bg.width - W) // 2 + W, (bg.height - H) // 2 + H))
     out = np.asarray(bg, np.float32) * 0.32                      # the glow: dim, so the cover reads
     fg = np.asarray(img.resize((side, side), Image.LANCZOS), np.float32) * 0.9
+    lum = float((fg * [0.2126, 0.7152, 0.0722]).sum(-1).mean())
+    if lum > 85:                                                 # a white cover: soft, not a light box
+        fg *= 85 / lum                                           # (and no power-supply sag on the panels)
     x, y = (W - side) // 2, (H - side) // 2
     out[y:y + side, x:x + side] = fg
     return out

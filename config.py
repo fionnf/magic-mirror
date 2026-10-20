@@ -32,7 +32,7 @@ SCAN_RATE = 32  # most 64x64 panels are 1/32 scan — confirm from sticker
 #   hardware_mapping "regular", gpio_slowdown 3, panel_type FM6126A, pwm_bits 7
 # (FM6124 panels need the FM6126A init sequence, otherwise they stay dark/garbled.)
 HARDWARE_MAPPING = "regular"
-GPIO_SLOWDOWN = 6   # 6: max refresh ~74 Hz, so the 58 Hz lock holds under CPU load (at 7, ~64 Hz max and the light wobbled when the CPU worked: slowest refresh 53.6 Hz). 7 had fewer data errors on the first panel - go back if stray pixels show
+GPIO_SLOWDOWN = 7   # 7 = cleanest data (at 6 the colours came out wrong after a restart, 2026-10-20); max refresh ~64 Hz, locked at 58. CPU-heavy art can make the light wobble at 7: draw art on the GPU
                     # history: 3 streaky, 4 better, 5 good, 6 clean (~67 Hz), 8 = ~57 Hz banding returns
                     # 8 = ~57 Hz banding returns. 6-bit at slowdown 6 = ~77 Hz but colour banding.
 MATRIX_PANEL_TYPE = "FM6126A"

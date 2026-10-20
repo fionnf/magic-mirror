@@ -1,7 +1,7 @@
 {
  "name": "Shoal of Small Lights",
  "description": "A sphere that exists only as a shoal of fine teal points, crowding into a bright rim where the surface turns away from us; it wakes sparse and low, fills out and rises by noon, drifts across in the evening, and thins to a lone glowing ring at night, while each hour of the day's music is laid down as one brightened latitude band on its turning skin.",
- "image": "2026-10-19.png",
+ "image": "2026-10-19.final.png",
  "animation_source": "2026-10-19.frag",
  "attributes": [
   {
@@ -47,5 +47,11 @@
   "score": 6,
   "verdict": "It follows the teal dot sphere direction closely, with a bright rim, dark ground and calm space, and it looks nothing like the recent warm-glow days. But the hundreds of fine, evenly scattered high-contrast points will sparkle and shimmer on a 64x64 grid, and the four stills barely differ beyond size and position, so the day's arc is weak."
  },
- "direction": "Teal dot sphere"
+ "direction": "Teal dot sphere",
+ "post": {
+  "caption": "The wall was offline today, so the sphere kept its own company, with no hours of music laid down as bands across its skin. What remains is the shoal itself, fine teal points gathering into a soft bright rim where the surface turns away, an even globe with nothing written on it. A day without a record, held quietly in small lights.",
+  "alt": "A sphere made of many small teal and aqua points of light floats slightly left of center on a near-black background, the points crowding brighter toward its glowing rim and scattered more sparsely across its darker middle."
+ },
+ "final": true,
+ "closed_by": "cloud"
 }

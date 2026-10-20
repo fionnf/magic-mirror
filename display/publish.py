@@ -49,9 +49,27 @@ def _git(*args, cwd=CLONE):
     return r.stdout
 
 
+_BROKEN = ("is empty", "corrupt", "bad object", "loose object", "unable to mmap", "not a git repository",
+           "did not send all necessary objects", "dubious ownership")
+
+
 def _commit_with_deploy_key(files, message):
     """The wall's way: a small sparse clone pushed over SSH with a deploy key (write access to this
-    one repository only), so no personal token has to live on the Pi."""
+    one repository only), so no personal token has to live on the Pi. The clone holds nothing that
+    is not on GitHub, so a damaged one (a power cut mid-write) is moved aside and cloned afresh."""
+    try:
+        return _commit_in_clone(files, message)
+    except RuntimeError as e:
+        if not any(b in str(e) for b in _BROKEN):
+            raise
+        import time
+        aside = f"{CLONE}.broken-{int(time.time())}"
+        os.rename(CLONE, aside)
+        print(f"[publish] clone damaged ({str(e)[:80]}): moved to {aside}, cloning afresh", flush=True)
+        return _commit_in_clone(files, message)
+
+
+def _commit_in_clone(files, message):
     if not os.path.isdir(os.path.join(CLONE, ".git")):
         _git("clone", "--depth", "1", "--filter=blob:none", "--sparse", "--branch", BRANCH,
              f"git@github.com:{REPO}.git", CLONE, cwd=os.path.dirname(CLONE))

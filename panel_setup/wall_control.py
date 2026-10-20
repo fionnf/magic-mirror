@@ -1163,6 +1163,7 @@ def main():
         if not exe or os.environ.get("WALL_TUNNEL", "1") == "0" or not os.environ.get("WALL_PASSWORD"):
             return
         from display import publish
+        latest = {"url": None}
         while True:
             try:
                 p = subprocess.Popen([exe, "tunnel", "--no-autoupdate", "--url", f"http://localhost:{port}"],
@@ -1171,13 +1172,20 @@ def main():
                     m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
                     if m:
                         print(f"[tunnel] {m.group(0)}", flush=True)
-                        for _ in range(5):
-                            try:
-                                publish.announce_wall(m.group(0))
-                                break
-                            except Exception as e:
-                                print(f"[tunnel] announce failed: {e}", flush=True)
-                                time.sleep(30)
+                        url = latest["url"] = m.group(0)
+
+                        def announce(url=url):               # keep trying until the app can find the wall
+                            wait = 30
+                            while latest["url"] == url:      # a newer tunnel takes over
+                                try:
+                                    publish.announce_wall(url)
+                                    print(f"[tunnel] announced {url}", flush=True)
+                                    return
+                                except Exception as e:
+                                    print(f"[tunnel] announce failed: {e}", flush=True)
+                                    time.sleep(wait)
+                                    wait = min(300, wait * 2)
+                        threading.Thread(target=announce, daemon=True).start()
                 p.wait()
             except Exception as e:
                 print(f"[tunnel] {e}", flush=True)

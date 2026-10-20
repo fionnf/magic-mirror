@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 6
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "Bass breath gently swells the sphere, rising tension tightens and lifts its rim halo, the key tilts the axis and leans the points between aqua and pale mint, treble sharpens each point, every song re-scatters the constellation, and iDay turns the music of each hour into a denser, brighter band of latitude so the globe becomes a portrait of the day by midnight.",
@@ -48,10 +60,35 @@
   "verdict": "It follows the teal dot sphere direction closely, with a bright rim, dark ground and calm space, and it looks nothing like the recent warm-glow days. But the hundreds of fine, evenly scattered high-contrast points will sparkle and shimmer on a 64x64 grid, and the four stills barely differ beyond size and position, so the day's arc is weak."
  },
  "direction": "Teal dot sphere",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
  "post": {
-  "caption": "The wall was offline today, so the sphere kept its own company, with no hours of music laid down as bands across its skin. What remains is the shoal itself, fine teal points gathering into a soft bright rim where the surface turns away, an even globe with nothing written on it. A day without a record, held quietly in small lights.",
-  "alt": "A sphere made of many small teal and aqua points of light floats slightly left of center on a near-black background, the points crowding brighter toward its glowing rim and scattered more sparsely across its darker middle."
+  "caption": "No music reached the room today, so the shoal never gathered into bands and its skin stayed unmarked from morning to midnight. What remains is the piece at its most elemental: a single ring of teal points glowing at the edge of a sphere that was never written on. A silent day, kept as a quiet circle of light.",
+  "alt": "A loose ring of small glowing teal and aqua dots with a soft halo floats slightly right of center against a near-black, dark teal background, its middle empty and dark."
  },
- "final": true,
- "closed_by": "cloud"
+ "final": true
 }

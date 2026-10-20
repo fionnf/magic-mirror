@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 8
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 1
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": 16
   }
  ],
  "listening": "The bass breathes the orb's size and the warmth of its halo, rising tension draws the halo in close around the rim, the key leans the glass between jade and mint, treble sharpens the highlight, each song turns the light to its own angle, and the day's music widens the halo hour by hour so the night state carries the whole day's sound.",
@@ -48,10 +60,35 @@
   "verdict": "A single emerald orb that moves from front-lit lantern to eclipsed mint rim gives a real day's arc, and it sits squarely inside the direction while breaking cleanly from the recent warm dim glows. It echoes the residents' glass-orb and eclipse favourites, reads boldly on a coarse grid, and is calm enough to sleep in front of."
  },
  "direction": "Emerald orb",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.662,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
  "post": {
-  "caption": "The wall was offline today, so the room's listening went unrecorded and the lantern kept its own hours. Without a day of sound to widen its halo, it settled at midnight still lit almost from the front, a jade orb with a single bright highlight and only a soft, close glow at its rim. A quiet entry, more lantern than eclipse.",
-  "alt": "A glossy emerald-green sphere glows against a near-black green background, lit from the upper right with a small bright mint highlight, its edge ringed by a faint pale halo."
+  "caption": "A quiet day in the room, broken by a single stretch of music in the late afternoon, around four, that played for a good while and then let the silence return. With only that one hour to carry, the orb settled at midnight into a dark jade disc with a bright mint rim and a soft, modest halo, its glow held close rather than spread wide. An eclipse shaped by one afternoon.",
+  "alt": "A dark green circular disc sits at the center of a deep green-black field, outlined by a thin glowing mint-white ring and surrounded by a faint, diffuse green halo that fades into the darkness."
  },
- "final": true,
- "closed_by": "cloud"
+ "final": true
 }

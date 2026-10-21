@@ -1,7 +1,7 @@
 {
  "name": "Jade Lantern, Tide Kept",
  "description": "A single emerald glass orb rises from the floor of a dark room at dawn, hangs high and full at noon, drifts east and widens its halo through the evening, then sinks to rest above a pool of its own light at night, while soft, barely-banded shells of jade quietly record each hour of music the house played.",
- "image": "2026-10-20.png",
+ "image": "2026-10-20.final.png",
  "animation_source": "2026-10-20.frag",
  "attributes": [
   {
@@ -47,5 +47,11 @@
   "score": 7,
   "verdict": "A single emerald glass orb with mint rim light sits squarely inside the direction, reads clearly on a coarse grid and shifts position, scale and halo across the day; it is distinct from the recent warm amber days. The concentric halo rings at 3 pm and 8 pm edge toward pattern, but they are wide and soft enough to keep the piece calm, so it hangs."
  },
- "direction": "Emerald orb"
+ "direction": "Emerald orb",
+ "post": {
+  "caption": "The wall was offline today, so Jade Lantern kept its tide without a listener, an emerald orb hanging in the dark with no hours of music laid into its halo. What remains is the piece at its simplest: a pale glass sphere, a small mint highlight, and a smooth green glow with no shells to read. A blank page in the diary, held quietly until the room hears again.",
+  "alt": "A pale jade glass sphere with a small bright highlight on its upper left floats slightly above center in a dark room, surrounded by a soft, even emerald glow that fades smoothly to near-black at the edges."
+ },
+ "final": true,
+ "closed_by": "cloud"
 }

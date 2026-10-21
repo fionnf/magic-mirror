@@ -1,0 +1,51 @@
+{
+ "name": "Cobalt Vessel, Filling",
+ "description": "A single tall capsule of cobalt neon stands in the dark and slowly fills with pale mint light from morning to midnight, while its own glow pools and mirrors on an unseen floor below.",
+ "image": "2026-10-21.png",
+ "animation_source": "2026-10-21.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-21"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#050a24 #1f4fe0 #a8f5d8"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 192 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "The neon rim becomes a clock face: each hour's music brightens its own arc of the outline, so by midnight the rod's brightness is a ring-shaped memory of the day; breath widens the pool, tension tightens the line, the key leans the light from cobalt toward mint, brightness adds haze, and each song nudges where the vessel stands.",
+ "palette": [
+  "#050a24",
+  "#1f4fe0",
+  "#a8f5d8"
+ ],
+ "source_sha256": "17671f887ef060c7262c70565879f13f1361295030b07f495bd8feaefb8d2e2c",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  192
+ ],
+ "attempts": 1,
+ "created": 1792569584.8957236,
+ "curator": {
+  "score": 7,
+  "verdict": "A single cobalt capsule that fills with light through the day: it follows the direction faithfully, glows clearly on dark navy, and has a real arc that is nothing like the recent warm-on-black days. I would hang it, though the mint highlight barely registers and the fill reads as icy blue rather than mint, so the palette is close to monochrome."
+ },
+ "direction": "Cobalt pill"
+}

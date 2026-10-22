@@ -1,7 +1,7 @@
 {
  "name": "Cobalt Vessel, Filling",
  "description": "A single tall capsule of cobalt neon stands in the dark and slowly fills with pale mint light from morning to midnight, while its own glow pools and mirrors on an unseen floor below.",
- "image": "2026-10-21.png",
+ "image": "2026-10-21.final.png",
  "animation_source": "2026-10-21.frag",
  "attributes": [
   {
@@ -47,5 +47,11 @@
   "score": 7,
   "verdict": "A single cobalt capsule that fills with light through the day: it follows the direction faithfully, glows clearly on dark navy, and has a real arc that is nothing like the recent warm-on-black days. I would hang it, though the mint highlight barely registers and the fill reads as icy blue rather than mint, so the palette is close to monochrome."
  },
- "direction": "Cobalt pill"
+ "direction": "Cobalt pill",
+ "post": {
+  "caption": "The wall was offline today, so the vessel heard nothing and kept its own quiet company. Its cobalt outline glows evenly all the way around, with no hour brighter than another, and only a shallow band of light has gathered at the bottom. A still life of an empty day, waiting to be filled.",
+  "alt": "A tall, rounded capsule outlined in glowing cobalt-blue neon stands centred against a deep navy background, a thin layer of soft blue light resting in its base and a faint mirrored reflection pooling on the dark floor beneath it."
+ },
+ "final": true,
+ "closed_by": "cloud"
 }

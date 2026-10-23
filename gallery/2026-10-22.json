@@ -1,7 +1,7 @@
 {
  "name": "The Champagne Gap",
  "description": "A single hairline of pale gold light draws itself around the dark. It is a wide open arc at breakfast, almost seals into a full ring by evening and loosens again after midnight, and the day's music is written into its thickness, one hour to each sliver of the circle.",
- "image": "2026-10-22.png",
+ "image": "2026-10-22.final.png",
  "animation_source": "2026-10-22.frag",
  "attributes": [
   {
@@ -47,5 +47,11 @@
   "score": 7,
   "verdict": "A clean, luminous champagne ring on blue-black that follows the direction closely, reads clearly on a coarse grid, and opens and closes across the day in a calm arc that departs from the recent dim warm glows. I would hang it, though the dark wedge-shaped shadow cones fanning from the gap look like rendering artifacts and muddy the otherwise pure single form."
  },
- "direction": "Gold ring"
+ "direction": "Gold ring",
+ "post": {
+  "caption": "The wall was offline today, so The Champagne Gap had no music to write into its line and kept only its own slow clock. What remains at midnight is the bare arc, an even sliver of pale light on the right side of the dark, its wide gap open on the left like a breath not yet taken. A quiet record of a day the room kept to itself.",
+  "alt": "A thin, evenly lit arc of pale gold-white light curves around the right half of a deep navy background, its ends fading into soft glowing points and leaving the left side of the circle open and dark."
+ },
+ "final": true,
+ "closed_by": "cloud"
 }

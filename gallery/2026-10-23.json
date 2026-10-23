@@ -1,0 +1,51 @@
+{
+ "name": "Violet Glass, Breathing Low",
+ "description": "A single soft lump of violet glass drifts through a dark indigo room, catching a cold white rim light that circles it like a slow sun, while the faint glow it casts beneath it gathers, hour by hour, into a quiet record of the day's music.",
+ "image": "2026-10-23.png",
+ "animation_source": "2026-10-23.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-23"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#0c0820 #4a2a9a #e4e2ff"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 192 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "The bass breathes the glass body gently larger and smaller, rising tension makes its outline more molten, the key leans the inner tint between indigo and lilac, treble widens the haze around it, each song reshapes its lumps, and every hour's energy is laid down as a soft band of light in the pool of glow beneath it.",
+ "palette": [
+  "#0c0820",
+  "#4a2a9a",
+  "#e4e2ff"
+ ],
+ "source_sha256": "8057fa3d388241f8cc6848be7d4145e974d51e429b411b2d49aa0cd7e72271d6",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  192
+ ],
+ "attempts": 1,
+ "created": 1792742130.9065826,
+ "curator": {
+  "score": 7,
+  "verdict": "A single lumpy violet glass body with a cold white rim and a faint glow below sits squarely in the direction, reads cleanly on a coarse grid, and is clearly unlike the recent warm-on-black days. The day's arc is modest: drift, a turning highlight and a growing glow, which is the same picture moved around rather than four distinct ones, but it is calm and beautiful enough to hang."
+ },
+ "direction": "Violet glass"
+}

@@ -4,7 +4,7 @@
 #   PI_HOST=192.168.1.50 PI_USER=fionn ./panel_setup/deploy.sh
 set -euo pipefail
 PI_USER="${PI_USER:-pi}"
-PI_HOST="${PI_HOST:-192.168.1.207}"     # the live wall (Pi 4 "Fortuna" since 2026-10-20; mirror4 at .129 died)
+PI_HOST="${PI_HOST:-192.168.1.129}"     # the live wall: new Pi 4 "mirror4" (fresh card, 2026-10-23); old Pi "Fortuna" = .207
 PI_DIR="${PI_DIR:-magic-mirror}"          # relative to the Pi user's home
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 

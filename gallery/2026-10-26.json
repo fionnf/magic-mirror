@@ -1,7 +1,7 @@
 {
  "name": "Luminous Current",
  "description": "A comb of glowing strands is released from one edge and carried through a slow two-wave field, gathering into a richer, broader flow as the day deepens.",
- "image": "2026-10-26.png",
+ "image": "2026-10-26.final.png",
  "animation_source": "2026-10-26.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 6
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": 19
   }
  ],
  "listening": "It listens like a tide recorder: bass widens the sweep, treble sharpens the heads of the strands, and the day\u2019s hour log thickens the flow into a denser, more luminous braid.",
@@ -47,5 +59,36 @@
   "score": 7,
   "verdict": "This piece fits the day's direction well with its flowing, luminous comb of strands and soft glowing cores, using a restrained palette that glows clearly on a dark ground. It maintains calm space and a slow, natural flow, avoiding dense patterns and shimmer, while evolving thoughtfully through the day."
  },
- "direction": "Flow lines"
+ "direction": "Flow lines",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.174,
+  0.213,
+  0.385,
+  0.53,
+  0.0,
+  0.0,
+  0.249,
+  0.404
+ ],
+ "post": {
+  "caption": "Today, the light strands quietly gathered in strength as the afternoon brought a gentle swell of music that grew steady into evening. The luminous lines became broader and brighter, reflecting a calm yet persistent flow of sound wrapped in waves of bass and treble. By midnight, the piece held a dense braid of glow that carried the day\u2019s musical rhythm into the quiet night.",
+  "alt": "Glowing vertical and horizontal purple strands interweave in a dark space, forming a luminous flowing braid."
+ },
+ "final": true
 }

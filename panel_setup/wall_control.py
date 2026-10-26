@@ -714,6 +714,12 @@ def make_app(runner):
             json.dump({"mode": mode, "colour": col, "level": level}, fh)
         return rods_get()
 
+    @app.post("/api/rods/connect")
+    def rods_connect():
+        with open(os.path.join(HERE, "rods_reconnect"), "w") as fh:
+            fh.write(str(time.time()))
+        return jsonify({"ok": True})
+
     @app.post("/api/artspeed")
     def artspeed():
         try:

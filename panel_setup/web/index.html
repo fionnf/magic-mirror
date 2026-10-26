@@ -357,6 +357,7 @@
       <h2>Brightness</h2>
       <input type="range" id="rodLevel" min="5" max="100" step="5" aria-label="Rod brightness">
       <div class="rodst" id="rodStatus"></div>
+      <button class="btn" id="rodConnect" style="margin-top:12px" onclick="connectRods()">Connect rods</button>
     </section>
   </div>
 
@@ -802,7 +803,12 @@ async function loadRoom() {
   $('rodPick').addEventListener('change', e => setRods({colour: e.target.value}));
   if (document.activeElement !== $('rodLevel')) $('rodLevel').value = ROD.level;
   const n = ['Rod 1', 'Rod 2'];
-  $('rodStatus').innerHTML = (ROD.status || []).map((st, i) => `<span><i class="${st === 'on' ? 'on' : ''}"></i>${n[i] || 'Rod'} ${st === 'on' ? 'connected' : 'not connected'}</span>`).join('');
+  $('rodStatus').innerHTML = (ROD.status || []).map((st, i) => `<span><i class="${st === 'on' ? 'on' : ''}"></i>${n[i] || 'Rod'} ${st === 'on' ? 'connected' : st === 'connecting' ? 'connecting…' : 'not connected'}</span>`).join('');
+}
+async function connectRods() {
+  try { await api('/api/rods/connect', {}); toast('Connecting the rods…'); $('rodConnect').disabled = true;
+        setTimeout(loadRoom, 4000); setTimeout(() => { loadRoom(); $('rodConnect').disabled = false; }, 12000); }
+  catch (e) { toast(e.message); }
 }
 async function setRods(d) { try { ROD = await api('/api/rods', d); loadRoom(); } catch (e) { toast(e.message); } }
 document.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => setRods({mode: b.dataset.rm})));

@@ -17,7 +17,8 @@ import time
 
 import numpy as np
 
-STATUS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "panel_setup", "rods_status.json")
+STATUS_RECONNECT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "panel_setup", "rods_reconnect")   # touched by the app
+FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "panel_setup", "rods_status.json")
 FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "panel_setup", "rods.json")
 ADDRESSES = ["BE:69:33:1C:4F:01", "BE:69:6A:12:CD:03"]      # living room rod 1, rod 2
 ON = bytes([0x7e, 0x04, 0x04, 0x01, 0xff, 0xff, 0x00, 0xef])
@@ -115,10 +116,19 @@ class Rods:
     async def _main(self):
         await asyncio.gather(*[self._rod(i) for i in range(len(self.addr))])
 
+    @staticmethod
+    def _asked():
+        try:
+            return os.path.getmtime(RECONNECT)
+        except OSError:
+            return 0.0
+
     async def _rod(self, i):
         from bleak import BleakClient
         await asyncio.sleep(3.0 * i)                         # one connection at a time: the adapter is busy otherwise
+        seen = self._asked()
         while True:
+            self.status[i] = "connecting"; self._publish()
             try:
                 async with BleakClient(self.addr[i], timeout=20) as c:
                     ch = next(x for s in c.services for x in s.characteristics
@@ -127,7 +137,7 @@ class Rods:
                     await c.write_gatt_char(ch, ON, response=False)
                     self.status[i] = "on"; self._publish()
                     sent = None
-                    while c.is_connected:
+                    while c.is_connected and self._asked() <= seen:
                         rgb = tuple(int(v) for v in self.cur[i])
                         if sent is None or max(abs(a - b) for a, b in zip(rgb, sent)) >= 3:
                             await c.write_gatt_char(ch, _pack(*rgb), response=False)
@@ -135,4 +145,15 @@ class Rods:
                         await asyncio.sleep(0.25)
             except Exception as e:
                 self.status[i] = f"{type(e).__name__}"; self._publish()
-            await asyncio.sleep(10.0)                         # lost or not there: try again later
+            for _ in range(20):                               # lost or not there: try again later, or at once when asked
+                await asyncio.sleep(0.5)
+                if self._asked() > seen:
+                    break
+            if self._asked() > seen:
+                seen = self._asked()
+                try:                                          # clear a half-open BlueZ connection first
+                    p = await asyncio.create_subprocess_exec("bluetoothctl", "disconnect", self.addr[i],
+                                                             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                    await asyncio.wait_for(p.wait(), 8)
+                except Exception:
+                    pass

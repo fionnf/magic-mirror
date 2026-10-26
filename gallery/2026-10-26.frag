@@ -1,56 +1,89 @@
-// Lantern in Frosted Lime - art of the day 2026-10-26
-// A single lime light lives behind frosted glass in a dark petrol room: a tight low seed at morning, a broad pale lantern by afternoon, a lobed shape the evening music pulls into new outlines, and at night a wide, flattened ember with one small bright heart.
-float hash(float n){return fract(sin(n)*43758.5453);}
+// Prism Line - art of the day 2026-10-26
+// A single vertical seam of light opens into a quiet spectral fan that deepens and widens through the day, holding a dark room together without ever breaking its calm.
+float sat(float x){ return clamp(x,0.0,1.0); }
+float smoother(float a,float b,float x){ x = sat((x-a)/(b-a)); return x*x*(3.0-2.0*x); }
+float hash1(float n){ return fract(sin(n)*43758.5453123); }
+
+vec3 paletteMix(float t){
+    vec3 a = iColA;
+    vec3 b = iColB;
+    vec3 c = iColC;
+    if(t < 0.5){
+        float u = t * 2.0;
+        return mix(a, b, u);
+    }
+    float u = (t - 0.5) * 2.0;
+    return mix(b, c, u);
+}
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord){
-  vec2 uv=fragCoord/iResolution;
-  float m=min(iResolution.x,iResolution.y);
-  vec2 p=(fragCoord-0.5*iResolution)/m;
-  float h=mod(iClock,24.0);
-  float t=iTime;
-  vec4 A=vec4(0.075,0.075,-0.24,0.05); vec2 Ae=vec2(0.35,0.45);
-  vec4 B=vec4(0.25,0.26,0.0,0.08);   vec2 Be=vec2(1.0,0.85);
-  vec4 C=vec4(0.19,0.30,0.02,0.28);  vec2 Ce=vec2(0.6,0.55);
-  vec4 D=vec4(0.32,0.11,-0.08,0.06); vec2 De=vec2(0.12,0.22);
-  vec4 k; vec2 e;
-  if(h<9.0){float w=smoothstep(2.0,8.5,h); k=mix(D,A,w); e=mix(De,Ae,w);}
-  else{
-    float w=smoothstep(9.0,15.0,h); k=mix(A,B,w); e=mix(Ae,Be,w);
-    w=smoothstep(15.0,20.0,h); k=mix(k,C,w); e=mix(e,Ce,w);
-    w=smoothstep(20.0,23.0,h); k=mix(k,D,w); e=mix(e,De,w);
-  }
-  float ev=smoothstep(16.0,19.5,h)*(1.0-smoothstep(21.0,23.0,h));
-  float mus=clamp(iBreath*0.6+iTension*0.7,0.0,1.0);
-  float lobe=k.w*(0.7+0.6*mus)+ev*0.28*mus+0.03*iBreath;
-  float rx=k.x*(1.0+0.06*iBreath+0.05*sin(t*0.017));
-  float ry=k.y*(1.0+0.04*iBreath+ev*0.4*iTension+0.05*sin(t*0.012+2.0));
-  float dayE=0.0; float cnt=0.0;
-  for(int i=0;i<24;i++){ if(float(i)<h){dayE+=iDay[i]; cnt+=1.0;} }
-  dayE=cnt>0.0?dayE/cnt:0.0;
-  vec2 c=vec2(0.03*sin(t*0.013)+0.02*sin(t*0.0071+1.0), k.z+0.015*sin(t*0.011+0.5));
-  c.x+=0.004*sin(6.2831*iBeatPhase);
-  vec2 q=p-c;
-  float ro=0.15*sin(t*0.009)+0.05*sin(iKey);
-  q=mat2(cos(ro),-sin(ro),sin(ro),cos(ro))*q;
-  float ang=atan(q.y,q.x);
-  float s=iSong*6.2831;
-  float r=1.0+lobe*(0.55*sin(2.0*ang+t*0.021+s)+0.3*sin(3.0*ang-t*0.015+iKey+s*1.7)+0.15*sin(5.0*ang+t*0.033+s*2.3));
-  float d=length(q/vec2(rx,ry))/max(r,0.3);
-  float soft=1.7-0.5*iBright;
-  float body=exp(-d*d*soft);
-  float hs=1.0+1.4*dayE;
-  float halo=exp(-d/(1.1*hs))*0.9;
-  float vig=length((uv-0.5)*vec2(1.0,1.0))*1.45;
-  vec3 ground=mix(iColA*1.35,iColA*0.55,smoothstep(0.0,1.0,vig));
-  ground+=iColB*0.05*dayE*smoothstep(0.35,0.0,uv.y);
-  vec3 col=ground;
-  col=mix(col,iColB*0.75,clamp(halo*0.35,0.0,1.0));
-  col=mix(col,iColB,clamp(body*1.1,0.0,1.0));
-  vec3 lime=mix(iColB,iColC,0.3+0.12*sin(iKey));
-  col=mix(col,lime,smoothstep(0.3,1.0,body)*0.45);
-  col=mix(col,mix(iColB,iColC,0.65),smoothstep(0.15,0.75,body)*e.x*0.55);
-  float core=smoothstep(1.0-0.7*e.y,1.0,body);
-  col=mix(col,iColC,core*(0.55+0.35*e.x));
-  col=min(col,vec3(0.95));
-  fragColor=vec4(col,1.0);
+    float day = clamp((iClock - 7.0) / 16.0, 0.0, 1.0);
+    vec2 p = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
+
+    float aspect = iResolution.x / iResolution.y;
+    float seam = floor((fragCoord.x / iResolution.x) * iPanels.x) / max(iPanels.x - 1.0, 1.0);
+    float drift = 0.015 * sin(iTime * 0.013 + iDay[int(mod(floor(iClock), 24.0))] * 6.2831);
+    float x0 = mix(-0.02, 0.05, day) + drift + 0.02 * (seam - 0.5);
+    float y0 = mix(0.22, -0.03, day) + 0.02 * sin(0.7 + iTime * 0.011 + iLevel * 1.3);
+
+    vec2 q = p;
+    q.x = (q.x - x0) * aspect;
+    q.y = q.y - y0;
+
+    float lineW = mix(0.010, 0.020, day) + 0.004 * iMid;
+    float line = exp(-abs(q.x) / lineW) * exp(-abs(q.y + 0.16) * 1.7);
+    float core = exp(-dot(vec2(q.x / (lineW * 1.8), q.y * 3.5), vec2(q.x / (lineW * 1.8), q.y * 3.5)));
+
+    float fanStart = mix(0.02, -0.05, day);
+    float fanOpen = mix(0.12, 0.42, day) + 0.06 * iTreble;
+    float fanY = max(q.y - fanStart, 0.0);
+    float width = fanOpen * fanY * 1.6 + 0.03;
+    float fan = exp(-abs(q.x) / width) * smoother(0.0, 0.85, fanY);
+    fan *= exp(-fanY * mix(0.9, 0.55, day));
+
+    float prism = 0.0;
+    float yy = max(q.y + 0.02, 0.0);
+    float bands = 3.0 + 2.0 * day;
+    float ang = atan(q.x, max(0.01, yy));
+    float hue = 0.5 + 0.5 * sin(ang * bands + 3.0 * q.y + iTime * 0.01);
+    prism += fan * (0.35 + 0.65 * hue);
+    prism += 0.5 * core;
+    prism += 0.7 * line;
+
+    // soft spectral fan, not striped: only broad chromatic zones
+    float r = exp(-pow((q.x + 0.10 * (1.0 - day)) / (0.20 + 0.16 * fanY), 2.0));
+    float g = exp(-pow((q.x - 0.02 * day) / (0.16 + 0.14 * fanY), 2.0));
+    float b = exp(-pow((q.x - 0.14 - 0.05 * day) / (0.18 + 0.18 * fanY), 2.0));
+    vec3 spectral = iColA * (0.55 + 0.35 * r) + iColB * (0.22 + 0.55 * g) + iColC * (0.10 + 0.60 * b);
+
+    // dark ground with luminous clarity
+    float vign = 0.85 + 0.18 * dot(p, p);
+    vec3 bg = iColA * (0.42 + 0.08 * sin(0.8 + iClock * 0.25)) * vign;
+
+    // day arc: larger changes in height, position, and glow weight
+    float dayGlow = mix(0.80, 1.22, day);
+    float dayLift = mix(0.08, 0.26, day);
+    vec3 col = bg;
+
+    col += spectral * (0.10 + 0.65 * fan) * dayGlow;
+    col += iColC * (0.10 * line + 0.12 * core) * mix(0.70, 1.15, day);
+    col += iColB * (0.06 * fan) * (0.8 + 0.5 * iBright);
+
+    // subtle sediment from the day's memory, concentrated low and gentle
+    float mem = 0.0;
+    mem += iDay[0] + iDay[4] + iDay[8] + iDay[12] + iDay[16] + iDay[20];
+    mem /= 6.0;
+    float sediment = exp(-pow((q.y + 0.33) / 0.22, 2.0)) * exp(-abs(q.x) * 2.2);
+    col += (0.04 + 0.06 * mem) * sediment * mix(iColB, iColC, day * 0.7);
+
+    // quiet edge glow along the fan opening
+    float edge = exp(-abs(abs(q.x) - width * 0.85) / (0.02 + 0.02 * day)) * fan;
+    col += edge * (0.06 * iColC + 0.03 * iColB);
+
+    // keep it luminous but restrained
+    col = max(col, vec3(0.0));
+    col = col / (1.0 + col * 1.45);
+    col = pow(col, vec3(0.92));
+
+    fragColor = vec4(col, 1.0);
 }

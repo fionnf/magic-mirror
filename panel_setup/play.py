@@ -290,6 +290,11 @@ def main():
     t_prev, art_t, slow = None, None, 1.0           # the art's own clock, slowed while frames are held longer
     heat_t, heat_floor = 0.0, 0                     # thermal guard: a hot chip gets fewer frames to make
     rods = None
+    try:
+        from display.netstate import NetState
+        netstate = NetState()
+    except Exception:
+        netstate = None
     if os.environ.get("WALL_RODS", "1") == "1":
         try:
             from display.rods import Rods
@@ -351,6 +356,8 @@ def main():
             if presence is not None:
                 img = presence.apply(img, ff / refresh)
             img = overlay.apply(img)
+            if netstate is not None:
+                img = netstate.mark(img)
             if rods is not None:
                 rods.feed(img)
             if gain < 0.999 or gain > 1.001:

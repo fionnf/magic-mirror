@@ -17,6 +17,7 @@ import time
 
 import numpy as np
 
+STATUS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "panel_setup", "rods_status.json")
 FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "panel_setup", "rods.json")
 ADDRESSES = ["BE:69:33:1C:4F:01", "BE:69:6A:12:CD:03"]      # living room rod 1, rod 2
 ON = bytes([0x7e, 0x04, 0x04, 0x01, 0xff, 0xff, 0x00, 0xef])
@@ -49,6 +50,7 @@ class Rods:
         self.target = [np.zeros(3, np.float32) for _ in addresses]
         self.cur = [np.zeros(3, np.float32) for _ in addresses]
         self.last = None
+        self.level = 1.0
         self.follow = False                                  # True only while the daily art is on the wall
         self.status = ["off"] * len(addresses)
         self._fed = 0.0
@@ -65,7 +67,7 @@ class Rods:
         dt, self._fed = min(0.5, now - self._fed), now
         top, bot = self._choice(img)
         for i, c in enumerate((top, bot)[:len(self.addr)]):
-            self.target[i] = c * GAIN
+            self.target[i] = c * GAIN * self.level
             self.cur[i] += (self.target[i] - self.cur[i]) * (1 - np.exp(-dt / EASE))
 
     def _choice(self, img):
@@ -80,12 +82,32 @@ class Rods:
             except Exception:
                 self._cfg = {}
         cfg = getattr(self, "_cfg", {})
-        if cfg.get("mode") == "off":
+        mode = cfg.get("mode", "auto")
+        self.level = max(0.05, min(1.0, float(cfg.get("level", 100)) / 100.0))
+        if mode == "off":
             z = np.zeros(3, np.float32)
             return z, z
-        if self.follow:
+        if mode in ("solid", "breathe"):
+            h = str(cfg.get("colour", "#ff6a00")).lstrip("#")
+            try:
+                c = np.array([int(h[i:i + 2], 16) for i in (0, 2, 4)], np.float32)
+            except ValueError:
+                c = ORANGE
+            if mode == "breathe":
+                c = c * (0.55 + 0.45 * np.sin(time.monotonic() * 2 * np.pi / 8.0))
+            return c, c
+        if mode == "follow" or (mode == "auto" and self.follow):
             return colours(img)
         return ORANGE, ORANGE
+
+    def _publish(self):
+        try:
+            tmp = STATUS_FILE + ".tmp"
+            with open(tmp, "w") as fh:
+                json.dump({"status": self.status, "addr": self.addr}, fh)
+            os.replace(tmp, STATUS_FILE)
+        except Exception:
+            pass
 
     def _run(self):
         asyncio.run(self._main())
@@ -103,7 +125,7 @@ class Rods:
                               if x.uuid.startswith(("0000fff3", "0000ffe1")) and
                               ("write" in x.properties or "write-without-response" in x.properties))
                     await c.write_gatt_char(ch, ON, response=False)
-                    self.status[i] = "on"
+                    self.status[i] = "on"; self._publish()
                     sent = None
                     while c.is_connected:
                         rgb = tuple(int(v) for v in self.cur[i])
@@ -112,5 +134,5 @@ class Rods:
                             sent = rgb
                         await asyncio.sleep(0.25)
             except Exception as e:
-                self.status[i] = f"{type(e).__name__}"
+                self.status[i] = f"{type(e).__name__}"; self._publish()
             await asyncio.sleep(10.0)                         # lost or not there: try again later

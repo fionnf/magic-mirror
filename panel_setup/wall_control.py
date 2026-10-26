@@ -14,6 +14,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -681,6 +682,37 @@ def make_app(runner):
     def brightness():
         runner.set_brightness((request.get_json(force=True, silent=True) or {}).get("value", 40))
         return jsonify(runner.status())
+
+    @app.get("/api/rods")
+    def rods_get():
+        out = {"mode": "auto", "colour": "#ff6a00", "level": 100, "status": []}
+        try:
+            with open(os.path.join(HERE, "rods.json")) as fh:
+                out.update(json.load(fh))
+        except Exception:
+            pass
+        try:
+            with open(os.path.join(HERE, "rods_status.json")) as fh:
+                out["status"] = json.load(fh).get("status", [])
+        except Exception:
+            pass
+        return jsonify(out)
+
+    @app.post("/api/rods")
+    def rods_set():
+        d = request.get_json(force=True, silent=True) or {}
+        cur = rods_get().get_json()
+        mode = d.get("mode", cur["mode"])
+        col = str(d.get("colour", cur["colour"]))
+        if mode not in ("auto", "follow", "solid", "breathe", "off") or not re.fullmatch(r"#[0-9a-fA-F]{6}", col):
+            return jsonify({"error": "bad value"}), 400
+        try:
+            level = max(5, min(100, int(d.get("level", cur["level"]))))
+        except (TypeError, ValueError):
+            return jsonify({"error": "bad value"}), 400
+        with open(os.path.join(HERE, "rods.json"), "w") as fh:
+            json.dump({"mode": mode, "colour": col, "level": level}, fh)
+        return rods_get()
 
     @app.post("/api/artspeed")
     def artspeed():

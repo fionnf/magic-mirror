@@ -124,13 +124,16 @@ class Rods:
             return 0.0
 
     async def _rod(self, i):
-        from bleak import BleakClient
+        from bleak import BleakClient, BleakScanner
         await asyncio.sleep(3.0 * i)                         # one connection at a time: the adapter is busy otherwise
         seen = self._asked()
         while True:
             self.status[i] = "connecting"; self._publish()
             try:
-                async with BleakClient(self.addr[i], timeout=20) as c:
+                dev = await BleakScanner.find_device_by_address(self.addr[i], timeout=20)   # scan first: weak rods are missed otherwise
+                if dev is None:
+                    raise LookupError("not in range")
+                async with BleakClient(dev, timeout=25) as c:
                     ch = next(x for s in c.services for x in s.characteristics
                               if x.uuid.startswith(("0000fff3", "0000ffe1")) and
                               ("write" in x.properties or "write-without-response" in x.properties))

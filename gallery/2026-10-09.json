@@ -1,7 +1,7 @@
 {
  "name": "October Sediment, Low Sun",
  "description": "A low autumn sun hangs over the Z\u00fcrich lake fog while the day's music settles beneath it as twenty-four thin strata of earth, one for every hour, so by midnight the ground has become a core sample of everything the house listened to.",
- "image": "2026-10-09.png",
+ "image": "2026-10-09.final.png",
  "animation_source": "2026-10-09.frag",
  "attributes": [
   {
@@ -23,6 +23,18 @@
   {
    "trait_type": "Artist",
    "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "The bass makes the sun slowly swell and recede, rising tension draws the fog tight along the horizon, treble thins it into a fine glittering mist, the key leans the amber toward gold or rust, each song re-draws the warp of the layers, and every hour's average energy is laid down as one stratum of se",
@@ -34,5 +46,36 @@
  "source_sha256": "78300d171c027a15d260b048548f5cb1b8a3926d300bc585d1991ad521389cca",
  "model": "claude-opus-5-5",
  "attempts": 1,
- "created": 1791553533.289929
+ "created": 1791553533.289929,
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "The day in Zurich was quiet, with no music stirring the air. October Sediment, Low Sun holds the stillness like a low amber sun sinking into the lake fog, tracing calm layers of silence that settle softly together by midnight.",
+  "alt": "A dark, amber-hued digital image showing a glowing low sun above a calm surface with horizontal layers, resembling a foggy lakeshore at sunset."
+ },
+ "final": true
 }

@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "The bass breathes the rod a little longer, rising tension narrows and gathers its fan, treble thins the haze into a fine grain, the key leans the glow between rust and apricot, each song re-angles the fan's skew, the beat only sways it by a hair, and iDay grows one tick per hour so by midnight the rod is a ruler of the day's music.",
@@ -47,10 +59,35 @@
   "score": 7,
   "verdict": "A single warm neon line casting a soft fan of rust light onto near-black is exactly the restrained, one-form, one-family piece this wall is for, and the slow tilt reads calmly across the stills. I would hang it, though the promised hour notches are invisible and the fan's gradient is so faint it may band or vanish on a 64x64 LED grid."
  },
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
  "post": {
-  "caption": "The wall was offline today, so the rod kept no hours and carries no notches along its edge, just a clean line of warm neon tilted gently upward. Without music to gather or skew it, the fan of light fell loose and wide onto the wall below, a soft rust glow settling into the dark. A day left unmeasured, and the piece simply resting in its own dusk.",
-  "alt": "A thin, glowing apricot neon rod angles slightly upward from left to right near the top of a dark frame, casting a broad, faint reddish-brown haze of light down the wall beneath it."
+  "caption": "Today, the house held a quiet stillness, with no music to shape the warm glow of the rod. It hangs steady in the soft autumn dusk, marking time purely by the passing hours themselves, undisturbed and gentle. The light feels like a calm breath, resting softly in the room.",
+  "alt": "A thin horizontal neon rod emits a warm apricot light against a dark wall, with a soft fan of light spreading below it in an autumn dusk setting."
  },
- "final": true,
- "closed_by": "cloud"
+ "final": true
 }

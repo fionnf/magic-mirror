@@ -48,9 +48,12 @@ MATRIX_MAX_AMPS = 28.0
 # Conservative full-white draw of ONE 64x64 panel at 100% brightness (typical
 # 3-4 A; measure yours and adjust).
 MATRIX_AMPS_PER_PANEL = 4.0
-MATRIX_PWM_BITS = 5            # 1-11; fewer bits = much higher refresh
+MATRIX_PWM_BITS = 7            # 1-11; fewer bits = much higher refresh
 MATRIX_PWM_DITHER_BITS = 0      # 0-2: smoother gradients at low pwm_bits, costs refresh
 MATRIX_PWM_LSB_NS = 80         # measured 2026-10-14: at 130 the refresh dips to 55 Hz under the 58 Hz lock (judder); at 80 it never drops below 62
+MATRIX_PWM_BITS_BRIGHT = 5     # used only while the picture is very bright (faster refresh, less flicker, fewer colour steps)
+BRIGHT_ON, BRIGHT_OFF = 0.20, 0.14   # mean picture level x brightness: switch to the bright bits above ON, back below OFF
+PWM_BITS_HZ = {5: 110, 6: 100, 7: 88}  # refresh the panels reach with that many bits under real art (sets the brightness scale)
 MATRIX_REFRESH_LIMIT_HZ = 110   # lock refresh. Blind test 2026-10-26 at full brightness on coral: flicker fell steadily with refresh (60 awful, 72 flicker, 84 less, 100/6-bit very good, 110/5-bit best). 6 bits at 100 Hz (lsb 60) is the fallback if 5-bit banding shows.
                                # frames hold a whole number of refreshes: 42 fps (2) or 28 fps (3)
 BRIGHTNESS_REF_HZ = 58         # the refresh the brightness settings were tuned at: a faster refresh is brighter, so it is scaled back

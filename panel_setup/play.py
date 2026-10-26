@@ -298,6 +298,11 @@ def main():
     gc.freeze()                                         # start-up objects never rescanned mid-frame
     try:
         while True:
+            if hasattr(matrix, "_hz_for") and hasattr(matrix, "_bits"):   # the refresh follows the PWM bits
+                hz = matrix._hz_for(matrix._bits)
+                if hz != refresh:
+                    refresh, period = hz, 1 / (hz + 0.1)
+                    recent.clear()
             now = time.monotonic()
             if shown is None or now - shown > 0.25:
                 tv = now - t0

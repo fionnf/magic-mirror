@@ -78,6 +78,8 @@ class LedMatrix:
         self._lock = threading.Lock()
         self._brightness = config.MATRIX_BRIGHTNESS
         self.last_amps = 0.0
+        self._bits, self._bits_t = config.MATRIX_PWM_BITS, 0.0
+        LedMatrix._bits_now = config.MATRIX_PWM_BITS
         self.send_s = 0.0
         self._prepare_layout()
         self._luts = None
@@ -88,8 +90,33 @@ class LedMatrix:
     def _hw_brightness(value) -> int:
         """The panel's duty grows with the refresh rate (less idle time between scans), so the app's
         brightness % is scaled back to what it looked like at BRIGHTNESS_REF_HZ."""
-        scale = min(1.0, config.BRIGHTNESS_REF_HZ / float(config.MATRIX_REFRESH_LIMIT_HZ or config.BRIGHTNESS_REF_HZ))
+        scale = min(1.0, config.BRIGHTNESS_REF_HZ / float(LedMatrix._hz_for(getattr(LedMatrix, "_bits_now", config.MATRIX_PWM_BITS))))
         return max(1, int(round(value * scale))) if value > 0 else 0
+
+    @staticmethod
+    def _hz_for(bits) -> float:
+        """The refresh the panels run at with this many PWM bits (measured under real art)."""
+        return float(min(config.MATRIX_REFRESH_LIMIT_HZ, config.PWM_BITS_HZ.get(bits, config.BRIGHTNESS_REF_HZ)))
+
+    def _adapt_bits(self, mean: float) -> None:
+        """Full colour depth for normal art; fewer PWM bits (a faster refresh, less flicker) only
+        while the picture is very bright, which is when flicker shows. Hysteresis + a minimum dwell."""
+        if config.MATRIX_PWM_BITS_BRIGHT == config.MATRIX_PWM_BITS:
+            return
+        eff = mean * self._brightness / 100.0
+        now = time.monotonic()
+        want = self._bits
+        if self._bits == config.MATRIX_PWM_BITS and eff > config.BRIGHT_ON:
+            want = config.MATRIX_PWM_BITS_BRIGHT
+        elif self._bits == config.MATRIX_PWM_BITS_BRIGHT and eff < config.BRIGHT_OFF:
+            want = config.MATRIX_PWM_BITS
+        if want != self._bits and now - self._bits_t > 4.0:
+            self._bits, self._bits_t = want, now
+            print(f"[bits] {want} PWM bits (picture level {eff:.2f})", flush=True)
+            LedMatrix._bits_now = want
+            with self._lock:
+                self.matrix.pwmBits = want
+                self.matrix.brightness = self._hw_brightness(self._brightness)
 
     def _load_gains(self):
         """Load per-panel colour gains if a calibration file exists."""
@@ -148,6 +175,7 @@ class LedMatrix:
         amps = (mean * config.CHAIN_LENGTH * config.MATRIX_AMPS_PER_PANEL
                 * self._brightness / 100.0)
         self.last_amps = amps
+        self._adapt_bits(mean)
         want = min(1.0, config.MATRIX_MAX_AMPS * 0.97 / amps) if amps > 0 else 1.0
         cur = getattr(self, "_pscale", 1.0)
         if want < cur:

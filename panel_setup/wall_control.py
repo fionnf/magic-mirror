@@ -584,6 +584,10 @@ def make_app(runner):
         import print_out
         return jsonify(print_out.status())
 
+    @app.get("/<any(favicon.svg, favicon.png, apple-touch-icon.png):name>")
+    def icons(name):
+        return send_from_directory(os.path.join(os.path.dirname(HERE), "site"), name, max_age=86400)
+
     @app.get("/api/now.jpg")
     def now_jpg():
         resp = send_from_directory(HERE, "now.jpg", max_age=0)

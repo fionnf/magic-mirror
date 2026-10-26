@@ -88,7 +88,12 @@ def day_strip(m, prefix):
     return f'<div class="dayStrip" aria-label="The piece through its day">{cells}</div>'
 
 
+ICONS = ('<link rel="icon" href="{p}favicon.svg" type="image/svg+xml"><link rel="icon" href="{p}favicon.png" type="image/png" sizes="64x64">'
+         '<link rel="apple-touch-icon" href="{p}apple-touch-icon.png">')
+
+
 def page(title, body, prefix, desc=TAGLINE, image=None, canonical="", scripts=()):
+    ICONS_ = ICONS.format(p=prefix)
     og = f'<meta property="og:image" content="{SITE_URL}gallery/{image}">' if image else ""
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -96,7 +101,7 @@ def page(title, body, prefix, desc=TAGLINE, image=None, canonical="", scripts=()
 <meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}">{og}
 <link rel="canonical" href="{SITE_URL}{canonical}">
 <link rel="alternate" type="application/rss+xml" title="{TITLE}" href="{SITE_URL}feed.xml">
-<meta name="theme-color" content="#121014">{FONTS}<link rel="stylesheet" href="{prefix}style.css"></head>
+<meta name="theme-color" content="#121014">{ICONS_}{FONTS}<link rel="stylesheet" href="{prefix}style.css"></head>
 <body><div class="wrap">{body}
 <footer>Made by {CREDIT} at House Fortuna. Every piece here is the same program that runs on the
 wall. <a href="{prefix}feed.xml">Follow by RSS</a>.</footer></div>
@@ -240,7 +245,7 @@ def main():
     eds = load(a.src) if os.path.isdir(a.src) else []
     shutil.rmtree(a.out, ignore_errors=True)
     os.makedirs(os.path.join(a.out, "gallery"))
-    for fn in ("style.css", "gallery.js", "studio.js"):
+    for fn in ("style.css", "gallery.js", "studio.js", "favicon.svg", "favicon.png", "apple-touch-icon.png"):
         shutil.copy(os.path.join(ROOT, "site", fn), a.out)
     for m in eds:
         for ext in ("frag", "png", "final.png"):

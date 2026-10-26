@@ -1,7 +1,7 @@
 {
  "name": "Violet Glass, Breathing Low",
  "description": "A single soft lump of violet glass drifts through a dark indigo room, catching a cold white rim light that circles it like a slow sun, while the faint glow it casts beneath it gathers, hour by hour, into a quiet record of the day's music.",
- "image": "2026-10-23.png",
+ "image": "2026-10-23.final.png",
  "animation_source": "2026-10-23.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "The bass breathes the glass body gently larger and smaller, rising tension makes its outline more molten, the key leans the inner tint between indigo and lilac, treble widens the haze around it, each song reshapes its lumps, and every hour's energy is laid down as a soft band of light in the pool of glow beneath it.",
@@ -47,5 +59,36 @@
   "score": 7,
   "verdict": "A single lumpy violet glass body with a cold white rim and a faint glow below sits squarely in the direction, reads cleanly on a coarse grid, and is clearly unlike the recent warm-on-black days. The day's arc is modest: drift, a turning highlight and a growing glow, which is the same picture moved around rather than four distinct ones, but it is calm and beautiful enough to hang."
  },
- "direction": "Violet glass"
+ "direction": "Violet glass",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "No music reached the room today, so the violet glass kept its first shape from morning to midnight, breathing only at rest. The pool of light beneath it gathered no bands, just a faint even glow, the record of a day held entirely in silence.",
+  "alt": "A single smooth, rounded lump of translucent violet glass with a pale rim of light and a small white highlight floats in the lower right of a dark indigo space, casting a soft purple glow below it."
+ },
+ "final": true
 }

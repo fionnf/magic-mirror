@@ -56,13 +56,21 @@ DIRECTIONS = [   # one quiet, glowing form each (the house's favourites: glass o
     {"name": "Magenta cross", "hues": (300, 325), "ground": "mid",
      "colour": "magenta and violet light seeping between deep plum cushions",
      "form": "four soft cushions pressed together, light escaping along the seams as a glowing cross"},
+    {"name": "Flow lines", "hues": (0, 360), "ground": "dark", "shapes": True,
+     "colour": "one or two luminous colours on black, a soft glow around bright cores",
+     "form": "a comb of thin bright lines released along one edge and flowing through a slow two-wave field, "
+             "each line a few LEDs wide and brightest at its head, like the gallery's Flow Lines / Night Ridges"},
+    {"name": "Dot trails", "hues": (0, 360), "ground": "dark", "shapes": True,
+     "colour": "warm or cool luminous dots on black with a soft glow",
+     "form": "dots left at a fixed spacing along a handful of flowing paths (Flow Dots), dots 2-3 LEDs across, "
+             "brighter towards the path's head"},
     {"name": "Prism line", "hues": (0, 360), "ground": "dark",
      "colour": "white light splitting into a narrow soft spectrum only where it fans out",
      "form": "one thin vertical line of light opening into a soft spectral fan towards the bottom"},
 ]
 
 GROUND = {   # mean brightness range (0..255) of the still for each ground
-    "dark": (12, 70, "a dark ground, but the piece should still glow clearly (not a dim smudge on black)"),
+    "dark": (22, 80, "a dark ground, but the piece should still glow clearly (not a dim smudge on black)"),
     "mid": (40, 130, "a mid-tone ground: the whole wall is coloured, not black"),
     "light": (90, 150, "a light, high-key ground: pale paper or sky, with darker marks on it"),
 }
@@ -82,13 +90,42 @@ def pick(date, used=()):
     return DIRECTIONS[order[pos]]
 
 
+VISIBILITY = (
+    "VISIBILITY (measured on the real wall in a lit living room): anything darker than about 80/255 reads as black, "
+    "so a piece whose brightest area is dim looks empty. Keep the key form luminous (peak 200-255, body above 110) "
+    "and put the dark only in the background. Lines must be at least 2 LEDs wide and at least 100/255 bright "
+    "(a 1-LED line vanishes unless nearly white); dots 2-3 LEDs across; neighbouring tones must differ by at "
+    "least 30/255 or they merge into one. Soft glows are welcome but need a bright core.")
+
+
 def brief(direction):
     lo, hi, words = GROUND[direction["ground"]]
+    if direction.get("shapes"):
+        style = ("Interpret it freely and make it yours: the house loves this thin-line / dot shape art on black. "
+                 "Few, deliberate, flowing shapes with lots of calm space; no grids, checkerboards or dense fine "
+                 "patterns - they shimmer on an LED wall.")
+    else:
+        style = ("Interpret it freely and make it yours, but stay inside it: ONE form, quiet and luminous, lots of "
+                 "calm space around it. No stripes, checkerboards, grids of fine lines or other busy patterns - "
+                 "they shimmer on an LED wall.")
     return (f"TODAY'S DIRECTION - \"{direction['name']}\" (required; it keeps the wall from repeating itself):\n"
             f"- colour: {direction['colour']}\n- ground: {words}\n- form: {direction['form']}\n"
-            "Interpret it freely and make it yours, but stay inside it: ONE form, quiet and luminous, lots of "
-            "calm space around it. No stripes, checkerboards, grids of fine lines or other busy patterns - "
-            "they shimmer on an LED wall.")
+            f"{style}\n\n{VISIBILITY}")
+
+
+def visibility_problem(still):
+    """-> None if fine, else a note for the artist: would this read on the real wall? still = HxWx3 uint8."""
+    import numpy as np
+    mx = np.asarray(still).max(axis=2)
+    p99 = float(np.percentile(mx, 99))
+    lit = float((mx >= 100).mean())
+    if p99 < 170:
+        return (f"its brightest areas only reach {p99:.0f}/255: on the real wall anything under ~80 looks black, so it "
+                "would look empty. Make the key form luminous (peak 200-255) with a bright core")
+    if lit < 0.025:
+        return (f"only {lit * 100:.1f}% of the wall is brighter than 100/255: the form is too small or too dim to read. "
+                "Make the main form larger or brighter, lines 2+ LEDs wide")
+    return None
 
 
 def _hsv(h):

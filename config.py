@@ -48,6 +48,9 @@ MATRIX_MAX_AMPS = 28.0
 # Conservative full-white draw of ONE 64x64 panel at 100% brightness (typical
 # 3-4 A; measure yours and adjust).
 MATRIX_AMPS_PER_PANEL = 4.0
+# Shadow lift (camera tests 2026-10-26: anything under ~80/255 reads as black on the wall in a lit room).
+# 0 = off, 1 = full. Dark colours are lifted into the visible range keeping their hue; bright ones are untouched.
+ART_SHADOW_LIFT = float(__import__("os").environ.get("WALL_LIFT", 0.7))
 MATRIX_PWM_BITS = 6            # 1-11; fewer bits = much higher refresh
 MATRIX_PWM_DITHER_BITS = 0      # 0-2: smoother gradients at low pwm_bits, costs refresh
 MATRIX_PWM_LSB_NS = 60         # measured 2026-10-14: at 130 the refresh dips to 55 Hz under the 58 Hz lock (judder); at 80 it never drops below 62

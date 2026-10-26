@@ -205,6 +205,27 @@ class LedMatrix:
             return arr
         return (arr.astype(np.float32) * cur).astype(np.uint8)
 
+    @staticmethod
+    def _lift_lut(strength: float) -> np.ndarray:
+        """scale[m] for a pixel whose brightest channel is m: dark pixels are scaled up (hue kept), bright ones left alone."""
+        m = np.arange(256, dtype=np.float32)
+        g = 255.0 * (np.maximum(m, 1.0) / 255.0) ** 0.55                     # a strong gamma lift of the shadows
+        t = np.clip((m - 60.0) / 140.0, 0.0, 1.0)
+        w = 1.0 - t * t * (3 - 2 * t)                                        # full lift below 60, none above 200
+        f = m + strength * (g - m) * w
+        scale = np.where(m > 0, f / np.maximum(m, 1.0), 1.0)
+        return scale.astype(np.float32)
+
+    def _lift(self, arr: np.ndarray) -> np.ndarray:
+        k = config.ART_SHADOW_LIFT
+        if k <= 0.001:
+            return arr
+        if getattr(self, "_lift_k", None) != k:
+            self._lift_k, self._lift_scale = k, self._lift_lut(k)
+        m = arr.max(axis=2)
+        out = arr.astype(np.float32) * self._lift_scale[m][..., None]
+        return np.minimum(out, 255.0).astype(np.uint8)
+
     def _remap(self, image: Image.Image) -> np.ndarray:
         """Logical canvas -> flat chain strip (rows, chain*cols, 3) uint8.
 
@@ -214,7 +235,7 @@ class LedMatrix:
         if not hasattr(self, "_tile_idx"):
             self._prepare_layout()
         pr, pc = config.PANEL_ROWS, config.PANEL_COLS
-        arr = self._limit_power(np.asarray(image, dtype=np.uint8))
+        arr = self._limit_power(self._lift(np.asarray(image, dtype=np.uint8)))
         tiles = (arr.reshape(config.PANELS_TALL, pr, config.PANELS_WIDE, pc, 3)
                  .transpose(0, 2, 1, 3, 4)
                  .reshape(-1, pr, pc, 3))

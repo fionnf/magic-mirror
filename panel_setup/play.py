@@ -287,6 +287,7 @@ def main():
     # pause pulls the clock back to real time.
     period, shown, tv, late = 1 / (refresh + 0.1), None, 0.0, 0
     ffx = ff
+    up_lock, up_t, down_ok = 60.0, -1e9, 0.0       # after slowing down, do not speed up again for a while (it judders)
     t_prev, art_t, slow = None, None, 1.0           # the art's own clock, slowed while frames are held longer
     heat_t, heat_floor = 0.0, 0                     # thermal guard: a hot chip gets fewer frames to make
     rods = None
@@ -381,8 +382,10 @@ def main():
                     worst = sorted(recent)[int(len(recent) * 0.9)] * 1000
                     if worst > ff * 1000 / refresh - 2.0 and ff < 4:   # misses its slot: give it one more refresh
                         ff += 1
+                        up_lock = min(900.0, up_lock * 2) if now - up_t < 900 else 60.0   # came back too soon: wait longer
+                        up_t, down_ok = now, now + up_lock
                         print(f"[fps] {refresh / ff:.0f} fps (frames take {worst:.0f} ms)", flush=True)
-                    elif ff > ff_min and len(recent) >= 300 and worst < (ff - 1) * 1000 / refresh - 6.0:
+                    elif ff > ff_min and len(recent) >= 300 and now > down_ok and worst < (ff - 1) * 1000 / refresh - 8.0:
                         ff -= 1
                         print(f"[fps] {refresh / ff:.0f} fps (frames take {worst:.0f} ms)", flush=True)
                     if ff == ff_min or len(recent) >= 300:

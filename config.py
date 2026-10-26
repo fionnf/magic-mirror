@@ -18,11 +18,11 @@ PIXEL_MAPPER = ""
 # starting at the panel each cable plugs into. Check with panel_setup/display_test.py --pattern numbers.
 if PANELS_TALL == 4:
     PANEL_CHAIN_ORDER = [
-        (2, 2), (1, 2), (0, 2), (0, 3), (1, 3), (2, 3),      # port 1: right-to-left along row 3, then row 4 left-to-right
+        (0, 3), (1, 3), (2, 3), (2, 2), (1, 2), (0, 2),      # port 1: left-to-right along row 4 (bottom), then right-to-left along row 3
         (2, 1), (1, 1), (0, 1), (0, 0), (1, 0), (2, 0),      # port 3: the same, rows 2 then 1 (top)
     ]
-    # Rows 2 and 3 (chain 0-2 of each port) are mounted upside down.
-    PANEL_ROTATE = {0: 180, 1: 180, 2: 180, 6: 180, 7: 180, 8: 180}
+    # Port 1's block was turned 180 on 2026-10-26: its 3-5 (row 3) are upside down; port 3's 0-2 (row 2) too.
+    PANEL_ROTATE = {3: 180, 4: 180, 5: 180, 6: 180, 7: 180, 8: 180}
 else:
     PORT_SLOTS, CHAIN_PER_PORT, PARALLEL = [0], CHAIN_LENGTH, 1
     PANEL_CHAIN_ORDER = [            # row serpentine from the bottom-left, any number of rows

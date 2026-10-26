@@ -8,6 +8,7 @@ config.PANEL_CHAIN_ORDER, so any wiring layout works without pixel mappers.
 import json
 import os
 import threading
+import time
 import numpy as np
 from PIL import Image
 import config
@@ -77,6 +78,7 @@ class LedMatrix:
         self._lock = threading.Lock()
         self._brightness = config.MATRIX_BRIGHTNESS
         self.last_amps = 0.0
+        self.send_s = 0.0
         self._prepare_layout()
         self._luts = None
         if config.MATRIX_APPLY_PANEL_GAINS:
@@ -188,6 +190,7 @@ class LedMatrix:
         if image.mode != "RGB":
             image = image.convert("RGB")
         write_snapshot(image)
+        t0 = time.perf_counter()
         strip = self._remap(image)
         # Static content (idle text, held frames) costs nothing: skip the
         # upload when nothing changed — the panels keep showing the last frame.
@@ -196,6 +199,7 @@ class LedMatrix:
         self._prev = strip
         with self._lock:
             self.canvas.SetImage(Image.fromarray(strip, "RGB"))
+            self.send_s = time.perf_counter() - t0               # remap + upload, before the vsync wait
             self.canvas = self.matrix.SwapOnVSync(self.canvas, max(1, int(frame_fraction)))
         return True
 

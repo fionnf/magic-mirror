@@ -320,13 +320,13 @@ def main():
                         late += 1
                 shown = ts
             if a.fps >= 50:                             # adapt: heavy moments fall back to 29 fps
-                recent.append(c1 - c0)                  # the frame's own work, not the vsync wait
+                recent.append(c1 - c0 + getattr(matrix, "send_s", 0.003))   # render + sending it, not the vsync wait
                 if len(recent) >= 60:
                     worst = sorted(recent)[int(len(recent) * 0.9)] * 1000
-                    if ff == 1 and worst > 11.0:      # + ~3 ms to send it: keep under 17 ms
+                    if ff == 1 and worst > 15.0:      # render + send must fit one refresh (17 ms)
                         ff = 2
                         print(f"[fps] 29 fps (frames take {worst:.0f} ms)", flush=True)
-                    elif ff == 2 and worst < 7.0 and len(recent) >= 300:
+                    elif ff == 2 and worst < 11.0 and len(recent) >= 300:
                         ff = 1
                         print(f"[fps] 58 fps (frames take {worst:.0f} ms)", flush=True)
                     if ff == 1 or len(recent) >= 300:

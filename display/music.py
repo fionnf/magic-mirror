@@ -1373,7 +1373,7 @@ class MusicShow:
                 hold = float(c.get("hold", 180.0))
                 if not getattr(self, "_art_pick", None) or now - getattr(self, "_art_pick_t", 0) > hold \
                         or self._art_pick == "art:" + (getattr(self, "_art_fixed", "") or ""):
-                    ids = [e["id"] for e in library.catalogue()]
+                    ids = [e["id"] for e in library._all()]
                     if not vjshaders.renderer().ok:
                         ids = [i for i in ids if not i.startswith("shader-")]
                     recent = getattr(self, "_art_recent", [])

@@ -10,6 +10,8 @@ pieces moving with the music) and by the app's gallery.
 import os
 import re
 
+import numpy as np
+
 import config
 
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,6 +24,7 @@ COLLECTIONS = [          # (key, title in the app, how to get its pieces)
     ("glass", "Glass & trails", ("display.light_art", "LightGallery")),
     ("lava", "Coral & breath", ("display.art", "LavaCoralGallery")),
     ("art", "Ink & moire", ("display.art", "Gallery")),
+    ("daily", "Art of the day", None),               # every edition made for this wall; new days appear by themselves
 ]
 _cat = None
 
@@ -58,6 +61,8 @@ def catalogue():
     W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
     out = []
     for key, title, src in COLLECTIONS:
+        if key == "daily":
+            continue
         if src is None:
             for p in shaders.gallery_pieces(W, H):
                 out.append({"id": "shader-" + p.name, "title": _shader_title(p.name), "collection": key,
@@ -75,12 +80,49 @@ def catalogue():
     return out
 
 
+def _daily_entries():
+    """The art-of-the-day editions on this wall, newest first (read each time: a new day appears by itself)."""
+    try:
+        from display import daily
+        eds = daily.editions()
+    except Exception:
+        return []
+    return [{"id": "daily-" + d, "title": (m.get("name") or d), "collection": "daily",
+             "collection_title": "Art of the day", "kind": "daily", "date": d}
+            for d, m in eds if os.path.exists(os.path.join(daily.FOLDER, d + ".frag"))]
+
+
+def _all():
+    return catalogue() + _daily_entries()
+
+
 def find(pid):
-    return next((e for e in catalogue() if e["id"] == pid), None)
+    return next((e for e in _all() if e["id"] == pid), None)
 
 
 def public():
-    return [{k: v for k, v in e.items() if not k.startswith("_")} for e in catalogue()]
+    return [{k: v for k, v in e.items() if not k.startswith("_")} for e in _all()]
+
+
+class DailyPiece:
+    """One art-of-the-day edition as a library piece: its shader, its palette, its own day (not listening)."""
+
+    def __init__(self, W, H, date):
+        self.W, self.H, self.date, self.name = W, H, date, "daily-" + date
+        from display import daily
+        self.meta = next((m for d, m in daily.editions() if d == date), {})
+        self.cols = [daily._hex(c) for c in self.meta.get("palette", ["#000000", "#808080", "#ffffff"])]
+        self.hours = daily.load_memory(date)["hours"]
+
+    def reset(self):
+        pass
+
+    def render(self, dt, t):
+        from display import daily, shaders
+        r = shaders.renderer()
+        if not r.ok:
+            return np.zeros((self.H, self.W, 3), np.float32)
+        return r.render("path:" + daily._path(self.date, "frag"), t, {"level": 0.1, "day": self.hours}, self.cols)
 
 
 def make(pid, W=None, H=None):
@@ -89,6 +131,8 @@ def make(pid, W=None, H=None):
     e = find(pid)
     if e is None:
         return None
+    if e["kind"] == "daily":
+        return DailyPiece(W, H, e["date"])
     if e["kind"] == "shader":
         from display import shaders
         name = pid[len("shader-"):]
@@ -105,7 +149,7 @@ def render_still(pid, seconds=8.0):
     if p is None:
         return None
     p.reset()
-    if find(pid)["kind"] == "shader":
+    if find(pid)["kind"] in ("shader", "daily"):
         return p.render(0.04, 40.0)
     img = None
     for k in range(int(seconds / 0.04)):
@@ -136,7 +180,7 @@ def thumbs_in_subprocess(ids=None, timeout=600):
     server must never render shaders itself."""
     import subprocess
     import sys
-    todo = [i for i in (ids or [e["id"] for e in catalogue()]) if not os.path.exists(_thumb_path(i))]
+    todo = [i for i in (ids or [e["id"] for e in _all()]) if not os.path.exists(_thumb_path(i))]
     if todo:
         subprocess.run([sys.executable, "-m", "display.library", "thumbs", *todo], cwd=_HERE,
                        timeout=timeout, capture_output=True)
@@ -146,7 +190,7 @@ def thumbs_in_subprocess(ids=None, timeout=600):
 if __name__ == "__main__":
     import sys
     if sys.argv[1:2] == ["thumbs"]:
-        for pid in sys.argv[2:] or [e["id"] for e in catalogue()]:
+        for pid in sys.argv[2:] or [e["id"] for e in _all()]:
             try:
                 thumb(pid)
             except Exception as e:

@@ -245,7 +245,7 @@ class Everything:
     def __init__(self):
         import random
         from display import library
-        ids = [e["id"] for e in library.catalogue()]
+        ids = [e["id"] for e in library._all()]
         try:
             from display import shaders
             if not shaders.renderer().ok:

@@ -25,11 +25,13 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$ROOT
+ExecStartPre=-/bin/bash $ROOT/panel_setup/update.sh
 ExecStart=/usr/bin/python3 $ROOT/panel_setup/wall_control.py --port 80
 Restart=always
 RestartSec=3
 KillSignal=SIGTERM
 TimeoutStopSec=15
+TimeoutStartSec=120
 User=root
 
 [Install]

@@ -99,23 +99,34 @@ class LedMatrix:
         """The refresh the panels run at with this many PWM bits (measured under real art)."""
         return float(min(config.MATRIX_REFRESH_LIMIT_HZ, config.PWM_BITS_HZ.get(bits, config.BRIGHTNESS_REF_HZ)))
 
+    @staticmethod
+    def _depth_for(level: float) -> int:
+        """PWM bits for a picture level: the darker the picture, the more colour steps (flicker hides in the dark)."""
+        for below, bits in config.DEPTH_STEPS:               # darkest first
+            if level < below:
+                return bits
+        return config.MATRIX_PWM_BITS
+
     def _adapt_bits(self, mean: float, bright_frac: float = 0.0) -> None:
         """More colour steps for dark art, a faster refresh for bright art.
-        Dark pictures hide flicker, so after ~20 s of a dark picture the panels take MATRIX_PWM_BITS_DARK
-        (more shades in the shadows); any bright moment sends them straight back to MATRIX_PWM_BITS.
-        It follows the picture's 8-second average, not single frames, so it never hops back and forth."""
-        if config.MATRIX_PWM_BITS_DARK == config.MATRIX_PWM_BITS:
+        It follows the picture's 8-second average (never single frames), needs a clear margin past each
+        threshold, waits ~25 s before going deeper, and a bright moment sends it straight back to
+        MATRIX_PWM_BITS. So it never hops back and forth."""
+        if not config.DEPTH_STEPS:
             return
         eff = max(mean, 0.7 * bright_frac) * self._brightness / 100.0     # small bright areas count too
         now = time.monotonic()
         self._lvl += (eff - self._lvl) * min(1.0, (now - self._lvl_t) / 8.0)
         self._lvl_t = now
         want = self._bits
-        if self._bits == config.MATRIX_PWM_BITS and self._lvl < config.DARK_ON and eff < config.DARK_OFF:
-            want = config.MATRIX_PWM_BITS_DARK
-        elif self._bits == config.MATRIX_PWM_BITS_DARK and (self._lvl > config.DARK_OFF or eff > 0.30):
+        cand = self._depth_for(self._lvl)
+        if eff > 0.30:
             want = config.MATRIX_PWM_BITS
-        dwell = 0.4 if want == config.MATRIX_PWM_BITS else 25.0           # quick to calm a bright moment, slow to enrich
+        elif cand > self._bits and self._depth_for(self._lvl * 1.25) == cand and eff < 1.25 * self._lvl + 0.02:
+            want = cand
+        elif cand < self._bits and self._depth_for(self._lvl / 1.25) == cand:
+            want = cand
+        dwell = 25.0 if want > self._bits else 0.4                        # slow to enrich, quick to calm
         if want != self._bits and now - self._bits_t > dwell:
             self._bits, self._bits_t = want, now
             print(f"[bits] {want} PWM bits (picture level {eff:.2f})", flush=True)

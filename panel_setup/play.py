@@ -287,6 +287,7 @@ def main():
     # pause pulls the clock back to real time.
     period, shown, tv, late = 1 / (refresh + 0.1), None, 0.0, 0
     ffx = ff
+    over = 0
     up_lock, up_t, down_ok = 60.0, -1e9, 0.0       # after slowing down, do not speed up again for a while (it judders)
     t_prev, art_t, slow = None, None, 1.0           # the art's own clock, slowed while frames are held longer
     heat_t, heat_floor = 0.0, 0                     # thermal guard: a hot chip gets fewer frames to make
@@ -380,8 +381,10 @@ def main():
                 recent.append(c1 - c0 + getattr(matrix, "send_s", 0.003))   # render + sending it, not the vsync wait
                 if len(recent) >= 60:
                     worst = sorted(recent)[int(len(recent) * 0.9)] * 1000
-                    if worst > ff * 1000 / refresh - 2.0 and ff < 4:   # misses its slot: give it one more refresh
+                    over = over + 1 if worst > ff * 1000 / refresh - 2.0 else 0
+                    if over >= 3 and ff < 4:                           # misses its slot for ~4 s running (not one USB blip)
                         ff += 1
+                        over = 0
                         up_lock = min(900.0, up_lock * 2) if now - up_t < 900 else 60.0   # came back too soon: wait longer
                         up_t, down_ok = now, now + up_lock
                         print(f"[fps] {refresh / ff:.0f} fps (frames take {worst:.0f} ms)", flush=True)

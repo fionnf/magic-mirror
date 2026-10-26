@@ -65,7 +65,7 @@ def _anims():
         "music":   (music.frame, 600.0),
         "trams":   (departures.frame, 60.0),
         "ambient": (departures.ambient_frame, 600.0),
-        "art":     (art.frame, art.LOOP_SEC),
+        "art":     (art.frame_everything, 3600.0),
         "shapes":  (shapes.frame, shapes.LOOP_SEC),
         "glass":   (light_art.frame, light_art.LOOP_SEC),
         "artsy":   (artsy.frame, artsy.LOOP_SEC),

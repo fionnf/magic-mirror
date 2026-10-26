@@ -45,8 +45,10 @@ def upsample(field, s, H, W):
 
 
 def _lut(field, lut):
-    idx = np.clip((field * (len(lut) - 1)).astype(int), 0, len(lut) - 1)
-    return lut[idx]
+    n = len(lut)
+    if n <= 256:                                       # a uint8 index with take is ~3x faster than fancy indexing
+        return np.take(lut, np.clip(field * (n - 1), 0, n - 1).astype(np.uint8), axis=0)
+    return lut[np.clip((field * (n - 1)).astype(np.intp), 0, n - 1)]
 
 
 # ------------------------------------------------------------- pieces ---
@@ -236,8 +238,64 @@ class Gallery:
         return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
 
 
+class Everything:
+    """The whole library (every collection) as one shuffled, cross-fading rotation: the Art mode.
+    Pieces are built when their turn comes, so starting is instant."""
+
+    def __init__(self):
+        import random
+        from display import library
+        ids = [e["id"] for e in library.catalogue()]
+        try:
+            from display import shaders
+            if not shaders.renderer().ok:
+                ids = [i for i in ids if not i.startswith("shader-")]
+        except Exception:
+            ids = [i for i in ids if not i.startswith("shader-")]
+        random.shuffle(ids)
+        self.ids, self.cur, self.nxt, self.k, self.last_t = ids or ["art-ink-flow"], None, None, -1, None
+
+    def _piece(self, k):
+        from display import library
+        for _ in range(len(self.ids)):                       # skip anything that will not build
+            pid = self.ids[k % len(self.ids)]
+            try:
+                p = library.make(pid)
+                if p is not None:
+                    p.reset()
+                    return p
+            except Exception as e:
+                print(f"[art] {pid}: {type(e).__name__}: {e}", flush=True)
+            k += 1
+        raise RuntimeError("no art pieces")
+
+    def __call__(self, t):
+        dt = 0.04 if self.last_t is None else max(0.0, min(0.2, t - self.last_t))
+        self.last_t = t
+        k, u = int(t // PIECE_SEC), t % PIECE_SEC
+        if k != self.k:
+            self.cur = self.nxt if (self.nxt is not None and k == self.k + 1) else self._piece(k)
+            self.k, self.nxt = k, None
+        img = self.cur.render(dt, t)
+        if u > PIECE_SEC - XFADE:                           # cross-fade into the next piece
+            if self.nxt is None:
+                self.nxt = self._piece(k + 1)
+            a = (u - (PIECE_SEC - XFADE)) / XFADE
+            a = a * a * (3 - 2 * a)
+            img = img * (1 - a) + self.nxt.render(dt, t) * a
+        return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
+
+
 LOOP_SEC = PIECE_SEC * 3
 _gallery = None
+_everything = None
+
+
+def frame_everything(t):
+    global _everything
+    if _everything is None:
+        _everything = Everything()
+    return _everything(t)
 
 
 def frame(t):
@@ -325,7 +383,7 @@ class CoralPlus:
     """Gray-Scott variations: params, palette, seeding and optional relief light."""
 
     def __init__(self, W, H, name, F, k, lut, seed="random", relief=False, scale=2,
-                 steps_per_sec=110):
+                 steps_per_sec=80):
         self.W, self.H, self.name = W, H, name
         self.F, self.k, self.lut, self.seed = F, k, lut, seed
         self.relief, self.s, self.sps = relief, scale, steps_per_sec
@@ -356,11 +414,12 @@ class CoralPlus:
         v = np.clip(upsample(self.B, self.s, self.H, self.W) * 2.6, 0, 1)
         img = _lut(v, self.lut)
         if self.relief:                                          # carved, lit from top-left
-            gy, gx = np.gradient(v)
-            nx, ny, nz = -gx * 6 * self.s, -gy * 6 * self.s, np.ones_like(v)
-            n = np.sqrt(nx * nx + ny * ny + nz * nz)
-            light = np.clip((-0.55 * nx - 0.6 * ny + 0.58 * nz) / n, 0, 1)
-            img = img * (0.35 + 0.95 * light[..., None])
+            vh = np.clip(self.B * 2.6, 0, 1)                     # the light is smooth: work it out on the
+            gy, gx = np.gradient(vh)                             # small grid, then spread it to every LED
+            nx, ny = -gx * 6, -gy * 6
+            n = np.sqrt(nx * nx + ny * ny + 1.0)
+            light = upsample(np.clip((-0.55 * nx - 0.6 * ny + 0.58) / n, 0, 1), self.s, self.H, self.W)
+            img *= (0.35 + 0.95 * light)[..., None]
         return img
 
 

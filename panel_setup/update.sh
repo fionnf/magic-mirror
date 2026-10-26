@@ -7,7 +7,7 @@ STAMP=/tmp/wall-update.stamp
 if [ -f "$STAMP" ] && [ $(( $(date +%s) - $(stat -c %Y "$STAMP") )) -lt 600 ]; then
     exit 0                                   # pulled within 10 minutes (a quick restart or a crash loop)
 fi
-[ -d .git ] || { echo "[update] not a git checkout: skipping"; exit 0; }
+[ -d .git ] || git init -q                 # a rsync-deployed copy has no history yet: the first pull creates it
 KEY="${GALLERY_DEPLOY_KEY:-$HOME/.ssh/fortuna_deploy}"
 [ -f "$KEY" ] || KEY=/home/pi/.ssh/fortuna_deploy
 for i in 1 2 3 4 5 6; do                     # at boot the network can lag behind the service

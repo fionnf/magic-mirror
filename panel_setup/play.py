@@ -300,7 +300,7 @@ def main():
     if os.environ.get("WALL_RODS", "1") == "1":
         try:
             from display.rods import Rods
-            rods = Rods()
+            rods = Rods(ble=False)
             rods.follow = a.anim == "daily" or (a.anim == "piece" and os.environ.get("WALL_PIECE", "").startswith("daily-"))
         except Exception as e:
             print(f"[rods] off: {e}", flush=True)

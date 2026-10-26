@@ -24,7 +24,8 @@ ADDRESSES = ["BE:69:33:1C:4F:01", "BE:69:6A:12:CD:03"]      # living room rod 1,
 ON = bytes([0x7e, 0x04, 0x04, 0x01, 0xff, 0xff, 0x00, 0xef])
 GAIN = 0.8                  # the rods are close to the eye: not full power
 ORANGE = np.array([255, 110, 0], np.float32)
-EASE = 0.6                  # seconds for a colour to follow the wall
+EASE = 1.5                  # seconds for a colour to follow the wall: the rods need no fast refresh
+SHARED = "/dev/shm/wall-rods.json"   # the art process writes the colours here, the wall controller (long-lived) drives Bluetooth
 
 
 def _pack(r, g, b):
@@ -46,7 +47,10 @@ def colours(img):
 
 
 class Rods:
-    def __init__(self, addresses=ADDRESSES):
+    """ble=False (in the art process): only works out the colours and shares them. ble=True (in the wall
+    controller, which outlives art changes): keeps the Bluetooth links and follows the shared colours."""
+    def __init__(self, addresses=ADDRESSES, ble=True):
+        self.ble = ble
         self.addr = addresses
         self.target = [np.zeros(3, np.float32) for _ in addresses]
         self.cur = [np.zeros(3, np.float32) for _ in addresses]
@@ -55,6 +59,8 @@ class Rods:
         self.follow = False                                  # True only while the daily art is on the wall
         self.status = ["off"] * len(addresses)
         self._fed = 0.0
+        if not ble:
+            return
         try:
             import bleak  # noqa: F401
         except Exception:
@@ -62,14 +68,43 @@ class Rods:
         threading.Thread(target=self._run, daemon=True).start()
 
     def feed(self, img):
+        """Called every frame by the art process; works at 2 Hz, the rods are slow on purpose."""
         now = time.monotonic()
-        if now - self._fed < 0.1:
+        if now - self._fed < 0.5:
             return
-        dt, self._fed = min(0.5, now - self._fed), now
+        self._fed = now
         top, bot = self._choice(img)
-        for i, c in enumerate((top, bot)[:len(self.addr)]):
-            self.target[i] = c * GAIN * self.level
-            self.cur[i] += (self.target[i] - self.cur[i]) * (1 - np.exp(-dt / EASE))
+        try:
+            tmp = SHARED + ".tmp"
+            with open(tmp, "w") as fh:
+                json.dump({"t": time.time(), "c": [top.tolist(), bot.tolist()], "level": self.level}, fh)
+            os.replace(tmp, SHARED)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _shared():
+        try:
+            with open(SHARED) as fh:
+                d = json.load(fh)
+            return d if time.time() - d["t"] < 4.0 else None
+        except Exception:
+            return None
+
+    async def _pull(self):
+        last = time.monotonic()
+        while True:
+            await asyncio.sleep(0.5)
+            now = time.monotonic()
+            dt, last = min(2.0, now - last), now
+            d = self._shared()
+            if d:
+                cols, self.level = [np.array(c, np.float32) for c in d["c"]], float(d.get("level", 1.0))
+            else:                                            # nothing is playing: orange, a set colour, or dark
+                cols = list(self._choice(None))
+            for i, c in enumerate(cols[:len(self.addr)]):
+                self.target[i] = c * GAIN * self.level
+                self.cur[i] += (self.target[i] - self.cur[i]) * (1 - np.exp(-dt / EASE))
 
     def _choice(self, img):
         """Warm orange, except while the daily art is on the wall (self.follow): then they take its colours.
@@ -97,7 +132,7 @@ class Rods:
             if mode == "breathe":
                 c = c * (0.55 + 0.45 * np.sin(time.monotonic() * 2 * np.pi / 8.0))
             return c, c
-        if mode == "follow" or (mode == "auto" and self.follow):
+        if img is not None and (mode == "follow" or (mode == "auto" and self.follow)):
             return colours(img)
         return ORANGE, ORANGE
 
@@ -114,7 +149,7 @@ class Rods:
         asyncio.run(self._main())
 
     async def _main(self):
-        await asyncio.gather(*[self._rod(i) for i in range(len(self.addr))])
+        await asyncio.gather(self._pull(), *[self._rod(i) for i in range(len(self.addr))])
 
     @staticmethod
     def _asked():
@@ -145,7 +180,7 @@ class Rods:
                         if sent is None or max(abs(a - b) for a, b in zip(rgb, sent)) >= 3:
                             await c.write_gatt_char(ch, _pack(*rgb), response=False)
                             sent = rgb
-                        await asyncio.sleep(0.25)
+                        await asyncio.sleep(1.0)
             except Exception as e:
                 self.status[i] = f"{type(e).__name__}: {str(e)[:80]}"; self._publish()
             for _ in range(20):                               # lost or not there: try again later, or at once when asked

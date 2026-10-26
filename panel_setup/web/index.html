@@ -79,7 +79,7 @@
   .switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); transition: transform .2s; }
   .switch input:checked { background: rgb(var(--glow)); }
   .switch input:checked::after { transform: translateX(18px); }
-  select, input[type=text] { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  select, input[type=text], input[type=search] { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 
   /* scenes: one tap sets the room */
   .scenes { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: none; }
@@ -120,6 +120,15 @@
   .gallery .sel img { outline-color: var(--ink); }
   .gallery span { display: block; font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.25; }
   .gallery .any img { background: linear-gradient(135deg, rgb(var(--glow)), #000); }
+  .find { display: flex; gap: 8px; margin: 0 0 10px; }
+  .find input { flex: 1; min-width: 0; }
+  .more { margin-top: 30px; border-top: 1px solid var(--line); }
+  .more > summary { list-style: none; cursor: pointer; padding: 16px 0; font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; }
+  .more > summary::-webkit-details-marker { display: none; }
+  .more > summary::after { content: "+"; color: var(--muted); font-size: 20px; line-height: 1; }
+  .more[open] > summary::after { content: "\2212"; }
+  .stepper { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 14px 0 0; }
+  .stepper .btn { min-width: 96px; }
   .strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 6px; scroll-snap-type: x mandatory; }
   .strip button { flex: 0 0 auto; width: 74px; border: 0; padding: 0; background: none; text-align: left; scroll-snap-align: start; }
   .strip img { width: 74px; aspect-ratio: 1; object-fit: cover; border-radius: 8px; display: block; background: #000; outline: 2px solid transparent; outline-offset: 2px; }
@@ -202,6 +211,7 @@
     <h1 id="title">Fortuna wall</h1>
     <p id="sub"></p>
   </div>
+  <div class="stepper"><button class="btn" onclick="stepPiece(-1)" aria-label="Previous piece">&#8592; Previous</button><button class="btn" onclick="surprise()">Surprise me</button><button class="btn" onclick="stepPiece(1)" aria-label="Next piece">Next &#8594;</button></div>
   <div class="controls" style="width:100%">
     <button class="round" id="power" aria-label="Turn the wall off" onclick="power()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>
@@ -230,10 +240,17 @@
     <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/" target="_blank">The public gallery</a> shows every day's piece.</p>
     <section>
       <h2 id="galleryHead">Gallery</h2>
+      <div class="find"><input type="search" id="artFind" placeholder="Search the gallery" aria-label="Search the gallery" autocomplete="off"><button class="btn" onclick="surprise()">Surprise me</button></div>
       <div class="chips" id="artChips"></div>
       <div class="gallery" id="artGrid"></div>
       <p class="hint">Tap a piece to hang it. It stays until you choose something else.</p>
     </section>
+    <section>
+      <h2>Pace</h2>
+      <input type="range" id="pace" min="3" max="100" step="1" aria-label="Art pace">
+      <div class="ends"><span>barely moving</span><span>lively</span></div>
+    </section>
+    <details class="more"><summary>Slideshows, shows and tours</summary>
     <section>
       <h2>Slideshows</h2>
       <div class="list" id="collections"></div>
@@ -251,15 +268,11 @@
       </div>
     </section>
     <section>
-      <h2>Pace</h2>
-      <input type="range" id="pace" min="3" max="100" step="1" aria-label="Art pace">
-      <div class="ends"><span>barely moving</span><span>lively</span></div>
-    </section>
-    <section>
       <h2>People</h2>
       <div class="switch"><span>Show people on the art</span><input type="checkbox" id="tPresence"></div>
       <p class="hint">The camera sees who is in the room, and the art's colours shift slightly where they are. Nothing is recorded.</p>
     </section>
+    </details>
   </div>
 
   <!-- MUSIC -->
@@ -699,7 +712,7 @@ async function loadArt() {
     .map(c => `<button class="${sel === c.key ? 'on' : ''}" onclick="${fn}('${c.key}')">${esc(c.title)}</button>`).join('');
   $('artChips').innerHTML = chips(artFilter, 'filterArt');
   const cur = STATUS.current === 'piece' ? STATUS.piece : null;
-  const list = ART.pieces.filter(p => artFilter === 'all' || p.collection === artFilter);
+  const list = shownPieces();
   $('galleryHead').textContent = `Gallery · ${ART.pieces.length} pieces`;
   $('artGrid').innerHTML = list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
       <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
@@ -711,6 +724,23 @@ async function loadArt() {
       mlist.map(p => `<button class="${p.id === mcur ? 'sel' : ''}" onclick="musicArt('${p.id}')">
         <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   }
+}
+function shownPieces() {
+  const q = ($('artFind').value || '').trim().toLowerCase();
+  return ART.pieces.filter(p => (artFilter === 'all' || p.collection === artFilter) &&
+    (!q || (p.title + ' ' + (p.collection_title || '')).toLowerCase().includes(q)));
+}
+$('artFind').addEventListener('input', debounce(() => loadArt(), 200));
+async function stepPiece(d) {
+  if (!ART) await loadArt(); if (!ART) return;
+  const all = ART.pieces; if (!all.length) return;
+  const i = all.findIndex(p => p.id === STATUS.piece && STATUS.current === 'piece');
+  hangPiece(all[(i < 0 ? (d > 0 ? 0 : all.length - 1) : (i + d + all.length) % all.length)].id);
+}
+async function surprise() {
+  if (!ART) await loadArt(); if (!ART) return;
+  const l = shownPieces().length ? shownPieces() : ART.pieces;
+  hangPiece(l[Math.floor(Math.random() * l.length)].id);
 }
 function filterArt(k) { artFilter = k; loadArt(); }
 function filterMusicArt(k) { musicArtFilter = k; loadArt(); }

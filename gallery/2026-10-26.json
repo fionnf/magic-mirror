@@ -1,6 +1,6 @@
 {
- "name": "Prism Line",
- "description": "A single vertical seam of light opens into a quiet spectral fan that deepens and widens through the day, holding a dark room together without ever breaking its calm.",
+ "name": "Luminous Current",
+ "description": "A comb of glowing strands is released from one edge and carried through a slow two-wave field, gathering into a richer, broader flow as the day deepens.",
  "image": "2026-10-26.png",
  "animation_source": "2026-10-26.frag",
  "attributes": [
@@ -14,7 +14,7 @@
   },
   {
    "trait_type": "Palette",
-   "value": "#07111d #1d2f55 #f4c8ff"
+   "value": "#08111f #1f67ff #ff4fd6"
   },
   {
    "trait_type": "Medium",
@@ -26,26 +26,26 @@
   },
   {
    "trait_type": "Curator score",
-   "value": 8
+   "value": 7
   }
  ],
- "listening": "It listens by breathing the line\u2019s height, fan width, and colour tilt with the room\u2019s low energy, while the day\u2019s hour memories settle as a faint sediment in the glow.",
+ "listening": "It listens like a tide recorder: bass widens the sweep, treble sharpens the heads of the strands, and the day\u2019s hour log thickens the flow into a denser, more luminous braid.",
  "palette": [
-  "#07111d",
-  "#1d2f55",
-  "#f4c8ff"
+  "#08111f",
+  "#1f67ff",
+  "#ff4fd6"
  ],
- "source_sha256": "aad2a3e8b762cda6d4c42218744b442835a59c0135a4854478dfd410dc09aa2a",
+ "source_sha256": "55a395cf587f446af00f292fd651cab5c7907936e0090e831c9b20fa08177b6f",
  "model": "gpt-5.4-mini",
  "size": [
   192,
   256
  ],
- "attempts": 6,
- "created": 1793048137.4730709,
+ "attempts": 7,
+ "created": 1793050454.5246296,
  "curator": {
-  "score": 8,
-  "verdict": "The piece elegantly embodies the 'Prism line' direction with a calm vertical seam softly evolving into a spectral fan, using a restrained palette that glows well on the dark ground. It creates a quiet, luminous presence that fits the house's elegant taste and stands apart clearly from recent pieces."
+  "score": 7,
+  "verdict": "This piece fits the day's direction well with its flowing, luminous comb of strands and soft glowing cores, using a restrained palette that glows clearly on a dark ground. It maintains calm space and a slow, natural flow, avoiding dense patterns and shimmer, while evolving thoughtfully through the day."
  },
- "direction": "Prism line"
+ "direction": "Flow lines"
 }

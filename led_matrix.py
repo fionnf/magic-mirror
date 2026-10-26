@@ -56,7 +56,7 @@ class LedMatrix:
         opts = RGBMatrixOptions()
         opts.rows = config.PANEL_ROWS
         opts.cols = config.PANEL_COLS
-        opts.chain_length = config.CHAIN_LENGTH
+        opts.chain_length = getattr(config, "CHAIN_PER_PORT", config.CHAIN_LENGTH)
         opts.parallel = config.PARALLEL
         opts.hardware_mapping = config.HARDWARE_MAPPING
         opts.pixel_mapper_config = config.PIXEL_MAPPER
@@ -169,8 +169,15 @@ class LedMatrix:
                 sel[k] = self._luts[k][_CH, sel[k]]
         for k, quarter_turns in self._rots.items():
             sel[k] = np.rot90(sel[k], k=-quarter_turns)
-        return np.ascontiguousarray(
-            sel.transpose(1, 0, 2, 3).reshape(pr, len(self._tile_idx) * pc, 3))
+        per = getattr(config, "CHAIN_PER_PORT", len(sel))
+        slots = getattr(config, "PORT_SLOTS", [0])
+        if len(slots) == 1 and config.PARALLEL == 1:
+            return np.ascontiguousarray(sel.transpose(1, 0, 2, 3).reshape(pr, len(sel) * pc, 3))
+        out = np.zeros((config.PARALLEL * pr, per * pc, 3), np.uint8)    # port slot p = rows p*64 ...
+        for i, slot in enumerate(slots):
+            out[slot * pr:(slot + 1) * pr] = (sel[i * per:(i + 1) * per]
+                                              .transpose(1, 0, 2, 3).reshape(pr, per * pc, 3))
+        return out
 
     def draw(self, image: Image.Image, frame_fraction: int = 1) -> bool:
         """Show a frame. frame_fraction=N holds it for exactly N panel refreshes

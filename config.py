@@ -1,32 +1,35 @@
 import os
-# Panel hardware — up to 12× 64x64 panels (256 mm square) in a 3-wide x 4-tall
-# portrait layout, all on ONE chain from the Adafruit HAT.
+# Panel hardware — 12× 64x64 panels (256 mm square) in a 3-wide x 4-tall portrait layout,
+# on two chains of 6 (bonnet ports 1 and 3).
 PANEL_ROWS = 64
 PANEL_COLS = 64
 PANELS_WIDE = 3
-PANELS_TALL = int(__import__("os").environ.get("WALL_PANELS_TALL", 3))   # 3 now; the full wall is 4 (192 x 256).
-#                 WALL_PANELS_TALL=4 previews the full wall in the simulator; set 4 here when the row is wired
-CHAIN_LENGTH = PANELS_WIDE * PANELS_TALL
-PARALLEL = 1
-# The built-in rpi-rgb-led-matrix mappers can't do a 3-column serpentine, so
-# the driver runs the chain as a flat (64*12) x 64 strip and remaps the image
-# in software (see led_matrix.py). Leave PIXEL_MAPPER empty.
+PANELS_TALL = int(__import__("os").environ.get("WALL_PANELS_TALL", 4))   # the full wall is 4 (192 x 256); 3 = the old single-chain wall
+CHAIN_LENGTH = PANELS_WIDE * PANELS_TALL      # panels in all
+# Wiring (photo 2026-10-26): TWO chains of 6 on the bonnet's ports 1 and 3 (port 2 is empty). The library
+# drives them in parallel; port slots are 0-based, so "port 3" = slot 2 and PARALLEL = 3.
+PORT_SLOTS = [0, 2]
+CHAIN_PER_PORT = 6
+PARALLEL = 3
+# The built-in rpi-rgb-led-matrix mappers can't do this, so the driver runs each chain as a flat 64*6 x 64
+# strip and remaps the image in software (see led_matrix.py). Leave PIXEL_MAPPER empty.
 PIXEL_MAPPER = ""
-# Physical chain order, as (col, row) of each panel starting at the one the
-# HAT cable plugs into. Currently a row serpentine starting at the bottom-left
-# (see below). Edit to match your wiring; check with
-# panel_setup/display_test.py --pattern numbers.
-PANEL_CHAIN_ORDER = [            # row serpentine from the bottom-left, any number of rows
-    (c if (PANELS_TALL - 1 - r) % 2 == 0 else PANELS_WIDE - 1 - c, r)
-    for r in range(PANELS_TALL - 1, -1, -1) for c in range(PANELS_WIDE)
-]
-# 3 rows: (0,2) (1,2) (2,2) | (2,1) (1,1) (0,1) | (0,0) (1,0) (2,0)  - chain 0-2, 3-5, 6-8
-# ^ measured on the wall (photo 2026-10-07): the cable enters at the BOTTOM-LEFT
-#   panel and snakes by rows. Add the 4th row here when it is connected.
-# Per-panel rotation in degrees (0/90/180/270) keyed by chain index, for
-# panels mounted upside down. Missing = 0.
-# Middle row (chain 3-5) is mounted upside down.
-PANEL_ROTATE = {3: 180, 4: 180, 5: 180}
+# Physical order of every panel as (col, row), chain after chain (port 1's six, then port 3's six),
+# starting at the panel each cable plugs into. Check with panel_setup/display_test.py --pattern numbers.
+if PANELS_TALL == 4:
+    PANEL_CHAIN_ORDER = [
+        (2, 2), (1, 2), (0, 2), (0, 3), (1, 3), (2, 3),      # port 1: right-to-left along row 3, then row 4 left-to-right
+        (2, 1), (1, 1), (0, 1), (0, 0), (1, 0), (2, 0),      # port 3: the same, rows 2 then 1 (top)
+    ]
+    # Rows 2 and 3 (chain 0-2 of each port) are mounted upside down.
+    PANEL_ROTATE = {0: 180, 1: 180, 2: 180, 6: 180, 7: 180, 8: 180}
+else:
+    PORT_SLOTS, CHAIN_PER_PORT, PARALLEL = [0], CHAIN_LENGTH, 1
+    PANEL_CHAIN_ORDER = [            # row serpentine from the bottom-left, any number of rows
+        (c if (PANELS_TALL - 1 - r) % 2 == 0 else PANELS_WIDE - 1 - c, r)
+        for r in range(PANELS_TALL - 1, -1, -1) for c in range(PANELS_WIDE)
+    ]
+    PANEL_ROTATE = {3: 180, 4: 180, 5: 180}
 SCAN_RATE = 32  # most 64x64 panels are 1/32 scan — confirm from sticker
 # CONFIRMED WORKING on Pi 4B (Fortuna) with the P3 64x64 FM6124 panels:
 #   hardware_mapping "regular", gpio_slowdown 3, panel_type FM6126A, pwm_bits 7

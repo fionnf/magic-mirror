@@ -12,7 +12,7 @@ tests/sim_receipts/
 .DS_Store
 venv/
 .venv/
-panel_setup/monitor.csv
+panel_setup/monitor.csv*
 # personal / generated — never publish (public repo)
 photos/
 panel_setup/calibration_report/

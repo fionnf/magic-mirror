@@ -5,6 +5,7 @@
 #   ./panel_setup/run.sh numbers         # one pattern: walk numbers gradient bar text anim white
 #   ./panel_setup/run.sh bar --show-refresh --pwm-bits 7 --slowdown 2
 #   ./panel_setup/run.sh monitor         # health readout only (2nd SSH session)
+#   ./panel_setup/run.sh health          # one-shot install/service/power check
 #   ./panel_setup/run.sh tune            # find the lightest clean timing preset
 #   ./panel_setup/run.sh --single        # one panel only (wiring debug)
 set -euo pipefail
@@ -18,6 +19,10 @@ fi
 if [ "${1:-}" = "monitor" ]; then
     shift
     exec python3 panel_setup/monitor.py "$@"      # run in a 2nd SSH session
+fi
+
+if [ "${1:-}" = "health" ]; then
+    exec ./panel_setup/health_check.sh
 fi
 
 if [ "${1:-}" = "tune" ]; then

@@ -14,7 +14,9 @@ mirror mode uses the Mac webcam. GPU shaders need `pip install moderngl`.
 See *New Pi from scratch* below: deploy, then `./panel_setup/bootstrap_pi.sh` and a reboot.
 It installs the system packages, compiles the panel library, installs the Python packages,
 turns off the onboard audio (it conflicts with the panels), installs the `wall-control`
-service (the app on port 80) and runs a health check.
+service (the app on port 80) and runs a health check. The service is only enabled
+until the reboot (the panel library won't run while the onboard audio is loaded); after
+rebooting, `./panel_setup/run.sh health` should show `wall-control: running`.
 
 ## 2. Send code to the Pi (from your laptop)
 ```bash
@@ -42,7 +44,8 @@ Ctrl-C quits (display is cleared).
 | `run.sh white` | Worst-case power draw — **watch the PSU** |
 | `run.sh` | Cycle everything |
 | `run.sh tune` | Steps through light→heavy timing presets (12 s each); pick the lightest that looks clean |
-| `run.sh monitor` | Pi health only (run in a 2nd SSH window) |
+| `run.sh monitor` | Pi health only (run in a 2nd SSH window; fps/amps show `-` there) |
+| `run.sh health` | One-shot check: panel library, onboard audio off, `wall-control` running, camera, power flags |
 | `run.sh --single` | One panel only (`--mapping`, `--multiplexing`) |
 
 Tuning flags (override `config.py` for one run): `--brightness --pwm-bits
@@ -65,16 +68,27 @@ cost. `gpio_slowdown` 3 is confirmed on these panels; lower values are untested 
 lightest preset that shows no flicker, banding or noise on the bar test.
 
 ## Pi health monitoring
-Every test prints a `[PI]` line every 2 s and logs to `panel_setup/monitor.csv`:
+Every test prints a `[PI]` line every 2 s and appends to `panel_setup/monitor.csv`
+(a CSV with an older column layout is moved to `monitor.csv.old`):
 ```
-[PI] cpu  62% (worst core 98%) | 58°C 1800MHz | mem 14% |  29.8 fps draw 11.2ms (max 25) | ~5.0A | ok
+[PI] cpu  62% (worst core 98%) | 58°C 1800MHz | mem 14% |  29.8 fps +2 held work 6.1ms (max 11) | ~5.0A (peak 5.4) | ok
 ```
 - **worst core ~100%**: the matrix refresh thread is saturating a core — expected;
   use `isolcpus=3` so it has one to itself.
-- **fps below target / draw ms high**: Python remap+SetImage is the bottleneck.
+- **fps** counts frames actually sent to the panels; **held** are identical frames that
+  were skipped (static patterns show mostly held — that's fine, not a stall).
+- **work ms** is the Python cost per sent frame (remap + SetImage), without the wait
+  for the panel refresh. High work ms with fps below target = Python is the bottleneck;
+  low work ms with fps below target = the panel refresh rate is the limit.
+- **~A** is the estimate after the power limiter, **peak** the highest in the 2 s window.
+  `wants N` appears when the limiter is cutting a frame that asked for N A. It's linear in
+  pixel value, so mid-tones read high — a rough guide, not a meter.
 - **temp ≥ 75°C** warns once; ≥ 80°C means throttling is close — add a heatsink/fan.
-- **UNDERVOLTAGE / THROTTLED** flags come from `vcgencmd get_throttled`. Undervoltage
-  = the Pi's 5 V is sagging; check the Pi's own supply and panel power wiring.
+- **UNDERVOLTAGE / FREQ-CAPPED / THROTTLED / TEMP-LIMIT** come from `vcgencmd
+  get_throttled` and warn each time they switch on. Undervoltage = the Pi's 5 V is
+  sagging; check the Pi's own supply and panel power wiring. Events that latched before
+  the test started print once as `since boot`; a new one shows as `NEW …` (if it already
+  cleared by the next reading it's flagged as a brief event).
 - Copy the CSV back with `scp <user>@<host>:magic-mirror/panel_setup/monitor.csv .`
  .
 

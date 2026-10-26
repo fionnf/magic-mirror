@@ -21,7 +21,7 @@ Patterns:
     white     solid white at the configured brightness (check PSU / brightness)
 
 A live "[PI]" line prints every 2 s (CPU, temp, throttling/undervoltage, fps,
-draw time, estimated amps) and is logged to panel_setup/monitor.csv.
+work time per frame, estimated amps) and is appended to panel_setup/monitor.csv.
 --no-monitor disables it. Standalone: python3 panel_setup/monitor.py
 
 Tuning overrides (default from config.py): --brightness --pwm-bits --lsb-ns
@@ -250,11 +250,15 @@ def run():
                 gen = frames_for(name, args.panel, args.walk_sec)
                 while end is None or time.monotonic() < end:
                     t0 = time.monotonic()
+                    frame = next(gen)
                     td = time.monotonic()
-                    matrix.draw(next(gen))
+                    sent = matrix.draw(frame) is not False   # False = identical, not sent
                     if mon:
-                        mon.note_frame(time.monotonic() - td,
-                                       getattr(matrix, "last_amps", 0.0))
+                        # LedMatrix reports its Python cost without the vsync wait;
+                        # the simulator has no vsync, so wall time is right there
+                        work = getattr(matrix, "last_work_s", time.monotonic() - td)
+                        mon.note_frame(work, getattr(matrix, "last_amps_out", 0.0),
+                                       sent, getattr(matrix, "last_amps", None))
                     if args.sim:
                         import pygame
                         for ev in matrix.pump_events():

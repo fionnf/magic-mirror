@@ -3,6 +3,7 @@
 # Run ON THE PI:
 #   ./panel_setup/install_control.sh             # web page on http://<pi>/  (port 80)
 #   ./panel_setup/install_control.sh --remove
+#   ./panel_setup/install_control.sh --no-start   # enable for next boot only
 # It disables wall-art.service and magic-mirror.service: the controller is the
 # one program that drives the panels and starts whatever you pick on the page.
 set -euo pipefail
@@ -37,6 +38,10 @@ WantedBy=multi-user.target
 UNITEOF
 sudo systemctl daemon-reload
 sudo systemctl enable wall-control.service
-sudo systemctl restart wall-control.service
 IP=$(hostname -I | awk '{print $1}')
+if [ "${1:-}" = "--no-start" ]; then
+    echo "wall control enabled; starts at next boot: http://$IP/"
+    exit 0
+fi
+sudo systemctl restart wall-control.service
 echo "wall control running: http://$IP/   (and http://$(hostname).local/)"

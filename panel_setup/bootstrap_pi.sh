@@ -68,13 +68,16 @@ say "5b/7 face models (OpenCV zoo)"
 
 say "6/7 wall control website + autostart (port 80)"
 chmod +x panel_setup/*.sh
-./panel_setup/install_control.sh
+if lsmod | grep -q '^snd_bcm2835'; then
+    # the panel library exits while the onboard sound module is loaded, so
+    # starting now would only crash-loop until the reboot
+    ./panel_setup/install_control.sh --no-start
+else
+    ./panel_setup/install_control.sh
+fi
 
 say "7/7 health check"
-echo "-- panel library:  $(python3 -c 'import rgbmatrix; print("ok")' 2>&1 | tail -1)"
-echo "-- shazamio:       $(python3 -c 'import shazamio; print("ok")' 2>&1 | tail -1)"
-echo "-- camera:         $(rpicam-hello --list-cameras 2>&1 | head -3 | tr '\n' ' ')"
-echo "-- throttling:     $(vcgencmd get_throttled 2>&1)"
-echo "-- sound capture:  $(arecord -l 2>&1 | grep -c '^card') device(s)"
+./panel_setup/health_check.sh || true
 echo
-echo "Done. Reboot once ('sudo reboot') so the audio setting applies, then open http://$(hostname -I | awk '{print $1}')/"
+echo "Done. Reboot once ('sudo reboot') so the audio setting applies, then run"
+echo "'./panel_setup/run.sh health' (wall-control should say running) and open http://$(hostname -I | awk '{print $1}')/"

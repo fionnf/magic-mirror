@@ -8,6 +8,7 @@ config.PANEL_CHAIN_ORDER, so any wiring layout works without pixel mappers.
 import json
 import os
 import threading
+import time
 import numpy as np
 from PIL import Image
 import config
@@ -76,7 +77,9 @@ class LedMatrix:
         self.canvas = self.matrix.CreateFrameCanvas()
         self._lock = threading.Lock()
         self._brightness = config.MATRIX_BRIGHTNESS
-        self.last_amps = 0.0
+        self.last_amps = 0.0       # estimate for the frame as requested
+        self.last_amps_out = 0.0   # estimate after the power limiter scaled it
+        self.last_work_s = 0.0     # Python cost of the last draw (no vsync wait)
         self._prepare_layout()
         self._luts = None
         if config.MATRIX_APPLY_PANEL_GAINS:
@@ -131,7 +134,9 @@ class LedMatrix:
 
         Estimate: each panel draws AMPS_PER_PANEL at full white, linear in mean
         channel value and in brightness. Mean is taken on a 1-in-16 subsample -
-        plenty accurate for a budget check and ~16x cheaper.
+        plenty accurate for a budget check and ~16x cheaper. Linear in pixel value,
+        it ignores the library's luminance correction, so mid-tones over-estimate:
+        conservative for the budget, rough as a reading.
         The scale is smoothed over time: it drops quickly when the frame needs it (safety)
         but recovers slowly, so content hovering around the budget never flickers.
         """
@@ -146,6 +151,7 @@ class LedMatrix:
         else:
             cur = min(want, cur + 0.008)                     # up: ~2 s to recover
         self._pscale = cur
+        self.last_amps_out = amps * cur
         if cur >= 0.999:
             return arr
         return (arr.astype(np.float32) * cur).astype(np.uint8)
@@ -175,7 +181,9 @@ class LedMatrix:
     def draw(self, image: Image.Image, frame_fraction: int = 1) -> bool:
         """Show a frame. frame_fraction=N holds it for exactly N panel refreshes
         (the library paces it on vsync - smooth motion with no timer drift).
-        Returns False if the frame was identical and nothing was sent."""
+        Returns False if the frame was identical and nothing was sent.
+        last_work_s is the Python cost (remap + SetImage), not the vsync wait."""
+        t0 = time.monotonic()
         if image.size != (config.TOTAL_WIDTH, config.TOTAL_HEIGHT):
             image = image.resize((config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
         if image.mode != "RGB":
@@ -185,10 +193,12 @@ class LedMatrix:
         # Static content (idle text, held frames) costs nothing: skip the
         # upload when nothing changed — the panels keep showing the last frame.
         if self._prev is not None and np.array_equal(strip, self._prev):
+            self.last_work_s = time.monotonic() - t0
             return False
         self._prev = strip
         with self._lock:
             self.canvas.SetImage(Image.fromarray(strip, "RGB"))
+            self.last_work_s = time.monotonic() - t0
             self.canvas = self.matrix.SwapOnVSync(self.canvas, max(1, int(frame_fraction)))
         return True
 

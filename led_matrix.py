@@ -78,7 +78,8 @@ class LedMatrix:
         self._lock = threading.Lock()
         self._brightness = config.MATRIX_BRIGHTNESS
         self.last_amps = 0.0
-        self._bits, self._bits_t = config.MATRIX_PWM_BITS, 0.0
+        self._bits, self._bits_t = config.MATRIX_PWM_BITS, time.monotonic()
+        self._lvl, self._lvl_t = 1.0, time.monotonic()                 # start "bright": the start-up animation stays on the safe bits
         LedMatrix._bits_now = config.MATRIX_PWM_BITS
         self.send_s = 0.0
         self._prepare_layout()
@@ -99,18 +100,22 @@ class LedMatrix:
         return float(min(config.MATRIX_REFRESH_LIMIT_HZ, config.PWM_BITS_HZ.get(bits, config.BRIGHTNESS_REF_HZ)))
 
     def _adapt_bits(self, mean: float, bright_frac: float = 0.0) -> None:
-        """Full colour depth for normal art; fewer PWM bits (a faster refresh, less flicker) only
-        while the picture is very bright, which is when flicker shows. Hysteresis + a minimum dwell."""
-        if config.MATRIX_PWM_BITS_BRIGHT == config.MATRIX_PWM_BITS:
+        """More colour steps for dark art, a faster refresh for bright art.
+        Dark pictures hide flicker, so after ~20 s of a dark picture the panels take MATRIX_PWM_BITS_DARK
+        (more shades in the shadows); any bright moment sends them straight back to MATRIX_PWM_BITS.
+        It follows the picture's 8-second average, not single frames, so it never hops back and forth."""
+        if config.MATRIX_PWM_BITS_DARK == config.MATRIX_PWM_BITS:
             return
         eff = max(mean, 0.7 * bright_frac) * self._brightness / 100.0     # small bright areas count too
         now = time.monotonic()
+        self._lvl += (eff - self._lvl) * min(1.0, (now - self._lvl_t) / 8.0)
+        self._lvl_t = now
         want = self._bits
-        if self._bits == config.MATRIX_PWM_BITS and eff > config.BRIGHT_ON:
-            want = config.MATRIX_PWM_BITS_BRIGHT
-        elif self._bits == config.MATRIX_PWM_BITS_BRIGHT and eff < config.BRIGHT_OFF:
+        if self._bits == config.MATRIX_PWM_BITS and self._lvl < config.DARK_ON and eff < config.DARK_OFF:
+            want = config.MATRIX_PWM_BITS_DARK
+        elif self._bits == config.MATRIX_PWM_BITS_DARK and (self._lvl > config.DARK_OFF or eff > 0.30):
             want = config.MATRIX_PWM_BITS
-        dwell = 0.4 if want == config.MATRIX_PWM_BITS_BRIGHT else 4.0     # quick to calm a bright moment, slow to let go
+        dwell = 0.4 if want == config.MATRIX_PWM_BITS else 25.0           # quick to calm a bright moment, slow to enrich
         if want != self._bits and now - self._bits_t > dwell:
             self._bits, self._bits_t = want, now
             print(f"[bits] {want} PWM bits (picture level {eff:.2f})", flush=True)

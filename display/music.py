@@ -28,7 +28,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 import config
-from display.art import _palette, _lut, Coral
+from display.art import _palette, _lut, Coral, upsample
 from display.beat import BeatTracker
 from display import vj_fx
 from display.intensity import Intensity
@@ -1058,8 +1058,8 @@ class Visuals:
             c.B += 0.1 * Coral._lap(c.B) + AB2 - (k + F) * c.B
             np.clip(c.A, 0, 1, out=c.A)
             np.clip(c.B, 0, 1, out=c.B)
-        img = _lut(np.clip(c.B * 2.6, 0, 1), lut) * (0.85 + 0.3 * f["kick"])  # breathes with bass
-        return np.repeat(np.repeat(img, c.s, 0), c.s, 1)[:self.H, :self.W]
+        v = np.clip(upsample(c.B, c.s, self.H, self.W) * 2.6, 0, 1)
+        return _lut(v, lut) * (0.85 + 0.3 * f["kick"])      # breathes with bass
 
     def ink(self, f, lut, dt):
         W, H, p = self.W, self.H, self.phase

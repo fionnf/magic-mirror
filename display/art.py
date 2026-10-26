@@ -34,6 +34,16 @@ def _palette(stops, n=256):
     return np.stack([np.interp(v, xs, stops[:, c]) for c in range(3)], -1).astype(np.float32)
 
 
+def upsample(field, s, H, W):
+    """A half-resolution scalar field -> full resolution, smoothly (bicubic), so colour and light are
+    computed per LED instead of in blocks of s x s."""
+    if s == 1:
+        return field
+    from PIL import Image
+    im = Image.fromarray(np.ascontiguousarray(field, np.float32), "F").resize((W, H), Image.BICUBIC)
+    return np.asarray(im, np.float32)
+
+
 def _lut(field, lut):
     idx = np.clip((field * (len(lut) - 1)).astype(int), 0, len(lut) - 1)
     return lut[idx]
@@ -169,9 +179,8 @@ class Coral:
             AB2 = self.A * self.B * self.B
             self.A += Da * 0.2 * self._lap(self.A) - AB2 + F * (1 - self.A)
             self.B += Db * 0.2 * self._lap(self.B) + AB2 - (k + F) * self.B
-        v = np.clip(self.B * 2.6, 0, 1)
-        img = _lut(v, self.LUT)
-        return np.repeat(np.repeat(img, self.s, 0), self.s, 1)[:self.H, :self.W]
+        v = np.clip(upsample(self.B, self.s, self.H, self.W) * 2.6, 0, 1)
+        return _lut(v, self.LUT)
 
 
 class Interference:
@@ -344,15 +353,15 @@ class CoralPlus:
             self.B += 0.1 * lap(self.B) + AB2 - (self.k + self.F) * self.B
             np.clip(self.A, 0.0, 1.0, out=self.A)                # keep the sim bounded
             np.clip(self.B, 0.0, 1.0, out=self.B)
-        v = np.clip(self.B * 2.6, 0, 1)
+        v = np.clip(upsample(self.B, self.s, self.H, self.W) * 2.6, 0, 1)
         img = _lut(v, self.lut)
         if self.relief:                                          # carved, lit from top-left
             gy, gx = np.gradient(v)
-            nx, ny, nz = -gx * 6, -gy * 6, np.ones_like(v)
+            nx, ny, nz = -gx * 6 * self.s, -gy * 6 * self.s, np.ones_like(v)
             n = np.sqrt(nx * nx + ny * ny + nz * nz)
             light = np.clip((-0.55 * nx - 0.6 * ny + 0.58 * nz) / n, 0, 1)
             img = img * (0.35 + 0.95 * light[..., None])
-        return np.repeat(np.repeat(img, self.s, 0), self.s, 1)[:self.H, :self.W]
+        return img
 
 
 class LavaCoralGallery(Gallery):

@@ -616,6 +616,26 @@ class _Ears:
 _state = {"date": None, "mtime": 0.0, "ears": None, "today": None}
 
 
+# The light of the day over every daily piece: (hour, red, green, blue gain, brightness). Dawn rose, a clear cool
+# midday, golden evening, a deep blue night. Strength WALL_DAY_GRADE (0 = off, 1 = as written).
+_GRADE = [(0.0, 0.84, 0.92, 1.16, 0.94), (5.5, 0.92, 0.95, 1.12, 0.94), (7.5, 1.16, 0.94, 0.88, 0.92),
+          (10.0, 1.0, 1.0, 1.0, 1.0), (13.5, 0.93, 1.0, 1.10, 1.06), (17.0, 1.04, 1.0, 0.94, 1.02),
+          (19.0, 1.20, 0.96, 0.78, 1.0), (21.0, 1.10, 0.92, 1.0, 0.94), (24.0, 0.84, 0.92, 1.16, 0.94)]
+_GRADE_K = float(os.environ.get("WALL_DAY_GRADE", "1.0"))
+
+
+def day_grade(hour):
+    """(r, g, b) multipliers for this hour of the day, eased between the keyframes."""
+    for (h0, *c0), (h1, *c1) in zip(_GRADE, _GRADE[1:]):
+        if h0 <= hour <= h1:
+            f = (hour - h0) / (h1 - h0)
+            f = f * f * (3 - 2 * f)
+            r, g, b, v = (a + (b_ - a) * f for a, b_ in zip(c0, c1))
+            k = _GRADE_K
+            return tuple(1.0 + (x * v - 1.0) * k for x in (r, g, b))
+    return 1.0, 1.0, 1.0
+
+
 def frame(t):
     """play.py "daily": today's piece (or the one chosen in the app, WALL_DAILY_DATE)."""
     from PIL import Image
@@ -649,4 +669,8 @@ def frame(t):
             feats = _state["ears"].features(today)
     cols = [_hex(c) for c in meta["palette"]]
     img = r.render("path:" + _path(date, "frag"), t, feats, cols)
+    if _GRADE_K > 0:
+        lt = time.localtime(now)
+        g = np.array(day_grade(lt.tm_hour + lt.tm_min / 60.0 + lt.tm_sec / 3600.0), np.float32)
+        img = np.clip(img.astype(np.float32) * g, 0, 255)
     return Image.fromarray(img.astype(np.uint8), "RGB")

@@ -192,27 +192,32 @@ def _boot_frame(progress):
 
 
 def _loading_screen(matrix, frame_fn):
-    """Warm the animation up in a thread (first-frame set-up can take seconds on the Pi) while
-    the wall shows a progress bar that eases towards 90% and snaps to 100% when it is ready."""
+    """Warm the animation up (first-frame set-up can take seconds on the Pi) while the wall shows a
+    progress bar that eases towards 90% and snaps to 100% when it is ready. The warm-up runs on THIS
+    thread: a GPU (EGL) context only works on the thread that made it, so warming up on a side thread
+    left every later frame black or garbled. The bar is drawn from the side thread instead."""
     import math
     import threading
     done = threading.Event()
 
-    def warm():
-        try:
-            frame_fn(0.0)
-        finally:
-            done.set()
-    threading.Thread(target=warm, daemon=True).start()
-    t0, p = time.monotonic(), 0.0
-    while True:
-        el = time.monotonic() - t0
-        target = 1.0 if done.is_set() else 0.9 * (1 - math.exp(-el / 2.5))
-        p += (target - p) * 0.25
-        matrix.draw(_boot_frame(p))
-        if done.is_set() and p > 0.985:
-            break
-        time.sleep(0.05)
+    def bar():
+        t0, p = time.monotonic(), 0.0
+        while True:
+            el = time.monotonic() - t0
+            target = 1.0 if done.is_set() else 0.9 * (1 - math.exp(-el / 2.5))
+            p += (target - p) * 0.25
+            matrix.draw(_boot_frame(p))
+            if done.is_set() and p > 0.985:
+                break
+            time.sleep(0.05)
+
+    th = threading.Thread(target=bar, daemon=True)
+    th.start()
+    try:
+        frame_fn(0.0)
+    finally:
+        done.set()
+        th.join(timeout=10)
     matrix.draw(_boot_frame(1.0))
     time.sleep(0.25)
 

@@ -147,7 +147,7 @@ class Rods:
                             sent = rgb
                         await asyncio.sleep(0.25)
             except Exception as e:
-                self.status[i] = f"{type(e).__name__}"; self._publish()
+                self.status[i] = f"{type(e).__name__}: {str(e)[:80]}"; self._publish()
             for _ in range(20):                               # lost or not there: try again later, or at once when asked
                 await asyncio.sleep(0.5)
                 if self._asked() > seen:

@@ -843,8 +843,8 @@ class VJ:
                                         schema=self.SCENE_SCHEMA, timeout=40)[0])
             if not j:
                 raise RuntimeError("scene was not valid")
-            j["model"] = config.AI_MODEL
-            self.brain_status = f"Claude ({config.AI_MODEL}) ok - {time.time() - t0:.0f} s"
+            j["model"] = ai_client.model_name()
+            self.brain_status = f"AI ({ai_client.model_name()}) ok - {time.time() - t0:.0f} s"
             return j
         except Exception as e:
             self.brain_status = f"Claude error: {str(e)[:120]}"

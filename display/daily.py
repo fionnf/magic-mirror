@@ -382,7 +382,7 @@ def generate(date=None, notes="", attempts=6, min_score=7, direction=None):
                            {"trait_type": "Artist", "value": "Dewa and Fionn"},
                            {"trait_type": "Curator score", "value": score}],
             "listening": j.get("listening", "").strip()[:800],
-            "palette": pal, "source_sha256": sha, "model": config.AI_MODEL, "size": [W, H],
+            "palette": pal, "source_sha256": sha, "model": ai_client.model_name(), "size": [W, H],
             "tokens": {"in": tin, "out": tout}, "attempts": attempt, "created": time.time(),
             "curator": {"score": score, "verdict": verdict}, "direction": direction["name"]}
     with open(_path(date, "json"), "w") as fh:

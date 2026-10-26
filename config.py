@@ -107,6 +107,9 @@ SILHOUETTE_DIM_FACTOR = 0.2
 # AI (Claude via the Anthropic API; vision-capable). Needs ANTHROPIC_API_KEY in .env
 # The daily artist's mood board: a public Pinterest board, "user/board" (read via its RSS feed)
 MOODBOARD = __import__("os").environ.get("WALL_MOODBOARD", "fionnferreira/motion-graphics")
+AI_PROVIDER = "openai"                 # the cheaper default; "anthropic" = Claude (AI_MODEL). WALL_AI_PROVIDER overrides.
+AI_OPENAI_MODEL = os.environ.get("WALL_OPENAI_MODEL", "gpt-4.1-mini")
+AI_GROQ_MODEL = "llama-3.3-70b-versatile"   # Groq free tier (WALL_AI_PROVIDER=groq, GROQ_API_KEY)
 AI_MODEL = "claude-opus-5-5"
 AI_MAX_TOKENS = 30
 AI_TIMEOUT_SEC = 10

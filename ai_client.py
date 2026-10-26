@@ -6,6 +6,10 @@ Needs ANTHROPIC_API_KEY in .env. Model: config.AI_MODEL (claude-opus-5-5). Think
 for that model, so output depth is set with output_config.effort ("low" for these short lines).
 Server-side refusal fallbacks are enabled (fallbacks="default") so a declined request is re-run on
 a fallback model inside the same call instead of failing.
+
+A cheaper provider is the default now (config.AI_PROVIDER = "openai", model config.AI_OPENAI_MODEL,
+key OPENAI_API_KEY in .env; "groq" works too with GROQ_API_KEY): the art of the day, its curator, the music brain and the mirror lines all
+go through ask(). Set WALL_AI_PROVIDER=anthropic to use Claude again.
 """
 import os
 import io
@@ -39,13 +43,35 @@ def _get_client():
     return _client
 
 
+def provider() -> str:
+    return (os.environ.get("WALL_AI_PROVIDER") or getattr(config, "AI_PROVIDER", "anthropic")).lower()
+
+
+def model_name() -> str:
+    """The model that makes the pieces (recorded in each edition's metadata)."""
+    return config.AI_MODEL if provider() == "anthropic" else _compat(provider())[2]
+
+
+def _load_env() -> None:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+    except Exception:
+        pass
+
+
 def available() -> bool:
+    if provider() != "anthropic":
+        _load_env()
+        return bool(os.environ.get(_compat(provider())[1]))
     return bool(os.environ.get("ANTHROPIC_API_KEY")) or _client is not None
 
 
 def warm_up() -> None:
     """Import the SDK and build the client in the background at startup (the first import in a
     fresh environment can take longer than the reply limit)."""
+    if provider() != "anthropic":
+        return                                               # plain HTTPS: nothing to warm
     def run():
         try:
             _get_client().models.retrieve(config.AI_MODEL)   # cheap metadata call: warms TLS too
@@ -83,11 +109,65 @@ def _text_of(resp) -> str:
     return "".join(b.text for b in resp.content if b.type == "text").strip()
 
 
+def _openai_content(content):
+    """Claude-style content blocks -> OpenAI chat content parts."""
+    if isinstance(content, str):
+        return content
+    parts = []
+    for b in content:
+        if b.get("type") == "image":
+            src = b["source"]
+            parts.append({"type": "image_url",
+                          "image_url": {"url": f"data:{src['media_type']};base64,{src['data']}"}})
+        else:
+            parts.append({"type": "text", "text": b.get("text", "")})
+    return parts
+
+
+# OpenAI-compatible providers: name -> (base url, key variable, model)
+def _compat(name):
+    if name == "groq":
+        return ("https://api.groq.com/openai/v1", "GROQ_API_KEY",
+                os.environ.get("WALL_GROQ_MODEL", getattr(config, "AI_GROQ_MODEL", "llama-3.3-70b-versatile")))
+    return ("https://api.openai.com/v1", "OPENAI_API_KEY", config.AI_OPENAI_MODEL)
+
+
+def _ask_openai(system, content, max_tokens, schema, timeout):
+    import requests
+    _load_env()
+    base, keyvar, model = _compat(provider())
+    key = os.environ.get(keyvar)
+    if not key:
+        raise RuntimeError(f"{keyvar} is not set")
+    body = {"model": model,
+            "max_completion_tokens": min(int(max_tokens), 32000),
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": _openai_content(content)}]}
+    if schema is not None:
+        body["response_format"] = {"type": "json_schema",
+                                   "json_schema": {"name": "reply", "schema": schema, "strict": False}}
+    r = requests.post(base + "/chat/completions", json=body,
+                      headers={"Authorization": f"Bearer {key}"},
+                      timeout=timeout or config.AI_TIMEOUT_SEC + 5)
+    if r.status_code != 200:
+        raise RuntimeError(f"{provider()} {r.status_code}: {r.text[:200]}")
+    j = r.json()
+    ch = j["choices"][0]
+    if ch["message"].get("refusal"):
+        raise RuntimeError("declined: " + str(ch["message"]["refusal"])[:80])
+    text = (ch["message"].get("content") or "").strip()
+    out = json.loads(text) if schema is not None else text
+    u = j.get("usage", {})
+    return out, int(u.get("prompt_tokens", 0) or 0), int(u.get("completion_tokens", 0) or 0)
+
+
 def ask(system: str, content, max_tokens: int = 2048, effort: str = "low", schema: dict = None,
         timeout: float = None):
     """One Claude call. `content` is a string or a list of content blocks. With `schema`, the reply
     is guaranteed to be JSON matching it (structured output) and is returned parsed.
     Returns (text_or_dict, input_tokens, output_tokens). Raises on refusal or API errors."""
+    if provider() != "anthropic":
+        return _ask_openai(system, content, max_tokens, schema, timeout)
     client = _get_client()
     kwargs = dict(model=config.AI_MODEL, max_tokens=max_tokens, system=system,
                   output_config={"effort": effort},

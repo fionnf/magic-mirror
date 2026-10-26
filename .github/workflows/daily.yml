@@ -27,7 +27,8 @@ jobs:
       - run: pip install -q anthropic numpy Pillow moderngl opencv-python-headless python-dotenv requests
       - name: Compose, check, curate
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # only if WALL_AI_PROVIDER=anthropic
           TZ: Europe/Zurich                 # "today" is Zürich's date, also for runs by hand late at night
           WALL_MOODBOARD: ${{ vars.WALL_MOODBOARD }}
         run: xvfb-run -a python3 tools/make_today.py ${{ inputs.date }}

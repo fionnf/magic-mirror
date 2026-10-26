@@ -286,6 +286,13 @@ def main():
     # advances in exactly equal steps. The refresh period is measured; a dropped refresh or a long
     # pause pulls the clock back to real time.
     period, shown, tv, late = 1 / (refresh + 0.1), None, 0.0, 0
+    rods = None
+    if os.environ.get("WALL_RODS", "1") == "1":
+        try:
+            from display.rods import Rods
+            rods = Rods()
+        except Exception as e:
+            print(f"[rods] off: {e}", flush=True)
     import gc
     gc.collect()
     gc.freeze()                                         # start-up objects never rescanned mid-frame
@@ -312,6 +319,8 @@ def main():
             if presence is not None:
                 img = presence.apply(img, ff / refresh)
             img = overlay.apply(img)
+            if rods is not None:
+                rods.feed(img)
             if gain < 0.999 or gain > 1.001:
                 img = img.point([min(255, int(i * gain)) for i in range(256)] * 3)
             c1 = time.perf_counter()

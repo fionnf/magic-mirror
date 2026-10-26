@@ -584,8 +584,10 @@ def make_app(runner):
         import print_out
         return jsonify(print_out.status())
 
-    @app.get("/<any(favicon.svg, favicon.png, apple-touch-icon.png):name>")
+    @app.get("/<name>")
     def icons(name):
+        if name not in ("favicon.svg", "favicon.png", "apple-touch-icon.png"):
+            return jsonify({"error": "not found"}), 404
         return send_from_directory(os.path.join(os.path.dirname(HERE), "site"), name, max_age=86400)
 
     @app.get("/api/now.jpg")

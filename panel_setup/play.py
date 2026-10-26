@@ -286,6 +286,8 @@ def main():
     # advances in exactly equal steps. The refresh period is measured; a dropped refresh or a long
     # pause pulls the clock back to real time.
     period, shown, tv, late = 1 / (refresh + 0.1), None, 0.0, 0
+    ffx = ff
+    heat_t, heat_floor = 0.0, 0                     # thermal guard: a hot chip gets fewer frames to make
     rods = None
     if os.environ.get("WALL_RODS", "1") == "1":
         try:
@@ -304,16 +306,35 @@ def main():
                     refresh, period = hz, 1 / (hz + 0.1)
                     recent.clear()
             now = time.monotonic()
+            if now - heat_t > 5.0:
+                heat_t = now
+                try:
+                    with open("/sys/class/thermal/thermal_zone0/temp") as fh:
+                        temp = int(fh.read()) / 1000.0
+                    target = 2 if temp >= 80 else 1 if temp >= 74 else 0
+                    floor = heat_floor
+                    if target > floor:
+                        floor = target
+                    elif floor == 2 and temp < 75:
+                        floor = 1
+                    elif floor == 1 and temp < 69:
+                        floor = 0
+                    if floor != heat_floor:
+                        heat_floor = floor
+                        print(f"[heat] {temp:.0f} C: {'easing off, ' + str(heat_floor) + ' refresh(es) slower' if floor else 'cool again, full speed'}", flush=True)
+                except Exception:
+                    pass
             if shown is None or now - shown > 0.25:
                 tv = now - t0
             else:
-                tv += ff * period
+                tv += ffx * period
                 tv += 0.02 * ((now - t0) - tv)          # slow pull towards real time, never a jump
             t = tv
             if a.seconds and t > a.seconds:
                 break
             # each frame held for exactly ff refreshes (58 Hz -> 58 or 29 fps), paced by the
             # panels' own vsync instead of a sleep timer that drifts against it
+            ffx = min(6, ff + heat_floor)                    # frames held this long (ff itself stays adaptive)
             c0 = time.perf_counter()
             gain = 1.0
             if clock is not None:
@@ -329,7 +350,7 @@ def main():
             if gain < 0.999 or gain > 1.001:
                 img = img.point([min(255, int(i * gain)) for i in range(256)] * 3)
             c1 = time.perf_counter()
-            if not matrix.draw(img, frame_fraction=ff):
+            if not matrix.draw(img, frame_fraction=ffx):
                 time.sleep(interval / (2 if ff == 1 else 1))   # unchanged frame: nothing to pace
                 shown = None
             else:

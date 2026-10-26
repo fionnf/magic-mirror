@@ -257,7 +257,7 @@
     </section>
     <section>
       <h2>Pace</h2>
-      <input type="range" id="pace" min="3" max="100" step="1" aria-label="Art pace">
+      <input type="range" id="pace" min="0" max="100" step="1" aria-label="Art pace">
       <div class="ends"><span>barely moving</span><span>lively</span></div>
     </section>
     <details class="more"><summary>Slideshows, shows and tours</summary>
@@ -588,6 +588,9 @@ function subFor(id) {
 }
 const minsLeft = t => Math.max(1, Math.round((t * 1000 - Date.now()) / 60000));
 const offIn = s => !s.off_at ? '' : minsLeft(s.off_at) >= 90 ? 'off at ' + new Date(s.off_at * 1000).toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'}) : 'off in ' + minsLeft(s.off_at) + ' min';
+/* the pace slider is logarithmic: the slow end (0.5% of the old pace) gets as much room as the lively end */
+const paceToSpeed = v => +(0.005 * Math.pow(200, v / 100)).toFixed(4);
+const speedToPace = sp => 100 * Math.log(Math.max(0.005, sp) / 0.005) / Math.log(200);
 function render() {
   const s = STATUS, cur = s.current;
   if ($('tPresence')) $('tPresence').checked = !!s.presence;
@@ -601,7 +604,7 @@ function render() {
   $('power').classList.toggle('on', cur && cur !== 'off');
   $('power').setAttribute('aria-label', cur && cur !== 'off' ? 'Turn the wall off' : 'Turn the wall on');
   if (document.activeElement !== $('bright')) $('bright').value = s.brightness || 40;
-  if (document.activeElement !== $('pace') && s.art_speed != null) $('pace').value = Math.round(s.art_speed * 100);
+  if (document.activeElement !== $('pace') && s.art_speed != null) $('pace').value = Math.round(speedToPace(s.art_speed));
   document.querySelectorAll('.list button').forEach(b => { const d = b.querySelector('.now'); if (d) d.hidden = b.dataset.id !== cur; });
   document.querySelectorAll('.mirror-only').forEach(b => b.disabled = cur !== 'mirror');
   $('musicBtn').textContent = cur === 'music' ? 'Listening now' : 'Let the wall listen';
@@ -614,7 +617,7 @@ async function power() {
   } catch (e) { toast(e.message); }
 }
 $('bright').addEventListener('input', debounce(e => api('/api/brightness', {value: +e.target.value}).then(s => { STATUS = s; render(); }), 350));
-$('pace').addEventListener('input', debounce(e => api('/api/artspeed', {value: +e.target.value / 100}).then(s => { STATUS = s; render(); }), 450));
+$('pace').addEventListener('input', debounce(e => api('/api/artspeed', {value: paceToSpeed(+e.target.value)}).then(s => { STATUS = s; render(); }), 450));
 async function play(id) { try { STATUS = await api('/api/play', {mode: id}); render(); toast('Showing ' + titleFor(id)); } catch (e) { toast(e.message); } }
 
 /* ---------- art ---------- */

@@ -228,7 +228,7 @@ class Runner:
 
     def set_art_speed(self, value):
         with self.lock:
-            self.state["art_speed"] = max(0.03, min(1.0, float(value)))
+            self.state["art_speed"] = max(0.005, min(1.0, float(value)))
             save_state(self.state)
             if self.current in ("art", "lava", "shapes", "glass", "artsy", "ambient", "shaders"):
                 self._start(self.current)
@@ -262,7 +262,7 @@ class Runner:
         with self.lock:
             self.state["brightness"] = max(5, min(100, int(sc.get("brightness", self.state.get("brightness", 40)))))
             if "art_speed" in sc:
-                self.state["art_speed"] = max(0.03, min(1.0, float(sc["art_speed"])))
+                self.state["art_speed"] = max(0.005, min(1.0, float(sc["art_speed"])))
             # a scene sets the whole room: its own sleep timer, or none (an earlier timer is cancelled)
             self.state["off_at"] = time.time() + 60 * sc["sleep_minutes"] if sc.get("sleep_minutes") else None
             save_state(self.state)

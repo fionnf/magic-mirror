@@ -678,6 +678,13 @@ def make_app(runner):
         runner.play("off")
         return jsonify(runner.status())
 
+    @app.post("/api/shutdown")
+    def shutdown():
+        """Power the wall's computer down (it must be unplugged and replugged to start again)."""
+        runner.play("off")
+        threading.Timer(3.0, lambda: subprocess.Popen(["shutdown", "-h", "now"])).start()
+        return jsonify({"ok": True})
+
     @app.post("/api/brightness")
     def brightness():
         runner.set_brightness((request.get_json(force=True, silent=True) or {}).get("value", 40))

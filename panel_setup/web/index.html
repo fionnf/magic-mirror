@@ -410,6 +410,11 @@
       <div id="dList" style="margin-top:10px"></div>
     </section>
     <section>
+      <h2>Power</h2>
+      <button class="btn" onclick="shutSheet.showModal()">Shut down the wall</button>
+      <p class="hint">Turns the wall's computer off completely. To start it again, unplug it and plug it back in.</p>
+    </section>
+    <section>
       <h2>Receipt printer</h2>
       <p class="hint" id="printer" style="margin:0">Checking the printer…</p>
     </section>
@@ -441,6 +446,12 @@
   <div class="row"><input type="time" id="sleepAt" value="23:30" aria-label="Off at" style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 12px"><button class="btn" onclick="sleepAtTime()">Off at this time</button></div>
   <button class="btn" onclick="sleepCancel()" id="sleepOff">Stay on</button>
   <button class="btn primary" onclick="sleepSheet.close()">Close</button>
+</div></dialog>
+<dialog id="shutSheet"><div class="sheet">
+  <h3>Shut down?</h3>
+  <p class="hint" style="margin:0 0 6px">The wall goes dark and its computer powers off. You will have to unplug it and plug it back in to use it again.</p>
+  <button class="btn primary" onclick="shutDown()">Shut down</button>
+  <button class="btn" onclick="shutSheet.close()">Cancel</button>
 </div></dialog>
 <div class="toast" id="toast" role="status"></div>
 
@@ -808,6 +819,10 @@ async function loadRoom() {
 async function connectRods() {
   try { await api('/api/rods/connect', {}); toast('Connecting the rods…'); $('rodConnect').disabled = true;
         setTimeout(loadRoom, 4000); setTimeout(() => { loadRoom(); $('rodConnect').disabled = false; }, 12000); }
+  catch (e) { toast(e.message); }
+}
+async function shutDown() {
+  try { await api('/api/shutdown', {}); shutSheet.close(); toast('Shutting down. Unplug and replug to start it again.'); }
   catch (e) { toast(e.message); }
 }
 async function setRods(d) { try { ROD = await api('/api/rods', d); loadRoom(); } catch (e) { toast(e.message); } }

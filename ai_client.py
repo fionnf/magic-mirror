@@ -47,9 +47,13 @@ def provider() -> str:
     return (os.environ.get("WALL_AI_PROVIDER") or getattr(config, "AI_PROVIDER", "anthropic")).lower()
 
 
-def model_name() -> str:
-    """The model that makes the pieces (recorded in each edition's metadata)."""
-    return config.AI_MODEL if provider() == "anthropic" else _compat(provider())[2]
+def model_name(art: bool = False) -> str:
+    """The model behind a call (an edition records the one that made its piece: art=True)."""
+    if provider() == "anthropic":
+        return config.AI_MODEL
+    if art and provider() == "openai":
+        return os.environ.get("WALL_OPENAI_ART_MODEL", config.AI_OPENAI_ART_MODEL)
+    return _compat(provider())[2]
 
 
 def _load_env() -> None:
@@ -128,14 +132,26 @@ def _openai_content(content):
 def _compat(name):
     if name == "groq":
         return ("https://api.groq.com/openai/v1", "GROQ_API_KEY",
-                os.environ.get("WALL_GROQ_MODEL", getattr(config, "AI_GROQ_MODEL", "llama-3.3-70b-versatile")))
+                os.environ.get("WALL_GROQ_MODEL", getattr(config, "AI_GROQ_MODEL", "openai/gpt-oss-120b")))
     return ("https://api.openai.com/v1", "OPENAI_API_KEY", config.AI_OPENAI_MODEL)
 
 
-def _ask_openai(system, content, max_tokens, schema, timeout):
+def _has_image(content) -> bool:
+    return not isinstance(content, str) and any(b.get("type") == "image" for b in content)
+
+
+def _ask_openai(system, content, max_tokens, schema, timeout, effort="low", images="route", prov=None, art=False):
     import requests
     _load_env()
-    base, keyvar, model = _compat(provider())
+    prov = prov or provider()
+    if prov == "groq" and _has_image(content):       # Groq's models cannot see pictures
+        if images == "drop":
+            content = [b for b in content if b.get("type") != "image"]
+        else:
+            prov = "openai"                          # a vision call goes to OpenAI instead
+    base, keyvar, model = _compat(prov)
+    if art and prov == "openai":
+        model = model_name(art=True)
     key = os.environ.get(keyvar)
     if not key:
         raise RuntimeError(f"{keyvar} is not set")
@@ -143,6 +159,11 @@ def _ask_openai(system, content, max_tokens, schema, timeout):
             "max_completion_tokens": min(int(max_tokens), 32000),
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": _openai_content(content)}]}
+    if prov == "openai" and model.startswith("gpt-5"):          # reasoning models think before the GLSL
+        body["max_completion_tokens"] = min(int(max_tokens) + 8000, 32000)   # thinking counts against the cap
+        body["reasoning_effort"] = {"low": "low", "medium": "medium"}.get(effort, "high")
+    if prov == "groq":
+        body["reasoning_effort"] = {"low": "low", "medium": "medium"}.get(effort, "high")   # gpt-oss thinks
     if schema is not None:
         body["response_format"] = {"type": "json_schema",
                                    "json_schema": {"name": "reply", "schema": schema, "strict": False}}
@@ -150,24 +171,26 @@ def _ask_openai(system, content, max_tokens, schema, timeout):
                       headers={"Authorization": f"Bearer {key}"},
                       timeout=timeout or config.AI_TIMEOUT_SEC + 5)
     if r.status_code != 200:
-        raise RuntimeError(f"{provider()} {r.status_code}: {r.text[:200]}")
+        raise RuntimeError(f"{prov} {r.status_code}: {r.text[:200]}")
     j = r.json()
     ch = j["choices"][0]
     if ch["message"].get("refusal"):
         raise RuntimeError("declined: " + str(ch["message"]["refusal"])[:80])
     text = (ch["message"].get("content") or "").strip()
+    if not text:
+        raise RuntimeError(f"{prov} sent an empty reply (finish_reason {ch.get('finish_reason')})")
     out = json.loads(text) if schema is not None else text
     u = j.get("usage", {})
     return out, int(u.get("prompt_tokens", 0) or 0), int(u.get("completion_tokens", 0) or 0)
 
 
 def ask(system: str, content, max_tokens: int = 2048, effort: str = "low", schema: dict = None,
-        timeout: float = None):
+        timeout: float = None, images: str = "route", art: bool = False):
     """One Claude call. `content` is a string or a list of content blocks. With `schema`, the reply
     is guaranteed to be JSON matching it (structured output) and is returned parsed.
     Returns (text_or_dict, input_tokens, output_tokens). Raises on refusal or API errors."""
     if provider() != "anthropic":
-        return _ask_openai(system, content, max_tokens, schema, timeout)
+        return _ask_openai(system, content, max_tokens, schema, timeout, effort, images, art=art)
     client = _get_client()
     kwargs = dict(model=config.AI_MODEL, max_tokens=max_tokens, system=system,
                   output_config={"effort": effort},

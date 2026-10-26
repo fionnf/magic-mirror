@@ -88,7 +88,14 @@ Technical contract (anything else will not compile):
   real change between them - a form grows, travels across the wall, multiplies, thins out, settles,
   dissolves; a horizon rises; a colour family turns from the shadow tone towards the highlight; a
   composition accumulates (with iDay) until by night it is full. The 9 am and 11 pm stills must be
-  recognisably the same work and clearly different pictures. A piece that only drifts a little or
+  recognisably the same work and clearly different pictures.   A RELIABLE RECIPE (the checker measures the arc and rejects anything weaker): start mainImage with
+      float day = clamp((iClock - 7.0) / 16.0, 0.0, 1.0);   // 0 at 7 am, 0.4 at 2 pm, 0.8 at 8 pm, 1 at 11 pm
+  and make at least TWO visible things depend on `day` by LARGE amounts - e.g. the main form's radius
+  mix(0.10, 0.32, day) of the short side, its centre travelling 0.15-0.25 of the height, the number of
+  rings or dots changing by 2-3, the colour weight moving from iColA/iColB towards iColC. Changes of
+  30-50% in size, place or colour weight are needed; a 10% change is sent back. The 8 am and 11 pm
+  stills must differ by 9/255 on average, and each step 8 am -> 2 pm -> 8 pm -> 11 pm by 2.5/255.
+  A piece that only drifts a little or
   only changes brightness over the day will be sent back
 - it must run fast on a Raspberry Pi 4 GPU at about 50,000 pixels: keep total loop iterations per pixel
   under ~200
@@ -178,7 +185,10 @@ def check(src, palette):
     if span < 9.0 or arc < 2.5:
         return False, (f"it barely evolves over the day (8 am vs 11 pm differ by {span:.1f}/255, smallest step "
                        f"between 8, 14, 20 and 23 h {arc:.1f}/255); use iClock to change the composition, "
-                       "the form's size or place, its density or its colour family through the day - not just brightness"), None
+                       "the form's size or place, its density or its colour family through the day - not just brightness. "
+                       "Recipe: float day = clamp((iClock - 7.0) / 16.0, 0.0, 1.0); then change the form's radius by "
+                       "at least 40% (mix(0.10, 0.32, day)), move its centre by 0.15-0.25 of the height and shift the "
+                       "colour weight towards iColC with it - large changes, not 10%"), None
     if max(fast) > 2.5:
         return False, (f"it moves or changes too fast (frame-to-frame change {max(fast):.1f}/255 at 29 fps); "
                        "slow iTime down a lot and remove any pulsing"), None
@@ -329,7 +339,7 @@ def generate(date=None, notes="", attempts=6, min_score=7, direction=None):
         msg = user + (f"\n\nYour previous attempt was rejected: {feedback}. Fix that and send the "
                       "whole piece again." if feedback else "")
         j, a_in, a_out = ai_client.ask(BRIEF, board + [{"type": "text", "text": msg}] if board else msg,
-                                       max_tokens=16000, effort="medium", schema=SCHEMA, timeout=300)
+                                       max_tokens=16000, effort="medium", schema=SCHEMA, timeout=300, images="drop", art=True)
         tin, tout = tin + a_in, tout + a_out
         pal = (j.get("palette") or [])[:3]
         try:
@@ -382,7 +392,7 @@ def generate(date=None, notes="", attempts=6, min_score=7, direction=None):
                            {"trait_type": "Artist", "value": "Dewa and Fionn"},
                            {"trait_type": "Curator score", "value": score}],
             "listening": j.get("listening", "").strip()[:800],
-            "palette": pal, "source_sha256": sha, "model": ai_client.model_name(), "size": [W, H],
+            "palette": pal, "source_sha256": sha, "model": ai_client.model_name(art=True), "size": [W, H],
             "tokens": {"in": tin, "out": tout}, "attempts": attempt, "created": time.time(),
             "curator": {"score": score, "verdict": verdict}, "direction": direction["name"]}
     with open(_path(date, "json"), "w") as fh:

@@ -71,7 +71,7 @@ class LedMatrix:
         opts.pwm_lsb_nanoseconds = config.MATRIX_PWM_LSB_NS
         opts.limit_refresh_rate_hz = config.MATRIX_REFRESH_LIMIT_HZ
         opts.show_refresh_rate = config.MATRIX_SHOW_REFRESH
-        opts.brightness = config.MATRIX_BRIGHTNESS
+        opts.brightness = self._hw_brightness(config.MATRIX_BRIGHTNESS)
         opts.drop_privileges = False
         self.matrix = RGBMatrix(options=opts)
         self.canvas = self.matrix.CreateFrameCanvas()
@@ -83,6 +83,13 @@ class LedMatrix:
         self._luts = None
         if config.MATRIX_APPLY_PANEL_GAINS:
             self._load_gains()
+
+    @staticmethod
+    def _hw_brightness(value) -> int:
+        """The panel's duty grows with the refresh rate (less idle time between scans), so the app's
+        brightness % is scaled back to what it looked like at BRIGHTNESS_REF_HZ."""
+        scale = min(1.0, config.BRIGHTNESS_REF_HZ / float(config.MATRIX_REFRESH_LIMIT_HZ or config.BRIGHTNESS_REF_HZ))
+        return max(1, int(round(value * scale))) if value > 0 else 0
 
     def _load_gains(self):
         """Load per-panel colour gains if a calibration file exists."""
@@ -211,7 +218,7 @@ class LedMatrix:
         value = max(0, min(100, int(value)))
         self._brightness = value
         with self._lock:
-            self.matrix.brightness = value
+            self.matrix.brightness = self._hw_brightness(value)
 
     def shutdown(self) -> None:
         self.clear()

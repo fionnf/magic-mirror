@@ -13,6 +13,7 @@
     python3 panel_setup/play.py pride --gif preview.gif  # offline preview, no hardware
 """
 import argparse
+import math
 import os
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")     # numpy must not fight the panel refresh for cores
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -149,7 +150,7 @@ class _SimMatrix:
         self.sim.draw(image)
         self.sim.tick()
         # pace like the real wall (29 fps)
-        wait = self.last + frame_fraction / 58.0 - time.monotonic()
+        wait = self.last + frame_fraction / float(config.MATRIX_REFRESH_LIMIT_HZ) - time.monotonic()
         if wait > 0:
             time.sleep(wait)
         self.last = time.monotonic()
@@ -276,13 +277,15 @@ def main():
     stats_t = time.monotonic()
     # 58 fps (a new frame every panel refresh) when the mode is light enough, else 29 fps (each frame
     # held for 2 refreshes). Halving the step between frames is what makes slow motion stop quivering.
-    ff = 1 if a.fps >= 50 else 2
+    refresh = float(config.MATRIX_REFRESH_LIMIT_HZ)
+    ff_min = max(1, math.ceil(refresh / 60.0 - 0.01))   # fewest refreshes per frame: 58 Hz -> 1 (58 fps), 90 Hz -> 2 (45 fps)
+    ff = ff_min if a.fps >= 50 else max(1, round(refresh / a.fps))    # a heavy mode holds each frame ~30 fps
     recent = []
     # The animation's clock runs on the panels' refresh, not on when Python gets round to a frame:
     # each frame is drawn for the moment it will be on screen (last swap + ff refreshes), so motion
     # advances in exactly equal steps. The refresh period is measured; a dropped refresh or a long
     # pause pulls the clock back to real time.
-    period, shown, tv, late = 1 / 58.1, None, 0.0, 0
+    period, shown, tv, late = 1 / (refresh + 0.1), None, 0.0, 0
     import gc
     gc.collect()
     gc.freeze()                                         # start-up objects never rescanned mid-frame
@@ -307,7 +310,7 @@ def main():
                 t *= ART_SPEED                               # house art: slow
             img = frame_fn(t)
             if presence is not None:
-                img = presence.apply(img, ff / 58.0)
+                img = presence.apply(img, ff / refresh)
             img = overlay.apply(img)
             if gain < 0.999 or gain > 1.001:
                 img = img.point([min(255, int(i * gain)) for i in range(256)] * 3)
@@ -324,17 +327,17 @@ def main():
                     elif gap > 1.5 * period:
                         late += 1
                 shown = ts
-            if a.fps >= 50:                             # adapt: heavy moments fall back to 29 fps
+            if a.fps >= 50:                             # adapt: heavy moments take more refreshes per frame
                 recent.append(c1 - c0 + getattr(matrix, "send_s", 0.003))   # render + sending it, not the vsync wait
                 if len(recent) >= 60:
                     worst = sorted(recent)[int(len(recent) * 0.9)] * 1000
-                    if ff == 1 and worst > 15.0:      # render + send must fit one refresh (17 ms)
-                        ff = 2
-                        print(f"[fps] 29 fps (frames take {worst:.0f} ms)", flush=True)
-                    elif ff == 2 and worst < 11.0 and len(recent) >= 300:
-                        ff = 1
-                        print(f"[fps] 58 fps (frames take {worst:.0f} ms)", flush=True)
-                    if ff == 1 or len(recent) >= 300:
+                    if worst > ff * 1000 / refresh - 2.0 and ff < 4:   # misses its slot: give it one more refresh
+                        ff += 1
+                        print(f"[fps] {refresh / ff:.0f} fps (frames take {worst:.0f} ms)", flush=True)
+                    elif ff > ff_min and len(recent) >= 300 and worst < (ff - 1) * 1000 / refresh - 6.0:
+                        ff -= 1
+                        print(f"[fps] {refresh / ff:.0f} fps (frames take {worst:.0f} ms)", flush=True)
+                    if ff == ff_min or len(recent) >= 300:
                         recent.clear()
             if stats is not None:
                 stats.append((c1 - c0, time.perf_counter() - c1))
@@ -344,7 +347,7 @@ def main():
                     print(f"[stats] {len(arr)} frames/10s  render p50 {np.percentile(arr[:,0],50):.1f} p95 "
                           f"{np.percentile(arr[:,0],95):.1f} max {arr[:,0].max():.1f} ms | draw(wait) p50 "
                           f"{np.percentile(arr[:,1],50):.1f} p95 {np.percentile(arr[:,1],95):.1f} "
-                          f"max {arr[:,1].max():.1f} ms (budget {ff * 17.2:.1f}, {58 // ff} fps) | late {late} | "
+                          f"max {arr[:,1].max():.1f} ms (budget {ff * 1000 / refresh:.1f}, {refresh / ff:.0f} fps) | late {late} | "
                           f"refresh {1 / period:.2f} Hz", flush=True)
                     stats.clear()
                     late = 0

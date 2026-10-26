@@ -51,7 +51,9 @@ MATRIX_AMPS_PER_PANEL = 4.0
 MATRIX_PWM_BITS = 7            # 1-11; fewer bits = much higher refresh
 MATRIX_PWM_DITHER_BITS = 0      # 0-2: smoother gradients at low pwm_bits, costs refresh
 MATRIX_PWM_LSB_NS = 80         # measured 2026-10-14: at 130 the refresh dips to 55 Hz under the 58 Hz lock (judder); at 80 it never drops below 62
-MATRIX_REFRESH_LIMIT_HZ = 58   # lock refresh: animations at 29 fps = exactly 2 refreshes per frame (no judder)
+MATRIX_REFRESH_LIMIT_HZ = 84   # lock refresh (2026-10-26: two chains of 6 reach 97 Hz unloaded, ~85 Hz under real art; 58 Hz still showed flicker when squinting).
+                               # frames hold a whole number of refreshes: 42 fps (2) or 28 fps (3)
+BRIGHTNESS_REF_HZ = 58         # the refresh the brightness settings were tuned at: a faster refresh is brighter, so it is scaled back
 MATRIX_MULTIPLEXING = 0        # change if the image looks striped/scrambled
 MATRIX_ROW_ADDRESS_TYPE = 0    # 64x64 panels with ABCDE addressing: usually 0
 MATRIX_SHOW_REFRESH = False    # print refresh rate to stdout

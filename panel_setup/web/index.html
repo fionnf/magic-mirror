@@ -144,9 +144,9 @@
   .list .now { width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--glow)); box-shadow: 0 0 10px rgb(var(--glow)); }
 
   /* the party slider */
-  .party output { font: italic 400 26px/1 var(--serif); display: block; margin-bottom: 4px; }
+  .party output { font: italic 400 22px/1 var(--serif); display: block; margin-bottom: 2px; }
   .ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
-  canvas.scope { width: 100%; height: 120px; display: block; border-radius: 12px; background: #0d0b10; }
+  canvas.scope { width: 100%; height: 72px; display: block; border-radius: 12px; background: #0d0b10; }
 
   /* photos */
   .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
@@ -278,30 +278,14 @@
   <!-- MUSIC -->
   <div class="view" id="v-music">
     <section>
-      <button class="btn primary" style="width:100%;padding:14px" onclick="playMusic()" id="musicBtn">Let the wall listen</button>
+      <button class="btn primary" style="width:100%;padding:10px" onclick="playMusic()" id="musicBtn">Let the wall listen</button>
       <p class="hint" id="song"></p>
-    </section>
-    <section>
-      <h2>Speakers</h2>
-      <div class="switch"><span>Follow the speakers</span><input type="checkbox" id="tCast"></div>
-      <p class="hint" id="castHint">When one of these speakers plays music, the wall shows music art. When the music stops, it goes back to what it was showing.</p>
-      <div class="chips" id="castChips"></div>
-      <div class="switch"><span>Show the album cover</span><input type="checkbox" id="tCover"></div>
-      <div class="switch"><span>Colour the art from the album cover</span><input type="checkbox" id="tCoverCol"></div>
-      <p class="hint">Covers come from the speakers and Spotify, so they show when the wall knows the song.</p>
     </section>
     <section class="party">
       <h2>Party level</h2>
       <output id="partyLab">Breathing</output>
       <input type="range" id="party" min="0" max="100" step="5" aria-label="Party level">
       <div class="ends"><span>the art just breathes</span><span>dance floor</span></div>
-    </section>
-    <section>
-      <h2>Microphone</h2>
-      <canvas class="scope" id="scope" width="600" height="160"></canvas>
-      <p class="hint" id="scopeTxt">Shows the room's sound while music is playing.</p>
-      <input type="range" id="sens" min="0" max="100" step="5" aria-label="Sensitivity" style="margin-top:6px">
-      <div class="ends"><span>less sensitive</span><span>more sensitive</span></div>
     </section>
     <section>
       <h2>What the wall shows</h2>
@@ -319,6 +303,25 @@
         <div class="strip" id="loops"></div>
       </div>
     </section>
+    <details class="more"><summary>Speakers and album covers</summary>
+    <section>
+      <h2>Speakers</h2>
+      <div class="switch"><span>Follow the speakers</span><input type="checkbox" id="tCast"></div>
+      <p class="hint" id="castHint">When one of these speakers plays music, the wall shows music art. When the music stops, it goes back to what it was showing.</p>
+      <div class="chips" id="castChips"></div>
+      <div class="switch"><span>Show the album cover</span><input type="checkbox" id="tCover"></div>
+      <div class="switch"><span>Colour the art from the album cover</span><input type="checkbox" id="tCoverCol"></div>
+      <p class="hint">Covers come from the speakers and Spotify, so they show when the wall knows the song.</p>
+    </section>
+    </details>
+    <details class="more"><summary>Microphone and listening</summary>
+    <section>
+      <h2>Microphone</h2>
+      <canvas class="scope" id="scope" width="600" height="160"></canvas>
+      <p class="hint" id="scopeTxt">Shows the room's sound while music is playing.</p>
+      <input type="range" id="sens" min="0" max="100" step="5" aria-label="Sensitivity" style="margin-top:6px">
+      <div class="ends"><span>less sensitive</span><span>more sensitive</span></div>
+    </section>
     <section>
       <h2>Listening</h2>
       <div class="switch"><span>Set the party level from the room</span><input type="checkbox" id="tAuto"></div>
@@ -326,6 +329,7 @@
       <div class="switch"><span>Show the song title on the wall</span><input type="checkbox" id="tWall"></div>
       <div class="switch"><span>Let all art move to music</span><input type="checkbox" id="tReact"></div>
     </section>
+    </details>
   </div>
 
   <!-- PHOTOS -->

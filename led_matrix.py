@@ -98,19 +98,20 @@ class LedMatrix:
         """The refresh the panels run at with this many PWM bits (measured under real art)."""
         return float(min(config.MATRIX_REFRESH_LIMIT_HZ, config.PWM_BITS_HZ.get(bits, config.BRIGHTNESS_REF_HZ)))
 
-    def _adapt_bits(self, mean: float) -> None:
+    def _adapt_bits(self, mean: float, bright_frac: float = 0.0) -> None:
         """Full colour depth for normal art; fewer PWM bits (a faster refresh, less flicker) only
         while the picture is very bright, which is when flicker shows. Hysteresis + a minimum dwell."""
         if config.MATRIX_PWM_BITS_BRIGHT == config.MATRIX_PWM_BITS:
             return
-        eff = mean * self._brightness / 100.0
+        eff = max(mean, 0.7 * bright_frac) * self._brightness / 100.0     # small bright areas count too
         now = time.monotonic()
         want = self._bits
         if self._bits == config.MATRIX_PWM_BITS and eff > config.BRIGHT_ON:
             want = config.MATRIX_PWM_BITS_BRIGHT
         elif self._bits == config.MATRIX_PWM_BITS_BRIGHT and eff < config.BRIGHT_OFF:
             want = config.MATRIX_PWM_BITS
-        if want != self._bits and now - self._bits_t > 4.0:
+        dwell = 0.4 if want == config.MATRIX_PWM_BITS_BRIGHT else 4.0     # quick to calm a bright moment, slow to let go
+        if want != self._bits and now - self._bits_t > dwell:
             self._bits, self._bits_t = want, now
             print(f"[bits] {want} PWM bits (picture level {eff:.2f})", flush=True)
             LedMatrix._bits_now = want
@@ -175,7 +176,8 @@ class LedMatrix:
         amps = (mean * config.CHAIN_LENGTH * config.MATRIX_AMPS_PER_PANEL
                 * self._brightness / 100.0)
         self.last_amps = amps
-        self._adapt_bits(mean)
+        sub = arr[::4, ::4]
+        self._adapt_bits(mean, float((sub.max(axis=2) > 200).mean()))
         want = min(1.0, config.MATRIX_MAX_AMPS * 0.97 / amps) if amps > 0 else 1.0
         cur = getattr(self, "_pscale", 1.0)
         if want < cur:

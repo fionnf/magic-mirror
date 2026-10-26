@@ -287,6 +287,7 @@ def main():
     # pause pulls the clock back to real time.
     period, shown, tv, late = 1 / (refresh + 0.1), None, 0.0, 0
     ffx = ff
+    t_prev, art_t, slow = None, None, 1.0           # the art's own clock, slowed while frames are held longer
     heat_t, heat_floor = 0.0, 0                     # thermal guard: a hot chip gets fewer frames to make
     rods = None
     if os.environ.get("WALL_RODS", "1") == "1":
@@ -339,8 +340,13 @@ def main():
             gain = 1.0
             if clock is not None:
                 t, gain = clock.step(t)
-            if a.anim in ART_MODES:
-                t *= ART_SPEED                               # house art: slow
+            if a.anim in ART_MODES or a.anim == "daily":
+                # when frames are held longer (a heavy piece, or a hot chip) the art moves slower too, so each
+                # frame's step stays as small as at full speed: slow and smooth, never choppy
+                dt_real, t_prev = (0.0, t) if t_prev is None else (max(0.0, min(0.5, t - t_prev)), t)
+                slow += (max(0.5, ff_min / float(ffx)) - slow) * 0.03
+                art_t = t if art_t is None else art_t + dt_real * slow
+                t = art_t * (ART_SPEED if a.anim in ART_MODES else 1.0)
             img = frame_fn(t)
             if presence is not None:
                 img = presence.apply(img, ff / refresh)

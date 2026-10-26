@@ -51,3 +51,4 @@ panel_setup/spotify_devices.json
 panel_setup/rods.json
 panel_setup/rods_status.json
 panel_setup/rods_reconnect
+panel_setup/rods_disconnected

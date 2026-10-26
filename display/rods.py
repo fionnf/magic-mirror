@@ -17,6 +17,7 @@ import time
 
 import numpy as np
 
+HOLD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "panel_setup", "rods_disconnected")   # exists while the rods are let go
 RECONNECT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "panel_setup", "rods_reconnect")   # touched by the app
 STATUS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "panel_setup", "rods_status.json")
 FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "panel_setup", "rods.json")
@@ -163,6 +164,11 @@ class Rods:
         await asyncio.sleep(3.0 * i)                         # one connection at a time: the adapter is busy otherwise
         seen = self._asked()
         while True:
+            if os.path.exists(HOLD):                          # let go: the rods are free for the phone app
+                self.status[i] = "disconnected"; self._publish()
+                while os.path.exists(HOLD):
+                    await asyncio.sleep(0.5)
+                seen = self._asked()
             self.status[i] = "connecting"; self._publish()
             try:
                 dev = await BleakScanner.find_device_by_address(self.addr[i], timeout=20)   # scan first: weak rods are missed otherwise
@@ -175,7 +181,7 @@ class Rods:
                     await c.write_gatt_char(ch, ON, response=False)
                     self.status[i] = "on"; self._publish()
                     sent = None
-                    while c.is_connected and self._asked() <= seen:
+                    while c.is_connected and self._asked() <= seen and not os.path.exists(HOLD):
                         rgb = tuple(int(v) for v in self.cur[i])
                         if sent is None or max(abs(a - b) for a, b in zip(rgb, sent)) >= 3:
                             await c.write_gatt_char(ch, _pack(*rgb), response=False)

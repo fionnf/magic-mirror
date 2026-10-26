@@ -688,7 +688,7 @@ def make_app(runner):
     def shutdown():
         """Power the wall's computer down (it must be unplugged and replugged to start again)."""
         runner.play("off")
-        threading.Timer(3.0, lambda: subprocess.Popen(["shutdown", "-h", "now"])).start()
+        threading.Timer(3.0, lambda: subprocess.Popen(["/usr/bin/systemctl", "poweroff"])).start()
         return jsonify({"ok": True})
 
     @app.post("/api/brightness")

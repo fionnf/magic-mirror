@@ -339,7 +339,7 @@ def generate(date=None, notes="", attempts=6, min_score=7, direction=None):
         msg = user + (f"\n\nYour previous attempt was rejected: {feedback}. Fix that and send the "
                       "whole piece again." if feedback else "")
         j, a_in, a_out = ai_client.ask(BRIEF, board + [{"type": "text", "text": msg}] if board else msg,
-                                       max_tokens=16000, effort="medium", schema=SCHEMA, timeout=300, images="drop", art=True)
+                                       max_tokens=24000, effort="low", schema=SCHEMA, timeout=400, images="drop", art=True)
         tin, tout = tin + a_in, tout + a_out
         pal = (j.get("palette") or [])[:3]
         try:

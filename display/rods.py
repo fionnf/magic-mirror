@@ -1,4 +1,4 @@
-"""The living room's two Bluetooth LED rods (MELK-OA10) following the wall's colours.
+"""The living room's two Bluetooth LED rods (MELK-OA10): warm orange, following the wall only for the daily art.
 
     r = Rods(); r.feed(img)          # call every frame with the picture being shown; cheap
 
@@ -21,6 +21,7 @@ FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 ADDRESSES = ["BE:69:33:1C:4F:01", "BE:69:6A:12:CD:03"]      # living room rod 1, rod 2
 ON = bytes([0x7e, 0x04, 0x04, 0x01, 0xff, 0xff, 0x00, 0xef])
 GAIN = 0.8                  # the rods are close to the eye: not full power
+ORANGE = np.array([255, 110, 0], np.float32)
 EASE = 0.6                  # seconds for a colour to follow the wall
 
 
@@ -48,6 +49,7 @@ class Rods:
         self.target = [np.zeros(3, np.float32) for _ in addresses]
         self.cur = [np.zeros(3, np.float32) for _ in addresses]
         self.last = None
+        self.follow = False                                  # True only while the daily art is on the wall
         self.status = ["off"] * len(addresses)
         self._fed = 0.0
         try:
@@ -67,8 +69,8 @@ class Rods:
             self.cur[i] += (self.target[i] - self.cur[i]) * (1 - np.exp(-dt / EASE))
 
     def _choice(self, img):
-        """The rods' setting (panel_setup/rods.json, re-read every 2 s):
-        {"mode": "follow"}  or  {"mode": "solid", "colour": "#00ff00"}  or  {"mode": "off"}"""
+        """Warm orange, except while the daily art is on the wall (self.follow): then they take its colours.
+        panel_setup/rods.json (re-read every 2 s) can still switch them off: {"mode": "off"}"""
         now = time.monotonic()
         if now - getattr(self, "_cfg_t", -9) > 2.0:
             self._cfg_t = now
@@ -78,15 +80,12 @@ class Rods:
             except Exception:
                 self._cfg = {}
         cfg = getattr(self, "_cfg", {})
-        mode = cfg.get("mode", "follow")
-        if mode == "off":
+        if cfg.get("mode") == "off":
             z = np.zeros(3, np.float32)
             return z, z
-        if mode == "solid":
-            h = str(cfg.get("colour", "#ffffff")).lstrip("#")
-            c = np.array([int(h[i:i + 2], 16) for i in (0, 2, 4)], np.float32)
-            return c, c
-        return colours(img)
+        if self.follow:
+            return colours(img)
+        return ORANGE, ORANGE
 
     def _run(self):
         asyncio.run(self._main())

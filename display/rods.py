@@ -191,7 +191,7 @@ class Rods:
                 self.status[i] = f"{type(e).__name__}: {str(e)[:80]}"; self._publish()
             for _ in range(20):                               # lost or not there: try again later, or at once when asked
                 await asyncio.sleep(0.5)
-                if self._asked() > seen:
+                if self._asked() > seen or os.path.exists(HOLD):
                     break
             if self._asked() > seen:
                 seen = self._asked()

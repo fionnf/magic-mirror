@@ -248,6 +248,7 @@ CURATED = {   # (shadow, mid, highlight) per piece - the gallery's look; the VJ 
     "blinds": ("#140e0a", "#a8602a", "#ffd8a0"),
     # recreated from the house's own reference images (Pinterest board + pictures sent in chat)
     "glassorb": ("#140a3a", "#3a3cff", "#ece8ff"),
+    "metamorphosis": ("#140a3a", "#5a3cff", "#f0e8ff"),   # the glass orb's hour-long transformation
     "halftonewave": ("#8a2cff", "#2a6cff", "#7cff4a"),
     "dotring": ("#ff3aa0", "#ff8a2a", "#7a3cff"),
     "emberweb": ("#ff3a1a", "#2a4cff", "#ffa040"),
@@ -269,7 +270,7 @@ def _rgb(h):
 
 def gallery_pieces(Wd, Hd):
     """One piece per shader, each in its curated palette (newest, strongest first)."""
-    order = ["glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "conic", "cutcurves", "aperture", "rothko", "eclipse",
+    order = ["metamorphosis", "glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "conic", "cutcurves", "aperture", "rothko", "eclipse",
              "inkdrop", "orbit", "neonarc", "prism", "contours", "ridges", "pointcloud", "blinds",
              "arches", "inkorbs", "ember", "cutpaper", "poolglass", "halo", "ribbon",
              "dandelion", "dotsphere",

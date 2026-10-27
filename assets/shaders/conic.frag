@@ -1,9 +1,13 @@
 // Conic tiles: one conic gradient per panel of the wall, each sweeping once from its own
 // corner (deep shadow, blue, a pale edge), so the seams fall exactly on the panel edges. The
 // sweeps turn very slowly; the key leans them, each song re-deals the corners.
+// Over tens of minutes (iEvolve) the pale edge widens and narrows, the deep shadow grows into the
+// sweep or shrinks back to the corner, and each tile leans further or pulls back - always inside its
+// panel, so the seams stay on the panel edges.
 float h1(float n){ return fract(sin(n * 91.345) * 47453.5453); }
 void mainImage(out vec4 o, in vec2 fc){
   vec2 uv = fc / iResolution;
+  vec4 e = iEvolve;
   vec2 cell = floor(uv * iPanels);
   vec2 p = fract(uv * iPanels);
   float id = cell.x + cell.y * iPanels.x;
@@ -13,8 +17,10 @@ void mainImage(out vec4 o, in vec2 fc){
   vec2 q = abs(p - c);                                // the corner becomes the origin
   float k = atan(q.y, q.x) / 1.5708;                  // 0..1 across the quarter turn
   if (h1(id * 5.7) > 0.5) k = 1.0 - k;                // half the tiles sweep the other way
-  k = clamp(k + 0.18 * sin(t * (0.6 + h1(id)) + id + iKey * 3.0), 0.0, 1.0);
-  vec3 col = mix(iColA, iColB, smoothstep(0.05, 0.75, k));
-  col = mix(col, iColC, smoothstep(0.78, 1.0, k) * (0.9 + 0.1 * iBreath));
+  k = clamp(k + 0.18 * sin(t * (0.6 + h1(id)) + id + iKey * 3.0) + 0.22 * e.w * (h1(id * 1.7) - 0.5), 0.0, 1.0);
+  float pale = 0.78 - 0.12 * e.x;                     // the pale edge widens and narrows
+  float shade = 0.05 + 0.18 * (0.5 + 0.5 * e.z);       // how far the deep shadow reaches
+  vec3 col = mix(iColA, iColB, smoothstep(shade, pale - 0.03, k));
+  col = mix(col, iColC, smoothstep(pale, 1.0, k) * (0.9 + 0.1 * iBreath));
   o = vec4(col, 1.0);
 }

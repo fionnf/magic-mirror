@@ -24,6 +24,8 @@ COLLECTIONS = [          # (key, title in the app, how to get its pieces)
     ("glass", "Glass & trails", ("display.light_art", "LightGallery")),
     ("lava", "Coral & breath", ("display.art", "LavaCoralGallery")),
     ("art", "Ink & moire", ("display.art", "Gallery")),
+    ("vj", "Music visuals", None),                   # the music mode's GPU scenes, in calm palettes
+    ("loops", "Video loops", None),                  # the music mode's VJ video loops
     ("daily", "Art of the day", None),               # every edition made for this wall; new days appear by themselves
 ]
 _cat = None
@@ -41,10 +43,10 @@ def _shader_title(name):
             first = fh.readline()
         m = re.match(r"//\s*([^:.\n]{2,40})[:.]", first)
         if m:
-            return m.group(1).strip()
+            return re.sub(r"\s*\(.*", "", m.group(1)).strip()
     except Exception:
         pass
-    return name.capitalize()
+    return os.path.basename(name).capitalize()
 
 
 def _gallery(mod, cls):
@@ -63,6 +65,21 @@ def catalogue():
     for key, title, src in COLLECTIONS:
         if key == "daily":
             continue
+        if key == "vj":
+            for n in _vj_names():
+                out.append({"id": "vj-" + n, "title": _shader_title("vj/" + n), "collection": key,
+                            "collection_title": title, "kind": "vj"})
+            continue
+        if key == "loops":
+            try:
+                from display import loops
+                clips = sorted(loops.LoopBank().clips)
+            except Exception:
+                clips = []
+            for i, n in enumerate(clips):
+                out.append({"id": "loop-" + n, "title": f"Loop {i + 1}", "collection": key,
+                            "collection_title": title, "kind": "loop", "_clip": n})
+            continue
         if src is None:
             for p in shaders.gallery_pieces(W, H):
                 out.append({"id": "shader-" + p.name, "title": _shader_title(p.name), "collection": key,
@@ -78,6 +95,61 @@ def catalogue():
                         "collection": key, "collection_title": title, "kind": "python", "_index": i})
     _cat = out
     return out
+
+
+def _vj_names():
+    from display import shaders
+    import glob
+    return sorted(os.path.splitext(os.path.basename(p))[0]
+                  for p in glob.glob(os.path.join(shaders.FOLDER, "vj", "*.frag")))
+
+
+# calm palettes for the music scenes outside music mode (shadow, mid, highlight): one or two neighbouring hues
+VJ_PALETTES = [("#06060c", "#3850b8", "#c8d8ff"), ("#120606", "#b03a18", "#ffd48a"),
+               ("#04101a", "#1a6a8a", "#c8f4ff"), ("#0a0714", "#5a2c8c", "#f0d6ff"),
+               ("#081208", "#2a7a4a", "#d8f4c8"), ("#140810", "#a03060", "#ffd0dc")]
+
+
+class VJPiece:
+    """A music-mode GPU scene as a gallery piece: its own calm palette, not listening."""
+
+    def __init__(self, W, H, name):
+        from display import shaders
+        self.W, self.H, self.name = W, H, name
+        pal = VJ_PALETTES[sum(map(ord, name)) % len(VJ_PALETTES)]
+        self.cols = tuple(shaders._rgb(c) for c in pal)
+
+    def reset(self):
+        pass
+
+    def render(self, dt, t):
+        from display import shaders
+        r = shaders.renderer()
+        if not r.ok:
+            return np.zeros((self.H, self.W, 3), np.float32)
+        return r.render("vj/" + self.name, t * 0.7, {"level": 0.1, "evolve": True}, self.cols)
+
+
+class LoopPiece:
+    """A VJ video loop filling the wall (cover: scaled to the wall's height, centred)."""
+
+    def __init__(self, W, H, clip):
+        self.W, self.H, self.clip, self.name, self.player = W, H, clip, "loop-" + clip, None
+
+    def reset(self):
+        from display import loops
+        self.player = loops.LoopPlayer(self.clip)
+
+    def render(self, dt, t):
+        import cv2
+        if self.player is None:
+            self.reset()
+        img = self.player.frame(dt, self.player.fps * 0.5)       # half speed: calmer than in music mode
+        h, w = img.shape[:2]
+        k = max(self.W / w, self.H / h)
+        img = cv2.resize(img, (max(self.W, round(w * k)), max(self.H, round(h * k))), interpolation=cv2.INTER_AREA)
+        y, x = (img.shape[0] - self.H) // 2, (img.shape[1] - self.W) // 2
+        return img[y:y + self.H, x:x + self.W].astype(np.float32)
 
 
 def _daily_entries():
@@ -134,6 +206,10 @@ def make(pid, W=None, H=None):
         return None
     if e["kind"] == "daily":
         return DailyPiece(W, H, e["date"])
+    if e["kind"] == "vj":
+        return VJPiece(W, H, pid[len("vj-"):])
+    if e["kind"] == "loop":
+        return LoopPiece(W, H, e["_clip"])
     if e["kind"] == "shader":
         from display import shaders
         name = pid[len("shader-"):]
@@ -150,8 +226,13 @@ def render_still(pid, seconds=8.0):
     if p is None:
         return None
     p.reset()
-    if find(pid)["kind"] in ("shader", "daily"):
+    if find(pid)["kind"] in ("shader", "daily", "vj"):
         return p.render(0.04, 40.0)
+    if find(pid)["kind"] == "loop":
+        img = None
+        for k in range(60):
+            img = p.render(0.1, 0.0)
+        return np.clip(img, 0, 255)
     img = None
     for k in range(int(seconds / 0.04)):
         img = p.render(0.04, 30.0 + k * 0.04)

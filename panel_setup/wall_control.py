@@ -37,6 +37,7 @@ MODES = [
     ("lava", "Art", "Lava & Coral", "Brain coral, a gold labyrinth, a jellyfish, breathing rings"),
     ("shapes", "Art", "Shapes", "Flow lines, a spiral, a harmonograph, night ridges"),
     ("daily", "Art", "Art of the day", "A new piece every day, made for this wall"),
+    ("flow", "Art", "Flow", "The whole gallery, each piece slowly bleeding into the next"),
     ("piece", "Piece", "One piece", "A single piece from the gallery, as long as you like"),
     ("shaders", "Art", "Shaders", "Glass orb, halftone wave, conic tiles, eclipse, prism and 30 more"),
     ("artsy", "Art", "Artsy", "Marbling, op-art stripes, oil slick, a drifting Mondrian"),
@@ -114,7 +115,7 @@ class Runner:
     # -- commands
     def _cmd(self, what):
         if what in MODE_IDS:
-            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva")
+            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva", "flow")
             return [PY, "panel_setup/play.py", what, "--fps", "29" if heavy else "58"]   # art: 58 fps when it can
         if what == "mirror":
             cmd = [PY, "-u", "main.py", "--no-touch", "--no-mqtt"]

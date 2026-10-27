@@ -60,7 +60,7 @@ def _piece_frame(t):
 
 def _anims():
     from display import (welcome, pride_show, cards, maeva_story, dewa_story, art,
-                         departures, music, shapes, light_art, artsy, shaders, daily)
+                         departures, music, shapes, light_art, artsy, shaders, daily, flow)
     return {
         "music":   (music.frame, 600.0),
         "trams":   (departures.frame, 60.0),
@@ -72,6 +72,7 @@ def _anims():
         "shaders": (_shader_gallery_frame, 60.0 * 5),
         "piece":   (_piece_frame, 3600.0),
         "daily":   (daily.frame, 3600.0),
+        "flow":    (flow.frame, 3600.0 * 24),
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),
         "maeva":   (maeva_story.frame, maeva_story.LOOP_SEC),
@@ -270,7 +271,7 @@ def main():
     t0 = time.monotonic()
     clock = _MusicClock() if a.anim != "music" else None
     presence = None                                     # people on the art (app switch, off by default)
-    if os.environ.get("WALL_PRESENCE") == "1" and a.anim in ART_MODES | {"music", "daily"}:
+    if os.environ.get("WALL_PRESENCE") == "1" and a.anim in ART_MODES | {"music", "daily", "flow"}:
         from display.presence import Presence
         presence = Presence(config.TOTAL_WIDTH, config.TOTAL_HEIGHT)
     stats = [] if os.environ.get("WALL_STATS") else None
@@ -301,7 +302,7 @@ def main():
         try:
             from display.rods import Rods
             rods = Rods(ble=False)
-            rods.follow = a.anim in ("daily", "music") or (a.anim == "piece" and os.environ.get("WALL_PIECE", "").startswith("daily-"))
+            rods.follow = a.anim in ("daily", "music", "flow") or (a.anim == "piece" and os.environ.get("WALL_PIECE", "").startswith("daily-"))
             if a.anim == "music":                       # the rods move with the music art
                 from display import music as _music
                 rods.music = _music.rod_feel

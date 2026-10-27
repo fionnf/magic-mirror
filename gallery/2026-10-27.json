@@ -1,7 +1,7 @@
 {
  "name": "Ultraviolet Threshold",
  "description": "A single open arc of ultraviolet neon hangs in the dark and slowly lengthens through the day, its soft lilac fan spilling evenly onto the night around it while the gap stays open.",
- "image": "2026-10-27.png",
+ "image": "2026-10-27.final.png",
  "animation_source": "2026-10-27.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 2
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": 15
   }
  ],
  "listening": "The bass breath gently thickens the fan's spread, tension lengthens the arc by a few degrees, the key leans the tint between violet and lilac, brightness sharpens the rod, and each hour's music leaves a faint wider halo in the fan's reach.",
@@ -47,5 +59,36 @@
   "score": 7,
   "verdict": "A clean single ultraviolet neon arc with a lilac halo that lengthens from a small cap to a near-ring across the day; it follows the direction and reads as a different picture from the recent warm-on-black days. I would hang it, though the soft fan stays faint and the line is near the 2-LED minimum on the 64-pixel grid."
  },
- "direction": "Ultraviolet arc"
+ "direction": "Ultraviolet arc",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.311,
+  0.337,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "Today unfolded in a quiet, gentle wave of music in the afternoon, just enough to stretch the arc a little longer and spread a soft lilac glow into the night. The sound was low and mellow, nesting softly in the quiet hours, leaving a faint halo that lingers as the day closes.",
+  "alt": "A softly glowing ultraviolet neon arc in a dark space, gently lengthening with a smooth lilac light spreading around it."
+ },
+ "final": true
 }

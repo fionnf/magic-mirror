@@ -1189,6 +1189,12 @@ def main():
         os.nice(12)                          # the website must never steal time from the panel refresh
     except OSError:
         pass
+    # import what the background threads need here, in one thread: on 2026-10-27 a boot left the
+    # import system broken ("name 'sys' is not defined" inside importlib) and the tunnel thread died
+    # silently, so the online app could not reach the wall until a restart. Fail loudly instead
+    # (systemd restarts the service).
+    import requests  # noqa: F401
+    from display import publish, daily  # noqa: F401
     runner = Runner()
     runner.resume_saved()
     if len([f for f in os.listdir(THUMB_DIR)] if os.path.isdir(THUMB_DIR) else []) < len(MODES) + 2:
@@ -1224,7 +1230,11 @@ def main():
         exe = shutil.which("cloudflared")
         if not exe or os.environ.get("WALL_TUNNEL", "1") == "0" or not os.environ.get("WALL_PASSWORD"):
             return
-        from display import publish
+        try:
+            from display import publish
+        except Exception as e:               # a broken import system: restart the whole service
+            print(f"[tunnel] cannot start ({e}); restarting the service", flush=True)
+            os._exit(1)
         latest = {"url": None}
         while True:
             try:

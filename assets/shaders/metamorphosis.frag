@@ -1,8 +1,8 @@
 // Metamorphosis: one body of violet glass that changes form once round the clock face every hour -
 // a drop on the hour, swelling to a full orb at :10, opening into a five-petalled flower at :20,
 // parting into three droplets that circle each other at :30, joining into a ring of glass at :40,
-// closing into a crescent at :50 that narrows back to the drop. Each form holds for five minutes and
-// melts into the next over the following five, lit like the glass orb: a cold rim light that walks
+// closing into a crescent at :50 that narrows back to the drop. Each form rests for a moment and
+// melts into the next over about eight and a half minutes, lit like the glass orb: a cold rim light that walks
 // round with the day, a blue glow on the far edge, veins moving slowly inside.
 float n2(vec2 p){ return sin(p.x * 1.7 + sin(p.y * 1.3)) * 0.5 + sin(p.y * 2.3 - p.x * 0.7) * 0.5; }
 float smin(float a, float b, float k){ float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0); return mix(b, a, h) - k * h * (1.0 - h); }
@@ -60,7 +60,7 @@ void mainImage(out vec4 o, in vec2 fc){
   float t = iTime * 0.03;
   float p = fract(iClock) * 6.0;                         // where we are in the hour, 0..6
   int k = int(floor(p));
-  float s = smoothstep(0.5, 1.0, fract(p));              // hold half the stage, melt for the other half
+  float s = smoothstep(0.15, 1.0, fract(p));             // rest a moment in each form, melt for most of the stage
   float d = shape(uv, t, k, s) - 0.01 * iBreath;
   vec2 h = vec2(0.004, 0.0);
   vec2 nrm = normalize(vec2(shape(uv + h.xy, t, k, s) - shape(uv - h.xy, t, k, s),

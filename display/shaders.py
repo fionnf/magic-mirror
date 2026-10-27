@@ -174,8 +174,9 @@ class Renderer:
         if "clock" in feats:
             clock = float(feats["clock"])
         else:
-            lt = time.localtime()
-            clock = lt.tm_hour + lt.tm_min / 60.0 + lt.tm_sec / 3600.0
+            now = time.time()                               # with the fraction of a second: whole seconds made
+            lt = time.localtime(now)                        # clock-driven forms move in visible 1 s steps
+            clock = lt.tm_hour + lt.tm_min / 60.0 + (lt.tm_sec + now % 1.0) / 3600.0
         setu("iClock", clock)
         setu("iZoom", float(feats.get("zoom", 1.0)))         # 1 = as drawn (music mode zooms gently on the bass)
         setu("iEvolve", tuple(float(v) for v in evolve))

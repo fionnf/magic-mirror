@@ -15,7 +15,7 @@ import config
 
 
 _CH = np.arange(3)
-SNAPSHOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "panel_setup", "now.jpg")
+SNAPSHOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "panel_setup", "now.png")
 _snap_t = [0.0]
 _snap_q = []
 
@@ -26,20 +26,24 @@ def _snap_writer():
         time.sleep(0.2)
         if not _snap_q:
             continue
-        image = _snap_q.pop()
+        image, level = _snap_q.pop()
         _snap_q.clear()
         try:
-            tmp = SNAPSHOT + ".tmp.jpg"
-            image.save(tmp, quality=85)
+            a = np.asarray(image, np.float32)
+            if level < 0.999:                                 # the brightness setting, as the panels apply it
+                a = a * level
+            tmp = SNAPSHOT + ".tmp.png"
+            Image.fromarray(np.clip(a + 0.5, 0, 255).astype(np.uint8), "RGB").save(tmp, compress_level=1)
             os.replace(tmp, SNAPSHOT)
         except Exception:
             pass
 
 
-def write_snapshot(image):
-    """What the wall shows, for the app's live preview: a small JPEG at most once a second. The JPEG
-    is encoded and written on a side thread, so the frame loop never waits on it (a late frame is a
-    visible hitch)."""
+def write_snapshot(image, level=1.0):
+    """What the wall shows, for the app's live preview, at most once a second: the exact pixels
+    (TOTAL_WIDTH x TOTAL_HEIGHT, lossless PNG) after the wall's own colour work (shadow lift, power
+    limit) and at the brightness setting `level` (0..1). Encoded and written on a side thread, so the
+    frame loop never waits on it (a late frame is a visible hitch)."""
     import threading
     import time
     now = time.monotonic()
@@ -48,7 +52,7 @@ def write_snapshot(image):
     if _snap_t[0] == 0.0:
         threading.Thread(target=_snap_writer, daemon=True).start()
     _snap_t[0] = now
-    _snap_q.append(image.copy())
+    _snap_q.append((np.array(image, np.uint8, copy=True), float(level)))
 
 
 class LedMatrix:
@@ -236,6 +240,7 @@ class LedMatrix:
             self._prepare_layout()
         pr, pc = config.PANEL_ROWS, config.PANEL_COLS
         arr = self._limit_power(self._lift(np.asarray(image, dtype=np.uint8)))
+        self._shown = arr                                # what the LEDs show (before per-panel calibration)
         tiles = (arr.reshape(config.PANELS_TALL, pr, config.PANELS_WIDE, pc, 3)
                  .transpose(0, 2, 1, 3, 4)
                  .reshape(-1, pr, pc, 3))
@@ -263,9 +268,9 @@ class LedMatrix:
             image = image.resize((config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
         if image.mode != "RGB":
             image = image.convert("RGB")
-        write_snapshot(image)
         t0 = time.perf_counter()
         strip = self._remap(image)
+        write_snapshot(self._shown, self._brightness / 100.0)
         # Static content (idle text, held frames) costs nothing: skip the
         # upload when nothing changed — the panels keep showing the last frame.
         if self._prev is not None and np.array_equal(strip, self._prev):

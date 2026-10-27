@@ -590,9 +590,10 @@ def make_app(runner):
             return jsonify({"error": "not found"}), 404
         return send_from_directory(os.path.join(os.path.dirname(HERE), "site"), name, max_age=86400)
 
-    @app.get("/api/now.jpg")
+    @app.get("/api/now.png")
+    @app.get("/api/now.jpg")                     # old name, same picture
     def now_jpg():
-        resp = send_from_directory(HERE, "now.jpg", max_age=0)
+        resp = send_from_directory(HERE, "now.png", max_age=0, mimetype="image/png")
         resp.headers["Cache-Control"] = "no-store"
         return resp
 

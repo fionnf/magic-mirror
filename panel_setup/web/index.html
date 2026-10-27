@@ -40,8 +40,8 @@
     background: #000; box-shadow: 0 30px 80px -20px rgba(var(--glow), .55), 0 0 0 1px rgba(255,255,255,.06);
     position: relative;
   }
-  .frame img { width: 100%; height: 100%; object-fit: cover; display: block; filter: blur(2px) saturate(1.15); transform: scale(1.04); }
-  .frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; }
+  .frame img { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: pixelated; }
+  .frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; image-rendering: pixelated; }
   .frame.led img { visibility: hidden; }
   .frame.off img, .frame.off canvas { opacity: 0; }
   .frame img, .frame canvas { transition: opacity .6s; }
@@ -536,15 +536,15 @@ function refreshNow() {
   if (document.hidden) return;
   const img = new Image();
   img.onload = () => { nowImg.src = img.src; ambient(img); leds(img); };
-  img.crossOrigin = 'anonymous'; img.src = u('/api/now.jpg?t=' + Date.now());
+  img.crossOrigin = 'anonymous'; img.src = u('/api/now.png?t=' + Date.now());
 }
 function leds(img) {                    // the preview as the wall really looks: round diodes, glow, seams
   const F = window.Fortuna; if (!F || !F.ledify) return;
-  const cv = $('nowLed'), w = STATUS.wall_w || 192, h = STATUS.wall_h || 192, r = devicePixelRatio || 1;
+  const cv = $('nowLed'), w = img.naturalWidth || STATUS.wall_w || 192, h = img.naturalHeight || STATUS.wall_h || 256, r = devicePixelRatio || 1;
   const cell = Math.max(1, Math.floor(cv.clientWidth * r / w));
   if (cv.width !== w * cell) { cv.width = w * cell; cv.height = h * cell; }
   const x = cv.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, cv.width, cv.height);
-  try { F.ledify(x, img, w, h, {x: 0, y: 0, w: cv.width, h: cv.height}, {bloom: .3}); $('frame').classList.add('led'); } catch (e) {}
+  try { F.ledify(x, img, w, h, {x: 0, y: 0, w: cv.width, h: cv.height}, {bloom: false}); $('frame').classList.add('led'); } catch (e) {}
 }
 /* swipe the wall left or right: the next or previous collection */
 (() => {

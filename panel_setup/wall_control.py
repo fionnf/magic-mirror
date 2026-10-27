@@ -292,12 +292,10 @@ class Runner:
     def resume_saved(self):
         with self.lock:
             self.boot_pending = True
-            m = self.state.get("mode", "lava")
-            if m == "playlist" and self.state.get("playlist"):
-                pl = self.state["playlist"]
-                self.playlist(pl["ids"], pl["minutes"])
-            else:
-                self._start(m)
+            # every start opens on today's art of the day (the user's wish, 2026-10-27)
+            self.state.update(mode="daily", playlist=None, daily_date=None)
+            save_state(self.state)
+            self._start("daily")
 
     def status(self):
         with self.lock:

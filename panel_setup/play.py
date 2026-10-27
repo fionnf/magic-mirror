@@ -60,7 +60,8 @@ def _piece_frame(t):
 
 def _anims():
     from display import (welcome, pride_show, cards, maeva_story, dewa_story, art,
-                         departures, music, shapes, light_art, artsy, shaders, daily, flow)
+                         departures, music, shapes, light_art, artsy, shaders, daily, flow,
+                         planes, limmat)
     return {
         "music":   (music.frame, 600.0),
         "trams":   (departures.frame, 60.0),
@@ -73,6 +74,8 @@ def _anims():
         "piece":   (_piece_frame, 3600.0),
         "daily":   (daily.frame, 3600.0),
         "flow":    (flow.frame, 3600.0 * 24),
+        "planes":  (planes.frame, 3600.0 * 24),
+        "limmat":  (limmat.frame, 3600.0 * 24),
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),
         "maeva":   (maeva_story.frame, maeva_story.LOOP_SEC),

@@ -51,6 +51,8 @@ MODES = [
     ("music", "Live", "Music", "Art that breathes with the music in the room"),
     ("ambient", "Live", "Art + trams", "Lava & Coral with a small Rennweg tram strip"),
     ("trams", "Live", "Tram board", "Live departures from Rennweg, split-flap style"),
+    ("planes", "Live", "Planes", "Every aircraft over Zürich right now, drawing its path in light"),
+    ("limmat", "Live", "Limmat", "The river flowing at its real speed, coloured by the lake's temperature"),
 ]
 MODE_IDS = {m[0] for m in MODES}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,

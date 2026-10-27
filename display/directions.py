@@ -56,6 +56,25 @@ DIRECTIONS = [   # one quiet, glowing form each (the house's favourites: glass o
     {"name": "Magenta cross", "hues": (300, 325), "ground": "mid",
      "colour": "magenta and violet light seeping between deep plum cushions",
      "form": "four soft cushions pressed together, light escaping along the seams as a glowing cross"},
+    # deep grounds: a dark colour fills the wall (not black); the form is a few tones lighter in the same hue
+    {"name": "Oxblood velvet", "hues": (345, 12), "ground": "deep",
+     "colour": "oxblood, garnet and deep wine, the form a few tones lighter in dusky rose",
+     "form": "one large soft fold or drape of velvet slowly shifting, its ridge catching a little light"},
+    {"name": "Ink tide", "hues": (215, 240), "ground": "deep",
+     "colour": "ink blue and midnight navy, the form in slate and soft steel blue",
+     "form": "a slow broad swell, like deep water seen from above, one long crest lit faintly"},
+    {"name": "Forest dusk", "hues": (120, 155), "ground": "deep",
+     "colour": "deep forest and bottle green, the form in moss and muted sage",
+     "form": "a few large overlapping soft shapes like leaves in shadow, drifting very slowly"},
+    {"name": "Aubergine hour", "hues": (280, 310), "ground": "deep",
+     "colour": "aubergine and deep plum, the form in mauve and smoky lilac",
+     "form": "one large rounded shape, lit from one side, its shadow side melting into the ground"},
+    {"name": "Petrol depth", "hues": (175, 200), "ground": "deep",
+     "colour": "deep petrol and dark teal, the form in muted aqua",
+     "form": "soft vertical veils of colour hanging and swaying, like light far down in a lake"},
+    {"name": "Umber ember", "hues": (15, 35), "ground": "deep",
+     "colour": "dark umber and burnt sienna, the form in muted copper",
+     "form": "one low, wide glow like the last embers under ash, breathing very slowly"},
     {"name": "Flow lines", "hues": (0, 360), "ground": "dark", "shapes": True,
      "colour": "one or two luminous colours on black, a soft glow around bright cores",
      "form": "a comb of thin bright lines released along one edge and flowing through a slow two-wave field, "
@@ -73,6 +92,8 @@ GROUND = {   # mean brightness range (0..255) of the still for each ground
     "dark": (22, 80, "a dark ground, but the piece should still glow clearly (not a dim smudge on black)"),
     "mid": (40, 130, "a mid-tone ground: the whole wall is coloured, not black"),
     "light": (90, 150, "a light, high-key ground: pale paper or sky, with darker marks on it"),
+    "deep": (30, 95, "a deep, dark COLOUR fills the whole wall (not black): the form is the same hue a few tones "
+                     "lighter, a dark and moody piece"),
 }
 
 
@@ -127,13 +148,30 @@ def brief(direction):
                  "they shimmer on an LED wall.")
     return (f"TODAY'S DIRECTION - \"{direction['name']}\" (required; it keeps the wall from repeating itself):\n"
             f"- colour: {direction['colour']}\n- ground: {words}\n- form: {direction['form']}\n"
-            f"{style}\n\n{VISIBILITY}")
+            f"{style}\n\n{VISIBILITY_DEEP if direction['ground'] == 'deep' else VISIBILITY}")
 
 
-def visibility_problem(still):
+VISIBILITY_DEEP = (
+    "VISIBILITY (measured on the real wall in a lit living room): the wall lifts dark colours so they keep their "
+    "hue, but keep the ground's strongest channel at least 45/255 everywhere (a true black reads as a hole, not "
+    "a deep colour) and saturated, so it reads as a colour, not grey. The form must stand out by at least "
+    "40/255 from the ground and reach 130-190 at its lightest; no white, no neon. Lines at least 3 LEDs wide.")
+
+
+def visibility_problem(still, ground="dark"):
     """-> None if fine, else a note for the artist: would this read on the real wall? still = HxWx3 uint8."""
     import numpy as np
     mx = np.asarray(still).max(axis=2)
+    if ground == "deep":
+        p99, filled = float(np.percentile(mx, 99)), float((mx >= 40).mean())
+        if filled < 0.7:
+            return (f"only {filled * 100:.0f}% of the wall carries the deep colour (channel 40+/255): the ground "
+                    "must be a dark colour everywhere, not black")
+        if p99 < 120:
+            return (f"its lightest areas only reach {p99:.0f}/255: the form needs to lift to 130-190 to read")
+        if p99 - float(np.percentile(mx, 30)) < 40:
+            return "the form does not stand out from the ground: make it at least 40/255 lighter"
+        return None
     p99 = float(np.percentile(mx, 99))
     lit = float((mx >= 100).mean())
     if p99 < 170:

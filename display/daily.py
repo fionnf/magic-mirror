@@ -357,7 +357,7 @@ def generate(date=None, notes="", attempts=6, min_score=7, direction=None):
         ok, reason, still = check(src, pal)
         print(f"[daily] attempt {attempt}: {j.get('title')!r} -> {reason}", flush=True)
         if ok:
-            why = directions.brightness_problem(float(still.mean()), direction) or directions.visibility_problem(still)
+            why = directions.brightness_problem(float(still.mean()), direction) or directions.visibility_problem(still, direction["ground"])
             if why:
                 ok, reason = False, why
                 print(f"[daily] attempt {attempt}: {why}", flush=True)

@@ -57,7 +57,9 @@ class Rods:
         self.cur = [np.zeros(3, np.float32) for _ in addresses]
         self.last = None
         self.level = 1.0
-        self.follow = False                                  # True only while the daily art is on the wall
+        self.follow = False                                  # True while the daily art or the music art is on the wall
+        self.music = None                                    # music mode: a callable -> (energy, phase, silent)
+        self._mode = "auto"
         self.status = ["off"] * len(addresses)
         self._fed = 0.0
         if not ble:
@@ -75,6 +77,8 @@ class Rods:
             return
         self._fed = now
         top, bot = self._choice(img)
+        if self.music is not None and self._mode in ("auto", "follow"):
+            top, bot = self._animate(top, bot)
         try:
             tmp = SHARED + ".tmp"
             with open(tmp, "w") as fh:
@@ -82,6 +86,21 @@ class Rods:
             os.replace(tmp, SHARED)
         except Exception:
             pass
+
+    def _animate(self, top, bot):
+        """Music mode: the rods move with the art. Their light swells with the music's loudness (seconds,
+        never on the beat) and a slow wave, tied to the art's own flow, sways the light between them."""
+        try:
+            feel = self.music()
+        except Exception:
+            feel = None
+        if not feel:
+            return top, bot
+        energy, phase, silent = feel
+        e = self._energy = getattr(self, "_energy", energy) * 0.8 + energy * 0.2   # ~2.5 s at 2 Hz
+        level = 0.4 if silent else 0.45 + 0.55 * e
+        w = 0.5 + 0.5 * np.sin(phase * 0.9)
+        return top * level * (0.55 + 0.45 * w), bot * level * (0.55 + 0.45 * (1.0 - w))
 
     @staticmethod
     def _shared():
@@ -119,7 +138,7 @@ class Rods:
             except Exception:
                 self._cfg = {}
         cfg = getattr(self, "_cfg", {})
-        mode = cfg.get("mode", "auto")
+        mode = self._mode = cfg.get("mode", "auto")
         self.level = max(0.05, min(1.0, float(cfg.get("level", 100)) / 100.0))
         if mode == "off":
             z = np.zeros(3, np.float32)

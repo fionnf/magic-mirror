@@ -97,6 +97,10 @@ HEAVY = {"poles", "jelly", "flowdots", "ridges", "flowlines", "spiral", "harmono
 QUIET = "shader:halo"                                  # the soft glow for a quiet room (1.3 ms on the GPU)                    # the house loves these: offered in every pool
 
 
+# music mode moves more than the calm art: every scene's clock runs this much faster (2026-10-27)
+MOTION = float(os.environ.get("WALL_MUSIC_MOTION", 1.7))
+
+
 def _lerp(a, b, k):
     return a + (b - a) * k
 
@@ -1583,7 +1587,7 @@ class MusicShow:
                 self._wave = pts if getattr(self, "_wave", None) is None else self._wave * 0.35 + pts * 0.65
                 f["wave"] = self._wave * (0.0 if f["silent"] else 1.0)
         self.layer_op = _ema(self.layer_op, float(c.get("layer_opacity", 0.0)) if auto else 0.0, dt, P["glide"])
-        self.vis.step(f, dt)
+        self.vis.step(f, dt * MOTION)
         # --- scene changes: whenever, when it is quiet; on a 4-bar boundary when the party is on
         self._watch_changes(f, now, dt)
         tgt = self._target()
@@ -1668,10 +1672,10 @@ class MusicShow:
         lop = 0.0 if slow else self.layer_op                  # too slow: drop the second layer
         if slow and self.xfade > 2.5:
             self.xfade = 2.5                                  # ...and cross-fade quickly (two renders at once)
-        img = self._render(self.cur, f, dt, beat, lop)
+        img = self._render(self.cur, f, dt * MOTION, beat, lop)
         k = (now - self.switched) / max(0.5, self.xfade)
         if self.prev and k < 1:
-            old = self._render(self.prev, f, dt, False, lop)
+            old = self._render(self.prev, f, dt * MOTION, False, lop)
             k = k * k * (3 - 2 * k)
             img = old * (1 - k) + img * k
         # --- post effects: colour drift, beat rings, light trails, and the swell with the sound
@@ -1720,6 +1724,14 @@ class MusicShow:
 
 
 _show = None
+
+
+def rod_feel():
+    """For the colour rods: (energy 0..1, flow phase, silent) of the music art now, or None."""
+    if _show is None:
+        return None
+    f = _show.l.f
+    return float(f.get("energy", 0.0)), float(_show.vis.phase), bool(f.get("silent", True))
 
 
 def frame(t):

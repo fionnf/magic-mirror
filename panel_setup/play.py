@@ -301,7 +301,10 @@ def main():
         try:
             from display.rods import Rods
             rods = Rods(ble=False)
-            rods.follow = a.anim == "daily" or (a.anim == "piece" and os.environ.get("WALL_PIECE", "").startswith("daily-"))
+            rods.follow = a.anim in ("daily", "music") or (a.anim == "piece" and os.environ.get("WALL_PIECE", "").startswith("daily-"))
+            if a.anim == "music":                       # the rods move with the music art
+                from display import music as _music
+                rods.music = _music.rod_feel
         except Exception as e:
             print(f"[rods] off: {e}", flush=True)
     import gc

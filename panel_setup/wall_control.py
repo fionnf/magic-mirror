@@ -1205,7 +1205,7 @@ def main():
         except Exception:
             sent = {}
         todo = [d for d, m in daily.editions()[:14]
-                if sent.get(d) != ("final" if m.get("final") else "new")]
+                if not m.get("offline") and sent.get(d) != ("final" if m.get("final") else "new")]
         if todo:
             publish.publish(todo)
             for d, m in daily.editions()[:14]:
@@ -1259,14 +1259,23 @@ def main():
         while True:
             try:
                 today = _dt.date.today().isoformat()
-                if not os.path.exists(os.path.join(daily.FOLDER, today + ".json")) and \
-                        (_dt.datetime.now().hour >= 5 or not daily.editions()):
+                mine = dict(daily.editions()).get(today)
+                if (mine is None or mine.get("offline")) and (_dt.datetime.now().hour >= 5 or not daily.editions()):
                     # the cloud artist (daily workflow) makes the piece; the wall hangs the same one.
                     # Only if the cloud has not delivered by 10:00 does the wall compose its own, so
-                    # the gallery never gets two different pieces for one day.
-                    meta = daily.fetch(today)
-                    if meta is None and (_dt.datetime.now().hour >= 10 or not daily.editions()):
-                        meta = daily.generate(today)
+                    # the gallery never gets two different pieces for one day. With no internet at all
+                    # the wall makes one itself (compose_offline); the real one replaces it once online.
+                    meta, net = None, daily.online()
+                    if net:
+                        meta = daily.fetch(today)
+                        if meta is None and (_dt.datetime.now().hour >= 10 or not daily.editions()):
+                            try:
+                                meta = daily.generate(today)
+                            except Exception as e:
+                                print(f"[daily] the artist failed: {e}", flush=True)
+                    if meta is None and mine is None:
+                        if not net or _dt.datetime.now().hour >= 10:
+                            meta = daily.compose_offline(today)
                     if meta:
                         print(f"[daily] {today}: {meta['name']}", flush=True)
                         if runner.current == "daily" and not runner.state.get("daily_date"):

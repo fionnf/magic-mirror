@@ -399,6 +399,73 @@ def generate(date=None, notes="", attempts=6, min_score=7, direction=None):
         json.dump(meta, fh, indent=1)
     return meta
 
+def online(timeout=3.0):
+    """True when the internet answers (the AI artist and the gallery both need it)."""
+    import socket
+    for host in ("1.1.1.1", "8.8.8.8"):
+        try:
+            socket.create_connection((host, 443), timeout=timeout).close()
+            return True
+        except OSError:
+            pass
+    return False
+
+
+_OFFLINE_NAMES = ["Variation", "Second light", "Echo", "Another hour", "Quiet study", "Afterimage", "Reprise", "Undertone"]
+
+
+def compose_offline(date=None, tries=8):
+    """No internet: make today's piece on the wall itself. A past edition's shader (chosen by the date)
+    is hung in a new palette - one or two neighbouring hues, as the house likes - and passes the same
+    checks as an AI piece. Marked "offline": it never goes to the public gallery, and the cloud's piece
+    replaces it as soon as the wall is back online. -> metadata or None."""
+    import colorsys
+    import random
+    from PIL import Image
+    from display import directions
+    d = datetime.date.fromisoformat(date) if date else datetime.date.today()
+    date = d.isoformat()
+    rnd = random.Random("offline-" + date)
+    pool = [(dd, m) for dd, m in editions() if dd != date and not m.get("offline") and os.path.exists(_path(dd, "frag"))]
+    if not pool:
+        return None
+    recent = [m.get("palette") for _, m in editions()[:5] if m.get("palette")]
+    for _ in range(tries):
+        src_date, src_meta = rnd.choice(pool[:60])
+        with open(_path(src_date, "frag")) as fh:
+            src = "\n".join(l for l in fh.read().split("\n") if not l.startswith("// "))   # drop the old label
+        h = rnd.random()
+        h2 = (h + rnd.choice((-1, 1)) * rnd.uniform(0.02, 0.07)) % 1.0
+        to = lambda hh, ss, vv: "#%02x%02x%02x" % tuple(int(v * 255) for v in colorsys.hsv_to_rgb(hh, ss, vv))
+        pal = [to(h, 0.85, rnd.uniform(0.10, 0.16)), to(h, 0.78, rnd.uniform(0.55, 0.7)), to(h2, 0.42, 1.0)]
+        if any(p and abs(colorsys.rgb_to_hsv(*_hex(p[1]))[0] - h) < 0.05 for p in recent):
+            continue                                       # too close to a recent day's colour
+        ok, reason, still = check(src, pal)
+        if ok:
+            why = directions.visibility_problem(still)
+            ok, reason = (False, why) if why else (True, reason)
+        print(f"[daily] offline {date}: {src_meta.get('name')!r} in {pal} -> {reason}", flush=True)
+        if not ok:
+            continue
+        name = f"{rnd.choice(_OFFLINE_NAMES)} of {src_meta.get('name', src_date)}"[:60]
+        statement = f"Made on the wall while it was offline: {src_meta.get('name', src_date)} ({src_date}) in a new light."
+        os.makedirs(FOLDER, exist_ok=True)
+        with open(_path(date, "frag"), "w") as fh:
+            fh.write(f"// {name} - art of the day {date} (offline)\n// {statement}\n" + src)
+        Image.fromarray(still).resize((W * 3, H * 3), Image.NEAREST).save(_path(date, "png"))
+        meta = {"name": name, "description": statement, "image": f"{date}.png", "animation_source": f"{date}.frag",
+                "attributes": [{"trait_type": "Date", "value": date}, {"trait_type": "Season", "value": _season(d)},
+                               {"trait_type": "Palette", "value": " ".join(pal)},
+                               {"trait_type": "Medium", "value": f"GLSL shader, {W} x {H} LED wall"},
+                               {"trait_type": "Artist", "value": "Dewa and Fionn"}],
+                "listening": src_meta.get("listening", ""), "palette": pal, "offline": True, "remix_of": src_date,
+                "size": [W, H], "created": time.time(), "direction": src_meta.get("direction", "")}
+        with open(_path(date, "json"), "w") as fh:
+            json.dump(meta, fh, indent=1)
+        return meta
+    return None
+
+
 GALLERY_RAW = os.environ.get("GALLERY_RAW", "https://raw.githubusercontent.com/fionnf/magic-mirror/master/gallery/")
 
 

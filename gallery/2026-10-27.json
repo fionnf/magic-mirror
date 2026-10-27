@@ -1,0 +1,51 @@
+{
+ "name": "Ultraviolet Threshold",
+ "description": "A single open arc of ultraviolet neon hangs in the dark and slowly lengthens through the day, its soft lilac fan spilling evenly onto the night around it while the gap stays open.",
+ "image": "2026-10-27.png",
+ "animation_source": "2026-10-27.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-27"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#0c0618 #6a2fd0 #e6c8ff"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "The bass breath gently thickens the fan's spread, tension lengthens the arc by a few degrees, the key leans the tint between violet and lilac, brightness sharpens the rod, and each hour's music leaves a faint wider halo in the fan's reach.",
+ "palette": [
+  "#0c0618",
+  "#6a2fd0",
+  "#e6c8ff"
+ ],
+ "source_sha256": "6e018133c4caf2210f6f39db15df46597a3eddaf1dfff1d58e64a8b02392e260",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 2,
+ "created": 1793103025.2860308,
+ "curator": {
+  "score": 7,
+  "verdict": "A clean single ultraviolet neon arc with a lilac halo that lengthens from a small cap to a near-ring across the day; it follows the direction and reads as a different picture from the recent warm-on-black days. I would hang it, though the soft fan stays faint and the line is near the 2-LED minimum on the 64-pixel grid."
+ },
+ "direction": "Ultraviolet arc"
+}

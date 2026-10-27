@@ -44,7 +44,14 @@ def _get_client():
 
 
 def provider() -> str:
-    return (os.environ.get("WALL_AI_PROVIDER") or getattr(config, "AI_PROVIDER", "anthropic")).lower()
+    """The chosen provider, or Claude when the chosen one has no key but Claude has (a missing
+    OPENAI_API_KEY secret must not cost the day its piece)."""
+    p = (os.environ.get("WALL_AI_PROVIDER") or getattr(config, "AI_PROVIDER", "anthropic")).lower()
+    if p != "anthropic":
+        _load_env()
+        if not os.environ.get(_compat(p)[1]) and os.environ.get("ANTHROPIC_API_KEY"):
+            return "anthropic"
+    return p
 
 
 def model_name(art: bool = False) -> str:
@@ -56,7 +63,14 @@ def model_name(art: bool = False) -> str:
     return _compat(provider())[2]
 
 
+_env_loaded = False
+
+
 def _load_env() -> None:
+    global _env_loaded
+    if _env_loaded:
+        return
+    _env_loaded = True
     try:
         from dotenv import load_dotenv
         load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))

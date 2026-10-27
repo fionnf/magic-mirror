@@ -324,7 +324,7 @@ def generate(date=None, notes="", attempts=6, min_score=7, direction=None):
     recent_pals = [m["palette"] for m in past if len(m.get("palette") or []) == 3]
     if isinstance(direction, str):
         direction = next(x for x in directions.DIRECTIONS if x["name"] == direction)
-    direction = direction or directions.pick(d, used=[m.get("direction") for m in past[:8]])
+    direction = direction or directions.pick(d, used=[m.get("direction") for m in past[:8]], recent_pals=recent_pals)
     print(f"[daily] {date}: direction {direction['name']!r}", flush=True)
     user = (f"Today is {d.strftime('%A %d %B %Y')} ({_season(d)} in Zürich; the season is background, "
             "not a subject - do not reach for autumn ambers).\n\n" + directions.brief(direction) +

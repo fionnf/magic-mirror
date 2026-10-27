@@ -76,18 +76,35 @@ GROUND = {   # mean brightness range (0..255) of the still for each ground
 }
 
 
-def pick(date, used=()):
-    """The direction for this date: dealt from a deck shuffled per cycle, skipping recently used names."""
+def _clashes(direction, recent_pals):
+    """True when the direction's colour family sits on one of the last 3 pieces' colours, so every
+    palette it allows would fail palette_problem's 'too close' rule."""
+    lo, hi = direction["hues"]
+    if (lo, hi) == (0, 360):
+        return False
+    for old in recent_pals[:3]:
+        oh = _main_hue(old)
+        if oh is not None and (_in_range(oh, lo, hi) or min(_hue_dist(oh, lo), _hue_dist(oh, hi)) < 25):
+            return True
+    return False
+
+
+def pick(date, used=(), recent_pals=()):
+    """The direction for this date: dealt from a deck shuffled per cycle, skipping recently used names
+    and colour families the last days already showed."""
     d = datetime.date.fromisoformat(date) if isinstance(date, str) else date
     n = len(DIRECTIONS)
     cycle, pos = divmod(d.toordinal(), n)
     order = list(range(n))
     random.Random(cycle * 7919).shuffle(order)
-    for k in range(n):
-        cand = DIRECTIONS[order[(pos + k) % n]]
-        if cand["name"] not in used:
-            return cand
-    return DIRECTIONS[order[pos]]
+    deck = [DIRECTIONS[order[(pos + k) % n]] for k in range(n)]
+    for ok in (lambda c: c["name"] not in used and not _clashes(c, recent_pals),
+               lambda c: not _clashes(c, recent_pals),
+               lambda c: c["name"] not in used):
+        for cand in deck:
+            if ok(cand):
+                return cand
+    return deck[0]
 
 
 VISIBILITY = (

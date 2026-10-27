@@ -53,6 +53,7 @@ MODES = [
     ("trams", "Live", "Tram board", "Live departures from Rennweg, split-flap style"),
     ("planes", "Live", "Planes", "Every aircraft over Zürich right now, drawing its path in light"),
     ("limmat", "Live", "Limmat", "The river flowing at its real speed, coloured by the lake's temperature"),
+    ("westcork", "Live", "West Cork", "Mizen, Fastnet, Schull and Baltimore at night, every light flashing its real signal"),
 ]
 MODE_IDS = {m[0] for m in MODES}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,

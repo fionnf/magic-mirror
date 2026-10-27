@@ -116,8 +116,8 @@ class LedMatrix:
         It follows the picture's 8-second average (never single frames), needs a clear margin past each
         threshold, waits ~25 s before going deeper, and a bright moment sends it straight back to
         MATRIX_PWM_BITS. So it never hops back and forth."""
-        if not config.DEPTH_STEPS:
-            return
+        if not config.DEPTH_STEPS or os.environ.get("WALL_FIXED_DEPTH") == "1":
+            return                       # points of light on black (the live maps): the fastest refresh, always
         eff = max(mean, 0.7 * bright_frac) * self._brightness / 100.0     # small bright areas count too
         now = time.monotonic()
         self._lvl += (eff - self._lvl) * min(1.0, (now - self._lvl_t) / 8.0)

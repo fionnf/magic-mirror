@@ -1,12 +1,17 @@
 """Planes: the sky over Zürich as live art. Every aircraft in range (adsb.lol, open ADS-B data, no
-key) drifts across the wall as a soft point of light, leaving a thin trail that fades over minutes,
-so the approaches and departures of Zürich airport slowly draw themselves. Low aircraft are warm
-amber, high ones rose; a faint dot marks the apartment and another the airport.
+key) drifts across the wall as a point of light with its flight number, leaving a one-LED trail that
+fades over minutes, so the approaches and departures of Zürich airport slowly draw themselves. Low
+aircraft are warm amber, high ones rose. Underneath, a faint map: the lakes, the rivers, the runways
+and a dot for the apartment (assets/maps/zurich.json, from tools/build_maps.py).
+
+Everything is drawn on whole LEDs (no anti-aliasing): a soft dot gliding between LEDs shimmers.
 
 Positions are fetched every 10 s on a side thread; between fetches each aircraft glides on at its
 reported speed and track, so the motion is continuous.
 """
+import json
 import math
+import os
 import threading
 import time
 
@@ -34,10 +39,38 @@ def to_px(lat, lon):
     return x, y
 
 
+MAP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "maps", "zurich.json")
+LAKE, LAKE_EDGE = (6, 12, 24), (16, 30, 56)       # the map stays far below the planes
+RIVER, RUNWAY = (12, 22, 40), (44, 42, 46)
+
+
+def base_map():
+    """The still map under the planes: lakes (filled, a fine edge), rivers and runways, one LED wide."""
+    import cv2
+    img = np.zeros((H, W, 3), np.uint8)
+    try:
+        with open(MAP) as fh:
+            m = json.load(fh)
+    except Exception:
+        return img
+    pts = lambda line: np.array([[round(v) for v in to_px(*p)] for p in line], np.int32)
+    for lake in m.get("lakes", []):
+        cv2.fillPoly(img, [pts(lake)], LAKE)
+        cv2.polylines(img, [pts(lake)], True, LAKE_EDGE, 1, cv2.LINE_8)
+    for r in m.get("rivers", []):
+        cv2.polylines(img, [pts(r)], False, RIVER, 1, cv2.LINE_8)
+    for r in m.get("runways", []):
+        cv2.polylines(img, [pts(r)], False, RUNWAY, 1, cv2.LINE_8)
+    x, y = (round(v) for v in to_px(*HOME))
+    img[y, x] = (90, 90, 90)
+    return img
+
+
 class Sky:
     def __init__(self):
-        self.ac, self.ok = {}, False                  # hex -> {lat, lon, gs (m/s), track, alt (ft), t}
+        self.ac, self.ok = {}, False                  # hex -> {lat, lon, gs (m/s), track, alt (ft), t, flight}
         self.trail = np.zeros((H, W, 3), np.float32)
+        self.base = base_map().astype(np.float32)
         self.drawn, self.last = {}, None
         threading.Thread(target=self._fetch_loop, daemon=True).start()
 
@@ -52,7 +85,8 @@ class Sky:
                         continue
                     self.ac[a["hex"]] = {"lat": a["lat"], "lon": a["lon"], "gs": float(a.get("gs") or 0) * 0.5144,
                                          "track": float(a.get("track") or 0), "t": now - float(a.get("seen_pos") or 0),
-                                         "alt": float(a.get("alt_baro") or a.get("alt_geom") or 0)}
+                                         "alt": float(a.get("alt_baro") or a.get("alt_geom") or 0),
+                                         "flight": (a.get("flight") or a.get("r") or "").strip()[:8]}
                 for k in [k for k, v in self.ac.items() if now - v["t"] > 60]:
                     del self.ac[k]
                 self.ok = True
@@ -73,32 +107,35 @@ class Sky:
 
     def __call__(self, t):
         import cv2
+        from display import pixelfont
         dt = 0.04 if self.last is None else max(0.0, min(0.5, t - self.last))
         self.last = t
         now = time.time()
         self.trail *= math.exp(-dt / FADE)
-        heads = np.zeros((H, W, 3), np.uint8)
         stamp = np.zeros((H, W, 3), np.uint8)
-        seen = set()
+        heads, seen = [], set()
         for k, a in list(self.ac.items()):
             x, y = self._now_pos(a, now)
             seen.add(k)
             hi = max(0.0, min(1.0, (a["alt"] - 6000.0) / 24000.0))
             col = LOW_COL + (HIGH_COL - LOW_COL) * hi
-            p = (int(round(x * 4)), int(round(y * 4)))                # 2 fractional bits: smooth slow motion
+            p = (int(round(x)), int(round(y)))
             prev = self.drawn.get(k)
-            if prev is not None and abs(prev[0] - p[0]) + abs(prev[1] - p[1]) < 4 * 40:
-                cv2.line(stamp, prev, p, tuple(int(c * 0.62) for c in col), 2, cv2.LINE_AA, shift=2)
+            if prev is not None and prev != p and abs(prev[0] - p[0]) + abs(prev[1] - p[1]) < 40:
+                cv2.line(stamp, prev, p, tuple(int(c * 0.72) for c in col), 1, cv2.LINE_8)
             self.drawn[k] = p
-            cv2.circle(heads, p, 4 * 2, tuple(int(c) for c in col), -1, cv2.LINE_AA, shift=2)
+            heads.append((p, col, a.get("flight", "")))
         np.maximum(self.trail, stamp, out=self.trail)
         for k in [k for k in self.drawn if k not in seen]:
             del self.drawn[k]
-        img = self.trail.copy()
-        for (lat, lon), lvl in ((HOME, 70), (AIRPORT, 45)):
-            x, y = to_px(lat, lon)
-            cv2.circle(img, (int(round(x)), int(round(y))), 1, (lvl, lvl, lvl), -1)
-        img = np.maximum(img, heads)
+        img = np.maximum(self.base, self.trail)
+        for (x, y), col, flight in heads:
+            if 0 <= x < W and 0 <= y < H:
+                img[y, x] = col                                      # the plane: one bright LED
+                if flight:
+                    w = pixelfont.width(flight)
+                    tx = x + 3 if x + 3 + w <= W else x - 2 - w      # beside it, on the side with room
+                    pixelfont.draw(img, flight, tx, min(H - 5, max(0, y - 2)), col * 0.6)
         return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
 
 

@@ -57,7 +57,9 @@ class Rods:
         self.cur = [np.zeros(3, np.float32) for _ in addresses]
         self.last = None
         self.level = 1.0
-        self.follow = False                                  # True only while the daily art is on the wall
+        self.follow = False                                  # True while the daily art or the music art is on the wall
+        self.music = None                                    # music mode: a callable -> (energy, phase, silent)
+        self._mode = "auto"
         self.status = ["off"] * len(addresses)
         self._fed = 0.0
         if not ble:
@@ -75,6 +77,8 @@ class Rods:
             return
         self._fed = now
         top, bot = self._choice(img)
+        if self.music is not None and self._mode in ("auto", "follow"):
+            top, bot = self._animate(top, bot)
         try:
             tmp = SHARED + ".tmp"
             with open(tmp, "w") as fh:
@@ -82,6 +86,21 @@ class Rods:
             os.replace(tmp, SHARED)
         except Exception:
             pass
+
+    def _animate(self, top, bot):
+        """Music mode: the rods move with the art. Their light swells with the music's loudness (seconds,
+        never on the beat) and a slow wave, tied to the art's own flow, sways the light between them."""
+        try:
+            feel = self.music()
+        except Exception:
+            feel = None
+        if not feel:
+            return top, bot
+        energy, phase, silent = feel
+        e = self._energy = getattr(self, "_energy", energy) * 0.8 + energy * 0.2   # ~2.5 s at 2 Hz
+        level = 0.4 if silent else 0.45 + 0.55 * e
+        w = 0.5 + 0.5 * np.sin(phase * 0.9)
+        return top * level * (0.55 + 0.45 * w), bot * level * (0.55 + 0.45 * (1.0 - w))
 
     @staticmethod
     def _shared():
@@ -119,7 +138,7 @@ class Rods:
             except Exception:
                 self._cfg = {}
         cfg = getattr(self, "_cfg", {})
-        mode = cfg.get("mode", "auto")
+        mode = self._mode = cfg.get("mode", "auto")
         self.level = max(0.05, min(1.0, float(cfg.get("level", 100)) / 100.0))
         if mode == "off":
             z = np.zeros(3, np.float32)
@@ -150,6 +169,7 @@ class Rods:
         asyncio.run(self._main())
 
     async def _main(self):
+        self._ble_lock = asyncio.Lock()
         await asyncio.gather(self._pull(), *[self._rod(i) for i in range(len(self.addr))])
 
     @staticmethod
@@ -158,6 +178,14 @@ class Rods:
             return os.path.getmtime(RECONNECT)
         except OSError:
             return 0.0
+
+    async def _unstick(self, i):
+        try:
+            p = await asyncio.create_subprocess_exec("bluetoothctl", "disconnect", self.addr[i],
+                                                     stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+            await asyncio.wait_for(p.wait(), 8)
+        except Exception:
+            pass
 
     async def _rod(self, i):
         from bleak import BleakClient, BleakScanner
@@ -170,25 +198,36 @@ class Rods:
                     await asyncio.sleep(0.5)
                 seen = self._asked()
             self.status[i] = "connecting"; self._publish()
+            c = None
             try:
-                dev = await BleakScanner.find_device_by_address(self.addr[i], timeout=20)   # scan first: weak rods are missed otherwise
-                if dev is None:
-                    raise LookupError("not in range")
-                async with BleakClient(dev, timeout=25) as c:
-                    ch = next(x for s in c.services for x in s.characteristics
-                              if x.uuid.startswith(("0000fff3", "0000ffe1")) and
-                              ("write" in x.properties or "write-without-response" in x.properties))
-                    await c.write_gatt_char(ch, ON, response=False)
-                    self.status[i] = "on"; self._publish()
-                    sent = None
-                    while c.is_connected and self._asked() <= seen and not os.path.exists(HOLD):
-                        rgb = tuple(int(v) for v in self.cur[i])
-                        if sent is None or max(abs(a - b) for a, b in zip(rgb, sent)) >= 3:
-                            await c.write_gatt_char(ch, _pack(*rgb), response=False)
-                            sent = rgb
-                        await asyncio.sleep(1.0)
+                async with self._ble_lock:                    # BlueZ does one scan/connect at a time ("InProgress")
+                    await self._unstick(i)                    # a half-open link from before hides the rod
+                    dev = await BleakScanner.find_device_by_address(self.addr[i], timeout=20)   # scan first: weak rods are missed otherwise
+                    if dev is None:
+                        raise LookupError("not in range")
+                    c = BleakClient(dev, timeout=25)
+                    await c.connect()
+                ch = next(x for s in c.services for x in s.characteristics
+                          if x.uuid.startswith(("0000fff3", "0000ffe1")) and
+                          ("write" in x.properties or "write-without-response" in x.properties))
+                await c.write_gatt_char(ch, ON, response=False)
+                self.status[i] = "on"; self._publish()
+                sent = None
+                while c.is_connected and self._asked() <= seen and not os.path.exists(HOLD):
+                    rgb = tuple(int(v) for v in self.cur[i])
+                    if sent is None or max(abs(a - b) for a, b in zip(rgb, sent)) >= 3:
+                        await c.write_gatt_char(ch, _pack(*rgb), response=False)
+                        sent = rgb
+                    await asyncio.sleep(1.0)
+                self.status[i] = "connecting"; self._publish()
+                await c.disconnect()
             except Exception as e:
                 self.status[i] = f"{type(e).__name__}: {str(e)[:80]}"; self._publish()
+                if c is not None:
+                    try:
+                        await c.disconnect()
+                    except Exception:
+                        pass
             for _ in range(20):                               # lost or not there: try again later, or at once when asked
                 await asyncio.sleep(0.5)
                 if self._asked() > seen or os.path.exists(HOLD):

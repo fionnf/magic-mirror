@@ -415,6 +415,8 @@
       <button class="btn" onclick="updSheet.showModal()">Update &amp; restart</button>
       <p class="hint">Fetches the newest version from GitHub and restarts everything. Back in about a minute.</p>
       <p class="hint" id="version" style="margin-top:0"></p>
+      <button class="btn" onclick="resetSheet.showModal()">Reset settings</button>
+      <p class="hint">Brightness, pace, music and rod settings back to their defaults, with the art of the day on the wall.</p>
       <button class="btn" onclick="shutSheet.showModal()">Shut down the wall</button>
       <p class="hint">Turns the wall's computer off completely. To start it again, unplug it and plug it back in.</p>
     </section>
@@ -457,6 +459,12 @@
   <button class="btn primary" onclick="updateWall(false)">Update &amp; restart</button>
   <button class="btn" onclick="updateWall(true)">Restart the whole computer</button>
   <button class="btn" onclick="updSheet.close()">Cancel</button>
+</div></dialog>
+<dialog id="resetSheet"><div class="sheet">
+  <h3>Reset settings?</h3>
+  <p class="hint" style="margin:0 0 6px">Brightness, pace, the music settings, the rods and the sleep timer go back to their defaults, and the wall shows the art of the day. Speakers, Spotify, the camera and guests' lines stay as they are.</p>
+  <button class="btn primary" onclick="resetWall()">Reset settings</button>
+  <button class="btn" onclick="resetSheet.close()">Cancel</button>
 </div></dialog>
 <dialog id="shutSheet"><div class="sheet">
   <h3>Shut down?</h3>
@@ -860,6 +868,10 @@ async function updateWall(reboot) {
     toast('Waiting for the wall to come back…'); setTimeout(poll, REMOTE ? 10000 : 4000);
   };
   poll();
+}
+async function resetWall() {
+  try { await api('/api/reset', {}); resetSheet.close(); toast('Settings reset.'); setTimeout(() => location.reload(), 1500); }
+  catch (e) { toast(e.message); }
 }
 async function shutDown() {
   try { await api('/api/shutdown', {}); shutSheet.close(); toast('Shutting down. Unplug and replug to start it again.'); }

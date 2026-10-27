@@ -226,6 +226,28 @@ class Runner:
             if self.current not in (None, "off") and self.oneshot_resume is None:
                 self._start(self.current)               # brightness applies at start
 
+    def reset(self):
+        """Settings back to the defaults and the art of the day on the wall. Connections and accounts
+        (camera, speakers, Spotify, music source, guests' lines) are kept."""
+        with self.lock:
+            for k in ("brightness", "art_speed", "smart_crop", "mirror_auto"):
+                self.state[k] = DEFAULT_STATE[k]
+            for k in ("piece", "daily_date", "playlist", "off_at", "presence"):
+                self.state[k] = None
+        try:
+            from display import music as mu
+            keep = {k: v for k, v in mu.load_settings().items() if k in ("source", "cast_devices", "cast_follow")}
+            with open(mu.SETTINGS_FILE, "w") as fh:
+                json.dump({**mu.DEFAULT_SETTINGS, **keep}, fh, indent=2)
+        except Exception as e:
+            print(f"[reset] music settings: {e}", flush=True)
+        try:
+            with open(os.path.join(HERE, "rods.json"), "w") as fh:
+                json.dump({"mode": "auto", "colour": "#ff6a00", "level": 100}, fh)
+        except OSError:
+            pass
+        self.play("daily")
+
     def set_art_speed(self, value):
         with self.lock:
             self.state["art_speed"] = max(0.005, min(1.0, float(value)))
@@ -689,6 +711,11 @@ def make_app(runner):
         runner.play("off")
         threading.Timer(3.0, lambda: subprocess.Popen(["/usr/bin/systemctl", "poweroff"])).start()
         return jsonify({"ok": True})
+
+    @app.post("/api/reset")
+    def reset_settings():
+        runner.reset()
+        return jsonify(runner.status())
 
     @app.post("/api/update")
     def update_restart():

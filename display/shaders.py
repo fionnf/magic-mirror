@@ -7,14 +7,26 @@ and may use these uniforms:
   iBass, iMid, iTreble, iEnergy      music features 0..1 (0 in art mode)
   iLevel                             party level 0..1
   iColA, iColB, iColC                the scene's colours (dark, mid, light) - keep to these
+  iEvolve                            four very slow drifts -1..1 (periods ~11-60 min, each piece its own):
+                                     use them for the form itself - lobes, size of parts, density, angles
   (iZoom is applied outside mainImage: music mode redraws the scene slightly larger on the bass)
+
+Slow evolution (feats["evolve"]: True = wall clock, or a time in seconds): besides iEvolve, the piece's
+palette drifts in hue and saturation, and its frame slowly grows, shrinks, turns and wanders, so after
+half an hour it is a different picture. Full-frame pieces (fc / iResolution) only zoom in and pan inside
+themselves; pieces that use iPanels keep their frame (the panel seams stay put). Without "evolve" the
+piece renders exactly as written (the daily art checks rely on that).
 
     r = Renderer()                      # r.ok is False if there is no GPU/EGL (laptop, old Pi)
     img = r.render(t, feats)    # float32 HxWx3
 """
+import colorsys
 import glob
+import math
 import os
+import re
 import time
+import zlib
 
 import numpy as np
 
@@ -30,14 +42,69 @@ uniform float iBass; uniform float iMid; uniform float iTreble; uniform float iE
 uniform vec3 iColA; uniform vec3 iColB; uniform vec3 iColC;
 uniform float iBreath; uniform float iTension; uniform float iKey; uniform float iBright; uniform float iSong;
 uniform float iBeatPhase; uniform float iDay[24]; uniform vec2 iPanels; uniform float iClock;
-uniform float iZoom;
+uniform float iZoom; uniform vec4 iEvolve; uniform vec4 iFrame;
 out vec4 _out;
 """
 POSTLUDE = """
 void main(){
-    vec2 m = 0.5 * iResolution, p = m + (gl_FragCoord.xy - m) / max(iZoom, 0.5);   // music: breathe with the bass
+    // iFrame = (scale, turn, x, y): the slow drift of size and place (1,0,0,0 = as drawn);
+    // iZoom: music mode breathes with the bass
+    vec2 m = 0.5 * iResolution, q = gl_FragCoord.xy - m;
+    float cs = cos(iFrame.y), sn = sin(iFrame.y);
+    q = mat2(cs, -sn, sn, cs) * q / max(iFrame.x * iZoom, 0.3);
+    vec2 p = m + q - iFrame.zw * iResolution;
     vec4 c = vec4(0.0); mainImage(c, p); _out = vec4(clamp(c.rgb, 0.0, 1.0), 1.0); }
 """
+GROUNDED = {"arches", "cutcurves", "ember", "neonarc"}   # stand on the bottom edge: never tilt or lift
+_FIELD = re.compile(r"(fc|fragCoord)(\.xy)?\s*/\s*iResolution")
+
+
+def _drift(seed, k, minutes, period):
+    """A smooth wander in -1..1 with a main period in minutes (two unrelated sines, seeded)."""
+    ph = (seed * (k + 1) * 0.618034) % 1.0 * 2 * math.pi
+    return (0.62 * math.sin(2 * math.pi * minutes / period + ph)
+            + 0.38 * math.sin(2 * math.pi * minutes / (period * 1.618) + 1.7 * ph))
+
+
+def evolution(seed, secs, kind="free"):
+    """The slow evolution of one piece at a time in seconds: (iEvolve, iFrame, palette shift).
+    seed: zlib.crc32 of the shader source (site/gallery.js does the same, so the wall and the
+    website show a piece in the same state at the same moment).
+    kind: 'free' (a form on a ground: may shrink, grow, turn, wander), 'grounded' (stands on the
+    bottom edge: grows and slides sideways, never tilts or lifts), 'field' (fills the frame: zoom in
+    and pan only), 'fixed' (lined up with the panel seams: frame never moves)."""
+    seed = seed / 2 ** 32 * 1000.0
+    m = secs / 60.0
+    d = lambda k, period: _drift(seed, k, m, period)
+    evolve = (d(0, 11.0), d(1, 17.0), d(2, 26.0), d(3, 41.0))
+    if kind == "fixed":
+        frame = (1.0, 0.0, 0.0, 0.0)
+    elif kind == "field":
+        sc = 1.0 + 0.09 * (d(4, 23.0) + 1.0)                     # 1 .. 1.18: never shows past the edge
+        room = 0.45 * (1.0 - 1.0 / sc)
+        frame = (sc, 0.0, room * d(6, 19.0), room * d(7, 29.0))
+    elif kind == "grounded":
+        sc = 2.0 ** (0.18 * d(4, 23.0))
+        frame = (sc, 0.0, 0.07 * d(6, 19.0), 0.5 * (1.0 - 1.0 / sc))   # scaled about the bottom edge
+    else:
+        frame = (2.0 ** (0.24 * d(4, 23.0)), 0.2 * d(5, 37.0), 0.08 * d(6, 19.0), 0.1 * d(7, 29.0))
+    shift = (34.0 * d(8, 31.0), 14.0 * d(10, 47.0), 0.2 * d(9, 21.0))   # hue all, hue mid+light, saturation
+    return evolve, frame, shift
+
+
+def shift_palette(cols, shift):
+    """Turn the palette round the colour wheel and change its saturation, keeping each colour's
+    brightness (dark stays dark, the highlight stays light)."""
+    hue, hue2, sat = shift
+    out = []
+    for i, c in enumerate(cols):
+        h, l, s_ = colorsys.rgb_to_hls(*(min(1.0, max(0.0, float(v))) for v in c))
+        h = (h + (hue + (hue2 if i else 0.0)) / 360.0) % 1.0
+        r, g, b = colorsys.hls_to_rgb(h, l, min(1.0, s_ * (1.0 + sat)))
+        out.append((r, g, b))
+    return tuple(out)
+
+
 VS = "#version 300 es\nin vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }"
 
 
@@ -47,7 +114,7 @@ def names():
 
 class Renderer:
     def __init__(self):
-        self.ok, self.error, self.progs = False, "", {}
+        self.ok, self.error, self.progs, self.kinds, self.seeds = False, "", {}, {}, {}
         try:
             os.environ.setdefault("EGL_PLATFORM", "surfaceless")
             import moderngl
@@ -70,6 +137,9 @@ class Renderer:
         with open(path) as fh:
             src = fh.read()
         self.progs[name] = self.compile(src)
+        self.seeds[name] = zlib.crc32(src.encode())
+        self.kinds[name] = ("fixed" if "iPanels" in src else "field" if _FIELD.search(src)
+                            else "grounded" if name in GROUNDED else "free")
         return self.progs[name]
 
     def compile(self, src):
@@ -87,6 +157,13 @@ class Renderer:
         feats = feats or {}
         prog, vao = self._program(name)
         cols = cols or ((0.03, 0.02, 0.08), (0.45, 0.2, 0.5), (0.95, 0.85, 0.9))
+        evolve, frame = (0.0, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0)
+        ev = feats.get("evolve")
+        if ev is not None and ev is not False:
+            secs = time.time() if ev is True else float(ev)
+            evolve, frame, shift = evolution(self.seeds.get(name, zlib.crc32(name.encode())), secs,
+                                             self.kinds.get(name, "free"))
+            cols = shift_palette(cols, shift)
 
         def setu(k, v):
             if k in prog:
@@ -100,7 +177,9 @@ class Renderer:
             lt = time.localtime()
             clock = lt.tm_hour + lt.tm_min / 60.0 + lt.tm_sec / 3600.0
         setu("iClock", clock)
-        setu("iZoom", float(feats.get("zoom", 1.0)))         # 1 = as drawn (music mode zooms gently on the bass)                  # hours since midnight: pieces evolve over the day
+        setu("iZoom", float(feats.get("zoom", 1.0)))         # 1 = as drawn (music mode zooms gently on the bass)
+        setu("iEvolve", tuple(float(v) for v in evolve))
+        setu("iFrame", tuple(float(v) for v in frame))
         for k, key in (("iBass", "bass"), ("iMid", "mid"), ("iTreble", "treble"), ("iEnergy", "energy"),
                        ("iLevel", "level"), ("iBreath", "breath"), ("iTension", "tension"), ("iKey", "key"),
                        ("iBright", "bright"), ("iSong", "song"), ("iBeatPhase", "beat_phase")):
@@ -144,7 +223,7 @@ class ShaderPiece:
         r = renderer()
         if not r.ok:
             return np.zeros((self.H, self.W, 3), np.float32)
-        img = r.render(self.name, t, None, self.cols)
+        img = r.render(self.name, t, {"evolve": True}, self.cols)
         if (self.H, self.W) != (H, W):
             from PIL import Image
             img = np.asarray(Image.fromarray(img.astype(np.uint8)).resize((self.W, self.H)), np.float32)

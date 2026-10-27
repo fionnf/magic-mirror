@@ -122,7 +122,8 @@ class DailyPiece:
         r = shaders.renderer()
         if not r.ok:
             return np.zeros((self.H, self.W, 3), np.float32)
-        return r.render("path:" + daily._path(self.date, "frag"), t, {"level": 0.1, "day": self.hours}, self.cols)
+        return r.render("path:" + daily._path(self.date, "frag"), t, {"level": 0.1, "day": self.hours, "evolve": True},
+                        self.cols)
 
 
 def make(pid, W=None, H=None):

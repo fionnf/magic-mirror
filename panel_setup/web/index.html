@@ -412,6 +412,9 @@
     </section>
     <section>
       <h2>Power</h2>
+      <button class="btn" onclick="updSheet.showModal()">Update &amp; restart</button>
+      <p class="hint">Fetches the newest version from GitHub and restarts everything. Back in about a minute.</p>
+      <p class="hint" id="version" style="margin-top:0"></p>
       <button class="btn" onclick="shutSheet.showModal()">Shut down the wall</button>
       <p class="hint">Turns the wall's computer off completely. To start it again, unplug it and plug it back in.</p>
     </section>
@@ -447,6 +450,13 @@
   <div class="row"><input type="time" id="sleepAt" value="23:30" aria-label="Off at" style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 12px"><button class="btn" onclick="sleepAtTime()">Off at this time</button></div>
   <button class="btn" onclick="sleepCancel()" id="sleepOff">Stay on</button>
   <button class="btn primary" onclick="sleepSheet.close()">Close</button>
+</div></dialog>
+<dialog id="updSheet"><div class="sheet">
+  <h3>Update &amp; restart?</h3>
+  <p class="hint" style="margin:0 0 6px">The wall goes dark for about a minute, fetches the newest version from GitHub and starts again. This page reconnects by itself.</p>
+  <button class="btn primary" onclick="updateWall(false)">Update &amp; restart</button>
+  <button class="btn" onclick="updateWall(true)">Restart the whole computer</button>
+  <button class="btn" onclick="updSheet.close()">Cancel</button>
 </div></dialog>
 <dialog id="shutSheet"><div class="sheet">
   <h3>Shut down?</h3>
@@ -825,6 +835,32 @@ async function connectRods() {
         setTimeout(loadRoom, 4000); setTimeout(() => { loadRoom(); $('rodConnect').disabled = false; }, 12000); }
   catch (e) { toast(e.message); }
 }
+async function loadVersion() {
+  try {
+    const v = await api('/api/version'); if (!v.commit) return;
+    const d = new Date(v.time * 1000);
+    $('version').textContent = `Running: ${v.subject} (${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})})`;
+  } catch (e) {}
+}
+async function updateWall(reboot) {
+  const before = BASE;
+  try { await api('/api/update', {reboot}); } catch (e) { toast(e.message); return; }
+  updSheet.close();
+  toast(reboot ? 'Restarting the wall\'s computer…' : 'Updating and restarting…');
+  const t0 = Date.now();
+  await new Promise(r => setTimeout(r, reboot ? 30000 : 12000));    // let it go down first
+  const poll = async () => {
+    if (Date.now() - t0 > 5 * 60000) { toast('The wall has not come back yet. Reload this page in a minute.'); return; }
+    // online the address changes with every start: wait until the wall has announced a new one
+    const back = await findWall();
+    if (back && (!REMOTE || BASE !== before)) {
+      try { const ok = await fetch(u('/api/status'), {headers: TOKEN && REMOTE ? {Authorization: 'Bearer ' + TOKEN} : {}});
+            if (ok.ok) { location.reload(); return; } } catch (e) {}
+    }
+    toast('Waiting for the wall to come back…'); setTimeout(poll, REMOTE ? 10000 : 4000);
+  };
+  poll();
+}
 async function shutDown() {
   try { await api('/api/shutdown', {}); shutSheet.close(); toast('Shutting down. Unplug and replug to start it again.'); }
   catch (e) { toast(e.message); }
@@ -982,7 +1018,7 @@ async function start() {
   started = true;
   if (welcome.piece && window.Fortuna) { window.Fortuna.remove(welcome.piece); welcome.piece = null; }   // the door piece stops once inside
   $('qrImg').src = $('qrLink').href = u('/d/qr.png');
-  shaderLib(); loadScenes(); loadDaily(); loadMusic(); refreshNow(); loadArt();
+  shaderLib(); loadScenes(); loadDaily(); loadMusic(); refreshNow(); loadArt(); loadVersion();
   try { const t = localStorage.getItem('tab'); if (t) document.querySelector(`nav [data-tab="${t}"]`).click(); } catch (e) {}
   setInterval(refresh, 3000); setInterval(loadMusic, 5000); setInterval(loadDaily, 60000); setInterval(refreshNow, 1500); setInterval(loadScenes, 30000);
   const rows = Math.round((STATUS.wall_h || 192) / 64), cols = Math.round((STATUS.wall_w || 192) / 64);

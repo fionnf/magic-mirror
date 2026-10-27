@@ -9,16 +9,59 @@ uniform float iBass; uniform float iMid; uniform float iTreble; uniform float iE
 uniform vec3 iColA; uniform vec3 iColB; uniform vec3 iColC;
 uniform float iBreath; uniform float iTension; uniform float iKey; uniform float iBright; uniform float iSong;
 uniform float iBeatPhase; uniform float iDay[24]; uniform vec2 iPanels; uniform float iClock;
+uniform vec4 iEvolve; uniform vec4 iFrame;
 out vec4 _out;
 `;
   const POST = `
-void main(){ vec4 c = vec4(0.0); mainImage(c, gl_FragCoord.xy); _out = vec4(clamp(c.rgb, 0.0, 1.0), 1.0); }`;
+void main(){
+  vec2 m = 0.5 * iResolution, q = gl_FragCoord.xy - m;
+  float cs = cos(iFrame.y), sn = sin(iFrame.y);
+  q = mat2(cs, -sn, sn, cs) * q / max(iFrame.x, 0.3);
+  vec4 c = vec4(0.0); mainImage(c, m + q - iFrame.zw * iResolution); _out = vec4(clamp(c.rgb, 0.0, 1.0), 1.0); }`;
   const VS = `#version 300 es
 in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
   const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
   const SCALARS = ['iBass', 'iMid', 'iTreble', 'iEnergy', 'iLevel', 'iBreath', 'iTension', 'iKey', 'iBright', 'iSong', 'iBeatPhase'];
 
-  const F = window.Fortuna = {pieces: [], hex};
+  /* Slow evolution, the same as display/shaders.py evolution(): over tens of minutes the palette drifts
+     in hue and saturation, the frame grows, shrinks, turns and wanders, and iEvolve carries four slow
+     drifts the shader can use for its form. Seeded by the source, timed by the wall clock, so the
+     website shows a piece as the wall does at the same moment. */
+  const CRC = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc32 = str => { let c = 0xFFFFFFFF; for (const b of new TextEncoder().encode(str)) c = CRC[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const FIELD = /(fc|fragCoord)(\.xy)?\s*\/\s*iResolution/;
+  function evolution(seed, secs, kind) {
+    seed = seed / 2 ** 32 * 1000; const m = secs / 60, TAU = 2 * Math.PI;
+    const d = (k, period) => { const ph = (seed * (k + 1) * 0.618034) % 1 * TAU;
+      return 0.62 * Math.sin(TAU * m / period + ph) + 0.38 * Math.sin(TAU * m / (period * 1.618) + 1.7 * ph); };
+    const evolve = [d(0, 11), d(1, 17), d(2, 26), d(3, 41)];
+    let frame;
+    if (kind === 'fixed') frame = [1, 0, 0, 0];
+    else if (kind === 'field') { const sc = 1 + 0.09 * (d(4, 23) + 1), room = 0.45 * (1 - 1 / sc); frame = [sc, 0, room * d(6, 19), room * d(7, 29)]; }
+    else frame = [2 ** (0.24 * d(4, 23)), 0.2 * d(5, 37), 0.08 * d(6, 19), 0.1 * d(7, 29)];
+    return {evolve, frame, shift: [34 * d(8, 31), 14 * d(10, 47), 0.2 * d(9, 21)]};
+  }
+  function rgb2hls(r, g, b) {                       // as Python's colorsys
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+    if (mx === mn) return [0, l, 0];
+    const s = l <= 0.5 ? (mx - mn) / (mx + mn) : (mx - mn) / (2 - mx - mn);
+    const rc = (mx - r) / (mx - mn), gc = (mx - g) / (mx - mn), bc = (mx - b) / (mx - mn);
+    const h = r === mx ? bc - gc : g === mx ? 2 + rc - bc : 4 + gc - rc;
+    return [((h / 6) % 1 + 1) % 1, l, s];
+  }
+  function hls2rgb(h, l, s) {
+    if (s === 0) return [l, l, l];
+    const m2 = l <= 0.5 ? l * (1 + s) : l + s - l * s, m1 = 2 * l - m2;
+    const v = hue => { hue = ((hue % 1) + 1) % 1;
+      return hue < 1 / 6 ? m1 + (m2 - m1) * hue * 6 : hue < 0.5 ? m2 : hue < 2 / 3 ? m1 + (m2 - m1) * (2 / 3 - hue) * 6 : m1; };
+    return [v(h + 1 / 3), v(h), v(h - 1 / 3)];
+  }
+  const shiftPalette = (pal, [hue, hue2, sat]) => pal.map((c, i) => {
+    const [h, l, s] = rgb2hls(...c.map(v => Math.min(1, Math.max(0, v))));
+    return hls2rgb((h + (hue + (i ? hue2 : 0)) / 360 + 1) % 1, l, Math.min(1, s * (1 + sat)));
+  });
+
+  const F = window.Fortuna = {pieces: [], hex, evolution};
   /* Draw a native frame as the wall really looks: one round diode per pixel, a little black between
      them, light blooming into the gaps, and the seams where the 64 x 64 panels meet. */
   const masks = new Map();
@@ -71,10 +114,10 @@ in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
     gl.bindAttribLocation(p, 0, 'p'); gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
     const loc = {};
-    for (const n of SCALARS.concat(['iTime', 'iClock', 'iResolution', 'iPanels', 'iColA', 'iColB', 'iColC']))
+    for (const n of SCALARS.concat(['iTime', 'iClock', 'iResolution', 'iPanels', 'iColA', 'iColB', 'iColC', 'iEvolve', 'iFrame']))
       loc[n] = gl.getUniformLocation(p, n);
     loc.iDay = gl.getUniformLocation(p, 'iDay[0]') || gl.getUniformLocation(p, 'iDay');
-    return {p, loc};
+    return {p, loc, seed: crc32(src), kind: /iPanels/.test(src) ? 'fixed' : FIELD.test(src) ? 'field' : 'free'};
   }
 
   // the visitor's room, if they let it listen
@@ -105,7 +148,8 @@ in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
   document.addEventListener('click', e => { const b = e.target.closest('[data-listen]'); if (b) F.listen(b); });
 
   /* A piece: {el, w, h, pal, day, over (uniform overrides), speed, draw(glc) | null}.
-     over may hold any uniform name (iBass..), plus 'clock' (hours) and 'pal' / 'day'. */
+     over may hold any uniform name (iBass..), plus 'clock' (hours), 'pal' / 'day' and 'evolve'
+     (false = as written, a number = that moment in seconds; default the wall clock). */
   F.add = function (el, o = {}) {
     const piece = Object.assign({el, ctx: el.getContext('2d'), visible: false, prog: null, src: null, over: {},
       speed: 1, time: 30 + Math.random() * 60, taps: new Set(), w: 192, h: 192}, o);
@@ -133,7 +177,13 @@ in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
     gl.uniform1f(L.iTime, p.time); gl.uniform1f(L.iClock, clock);
     gl.uniform2f(L.iResolution, p.w, p.h); gl.uniform2f(L.iPanels, p.cols, p.rows);
     for (const n of SCALARS) gl.uniform1f(L[n], o[n] != null ? o[n] : n === 'iBeatPhase' ? (p.time * 2) % 1 : (f[n] || 0));
-    const pal = (o.pal || p.pal).map(c => typeof c === 'string' ? hex(c) : c);
+    let pal = (o.pal || p.pal).map(c => typeof c === 'string' ? hex(c) : c);
+    let ev = {evolve: [0, 0, 0, 0], frame: [1, 0, 0, 0]};
+    if (o.evolve !== false) {
+      ev = evolution(p.prog.seed, typeof o.evolve === 'number' ? o.evolve : Date.now() / 1000, p.prog.kind);
+      pal = shiftPalette(pal, ev.shift);
+    }
+    gl.uniform4fv(L.iEvolve, ev.evolve); gl.uniform4fv(L.iFrame, ev.frame);
     gl.uniform3fv(L.iColA, pal[0]); gl.uniform3fv(L.iColB, pal[1]); gl.uniform3fv(L.iColC, pal[2]);
     const day = new Float32Array(24); (o.day || p.day || []).forEach((v, i) => { if (i < 24) day[i] = v; });
     if (L.iDay) gl.uniform1fv(L.iDay, day);

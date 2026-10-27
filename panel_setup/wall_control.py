@@ -690,6 +690,32 @@ def make_app(runner):
         threading.Timer(3.0, lambda: subprocess.Popen(["/usr/bin/systemctl", "poweroff"])).start()
         return jsonify({"ok": True})
 
+    @app.post("/api/update")
+    def update_restart():
+        """Pull the latest code from GitHub and restart everything: the service restarts and its
+        ExecStartPre (update.sh) pulls master. reboot=True restarts the whole computer instead
+        (update.sh runs at boot as well). The online app finds the wall's new address by itself."""
+        reboot = bool((request.get_json(force=True, silent=True) or {}).get("reboot"))
+        try:
+            os.remove("/tmp/wall-update.stamp")       # update.sh skips a pull made in the last 10 minutes
+        except OSError:
+            pass
+        runner.play("off")
+        cmd = (["/usr/bin/systemctl", "reboot"] if reboot else
+               ["/usr/bin/systemctl", "--no-block", "restart", "wall-control.service"])
+        threading.Timer(2.0, lambda: subprocess.Popen(cmd, start_new_session=True)).start()
+        return jsonify({"ok": True, "reboot": reboot})
+
+    @app.get("/api/version")
+    def version():
+        """The code the wall is running (the last commit pulled from GitHub)."""
+        try:
+            out = subprocess.run(["git", "-c", f"safe.directory={ROOT}", "-C", ROOT, "log", "-1", "--format=%h%x00%s%x00%ct"],
+                                 capture_output=True, text=True, timeout=5).stdout.strip().split("\0")
+            return jsonify({"commit": out[0], "subject": out[1], "time": int(out[2])})
+        except Exception:
+            return jsonify({"commit": None})
+
     @app.post("/api/brightness")
     def brightness():
         runner.set_brightness((request.get_json(force=True, silent=True) or {}).get("value", 40))

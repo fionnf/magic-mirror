@@ -7,6 +7,7 @@ STAMP=/tmp/wall-update.stamp
 if [ -f "$STAMP" ] && [ $(( $(date +%s) - $(stat -c %Y "$STAMP") )) -lt 600 ]; then
     exit 0                                   # pulled within 10 minutes (a quick restart or a crash loop)
 fi
+git() { command git -c safe.directory="$PWD" "$@"; }   # runs as root in a folder the pi user may own
 [ -d .git ] || git init -q                 # a rsync-deployed copy has no history yet: the first pull creates it
 KEY="${GALLERY_DEPLOY_KEY:-$HOME/.ssh/fortuna_deploy}"
 [ -f "$KEY" ] || KEY=/home/pi/.ssh/fortuna_deploy

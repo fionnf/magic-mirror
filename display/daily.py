@@ -76,7 +76,13 @@ Technical contract (anything else will not compile):
 - available uniforms (already declared, do not redeclare): float iTime; vec2 iResolution;
   float iBass, iMid, iTreble, iEnergy, iLevel; vec3 iColA, iColB, iColC; vec2 iPanels (the grid of
   physical panels, e.g. 3 x 4 - seams between panels are real edges you may use); float iClock (hours since
-  local midnight, 0..24, for evolution over the day)
+  local midnight, 0..24, for evolution over the day); vec4 iEvolve (four slow drifts, each -1..1, with
+  periods of about 11, 17, 26 and 41 minutes - 0 in the checker's stills)
+- the wall already drifts the palette's hue and the piece's size and place over tens of minutes; give
+  the FORM its own slow life with iEvolve on top of the day arc: e.g. the number of lobes, rings or
+  bands, the thickness of lines, a second shape appearing and melting back, a squash or a twist. Keep
+  each use moderate (the piece at iEvolve = 0 is what the checker judges), so that half an hour later
+  the same work is visibly a different picture
 - GLSL ES 3.00 (WebGL2) rules: no #version, no precision line, no textures, no derivatives, all
   float literals with a decimal point (1.0 not 1), loops with constant bounds <= 64
 - it hangs all day, so it must keep evolving for hours and never visibly loop: drive the form with
@@ -735,6 +741,7 @@ def frame(t):
         if _state["ears"]:
             feats = _state["ears"].features(today)
     cols = [_hex(c) for c in meta["palette"]]
+    feats = dict(feats, evolve=True)                        # slow drift of colour, size and form
     img = r.render("path:" + _path(date, "frag"), t, feats, cols)
     if _GRADE_K > 0:
         lt = time.localtime(now)

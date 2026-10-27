@@ -1,13 +1,18 @@
 // Cut paper: two flat colours in large interlocking curves, like a mid-century collage. The
 // shapes shift very slowly; each song redraws them a little.
+// Over tens of minutes the collage is re-cut: the circles grow and shrink, the wave between them
+// turns from a gentle swell to a tight ripple, and a third circle slides in from the top and away.
 float grain(vec2 p){ return fract(sin(dot(floor(p), vec2(12.9898, 78.233))) * 43758.5453); }
 void mainImage(out vec4 o, in vec2 fc){
   vec2 uv = (fc - 0.5 * iResolution) / iResolution.y;
   float t = iTime * 0.015 + iSong * 4.0;
-  float a = step(length(uv - vec2(-0.55, 0.10 + 0.04 * sin(t))), 0.62 + 0.015 * iBreath);
-  float b = step(length(uv - vec2(0.62, -0.05 + 0.04 * cos(t * 0.8))), 0.60);
-  float c = step(uv.y, -0.18 + 0.22 * sin(uv.x * 2.0 + 0.7 + t * 0.5));
-  float f = mod(a + b + c, 2.0);                 // alternate colour across every curve
+  vec4 e = iEvolve;
+  float a = step(length(uv - vec2(-0.55 + 0.06 * e.z, 0.10 + 0.04 * sin(t))), 0.62 + 0.08 * e.x + 0.015 * iBreath);
+  float b = step(length(uv - vec2(0.62 - 0.06 * e.z, -0.05 + 0.04 * cos(t * 0.8))), 0.60 - 0.07 * e.x);
+  float c = step(uv.y, -0.18 + (0.16 + 0.08 * e.y) * sin(uv.x * (2.0 + 1.4 * (0.5 + 0.5 * e.y)) + 0.7 + t * 0.5));
+  float in3 = smoothstep(-0.1, 0.9, e.w);                  // the third circle, from off the top edge
+  float d = step(length(uv - vec2(0.05 + 0.1 * sin(t * 0.3), 1.05 - 0.55 * in3)), 0.38);
+  float f = mod(a + b + c + d, 2.0);             // alternate colour across every curve
   vec3 col = mix(iColC * 0.78, iColB, f);
   col *= 0.94 + 0.06 * (1.0 - length(uv));
   col += (grain(fc * 0.5) - 0.5) * 0.04;

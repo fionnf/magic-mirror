@@ -4,7 +4,7 @@ with the sea ice of the day underneath.
 
 THIS IS A REPLAY, NOT LIVE. The Norwegian Polar Institute does not publish live bear positions. The
 tracks are real, recorded in 2012 (7 April to 30 November) on female bears in Svalbard, and the wall says
-so ("BEARS 2012 NOT LIVE", with the date of the replay in the corner). Time is compressed: the 237 days
+so ("BEARS NOT LIVE", with the date of the replay in the corner). Time is compressed: the 237 days
 play in about 28 minutes (6.5 s a day), then the replay starts again. All bears run on one shared clock,
 so many are visible at once. Each bear's number is its individual id in the NPI data, drawn with display/pixelfont.py beside its spot.
 
@@ -379,7 +379,7 @@ class Bears:
 
     def _corners(self, img, day, T, cyc):
         tm = time.gmtime(T)
-        pixelfont.draw(img, f"{_MONTHS[tm.tm_mon - 1]} {tm.tm_year}", 3, 3, TEXT)
+        pixelfont.draw(img, _MONTHS[tm.tm_mon - 1], 3, 3, TEXT)
         pixelfont.draw(img, "SVALBARD", W - 3 - pixelfont.width("SVALBARD"), 3, TEXT)
         pixelfont.draw(img, "BEARS 2012 NOT LIVE", 3, H - 9 - 6, TEXT)
         pixelfont.draw(img, self.ice_label, W - 3 - pixelfont.width(self.ice_label), H - 9 - 6, TEXT)

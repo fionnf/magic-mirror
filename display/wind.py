@@ -37,6 +37,7 @@ NX, NY = 6, 8                  # the grid of wind points over the picture
 REGIONS = {
     #       centre of the picture   km per LED  home (one faint LED)  map
     "ch": ((46.80, 8.21), 2.0, (47.3726, 8.5398), "switzerland.json"),
+    "eu": ((56.0, -7.0), 11.0, (47.3726, 8.5398), "europe.json"),     # Iceland to Switzerland
     "ie": ((53.30, -9.60), 3.0, (51.527, -9.547), "ireland.json"),   # zoomed out and west: the Atlantic too
 }
 
@@ -299,6 +300,10 @@ def frame_ie(t):
     return _frame("ie", t)
 
 
+def frame_eu(t):
+    return _frame("eu", t)
+
+
 frame = frame_ch
 
 
@@ -321,3 +326,7 @@ def thumb_ch():
 
 def thumb_ie():
     return _thumb("ie", 245.0, (9, 13, 17, 11, 15))
+
+
+def thumb_eu():
+    return _thumb("eu", 250.0, (9, 14, 19, 12, 16))

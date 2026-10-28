@@ -62,8 +62,8 @@ Roughly 2 kg of filament for the full build.
 | Touch box: M2 × 8 countersunk self-tapping | 4 |
 | Wall ears only: M3 × 50 countersunk at the 8 ear-node screws, 5 mm wall screws | 8 / 12 |
 
-Electronics: 12 × P4 64×64 HUB75 panels, Raspberry Pi 5 (or 4) + active cooler, HUB75 driver shield,
-Camera Module 3 + 500 mm camera cable (Pi 5: 22→15 pin) **or** Logitech C270, CZCL A-200AF-5 5 V 40 A supply,
+Electronics: 12 × P4 64×64 HUB75 panels, Raspberry Pi 4 + active cooler (Pi 5 is untested and unsupported upstream; see the main README), HUB75 driver Bonnet,
+Camera Module 3 + camera cable **or** Logitech C270, CZCL A-200AF-5 5 V 40 A supply,
 HUB75 ribbons, panel power leads, 1.5–2.5 mm² 5 V wiring, mains cable, fuse + switch.
 
 ## Assembly

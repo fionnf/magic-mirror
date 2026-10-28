@@ -21,6 +21,8 @@ import itertools
 import json
 import math
 import os
+import threading
+import time
 
 import numpy as np
 from PIL import Image
@@ -42,6 +44,83 @@ HOME_MARK = (255, 200, 90)
 # Lines whose paper colour is black (7, 50, 51) or too dark/close to another to read on an LED become
 # these; everything else is the line colour stretched to full brightness.
 LED = {"5": (235, 112, 38), "7": (160, 165, 175), "50": (235, 235, 235), "51": (235, 235, 235)}
+
+
+LIVE_URL = "https://api.opentransportdata.swiss/la/gtfs-rt"      # the whole country, ~9 MB, GTFS-RT trip updates
+LIVE_EVERY = float(os.environ.get("TRAM_LIVE_SECS", 120))           # seconds between downloads (~4 GB a day at 120)
+LIVE_IDLE = 120.0                                                  # no frame drawn for this long: stop fetching
+LIVE_STALE = 600.0                                                 # delays older than this are not trusted
+SLACK = 1800                                                       # a late tram may still be on the road this long after its timetable
+LIVE_MARK = (40, 150, 70)
+OFF_MARK = (70, 70, 80)
+
+
+class Live:
+    """Real delays and cancellations for the timetable's trips from opentransportdata.swiss (GTFS-RT, free key in
+    OTD_API_KEY). Fetched on a side thread while the piece is showing; without a key, the protobuf package
+    (gtfs-realtime-bindings) or a network the trams simply run to the timetable."""
+
+    def __init__(self, trip_ids, fetch=True):
+        self.ids = set(trip_ids)
+        self.delay, self.cancelled, self.t = {}, set(), 0.0
+        self.last_frame = time.time()
+        self.key = os.environ.get("OTD_API_KEY", "").strip()
+        if fetch and self.key and self.key != "your_key_here":
+            threading.Thread(target=self._loop, daemon=True).start()
+
+    @staticmethod
+    def parse(blob, ids):
+        """GTFS-RT bytes -> ({trip_id: delay seconds}, {cancelled trip ids}) for the trip ids we know."""
+        from google.transit import gtfs_realtime_pb2 as pb
+        feed = pb.FeedMessage()
+        feed.ParseFromString(blob)
+        delay, cancelled = {}, set()
+        for e in feed.entity:
+            if not e.HasField("trip_update"):
+                continue
+            tu = e.trip_update
+            tid = tu.trip.trip_id
+            if tid not in ids:
+                continue
+            if tu.trip.schedule_relationship == 3:                   # CANCELED
+                cancelled.add(tid)
+                continue
+            d = None
+            for su in tu.stop_time_update:                           # the first stop that reports a delay
+                for ev in (su.arrival, su.departure):
+                    if ev.HasField("delay"):
+                        d = ev.delay
+                        break
+                if d is not None:
+                    break
+            if d is None and tu.HasField("delay"):
+                d = tu.delay
+            if d:
+                delay[tid] = int(d)
+        return delay, cancelled
+
+    def _loop(self):
+        import requests
+        backoff = 30.0
+        while True:
+            if time.time() - self.last_frame > LIVE_IDLE:
+                time.sleep(5)
+                continue
+            wait = LIVE_EVERY
+            try:
+                r = requests.get(LIVE_URL, headers={"Authorization": "Bearer " + self.key,
+                                                    "User-Agent": "fortuna-wall/1.0 (private art project)"}, timeout=90)
+                r.raise_for_status()
+                delay, cancelled = self.parse(r.content, self.ids)
+                self.delay, self.cancelled, self.t = delay, cancelled, time.time()
+                backoff = 30.0
+            except Exception as e:
+                print(f"[trams] live: {str(e)[:100]}", flush=True)
+                wait, backoff = backoff, min(900.0, backoff * 2)
+            time.sleep(wait)
+
+    def fresh(self):
+        return self.t and time.time() - self.t < LIVE_STALE
 
 
 def _now():
@@ -84,6 +163,7 @@ class TramMap:
         self.mask = np.array([t[3] for t in trips], np.int64)
         total = np.array([sum(p) for p in self.profiles], np.int64)     # a profile's last arrival
         self.end = self.t0 + total[self.prof]
+        self.tid = [t[4] for t in trips]
         order = np.argsort(self.t0, kind="stable")
         if not (order == np.arange(len(order))).all():              # the builder sorts them; be safe
             self._resort(order)
@@ -94,6 +174,7 @@ class TramMap:
             self.edge[(e["a"], e["b"])] = e["pts"]
         self.sx = [s[0] for s in lay["stops"]]
         self.sy = [s[1] for s in lay["stops"]]
+        self.live = Live(self.tid)
         self.base = self._base()
         self.home = lay["stops"][lay["home"]][:2]
         for p in range(len(self.patterns)):                    # the routes once, so no frame pays for one
@@ -102,6 +183,7 @@ class TramMap:
     def _resort(self, order):
         self.t0, self.pat, self.prof, self.mask, self.end = (a[order] for a in
                                                             (self.t0, self.pat, self.prof, self.mask, self.end))
+        self.tid = [self.tid[i] for i in order]
         return True
 
     # ---- the still map -------------------------------------------------------------------------------
@@ -179,23 +261,25 @@ class TramMap:
 
     # ---- a frame ------------------------------------------------------------------------------------------
     def day_index(self, date):
-        """Which of the timetable's days stands for this date (the nearest, when it is not covered)."""
+        """Which of the timetable's days stands for this date (the nearest one with the same weekday, when it is not covered)."""
         if date in self.days:
             return self.days.index(date)
-        return min(range(len(self.days)), key=lambda i: abs((self.days[i] - date).days))
+        same = [i for i, d in enumerate(self.days) if d.weekday() == date.weekday()]
+        return min(same or range(len(self.days)), key=lambda i: abs((self.days[i] - date).days))
 
-    def active(self, di, secs):
-        """Trips of timetable day di on the road at secs after that day's midnight: (pattern, profile, tau)."""
+    def active(self, di, secs, slack=0):
+        """Trips of timetable day di on the road at secs after that day's midnight: (pattern, profile, tau, trip index).
+        With slack, also the trips that finished up to that many seconds ago (a late tram is still driving)."""
         if di < 0 or not len(self.t0):
             return []
-        lo = int(np.searchsorted(self.t0, secs - self.span, "left"))
+        lo = int(np.searchsorted(self.t0, secs - self.span - slack, "left"))
         hi = int(np.searchsorted(self.t0, secs, "right"))
         if lo >= hi:
             return []
         sl = slice(lo, hi)
-        ok = (((self.mask[sl] >> di) & 1) == 1) & (self.end[sl] >= secs)
+        ok = (((self.mask[sl] >> di) & 1) == 1) & (self.end[sl] >= secs - slack)
         idx = np.nonzero(ok)[0] + lo
-        return [(int(self.pat[i]), int(self.prof[i]), secs - int(self.t0[i])) for i in idx]
+        return [(int(self.pat[i]), int(self.prof[i]), secs - int(self.t0[i]), int(i)) for i in idx]
 
     def trams(self, now):
         """Every tram on the road at the aware datetime `now`: [(line, route, position)...]."""
@@ -207,10 +291,15 @@ class TramMap:
             local = local.replace(tzinfo=_zone())
         midnight = _service_midnight(local.date())
         secs = (local.astimezone(datetime.timezone.utc) - midnight).total_seconds()
+        live = self.live if (self.live.fresh() and self.days[di] == today) else None     # delays only for the real today
+        delay, cancelled = (live.delay, live.cancelled) if live else ({}, set())
         out = []
         for d, s in ((di, secs), (di - 1, secs + _day_len(self.days[di] - datetime.timedelta(1)))):
-            for p, q, tau in self.active(d, s):
-                pos = self._at(p, q, tau)
+            for p, q, tau, i in self.active(d, s, SLACK if live else 0):
+                tid = self.tid[i]
+                if tid in cancelled:
+                    continue
+                pos = self._at(p, q, tau - delay.get(tid, 0))             # a late tram is where the timetable had it, that much ago
                 if pos is not None:
                     out.append((self.patterns[p][0], p, pos))
         return out
@@ -234,6 +323,9 @@ class TramMap:
         for (x, y), c in heads:
             if 0 <= x < W and 0 <= y < H:
                 img[y, x] = c.astype(np.uint8)
+        self.live.last_frame = time.time()
+        from display import pixelfont
+        pixelfont.draw(img, "LIVE" if self.live.fresh() else "TIMETABLE", 2, H - 7, LIVE_MARK if self.live.fresh() else OFF_MARK)
         hx, hy = self.home
         pulse = 0.5 + 0.5 * math.sin(now.timestamp() * 2.0) ** 2
         mark = np.array(HOME_MARK, np.float32) * pulse

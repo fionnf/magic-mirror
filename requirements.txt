@@ -9,6 +9,7 @@ python-dotenv>=1.0.0
 qrcode>=7.4
 shazamio                            # song names in music mode
 tinytuya                            # Smart Life lights (optional)
+gtfs-realtime-bindings>=1.0         # live tram delays on the Tram map (optional; needs OTD_API_KEY)
 python-escpos>=3.0                  # receipt printer (optional)
 pyusb>=1.2.1
 google-api-python-client>=2.120.0   # Drive photo archive (optional)

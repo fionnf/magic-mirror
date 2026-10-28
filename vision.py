@@ -11,6 +11,33 @@ import config
 
 _KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 _bg_cache = {"id": None, "small": None}
+_clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(4, 6))
+last = {"alpha": None, "detail": None, "colour": None}      # the latest silhouette at wall size: soft edge 0..1 and shading 0..1
+
+
+def _detail(frame, alpha):
+    """The camera's own light inside the silhouette at wall resolution. Returns (shade, colour): shade is 0..1
+    luminance with local contrast (CLAHE, then two scales of unsharp mask: fine for eyes and hair strands, coarse for
+    the shape of a face and clothing folds), stretched over the person only; colour is that shade in the camera's own
+    hues (a little more saturated, since LEDs wash colour out), an HxWx3 float RGB 0..1."""
+    W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+    src = cv2.bilateralFilter(frame, 5, 28, 5)                          # quiet sensor noise, keep edges
+    small = cv2.resize(src, (W, H), interpolation=cv2.INTER_AREA)
+    lab = cv2.cvtColor(small, cv2.COLOR_BGR2LAB)
+    L = _clahe.apply(lab[:, :, 0]).astype(np.float32) / 255.0
+    inside = alpha > 0.6
+    if inside.sum() > 200:                                              # stretch to the person, not the room
+        lo, hi = np.percentile(L[inside], (3, 97))
+        L = np.clip((L - lo) / max(hi - lo, 0.08), 0, 1)
+    fine = L - cv2.GaussianBlur(L, (0, 0), 1.0)
+    coarse = L - cv2.GaussianBlur(L, (0, 0), 3.0)
+    L = np.power(np.clip(L + 0.85 * fine + 0.45 * coarse, 0, 1), 0.85)
+    shade = np.clip(0.14 + 0.80 * L, 0, 1)                              # dark clothes stay above the LEDs' floor
+    a = (lab[:, :, 1].astype(np.float32) - 128.0) * 1.35
+    b = (lab[:, :, 2].astype(np.float32) - 128.0) * 1.35
+    lab2 = np.dstack([np.clip(shade * 255.0, 0, 255), np.clip(a + 128.0, 0, 255), np.clip(b + 128.0, 0, 255)]).astype(np.uint8)
+    rgb = cv2.cvtColor(cv2.cvtColor(lab2, cv2.COLOR_LAB2BGR), cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    return shade, rgb
 
 
 def crop_to_aspect(img: np.ndarray, aspect: float, v_bias: float = 0.4) -> np.ndarray:
@@ -54,8 +81,17 @@ def silhouette_mask(frame: np.ndarray, background=None, subtractor=None) -> np.n
         _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
     mask = cv2.medianBlur(mask, 3)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, _KERNEL)
-    mask = cv2.resize(mask, (config.TOTAL_WIDTH, config.TOTAL_HEIGHT),
-                      interpolation=cv2.INTER_LINEAR)
+    wall_size = (config.TOTAL_WIDTH, config.TOTAL_HEIGHT)
+    if getattr(config, "SILHOUETTE_DETAIL", False):
+        alpha = cv2.resize(mask.astype(np.float32) / 255.0, wall_size, interpolation=cv2.INTER_CUBIC)
+        alpha = np.clip(cv2.GaussianBlur(alpha, (0, 0), 0.7), 0, 1)        # an anti-aliased edge
+        detail, colour = _detail(frame, alpha)
+        if config.SILHOUETTE_MIRROR:
+            alpha, detail, colour = cv2.flip(alpha, 1), cv2.flip(detail, 1), cv2.flip(colour, 1)
+        last["alpha"], last["detail"], last["colour"] = alpha, detail, colour
+        mask = (alpha > 0.5).astype(np.uint8) * 255                      # the binary mask the rest of the code expects
+        return mask
+    mask = cv2.resize(mask, wall_size, interpolation=cv2.INTER_LINEAR)
     if config.SILHOUETTE_MIRROR:
         mask = cv2.flip(mask, 1)        # behave like a mirror: your right = wall's right
     return mask

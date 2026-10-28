@@ -22,7 +22,6 @@ Everything is drawn on whole LEDs in a few well-separated levels (the dim ones t
 import json
 import math
 import os
-import random
 import threading
 import time
 
@@ -161,12 +160,11 @@ class Snow:
         lf = self.f_line
         # snowfall per LED: the model's snowfall, or its precipitation (0.7 cm of snow per mm) on slopes
         # above the line - a valley grid point raining while the peaks around it get snow
-        self.f_rate = np.maximum(f(rate), np.where(self.elev >= lf - 100.0, f(wet) * 0.7, 0.0))
-        self.f_rate[~self.ch] = 0.0
-        self.f_depth = f(depth)
-        self.snowing = float(self.f_rate.sum())
-        rows, cols = np.nonzero(self.f_rate > 0.02)
-        w = self.f_rate[rows, cols]
+        fr = np.maximum(f(rate), np.where(self.elev >= lf - 100.0, f(wet) * 0.7, 0.0))
+        fr[~self.ch] = 0.0
+        rows, cols = np.nonzero(fr > 0.02)
+        w = fr[rows, cols]
+        self.f_rate, self.f_depth, self.snowing = fr, f(depth), float(fr.sum())
         self.spawn_cells = (rows, cols, (np.cumsum(w) / w.sum()) if len(w) else None)
         self.label = "SNOW {} M".format(int(round(float(np.median(lf[self.ch])) / 100.0) * 100)) if age < 48 * 3600 else ""
 
@@ -214,6 +212,7 @@ class Snow:
         pts = [q if q is not None else dict(mean) for q in pts]
         with self.lock:
             self.data, self.data_t = pts, time.time()
+            self._derive()                             # the heavy part here, off the frame thread
             self.fresh = True
         try:
             tmp = CACHE + ".tmp"
@@ -248,7 +247,7 @@ class Snow:
         u = (t - self.start) / INTRO
         if u < 1.0:                                    # the snow line comes down from the summits
             s = 1.0 - (1.0 - u) ** 3
-            return 4800.0 + (self.line_to - 4800.0) * s, ("intro", int(u * 300))
+            return 4800.0 + (self.line_to - 4800.0) * s, ("intro", int(u * 150))
         if self.ease_t0 is not None:
             v = (t - self.ease_t0) / EASE
             if v < 1.0:
@@ -263,7 +262,6 @@ class Snow:
         if self.fresh:                                 # new data: ease from wherever the line is now
             with self.lock:
                 self.fresh = False
-                self._derive()
             self.line_from, self.line_to, self.ease_t0 = self._line_at(t)[0].copy(), self.f_line.copy(), t
             self.cached_key = None
         return self._line_at(t)
@@ -276,6 +274,7 @@ class Snow:
         deep = (self.f_depth > 0.25).astype(np.uint8)
         idx[lying] = LYING[deep[lying], self.light[lying]]
         snow = (e >= line) & self.ch & ~self.lakes
+        idx[self.border & (idx == 0)] = 1
         idx[snow] = self.edge_idx[snow]
         top = (e >= line + EDGE_M) & self.ch & ~self.lakes
         idx[top] = self.snow_idx[top]

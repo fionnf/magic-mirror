@@ -2,7 +2,7 @@
 // :00 a small hexagonal plate of ice, cut into six facets like a low pyramid. :10 six arms have grown
 // out of its corners, each with a pointed hexagonal tip. :20 side branches sprout along the arms at
 // sixty degrees, and by :30 it is a full dendritic snowflake, little fronds on every branch, glinting
-// as the light walks over its facets. From :35 it melts: the fronds and branches draw back, the arms
+// as the light walks over its facets. From :32 it melts: the fronds and branches draw back, the arms
 // shorten and round into a soft six-lobed star by :40, which gathers into a single clear droplet at :50.
 // From :52 the droplet freezes again, its round edge squaring off into the hexagonal plate of :00.
 // Six-fold throughout (one 30-degree sector, mirrored). Lit as cut ice: each facet takes the cold light
@@ -53,11 +53,11 @@ float crystal(vec2 uv){
     float x = L * (0.40 + 0.20 * fi + 0.025 * iEvolve.x);
     float l = L * B1 * (0.31 - 0.04 * fi - 0.05 * fi * fi) * (1.0 + 0.08 * iEvolve.y);
     float wb = w * 0.8 * gb;
-    d = smin(d, spike(q, vec2(x, 0.0), 1.0472, l, wb), k);
+    d = smin(d, spike(q, vec2(x, 0.0), 1.0472, l, wb) + 0.3 * (1.0 - gb), k);   // a vanished branch lifts out of reach
     for (int j = 0; j < 2; j++) {                        // fronds off the branch, parallel to the arm
       float s = l * (0.45 + 0.3 * float(j));
       vec2 o = vec2(x, 0.0) + s * vec2(0.5, 0.866);
-      d = smin(d, spike(q, o, 0.0, B2 * l * (0.42 - 0.18 * float(j)) * (1.0 + 0.15 * iEvolve.z), w * 0.6 * gf), k);
+      d = smin(d, spike(q, o, 0.0, B2 * l * (0.42 - 0.18 * float(j)) * (1.0 + 0.15 * iEvolve.z), w * 0.6 * gf) + 0.3 * (1.0 - gf), k);
     }
   }
   d -= k * 0.25;
@@ -73,9 +73,9 @@ void mainImage(out vec4 o, in vec2 fc){
   PA = mix(keyA(k), keyA(k2), s);
   PB = mix(keyB(k), keyB(k2), s);
   float d = crystal(uv) - 0.004 * iBreath;
-  vec2 h = vec2(0.003, 0.0);
-  vec2 g = vec2(crystal(uv + h.xy) - crystal(uv - h.xy), crystal(uv + h.yx) - crystal(uv - h.yx)) / 0.006;
-  vec2 gn = g / max(length(g), 1e-4);
+  vec2 h = vec2(0.004 + 0.08 * PB.y, 0.0);                // wider while it melts, so soft forms read soft
+  vec2 g = vec2(crystal(uv + h.xy) - crystal(uv - h.xy), crystal(uv + h.yx) - crystal(uv - h.yx)) / (2.0 * h.x);
+  vec2 gn = g / max(length(g), 0.75);                    // flatter along the ridges, where the facets meet
   float depth = max(-d, 0.0), wet = PB.w;
   // ice: a roof of flat facets rising from every edge; water: a dome
   float R = 0.17;
@@ -88,8 +88,8 @@ void mainImage(out vec4 o, in vec2 fc){
   float dif = max(dot(N, Lt), 0.0);
   float spec = pow(max(dot(N, normalize(Lt + vec3(0.0, 0.0, 1.0))), 0.0), mix(18.0, 60.0, wet));
   float edge = exp(-pow(d / 0.006, 2.0));
-  vec3 ice = mix(iColB * 0.62, mix(iColB, iColC, 0.45), dif * dif);   // each facet flat in the cold light
-  vec3 water = mix(iColB * 0.62, mix(iColB, iColC, 0.25), dif);
+  vec3 ice = mix(iColB * 0.78, mix(iColB, iColC, 0.45), dif * dif);   // each facet flat in the cold light
+  vec3 water = mix(iColB * 0.68, mix(iColB, iColC, 0.25), dif);
   float body = smoothstep(0.004, -0.004, d);
   float caustic = smoothstep(0.6, 0.95, dot(-gn, -Lt.xy)) * smoothstep(0.07, 0.0, depth) * wet * body;
   vec3 col = iColA * 0.12 + iColB * 0.10 * exp(-max(d, 0.0) * 9.0);   // the room, a faint cold glow

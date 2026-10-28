@@ -11,6 +11,24 @@ import config
 
 _KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 _bg_cache = {"id": None, "small": None}
+_clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(4, 6))
+last = {"alpha": None, "detail": None}      # the latest silhouette at wall size: soft edge 0..1 and shading 0..1
+
+
+def _detail(frame, alpha):
+    """The camera's own light inside the silhouette at wall resolution: local contrast (CLAHE) so a face keeps its
+    eyes, nose and hair, stretched over the person only, then sharpened a touch so LED-sized features survive."""
+    W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+    grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    grey = cv2.resize(grey, (W, H), interpolation=cv2.INTER_AREA)
+    grey = _clahe.apply(grey).astype(np.float32) / 255.0
+    inside = alpha > 0.6
+    if inside.sum() > 200:                                    # stretch to the person, not the room
+        lo, hi = np.percentile(grey[inside], (3, 97))
+        grey = np.clip((grey - lo) / max(hi - lo, 0.08), 0, 1)
+    soft = cv2.GaussianBlur(grey, (0, 0), 1.4)
+    grey = np.clip(grey + 0.9 * (grey - soft), 0, 1)          # unsharp mask
+    return np.power(grey, 0.85)
 
 
 def crop_to_aspect(img: np.ndarray, aspect: float, v_bias: float = 0.4) -> np.ndarray:
@@ -54,8 +72,17 @@ def silhouette_mask(frame: np.ndarray, background=None, subtractor=None) -> np.n
         _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
     mask = cv2.medianBlur(mask, 3)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, _KERNEL)
-    mask = cv2.resize(mask, (config.TOTAL_WIDTH, config.TOTAL_HEIGHT),
-                      interpolation=cv2.INTER_LINEAR)
+    wall_size = (config.TOTAL_WIDTH, config.TOTAL_HEIGHT)
+    if getattr(config, "SILHOUETTE_DETAIL", False):
+        alpha = cv2.resize(mask.astype(np.float32) / 255.0, wall_size, interpolation=cv2.INTER_CUBIC)
+        alpha = np.clip(cv2.GaussianBlur(alpha, (0, 0), 0.7), 0, 1)        # an anti-aliased edge
+        detail = _detail(frame, alpha)
+        if config.SILHOUETTE_MIRROR:
+            alpha, detail = cv2.flip(alpha, 1), cv2.flip(detail, 1)
+        last["alpha"], last["detail"] = alpha, detail
+        mask = (alpha > 0.5).astype(np.uint8) * 255                      # the binary mask the rest of the code expects
+        return mask
+    mask = cv2.resize(mask, wall_size, interpolation=cv2.INTER_LINEAR)
     if config.SILHOUETTE_MIRROR:
         mask = cv2.flip(mask, 1)        # behave like a mirror: your right = wall's right
     return mask

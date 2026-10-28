@@ -804,7 +804,7 @@ async function shaderLib() {
 let ART = null, artFilter = 'all', musicArtFilter = 'all';
 async function loadArt() {
   if (!ART) { try { ART = await api('/api/art'); } catch (e) { return; } }
-  const chips = (sel, fn) => [{key: 'all', title: 'All'}].concat(ART.collections, fn === 'filterArt' ? [{key: 'live', title: 'Live boards'}] : [])
+  const chips = (sel, fn) => [{key: 'all', title: 'All'}].concat(ART.collections, fn === 'filterArt' ? [{key: 'hour', title: 'Hour-long'}, {key: 'live', title: 'Live boards'}] : [])
     .map(c => `<button class="${sel === c.key ? 'on' : ''}" onclick="${fn}('${c.key}')">${esc(c.title)}</button>`).join('');
   $('artChips').innerHTML = chips(artFilter, 'filterArt');
   const cur = STATUS.current === 'piece' ? STATUS.piece : null;
@@ -823,6 +823,8 @@ async function loadArt() {
         <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   }
 }
+// pieces whose shader plays out a whole story once every hour (their first comment says so)
+const HOUR_IDS = ['shader-aurora', 'shader-bloom', 'shader-crystal', 'shader-inkcloud', 'shader-metamorphosis', 'shader-orbit', 'shader-totality'];
 const LIVE_IDS = ['trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'snow', 'tides', 'limmat', 'westcork', 'quakes'];
 function liveBoards() {                    // modes fed by real-time data, shown as a gallery chip
   const q = ($('artFind').value || '').trim().toLowerCase();
@@ -831,7 +833,7 @@ function liveBoards() {                    // modes fed by real-time data, shown
 function shownPieces() {
   const q = ($('artFind').value || '').trim().toLowerCase();
   if (artFilter === 'live') return [];
-  return ART.pieces.filter(p => (artFilter === 'all' || p.collection === artFilter) &&
+  return ART.pieces.filter(p => (artFilter === 'all' || (artFilter === 'hour' ? HOUR_IDS.includes(p.id) : p.collection === artFilter)) &&
     (!q || (p.title + ' ' + (p.collection_title || '')).toLowerCase().includes(q)));
 }
 $('artFind').addEventListener('input', debounce(() => loadArt(), 200));

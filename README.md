@@ -420,7 +420,7 @@ the Pi bootstrap script and Smart Life import have not been verified on fresh se
 
 ## Licence
 
-**There is no licence file in this repository yet.** Until the owner adds one, the code, art and 3D models are all rights reserved by default: GitHub lets you view and fork the repository, but reuse beyond that is not granted.
-Owner: please add a `LICENSE` (and a separate one for `hardware/` if you want one). Third-party pieces keep their own terms: the panel library
+The code, the generated art and the 3D models in `hardware/` are released under the [MIT licence](LICENSE).
+Third-party pieces keep their own terms, and data fetched at run time is not covered: the panel library
 [hzeller/rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) is compiled on the Pi, not included here (its licence is GPL-2.0 per upstream; not checked here); the face models come from the OpenCV Zoo (YuNet MIT, SFace Apache-2.0,
 see `assets/models/README.md`); the maps are built from Natural Earth (public domain) and OpenStreetMap (ODbL) data; the timetable data comes from opentransportdata.swiss (check its terms of use).

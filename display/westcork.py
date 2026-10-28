@@ -133,6 +133,14 @@ class WestCork:
 _wc = None
 
 
+def thumb():
+    """A still for the app (the lights need no network)."""
+    wc, img = WestCork(), None
+    for i in range(40):
+        img = wc(i * 0.25)
+    return img
+
+
 def frame(t):
     global _wc
     if _wc is None:

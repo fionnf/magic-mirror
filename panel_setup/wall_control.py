@@ -51,11 +51,12 @@ MODES = [
     ("music", "Live", "Music", "Art that breathes with the music in the room"),
     ("ambient", "Live", "Art + trams", "Lava & Coral with a small Rennweg tram strip"),
     ("trams", "Live", "Tram board", "Live departures from Rennweg, split-flap style"),
-    ("planes", "Live", "Planes", "Every aircraft over Zürich right now, drawing its path in light"),
-    ("limmat", "Live", "Limmat", "The river flowing at its real speed, coloured by the lake's temperature"),
-    ("westcork", "Live", "West Cork", "Mizen, Fastnet, Schull and Baltimore at night, every light flashing its real signal"),
+    ("planes", "Art", "Planes", "Every aircraft over Zürich right now, drawing its path in light"),
+    ("limmat", "Art", "Limmat", "The river flowing at its real speed, coloured by the lake's temperature"),
+    ("westcork", "Art", "West Cork", "Mizen, Fastnet, Schull and Baltimore at night, every light flashing its real signal"),
 ]
 MODE_IDS = {m[0] for m in MODES}
+LIVE_THUMBS = ["planes", "limmat", "westcork"]   # live modes whose module offers thumb()
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",
                  "mirror_auto": 0, "smart_crop": True, "art_speed": 0.12}
@@ -438,6 +439,9 @@ def make_thumbs():
             "mirror": lambda: icon("🪞", (10, 40, 30), "silhouette"),
             "wheel": lambda: icon("🎡", (40, 10, 50), "spin"),
         }
+        import importlib
+        for mod in LIVE_THUMBS:                          # live pieces: a still from their map and saved data, no network
+            jobs[mod] = (lambda m: lambda: importlib.import_module("display." + m).thumb())(mod)
         for k, fn in jobs.items():
             path = os.path.join(THUMB_DIR, f"{k}.png")
             if os.path.exists(path):

@@ -804,7 +804,7 @@ async function shaderLib() {
 let ART = null, artFilter = 'all', musicArtFilter = 'all';
 async function loadArt() {
   if (!ART) { try { ART = await api('/api/art'); } catch (e) { return; } }
-  const chips = (sel, fn) => [{key: 'all', title: 'All'}].concat(ART.collections, fn === 'filterArt' ? [{key: 'hour', title: 'Hour-long'}, {key: 'live', title: 'Live boards'}] : [])
+  const chips = (sel, fn) => [{key: 'all', title: 'All'}].concat(fn === 'filterArt' ? [{key: 'live', title: 'Live boards'}] : [], ART.collections, fn === 'filterArt' ? [{key: 'hour', title: 'Hour-long'}] : [])
     .map(c => `<button class="${sel === c.key ? 'on' : ''}" onclick="${fn}('${c.key}')">${esc(c.title)}</button>`).join('');
   $('artChips').innerHTML = chips(artFilter, 'filterArt');
   const cur = STATUS.current === 'piece' ? STATUS.piece : null;

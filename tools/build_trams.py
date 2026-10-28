@@ -238,6 +238,14 @@ HOME = "Rennweg"
 CENTRE = (47.3745, 8.5395)               # the magnification is around HB / Paradeplatz / Central
 # Hand adjustments: stop name -> (x, y) on the wall, pinned before the relaxation.
 OVERRIDES = {}
+MAGNIFY = 0.42                           # radial power: distance from the centre ** MAGNIFY (1 = true to scale)
+MARGIN_X, MARGIN_Y = 8, 10  # wall edge kept clear for the terminus labels
+RELAX_ITERS = 300
+OCTILINEAR = 1.0                         # 1 = edges end up exactly on 0/45/90, less keeps the true geography
+SPRING = 0.06                            # pull of each stop back to its magnified geographic place
+STRAIGHTEN = 0.05                        # how hard a plain stop is pulled onto the line between its neighbours
+MIN_GAP = 8.0                            # LEDs between stops while relaxing
+LABEL_MAX_COST = 60
 
 
 def project(lat, lon):
@@ -246,7 +254,166 @@ def project(lat, lon):
 
 
 def build_layout(data):
-    raise NotImplementedError
+    """The wall schematic from the timetable: {w, h, stops [[x,y,name]], edges [{a,b,lines,pts}],
+    labels [[x,y,text]], home}. Every consecutive stop pair of every pattern is one edge (undirected, with the
+    set of lines that use it); every stop sits on a whole LED and every edge is a polyline of whole-LED
+    corners with 0/45/90 degree segments (a straight run plus at most one 45 degree bend)."""
+    import numpy as np
+    names = [s[0] for s in data["stops"]]
+    edges = {}
+    for line, seq in data["patterns"]:
+        for a, b in zip(seq, seq[1:]):
+            if a != b:
+                edges.setdefault((min(a, b), max(a, b)), set()).add(line)
+    used = sorted({i for e in edges for i in e})
+    ix = {s: k for k, s in enumerate(used)}                    # stop index -> row in the working arrays
+    n = len(used)
+    km = np.array([project(data["stops"][s][1], data["stops"][s][2]) for s in used], float)
+    # 1. radial power compression around the centre: dense middle spread out, outskirts pulled in
+    r = np.hypot(km[:, 0], km[:, 1])
+    rmax = r.max()
+    k = np.where(r > 1e-9, (rmax * (np.maximum(r, 1e-9) / rmax) ** MAGNIFY) / np.maximum(r, 1e-9), 1.0)
+    pos = km * k[:, None]
+    # 2. fit to the wall, each axis on its own (a schematic need not keep the aspect)
+    lo, hi = pos.min(0), pos.max(0)
+    box_lo, box_hi = np.array([MARGIN_X, MARGIN_Y], float), np.array([W - 1 - MARGIN_X, H - 1 - MARGIN_Y], float)
+    pos = box_lo + (pos - lo) / (hi - lo) * (box_hi - box_lo)
+    home0 = pos.copy()
+    pinned = {}
+    for name, xy in OVERRIDES.items():
+        if name in names and names.index(name) in ix:
+            pinned[ix[names.index(name)]] = np.array(xy, float)
+            pos[ix[names.index(name)]] = xy
+    E = np.array([(ix[a], ix[b]) for a, b in edges], int)
+    degree = np.zeros(n, int)
+    np.add.at(degree, E.ravel(), 1)
+    deg2 = degree == 2
+    # 3. relax: edges turn towards the nearest of the eight directions, stops keep apart and near home
+    oct_dirs = np.array([(math.cos(i * math.pi / 4), math.sin(i * math.pi / 4)) for i in range(8)])
+    for it in range(RELAX_ITERS):
+        f = 1.0 - it / RELAX_ITERS
+        move = np.zeros_like(pos)
+        v = pos[E[:, 1]] - pos[E[:, 0]]
+        ln = np.hypot(v[:, 0], v[:, 1]) + 1e-9
+        best = oct_dirs[np.argmax(v @ oct_dirs.T / ln[:, None], axis=1)]
+        d = (best * ln[:, None] - v) * 0.5 * OCTILINEAR * (0.25 + 0.75 * (1 - f))
+        np.add.at(move, E[:, 0], -d)
+        np.add.at(move, E[:, 1], d)
+        move += (home0 - pos) * SPRING * (0.3 + 0.7 * f)
+        nb = np.zeros_like(pos)                                 # a stop with two neighbours drifts to their midpoint
+        np.add.at(nb, E[:, 0], pos[E[:, 1]])
+        np.add.at(nb, E[:, 1], pos[E[:, 0]])
+        move += np.where(deg2[:, None], nb / 2 - pos, 0.0) * STRAIGHTEN
+        diff = pos[:, None, :] - pos[None, :, :]
+        dist = np.hypot(diff[..., 0], diff[..., 1]) + np.eye(n) * 1e9
+        close = dist < MIN_GAP
+        push = np.where(close, (MIN_GAP - dist) / (dist * 2), 0.0)
+        move += (diff * push[..., None]).sum(1) * 0.6
+        pos += move
+        for i, xy in pinned.items():
+            pos[i] = xy
+        pos[:, 0] = np.clip(pos[:, 0], MARGIN_X, W - 1 - MARGIN_X)
+        pos[:, 1] = np.clip(pos[:, 1], MARGIN_Y, H - 1 - MARGIN_Y)
+    px = np.rint(pos).astype(int)
+    # whole LEDs: no two stops on one LED, and none right next to another
+    for _ in range(40):
+        moved = False
+        for i in range(n):
+            if i in pinned:
+                continue
+            for j in range(n):
+                if j != i and max(abs(px[i, 0] - px[j, 0]), abs(px[i, 1] - px[j, 1])) < 2:
+                    step = np.sign(pos[i] - pos[j]).astype(int)
+                    if not step.any():
+                        step = np.array([1, 0])
+                    px[i] += step * 2
+                    moved = True
+        if not moved:
+            break
+    # 4. route every edge: a straight run and at most one 45 degree bend, bend placed to stay clear
+    stop_at = {(int(x), int(y)): i for i, (x, y) in enumerate(px)}
+    taken = {}                                                  # pixel -> number of edges through it
+    routed = {}
+    order = sorted(range(len(E)), key=lambda e: -np.abs(px[E[e, 1]] - px[E[e, 0]]).max())
+    for e in order:
+        a, b = [int(v) for v in px[E[e, 0]]], [int(v) for v in px[E[e, 1]]]
+        dx, dy = int(b[0] - a[0]), int(b[1] - a[1])
+        sx, sy, m = (dx > 0) - (dx < 0), (dy > 0) - (dy < 0), min(abs(dx), abs(dy))
+        cands = [[tuple(a), tuple(b)]]
+        if dx and dy and abs(dx) != abs(dy):
+            cands = [[tuple(a), (a[0] + sx * m, a[1] + sy * m), tuple(b)],
+                     [tuple(a), (b[0] - sx * m, b[1] - sy * m), tuple(b)]]
+        best, best_cost = None, None
+        for c in cands:
+            cost = 0.0
+            for p in _pixels(c):
+                if p in stop_at and p != tuple(a) and p != tuple(b):
+                    cost += 50
+                cost += 3 * taken.get(p, 0)
+            if best_cost is None or cost < best_cost - 1e-9:
+                best, best_cost = c, cost
+        routed[e] = best
+        for p in _pixels(best):
+            taken[p] = taken.get(p, 0) + 1
+    out_edges = []
+    for e, ((a, b), lines) in enumerate(edges.items()):
+        out_edges.append({"a": a, "b": b, "lines": sorted(lines, key=int),
+                          "pts": [[int(x), int(y)] for x, y in routed[e]]})
+    # the output keeps the timetable's stop numbering (a stop no line serves sits off the wall at -1, -1)
+    out_stops = [[int(px[ix[i], 0]), int(px[ix[i], 1]), data["stops"][i][0]] if i in ix
+                 else [-1, -1, data["stops"][i][0]] for i in range(len(data["stops"]))]
+    labels = _place_labels(out_stops, out_edges)
+    home = next(i for i, s in enumerate(out_stops) if s[2] == HOME)
+    return {"w": W, "h": H, "stops": out_stops, "edges": out_edges, "labels": labels, "home": home}
+
+
+def _pixels(pts):
+    """Every whole LED on a polyline of 0/45/90 degree segments."""
+    out = []
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        n = max(abs(x1 - x0), abs(y1 - y0))
+        sx, sy = (x1 > x0) - (x1 < x0), (y1 > y0) - (y1 < y0)
+        out += [(x0 + sx * i, y0 + sy * i) for i in range(n + 1)]
+    return out
+
+
+def _place_labels(stops, edges):
+    """Each LABELS word beside its stop, on whichever side crosses the fewest lines and other words and stays
+    on the wall."""
+    glyph_w = lambda t: max(0, 4 * len(t) - 1)
+    busy = {}
+    for ed in edges:
+        for p in _pixels([tuple(q) for q in ed["pts"]]):
+            busy[p] = busy.get(p, 0) + 1
+    dots = {(s[0], s[1]) for s in stops}
+    placed, out = [], []
+    wanted = [(i, LABELS[s[2]]) for i, s in enumerate(stops) if s[2] in LABELS]
+    wanted.sort(key=lambda t: -len(t[1]))
+    for i, text in wanted:
+        x, y = stops[i][0], stops[i][1]
+        w = glyph_w(text)
+        cands = [(x + 3, y - 2), (x - 2 - w, y - 2), (x - w // 2, y - 8), (x - w // 2, y + 4),
+                 (x + 3, y - 7), (x + 3, y + 3), (x - 2 - w, y - 7), (x - 2 - w, y + 3),
+                 (x + 2, y - 10), (x - 1 - w, y - 10), (x + 2, y + 6), (x - 1 - w, y + 6),
+                 (x + 6, y - 2), (x - 5 - w, y - 2), (x + 5, y - 6), (x - 4 - w, y + 2),
+                 (x - w // 2, y - 12), (x - w // 2, y + 8)]
+        best, best_cost = None, None
+        for k, (tx, ty) in enumerate(cands):
+            if tx < 1 or ty < 1 or tx + w > W - 1 or ty + 5 > H - 1:
+                continue
+            cost = k * 0.5
+            for xx in range(tx - 1, tx + w + 1):
+                for yy in range(ty - 1, ty + 6):
+                    cost += 1.0 * busy.get((xx, yy), 0) + (4 if (xx, yy) in dots else 0)
+            for (ox, oy, ow) in placed:
+                if tx - 2 < ox + ow and ox - 2 < tx + w and ty - 2 < oy + 5 and oy - 2 < ty + 5:
+                    cost += 200
+            if best_cost is None or cost < best_cost:
+                best, best_cost = (tx, ty), cost
+        if best is not None and best_cost < LABEL_MAX_COST:
+            placed.append((best[0], best[1], w))
+            out.append([best[0], best[1], text])
+    return out
 
 
 def main():

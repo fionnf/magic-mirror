@@ -86,7 +86,7 @@ def _hillshade(elev, km_px, z=2.5, az=315.0, alt=40.0):
 
 
 class Snow:
-    def __init__(self):
+    def __init__(self, fetch=True):
         self.elev, self.ch, self.lakes, lat_c, lon_c, km_px, self.y0 = _load_relief()
         self.bh = self.elev.shape[0]
         kx = math.cos(math.radians(lat_c)) * 111.32
@@ -134,7 +134,8 @@ class Snow:
         self.spawn_acc = 0.0
         self.last_t = None
         self.rng = np.random.default_rng()
-        threading.Thread(target=self._fetch_loop, daemon=True).start()
+        if fetch:
+            threading.Thread(target=self._fetch_loop, daemon=True).start()
 
     # ---------------------------------------------------------------- data
     def _load_cache(self):
@@ -341,3 +342,12 @@ def frame(t):
                 _dead = Image.new("RGB", (W, H))       # no relief: stay black, do not retry every frame
             return Image.new("RGB", (W, H))
     return _dead
+
+
+def thumb():
+    """A still for the app: the relief of Switzerland by quiet light, from the bundled map (no network)."""
+    sn = Snow(fetch=False)
+    img = None
+    for i in range(90):
+        img = sn(i / 15.0)
+    return img

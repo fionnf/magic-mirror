@@ -58,3 +58,6 @@ panel_setup/now.json
 
 # live pieces: last good data, kept on the Pi
 panel_setup/*_cache.json
+
+# live cam sources: the user's own stream URLs (may hold credentials)
+panel_setup/livecams.json

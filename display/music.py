@@ -9,7 +9,7 @@ by panel_setup/wall_control.py --sim:   WALL_AUDIO=alsa:plughw:1   or   WALL_AUD
     (display/intensity.py measures the room if "let the wall listen" is on)
   - a rule-based curator picks scenes (variety, favourites, hold times); an optional Claude
     designer (ai_client) can propose scenes from the song + measurements
-  - pieces: generative (art, shapes, organic), GPU shaders, video loops; post effects in vj_fx
+  - pieces: generative (art, shapes, organic), GPU shaders; post effects in vj_fx
 """
 import base64
 import colorsys
@@ -32,11 +32,9 @@ from display.art import _palette, _lut, Coral, upsample
 from display.beat import BeatTracker
 from display import vj_fx
 from display.intensity import Intensity
-from display import loops as vjloops
 from display import shaders as vjshaders
 from display import organic as vjorganic
 ORGANIC_STYLES = ["jelly", "cells", "breath", "wave"]
-LOOP_BANK = vjloops.LoopBank()
 SHADER_STYLES = ["shader:" + n for n in vjshaders.names()]      # GPU shaders (need EGL: the Pi 4)
 
 SR = 22050
@@ -48,7 +46,7 @@ USAGE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
                           "panel_setup", "ai_usage.json")
 AI_CLIP = 10.0
 SHAPE_STYLES = ["flowdots", "flowlines", "garden", "truchet", "rings", "ridges", "weave"]
-STYLES = ["lava", "ripples", "coral", "ink"] + ORGANIC_STYLES + SHAPE_STYLES + list(vj_fx.PIECE_STYLES) + ["loops"] + SHADER_STYLES      # "glow" retired (Visuals.glow kept)
+STYLES = ["lava", "ripples", "coral", "ink"] + ORGANIC_STYLES + SHAPE_STYLES + list(vj_fx.PIECE_STYLES) + SHADER_STYLES      # "glow" retired (Visuals.glow kept)
 PALETTES = {
     "dusk":   [(15, 8, 30), (80, 30, 90), (220, 120, 120), (255, 200, 150)],
     "ocean":  [(2, 8, 25), (10, 50, 90), (30, 140, 160), (170, 230, 230)],
@@ -70,7 +68,7 @@ PROFILES = {
     "chill": dict(
         label="chill, organic and painterly",
         styles=["lava", "coral", "ink", "ripples", "marbling", "oilslick", "jelly", "cells", "breath", "wave",
-                "nebula", "glass", "harmonograph", "ridges", "trails", "loops"],
+                "nebula", "glass", "harmonograph", "ridges", "trails"],
         palettes=["dusk", "ocean", "forest", "moon", "blush", "ember", "gold"],
         layers=("ripples", "nebula"), layer_max=0.4, symmetry=("none",),
         trails=(0.0, 0.25), hue=(0.0, 0.08), accent=(0.0, 0.08), react=(0.2, 0.5),
@@ -79,7 +77,7 @@ PROFILES = {
     "techno": dict(
         label="cool techno: geometric, neon on black, driving",
         styles=["truchet", "opart", "flowlines", "poles", "garden", "spiral", "flowdots", "trails",
-                "marbling", "glass", "cells", "breath", "wave", "loops"],
+                "marbling", "glass", "cells", "breath", "wave"],
         palettes=["neon", "violet", "acid", "ice", "ocean", "moon"],
         layers=("rings", "ripples", "garden"), layer_max=0.4,
         symmetry=("none", "mirror", "quad"), trails=(0.0, 0.5), hue=(0.0, 0.25), accent=(0.0, 0.0),
@@ -139,8 +137,6 @@ def profile(mode=None, level=None):
     for fav in FAVOURITES:
         if fav not in pool and L > 0.3:
             pool.append(fav)
-    if not len(LOOP_BANK):
-        pool = [x for x in pool if x != "loops"]
     if SHADER_STYLES and vjshaders.renderer().ok:
         pool = pool + (SHADER_STYLES if L < 0.65 else SHADER_STYLES[:2])   # silk/veil also at a party
     out["styles"], out["palettes"] = pool, pals
@@ -168,7 +164,7 @@ def ai_prompt(mode=None):
         f"Preset palettes: {_swatches(mode)} - or invent a 4-colour ramp (deep shadow to bright highlight) "
         "in the same spirit. COLOUR DISCIPLINE: a scene uses ONE or TWO neighbouring hues and their tints "
         "(e.g. deep teal to pale mint; plum to rose gold) - tonal and restrained, never a rainbow, never "
-        "complementary clashes. 'loops' are real VJ video loops (Beeple, CC) speed-matched to the tempo; 'shader:*' are GPU "
+        "complementary clashes. 'shader:*' are GPU "
         "shaders (silk = drifting fabric, veil = rising smoke, dunes = lit ridges, lanterns = soft glows, "
         "tide = breathing bands) - slow and elegant, ideal for the living room. "
         "You are told the measured tempo: slow music (under 90 bpm) wants big, slow, long scenes; mid tempo "
@@ -278,7 +274,7 @@ def _validate(j):
         return None
     if j.get("style") in ("glow", "aurora"):
         j = {**j, "style": "nebula"}                      # retired styles -> nearest calm one
-    if j.get("style") not in STYLES and not str(j.get("style")).startswith("loop:"):
+    if j.get("style") not in STYLES:
         return None
     P = profile()
     num = lambda v, lo, hi, d: max(lo, min(hi, float(v))) if isinstance(v, (int, float)) else d
@@ -288,25 +284,15 @@ def _validate(j):
         v = j.get(k)
         out[k] = str(v)[:60] if v and str(v).strip().lower() not in ("null", "none", "unknown", "") else ""
     style = j["style"]
-    if style not in P["styles"] and not style.startswith("loop:"):   # outside this mode's world: pick a fitting one
+    if style not in P["styles"]:   # outside this mode's world: pick a fitting one
         style = random.choice(P["styles"])
-    if style == "loops":                              # a real video loop whose motion suits the level
-        clip = LOOP_BANK.pick(P["level"], avoid=set(_recent_loops))
-        if clip is None:
-            style = random.choice([x for x in P["styles"] if x != "loops"] or ["aurora"])
-        else:
-            style = "loop:" + clip
-            _recent_loops.append(clip)
-            del _recent_loops[:-6]
     out["style"] = style
     layer = j.get("layer", "none")
     out["layer"] = layer if layer in P["layers"] and layer != style else "none"
     out["layer_opacity"] = num(j.get("layer_opacity"), 0.0, P["layer_max"], 0.25) if out["layer"] != "none" else 0.0
     out["concept"] = str(j.get("concept", ""))[:120]
     pal = j.get("palette")
-    if pal == "native" and style.startswith("loop:"):
-        out["palkey"] = out["palette_desc"] = "native"
-    elif pal in P["palettes"]:
+    if pal in P["palettes"]:
         out["palkey"] = out["palette_desc"] = pal
     else:
         try:
@@ -333,7 +319,6 @@ def _validate(j):
     return out
 
 
-_recent_loops = []
 
 
 def _scene_key(c):
@@ -347,7 +332,7 @@ NOW_FILE = os.path.join(_HERE, "panel_setup", "music_now.json")             # re
 DEFAULT_SETTINGS = {"style": "auto", "palette": "auto", "vibe": "auto", "source": "pi",
                     "sensitivity": 50, "ai": True, "shazam": True, "song_on_wall": True,
                     "brain": "claude", "beat_offset": 0, "beat_strength": 100, "art_reacts": False,
-                    "prompt": "", "mode": "manual", "party": 15, "loop": "", "loop_music": "tempo", "art": "",
+                    "prompt": "", "mode": "manual", "party": 15, "art": "",
                     "cast_follow": False, "cast_devices": {},
                     "cover_show": False, "cover_colours": False}
 
@@ -359,7 +344,7 @@ def load_settings():
     except Exception:
         s = dict(DEFAULT_SETTINGS)
     if s["style"] != "auto" and s["style"] != "art" and s["style"] not in STYLES:
-        s["style"] = "auto"                                 # ("loops" is in STYLES: video loops only)
+        s["style"] = "auto"
     if s["palette"] != "auto" and s["palette"] not in PALETTES:
         s["palette"] = "auto"
     if s["vibe"] != "auto" and s["vibe"] not in VIBES:
@@ -383,15 +368,12 @@ def load_settings():
     s["prompt"] = " ".join(str(s.get("prompt", "") or "").split())[:200]
     if s.get("mode") not in MODES:
         s["mode"] = "manual"
-    s["loop"] = str(s.get("loop", "") or "")[:80]
     s["art"] = str(s.get("art", "") or "")[:80]                 # a library piece for the "art" style ("" = rotate)
     s["cast_follow"] = bool(s.get("cast_follow", False))    # off unless switched on in the app
     for k in ("cover_show", "cover_colours"):                 # the album cover: on the wall / in the colours
         s[k] = bool(s.get(k, False))
     cd = s.get("cast_devices")                                # {name: on} switched by hand; others: default
     s["cast_devices"] = {str(k)[:80]: bool(v) for k, v in list(cd.items())[:30]} if isinstance(cd, dict) else {}
-    if s.get("loop_music") not in ("off", "tempo", "bass"):
-        s["loop_music"] = "tempo"
     try:
         s["party"] = max(0, min(100, int(s["party"])))
     except (TypeError, ValueError):
@@ -866,8 +848,6 @@ class VJ:
         style = random.choices(pool, weights=weights, k=1)[0]
         pals = [x for x in P["palettes"] if x not in recent_pals] or list(P["palettes"])
         pal = random.choice(pals)
-        if style == "loops":
-            pal = "native"
         e = self.l.f["energy"]
         j = _validate({"scene": "", "style": style, "palette": pal, "layer": "none",
                        "symmetry": random.choice(P["symmetry"]), "speed": 0.5 + e,
@@ -1107,46 +1087,6 @@ class Visuals:
             v = v + np.exp(-((d - r) ** 2) / 30) * (1 - age / 6) * 0.45
         return _lut(np.clip(v, 0, 1), lut)
 
-    def loop_(self, name, f, dt):
-        pl = self.players.get(name)
-        if pl is None:
-            if len(self.players) >= 3:                     # keep memory small
-                old = next(iter(self.players))
-                self.players.pop(old).close()
-            pl = self.players[name] = vjloops.LoopPlayer(name, LOOP_BANK)
-        how = f.get("loop_music", "tempo")
-        kick, groove = max(f.get("kick_fast", 0.0), f.get("kick", 0.0)), f.get("beat_pulse", 0.0)
-        amount = 0.5 + 0.5 * CURRENT_LEVEL                  # the party slider scales the response
-        slow = 0.15 + 0.85 * _smoothstep(CURRENT_LEVEL, 0.0, 0.8)   # chill: ~0.2x speed .. party: full speed
-        period = f.get("period", 0.0) if (f.get("bconf", 0.0) > 0.5 and how == "tempo") else 0.0
-        beats = vjloops.beats_for(pl.seconds / slow, period)          # slower = the loop spans more beats
-        if beats:                                           # one loop = a whole number of beats, pushed on the beat
-            target = pl.total / (beats * period) * (1.0 + 0.8 * amount * groove)
-            tc = 0.6
-        elif how == "bass":                                 # breathes with the bass: 0.5x .. 2x of the base speed
-            target = pl.fps * slow * (0.5 + 1.5 * amount * max(kick, groove) + 0.2 * (1 - amount))
-            tc = 0.25
-        elif how == "off":
-            target, tc = pl.fps * slow, 2.0
-        else:
-            target = pl.fps * slow * max(0.4, min(1.8, f.get("d_speed", 1.0) * (1.0 + 0.6 * amount * kick)))
-            tc = 0.6
-        pl.rate = _ema(getattr(pl, "rate", target), target, dt, tc)
-        img = pl.frame(dt, pl.rate)
-        if how != "off":                                    # zoom "pump" on the kick: motion, not light
-            pump = max(kick, groove) * amount
-            z = 1.0 + 0.09 * pump
-            if z > 1.005:
-                import cv2
-                h, w = img.shape[:2]
-                cw, ch = int(w / z), int(h / z)
-                x0, y0 = (w - cw) // 2, (h - ch) // 2
-                img = cv2.resize(img[y0:y0 + ch, x0:x0 + cw], (w, h), interpolation=cv2.INTER_LINEAR)
-        if img.shape[0] != self.H or img.shape[1] != self.W:     # cover-crop to the wall's shape
-            from PIL import Image as _I, ImageOps as _O
-            img = np.asarray(_O.fit(_I.fromarray(img.astype(np.uint8)), (self.W, self.H), _I.BICUBIC), np.float32)
-        return img
-
     def shader_(self, name, f, lut, t=None):
         r = vjshaders.renderer()
         if not r.ok:
@@ -1263,8 +1203,6 @@ class Visuals:
             return self.wave_(f, lut, dt)
         if style.startswith("shader:"):
             return self.shader_(style[7:], f, lut)
-        if style.startswith("loop:"):
-            return self.loop_(style[5:], f, dt)
         if style.startswith("art:"):
             return self.art_(style[4:], f, dt)
         if style in vj_fx.PIECE_STYLES:
@@ -1365,11 +1303,7 @@ class MusicShow:
         st, c = self.settings, self.vj.choice
         auto_style = st["style"] == "auto"
         style = c["style"] if auto_style else st["style"]
-        if style == "loops" and st.get("loop") and st["loop"] in LOOP_BANK.clips:
-            style = "loop:" + st["loop"]                    # a clip chosen in the app
-            if st["palette"] == "auto":
-                pal = "native"
-        elif style == "art":                                # the art library, in its own colours, moving with the music
+        if style == "art":                                # the art library, in its own colours, moving with the music
             from display import library
             if st.get("art") and library.find(st["art"]):
                 self._art_pick = "art:" + st["art"]
@@ -1386,16 +1320,6 @@ class MusicShow:
                     self._art_pick, self._art_pick_t = "art:" + pick, now
             self._art_fixed = st.get("art", "")
             return (self._art_pick, "native", "none", "none")
-        elif style == "loops":                              # "video loops only": a clip that fits the level
-            hold = float(c.get("hold", 150.0))
-            if not getattr(self, "_loop_pick", None) or now - self._loop_pick_t > hold:
-                clip = LOOP_BANK.pick(profile()["level"], avoid=set(_recent_loops))
-                if clip:
-                    _recent_loops.append(clip); del _recent_loops[:-6]
-                    self._loop_pick, self._loop_pick_t = "loop:" + clip, now
-            style = self._loop_pick or c["style"]
-            if st["palette"] == "auto":
-                pal = "native"
         pal = c["palkey"] if st["palette"] == "auto" else st["palette"]
         if st.get("cover_colours") and self.covers.palette_key():
             pal = self.covers.palette_key()                  # the song's own colours
@@ -1567,7 +1491,6 @@ class MusicShow:
         f["d_speed"] *= self.tempo_f * (1.0 + 0.3 * self.rise + 0.6 * self.surge)
         f["d_speed"] = min(f["d_speed"], 0.6 + 1.1 * L)   # never frantic; near-still when quiet
         f["speed_tc"] = max(2.0, P["tc"])
-        f["loop_music"] = self.settings.get("loop_music", "tempo")
         # the live bass as a smooth swell: rises with a bass note in ~0.1 s, eases off over ~0.5 s.
         # It pushes the flow forward (motion only - no zoom: resampling makes LED lines shimmer, and
         # no light pulses: they read as flicker). The app's beat strength (0..200%) scales it.

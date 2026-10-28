@@ -253,3 +253,60 @@ def due(now=None):
         _save_state({"fired": today})
         return True
     return False
+
+
+# ------------------------------------------------------- Smart Life import ---
+# Rooms and tap-to-run scenes live in the Smart Life / Tuya cloud, not on the bulbs. The same cloud keys
+# `python -m tinytuya wizard` saves (tinytuya.json) let us read them once and keep a local copy.
+
+def _cloud():
+    import tinytuya
+    return tinytuya.Cloud()
+
+
+def _result(r):
+    if isinstance(r, dict) and r.get("success") is False:
+        raise RuntimeError(str(r.get("msg") or r.get("Error") or "cloud refused")[:100])
+    return (r or {}).get("result") if isinstance(r, dict) else None
+
+
+def import_room(room_name="living"):
+    """Read the home's rooms and scenes from Smart Life: the devices in the room whose name contains
+    room_name become 'the room', and that home's tap-to-run scenes are kept for the app."""
+    c = _cloud()
+    mine = {d["id"]: d["name"] for d in devices()}
+    cloud_devs = c.getdevices() or []
+    uid = next((d.get("uid") for d in cloud_devs if isinstance(d, dict) and d.get("uid")), None)
+    if not uid:
+        raise RuntimeError("no Smart Life account found in the cloud keys (run: python -m tinytuya wizard)")
+    homes = _result(c.cloudrequest(f"/v1.0/users/{uid}/homes")) or []
+    members, scenes, room_found = [], [], ""
+    for h in homes:
+        hid = h.get("home_id")
+        rooms = _result(c.cloudrequest(f"/v1.0/homes/{hid}/rooms")) or []
+        rooms = rooms.get("rooms", []) if isinstance(rooms, dict) else rooms
+        for r in rooms:
+            if room_name.lower() in str(r.get("name", "")).lower():
+                room_found = r.get("name", "")
+                got = _result(c.cloudrequest(f"/v1.0/homes/{hid}/rooms/{r.get('room_id')}/devices")) or []
+                for d in got:
+                    if d.get("id") in mine:
+                        members.append(mine[d["id"]])
+        for sc in _result(c.cloudrequest(f"/v1.1/homes/{hid}/scenes")) or []:
+            scenes.append({"id": sc.get("scene_id"), "name": sc.get("name") or "Scene", "home": hid})
+    if not room_found:
+        raise RuntimeError(f"no room called '{room_name}' in Smart Life")
+    _save_state({"room": members, "scenes": scenes, "imported_room": room_found})
+    return {"room": members, "scenes": [s["name"] for s in scenes], "room_name": room_found}
+
+
+def scenes():
+    return (_read(STATE_FILE) or {}).get("scenes", [])
+
+
+def run_scene(scene_id):
+    sc = next((s for s in scenes() if s["id"] == scene_id), None)
+    if not sc:
+        raise KeyError("no such scene")
+    _result(_cloud().cloudrequest(f"/v1.0/homes/{sc['home']}/scenes/{scene_id}/trigger", action="POST"))
+    return {"ok": True}

@@ -295,18 +295,11 @@
     </section>
     <section>
       <h2>What the wall shows</h2>
-      <span class="seg" id="musicShow"><button data-ms2="auto">Chosen for the music</button><button data-ms2="art">Art</button><button data-ms2="loops">Video loops</button></span>
+      <span class="seg" id="musicShow"><button data-ms2="auto">Chosen for the music</button><button data-ms2="art">Art</button></span>
       <div id="musicArtBox" hidden style="margin-top:12px">
         <p class="hint" style="margin:0 0 10px">Pieces from the gallery, in their own colours, moving with the music. Pick one or let them change.</p>
         <div class="chips" id="musicArtChips"></div>
         <div class="gallery" id="musicArtGrid"></div>
-      </div>
-      <div id="loopBox" hidden>
-        <div class="row between" style="margin:10px 0">
-          <span class="hint" style="margin:0">Music moves them</span>
-          <span class="seg"><button data-lm="off">Not at all</button><button data-lm="bass">With the bass</button><button data-lm="tempo">To the beat</button></span>
-        </div>
-        <div class="strip" id="loops"></div>
       </div>
     </section>
     <details class="more"><summary>Speakers and album covers</summary>
@@ -344,6 +337,8 @@
       <h2>Living room lights</h2>
       <div class="row"><button class="btn primary" onclick="roomPower(true)">All on</button><button class="btn" onclick="roomPower(false)">All off</button></div>
       <div class="strip" id="lightPresets" style="margin-top:12px"></div>
+      <div class="strip" id="lightScenes" style="margin-top:8px" hidden></div>
+      <div class="row" style="margin-top:8px"><button class="btn" id="lightImport" onclick="importLights()">Import living room from Smart Life</button></div>
       <h3 class="sub">Brightness</h3>
       <input type="range" id="lightBri" min="1" max="100" step="1" aria-label="Room brightness">
       <h3 class="sub">Warmth</h3>
@@ -893,6 +888,8 @@ async function loadLights() {
   if (!LIGHTS.configured) return;
   $('lightHint').textContent = !LIGHTS.installed ? 'The lights library (tinytuya) is not installed on the wall.' : '';
   $('lightPresets').innerHTML = LIGHT_PRESETS.map((p, i) => `<button onclick="lightPreset(${i})"><span style="${p.c ? 'color:' + p.c : ''}">${p.n}</span></button>`).join('');
+  $('lightScenes').hidden = !(LIGHTS.scenes || []).length;
+  $('lightScenes').innerHTML = (LIGHTS.scenes || []).map(sc => `<button onclick="runLightScene('${esc(sc.id)}')"><span>${esc(sc.name)}</span></button>`).join('');
   $('lightSw').innerHTML = SWATCHES.map(c => `<button style="background:${c}" onclick="lookLights({colour:'${c}'})" aria-label="${c}"></button>`).join('') +
     `<input type="color" id="lightPick" value="#ff6a00" aria-label="Pick a colour">`;
   $('lightPick').addEventListener('change', e => lookLights({colour: e.target.value}));
@@ -904,6 +901,12 @@ async function loadLights() {
   if (on && document.activeElement !== $('lightBri')) $('lightBri').value = on.brightness;
   if (LIGHTS.schedule && LIGHTS.schedule.off) $('lightOff').value = LIGHTS.schedule.off;
 }
+async function importLights() {
+  const b = $('lightImport'); b.disabled = true; toast('Reading Smart Life…');
+  try { const r = await api('/api/lights/import', {}); toast(`Living room: ${r.room.length} lights, ${r.scenes.length} scenes`); loadLights(); }
+  catch (e) { toast(e.message); } finally { b.disabled = false; }
+}
+async function runLightScene(id) { try { await api('/api/lights/scene', {id}); toast('Scene on'); setTimeout(loadLights, 1500); } catch (e) { toast(e.message); } }
 async function roomPower(on) { try { await api('/api/lights/room', {on}); toast(on ? 'Lights on' : 'Lights off'); setTimeout(loadLights, 800); } catch (e) { toast(e.message); } }
 async function toggleLight(i) {
   const d = LIGHTS.devices[i]; if (!d) return;
@@ -978,12 +981,10 @@ async function loadMusic() {
   $('party').disabled = autoOn;
   if (document.activeElement !== $('sens')) $('sens').value = s.sensitivity;
   $('tAuto').checked = autoOn; $('tShz').checked = !!s.shazam; $('tWall').checked = !!s.song_on_wall; $('tReact').checked = !!s.art_reacts;
-  const show = s.style === 'loops' ? 'loops' : s.style === 'art' ? 'art' : 'auto';
+  const show = s.style === 'art' ? 'art' : 'auto';
   document.querySelectorAll('[data-ms2]').forEach(b => b.classList.toggle('on', b.dataset.ms2 === show));
-  $('loopBox').hidden = show !== 'loops'; $('musicArtBox').hidden = show !== 'art';
+  $('musicArtBox').hidden = show !== 'art';
   if (show === 'art') loadArt();
-  document.querySelectorAll('[data-lm]').forEach(b => b.classList.toggle('on', b.dataset.lm === s.loop_music));
-  if (s.style === 'loops') loadLoops(s.loop || '');
   $('tCast').checked = !!s.cast_follow; $('tCover').checked = !!s.cover_show; $('tCoverCol').checked = !!s.cover_colours;
   const sp = MUSIC.speakers || [], sn = MUSIC.speaker_now;
   $('castChips').hidden = !s.cast_follow || !sp.length;
@@ -1010,15 +1011,6 @@ musicSwitch('tAuto', 'mode', c => c ? 'auto' : 'manual'); musicSwitch('tShz', 's
 $('tPresence').addEventListener('change', e => api('/api/presence', {on: e.target.checked}).then(r => { STATUS = r; render(); toast(e.target.checked ? 'People on the art' : 'People off'); }).catch(err => toast(err.message))); musicSwitch('tCover', 'cover_show'); musicSwitch('tCoverCol', 'cover_colours');
 document.querySelectorAll('[data-ms2]').forEach(b => b.onclick = () =>
   api('/api/music', {style: b.dataset.ms2, start: true}).then(r => { STATUS = r.status || STATUS; loadMusic(); }).catch(e => toast(e.message)));
-document.querySelectorAll('[data-lm]').forEach(b => b.onclick = () => api('/api/music', {loop_music: b.dataset.lm}).then(loadMusic));
-let LOOPS = null, loopSel = null;
-async function loadLoops(sel) {
-  if (!LOOPS) { try { LOOPS = await api('/api/loops'); } catch (e) { return; } }
-  if (loopSel === sel && $('loops').children.length) return; loopSel = sel;
-  const tile = (name, label, img) => `<button class="${sel === name ? 'sel' : ''}" onclick="api('/api/music',{loop:'${name}'}).then(loadMusic)">
-    ${img ? `<img src="${img}" alt="" loading="lazy">` : `<img alt="" style="background:linear-gradient(135deg,rgb(var(--glow)),#000)">`}<span>${label}</span></button>`;
-  $('loops').innerHTML = tile('', 'Any', null) + LOOPS.map(l => tile(l.name, l.name.split('__')[1].replace(/^(beeple-|mixkit-)/, ''), u('/loops/thumb/' + l.name + '.jpg'))).join('');
-}
 async function scopeTick() {
   if (!$('v-music').classList.contains('on') || STATUS.current !== 'music') return;
   let d; try { d = await api('/api/audio'); } catch (e) { return; }

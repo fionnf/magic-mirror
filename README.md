@@ -33,7 +33,7 @@ simulator window.
 ```bash
 git clone https://github.com/fionnf/magic-mirror.git
 cd magic-mirror
-python3 -m venv .venv
+python3 -m venv .venv      # Debian/Ubuntu: sudo apt install python3-venv first
 .venv/bin/pip install -r requirements-dev.txt
 ./panel_setup/sim.sh
 ```
@@ -62,17 +62,18 @@ Notes, honestly:
 | Part | Notes |
 |---|---|
 | Raspberry Pi 4 | The code and settings are for a Pi 4B. Upstream `rpi-rgb-led-matrix` does not support the Pi 5 (not tested here) |
-| HUB75 driver board | Adafruit RGB Matrix HAT/Bonnet; `config.HARDWARE_MAPPING = "regular"` (not `adafruit-hat`) |
+| HUB75 driver board | Adafruit RGB Matrix Bonnet (3 HUB75 outputs; the wiring below uses ports 1 and 3, so a single-output HAT is not enough); `config.HARDWARE_MAPPING = "regular"` (not `adafruit-hat`). Upstream hzeller docs say Adafruit boards need a GPIO4-GPIO18 solder bridge for the `adafruit-hat` mapping; whether this build carries a modification, and that `regular` is right for it, is not verified here: check your board against the upstream wiring docs |
+| microSD card, Pi power | A microSD card (16 GB or more) for Raspberry Pi OS, and a separate USB-C supply for the Pi (or a feed from the 5 V rail) |
 | 12 x 64 x 64 HUB75 panels, 256 mm square | P4, 1/32 scan, FM6126A-type driver (`MATRIX_PANEL_TYPE = "FM6126A"`: these panels stay dark or garbled without that init sequence) |
 | 5 V power supply | The frame is designed for a 40 A / 200 W unit (CZCL A-200AF-5). See [Safety](#safety) |
-| HUB75 ribbons, 5 V power leads, fuse and switch | A ribbon between the HAT and each chain's first panel, a short link cable between panels |
+| HUB75 ribbons, 5 V power leads, mains inlet, fuse and switch | A ribbon between the Bonnet and each chain's first panel, a short link cable between panels |
 | Camera, for Mirror mode | Pi Camera Module 3 (`camera.py` uses `picamera2`), or an MJPEG network stream such as a laptop webcam via `panel_setup/stream_webcam.sh`. `camera.py` has no direct USB-webcam path; the frame's Logitech C270 box is for its microphone, which works for Music mode |
 | USB microphone | Music mode reads the first ALSA capture device (`arecord -l`) |
 | 58 mm ESC/POS USB printer *(optional)* | Receipts. Default USB ids `0x0416`/`0x5011`; also over Wi-Fi, Bluetooth or a second Pi |
 | TTP223 touch sensor on GPIO 25, SK6812 LED strip, Bluetooth LED rods *(optional)* | Touch and strip are used by `main.py` (mirror); the control service starts the mirror with `--no-touch` |
 | Printed frame | [`hardware/led-wall-frame`](hardware/led-wall-frame/README.md): PETG, about 2 kg, OpenSCAD sources |
 
-**Wiring as built** (`config.py`): 12 panels in two chains of six, on HAT ports 1 and 3 (port 2 empty). Rows are numbered from the top (row 0) and
+**Wiring as built** (`config.py`): 12 panels in two chains of six, on Bonnet ports 1 and 3 (port 2 empty). Rows are numbered from the top (row 0) and
 columns from the left. Chain 1 (port 1): bottom row left to right, then the row above it right to left. Chain 2 (port 3): the next row right to left, then the top
 row left to right. The panels of the right-to-left rows are mounted turned 180 degrees so the short link cables reach, and the driver undoes that (`PANEL_ROTATE`).
 Two chains in parallel keep the refresh rate up (a comment in `config.py`: "Long chain => low refresh rate"). Run `./panel_setup/run.sh numbers` to see each panel's chain index and its up arrow, then fix
@@ -88,7 +89,7 @@ and remaps it onto the real chain(s) in software, so any wiring that you describ
 | `PANEL_ROWS`, `PANEL_COLS` | Pixels of one panel (64 x 64). Other sizes are untested |
 | `PANELS_WIDE`, `PANELS_TALL` | Panels across and down. `PANELS_TALL` can be set from `WALL_PANELS_TALL`; `PANELS_WIDE` is a literal in the file |
 | `CHAIN_LENGTH` | Panels in total (`PANELS_WIDE * PANELS_TALL`) |
-| `PORT_SLOTS` | Which HAT outputs carry a chain, 0-based: `[0, 2]` = ports 1 and 3, `[0]` = port 1 only |
+| `PORT_SLOTS` | Which Bonnet outputs carry a chain, 0-based: `[0, 2]` = ports 1 and 3, `[0]` = port 1 only |
 | `CHAIN_PER_PORT` | Panels on each chain |
 | `PARALLEL` | Number of output slots the library drives: the highest slot used plus one (3 here, 1 for a single chain) |
 | `PANEL_CHAIN_ORDER` | For every panel, `(col, row)` of its position on the wall (row 0 on top), in cable order: chain 1 from the panel its ribbon plugs into, then chain 2. The list needs `CHAIN_LENGTH` entries; each position exactly once |
@@ -102,7 +103,7 @@ Written out by hand it is:
 PANELS_WIDE = 3
 PANELS_TALL = 3
 CHAIN_LENGTH = PANELS_WIDE * PANELS_TALL            # 9
-PORT_SLOTS = [0]                                    # one output: HAT port 1
+PORT_SLOTS = [0]                                    # one output: Bonnet port 1
 CHAIN_PER_PORT = CHAIN_LENGTH                       # all nine on that chain
 PARALLEL = 1
 # bottom-left panel first, along the bottom row, up one row, back along it, and so on
@@ -112,7 +113,7 @@ PANEL_CHAIN_ORDER = [(0, 2), (1, 2), (2, 2),        # bottom row, left to right
 PANEL_ROTATE = {3: 180, 4: 180, 5: 180}             # the middle row is mounted upside down
 ```
 
-Cabling: the HAT ribbon goes into the input of the bottom-left panel; each panel's output goes to the next panel's input, snaking up the wall.
+Cabling: the Bonnet ribbon goes into the input of the bottom-left panel; each panel's output goes to the next panel's input, snaking up the wall.
 For any width and height with this snake pattern, the order and rotation can be generated instead of typed:
 
 ```python
@@ -149,6 +150,8 @@ Full detail, bring-up tools and tuning are in [panel_setup/README.md](panel_setu
 ```bash
 # laptop: copy the project to the Pi (set YOUR Pi's address: the default is the author's)
 PI_USER=pi PI_HOST=<pi-ip> ./panel_setup/deploy.sh
+# first: cp .env.example .env, then edit it: set OPENAI_API_KEY, delete the ANTHROPIC_API_KEY=your_key_here line,
+#        and set WALL_PANELS_TALL=3 if you have 9 panels
 scp .env pi@<pi-ip>:~/magic-mirror/.env          # keys and passwords; deploy.sh never sends .env
 # pi: install system packages, compile the panel library, install the service
 cd ~/magic-mirror && ./panel_setup/bootstrap_pi.sh && sudo reboot
@@ -356,7 +359,7 @@ A cheap sanity check anywhere: `python3 -m compileall -q .` and the layout check
 | Symptom | What to do |
 |---|---|
 | **My `config.py` changes disappear** | The service resets tracked files from GitHub on every start (`update.sh`). Point it at your fork or remove the `ExecStartPre` line: [panel_setup/README.md](panel_setup/README.md#2-send-code-to-the-pi-from-your-laptop) |
-| **Panels dark, garbled or striped** | Confirm `MATRIX_PANEL_TYPE` (FM6126A), `HARDWARE_MAPPING = "regular"`, a good ground, onboard audio off. Striped or scrambled: try `--multiplexing 1/2/4` and `--row-address 3` with `run.sh --single` |
+| **Panels dark, garbled or striped** | Confirm `MATRIX_PANEL_TYPE` (FM6126A), `HARDWARE_MAPPING = "regular"`, a good ground, onboard audio off. Striped or scrambled: try `./panel_setup/run.sh --single --multiplexing 1 --row-addr-type 3` (also 2 or 4), or `./panel_setup/run.sh walk --row-address 3` on the whole wall |
 | **Panels in the wrong order or upside down** | `./panel_setup/run.sh numbers`, then fix `PANEL_CHAIN_ORDER` and `PANEL_ROTATE` |
 | **Flicker or low refresh** | `./panel_setup/run.sh bar --show-refresh`, then `run.sh tune`; lower `MATRIX_PWM_BITS`; keep onboard audio off; watch the `[PI]` line for throttling |
 | **Shader art, including Art of the day, is black** | `moderngl` missing or no GL context (`[shaders] no GPU context` in `panel_setup/logs/<mode>.log`). On the Pi: `sudo pip3 install --break-system-packages moderngl` |

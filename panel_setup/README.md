@@ -112,9 +112,9 @@ Every test prints a `[PI]` line every 2 s and logs to `panel_setup/monitor.csv`:
 
 ## 4. Fix what you see
 - **Indices not 0,1,2... along the cable** -> edit `PANEL_CHAIN_ORDER` in `config.py`
-  (list of `(col, row)` per chain position, starting at the HAT cable).
+  (list of `(col, row)` per chain position, starting at the Bonnet cable).
 - **A panel upside down** -> `PANEL_ROTATE = {chain_index: 180}`.
-- **Scrambled/striped image** -> `--multiplexing 1` (or 2, 4); try `--row-address 3`.
+- **Scrambled/striped image** -> `--multiplexing 1` (or 2, 4); try `--row-address 3` (display_test commands such as `run.sh walk`); with `run.sh --single` the flag is `--row-addr-type 3`.
 - **Flicker / low refresh** -> lower `--pwm-bits` (7->6, 6->5), `--lsb-ns`, or the refresh limit;
   run `run.sh tune`; add `isolcpus=3` to `/boot/firmware/cmdline.txt`; keep onboard audio off
   (`bootstrap_pi.sh` does that: it also blacklists `snd_bcm2835`).

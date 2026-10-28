@@ -83,12 +83,12 @@ void mainImage(out vec4 o, in vec2 fc){
   col += iColB * 0.16 * (0.5 + bloomL) * exp(-p.x * p.x / 0.02) * exp(-max(p.y - y0, 0.0) / 0.05) * step(y0, p.y);
 
   // --- the resting seed (the hour's start), spent while the plant grows from it
-  vec2 home = vec2(0.0, y0 + 0.0147);
+  vec2 home = vec2(0.0, y0 + 0.0199);
   float breath = 0.5 + 0.5 * sin(t * 0.6);
   if (m < 18.0) {
     float wake = smoothstep(2.0, 5.0, m) * (1.0 - smoothstep(9.0, 17.0, m));
     col += iColB * (0.1 + 0.05 * breath + 0.18 * wake) * exp(-length(p - home) / 0.03);
-    seed(p, home, 1.5708, 0.036, 0.0, 1.4, 1.0 - smoothstep(9.0, 17.0, m));
+    seed(p, home, 1.5708, 0.04, 0.0, 1.9, 1.0 - smoothstep(9.0, 17.0, m));
   }
 
   // --- roots, under the ground line
@@ -188,7 +188,7 @@ void mainImage(out vec4 o, in vec2 fc){
 
   // --- the heart, and the seed head that grows out of it
   if (recep > 0.0) {
-    float rr = 0.01 + 0.008 * bud + 0.007 * smoothstep(36.0, 41.0, m);
+    float rr = (0.01 + 0.008 * bud + 0.007 * smoothstep(36.0, 41.0, m)) * (1.0 - 0.55 * smoothstep(45.0, 50.5, m));
     float dr = length(p - F) - rr;
     col += recep * (iColC * smoothstep(0.004, -0.002, dr) * 0.9 + iColB * 0.6 * exp(-max(dr, 0.0) / 0.03) * (0.6 + 0.6 * bloomL));
   }
@@ -219,10 +219,11 @@ void mainImage(out vec4 o, in vec2 fc){
       float al = hr + kk * 6.28318 / 20.0;
       float dA = mod(1.5708 - al + 3.1416, 6.28318) - 3.1416;
       float b = al + dA * smoothstep(0.0, 2.2, tau);
-      vec2 vel = vec2(0.03 + 0.05 * hash(kk), 0.014 + 0.026 * hash(kk + 7.0));
-      vec2 A = F + dirv(al) * (0.02 + 0.06 * smoothstep(0.0, 1.6, tau)) + vel * (tau + 0.25 * tau * tau)
+      vec2 vel = vec2(0.02 + 0.03 * hash(kk), 0.012 + 0.02 * hash(kk + 7.0));
+      vec2 A = F + dirv(al) * (0.02 + 0.07 * smoothstep(0.0, 1.6, tau)) + vel * (tau + 0.15 * tau * tau)
              + vec2(0.015 * sin(1.6 * tau + kk), 0.01 * sin(2.1 * tau + 2.0 * kk)) * min(tau, 1.0);
-      seed(p, A, b, 0.11, smoothstep(0.0, 1.0, tau), smoothstep(0.0, 0.8, tau), 1.0 - smoothstep(2.6, 5.2, tau));
+      float edge = (1.0 - smoothstep(0.34, 0.45, A.y + 0.11)) * (1.0 - smoothstep(0.28, 0.38, abs(A.x)));   // gone before the frame's edge
+      seed(p, A, b, 0.11, smoothstep(0.0, 1.0, tau), smoothstep(0.0, 0.8, tau), edge * (1.0 - smoothstep(2.6, 5.2, tau)));
     }
   }
 
@@ -234,10 +235,10 @@ void mainImage(out vec4 o, in vec2 fc){
                   mix(0.78, home.y, e));
     float b = 1.5708 + 0.3 * cos(u * 9.0) * (1.0 - u) * (1.0 - u);
     float fold = smoothstep(58.0, 59.8, m);
-    float L = mix(0.11, 0.036, fold);
+    float L = mix(0.11, 0.04, fold);
     float land = smoothstep(56.5, 59.5, m);
     col += iColB * (0.1 + 0.05 * breath) * land * exp(-length(p - home) / 0.03);
-    seed(p, A, b, L, 1.0 - fold, mix(1.0, 1.4, fold), smoothstep(50.5, 52.0, m));
+    seed(p, A, b, L, 1.0 - fold, mix(1.0, 1.9, fold), smoothstep(50.5, 52.0, m));
   }
   o = vec4(col, 1.0);
 }

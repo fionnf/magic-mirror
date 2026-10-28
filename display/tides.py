@@ -521,17 +521,17 @@ class Harbour:
         # the path of light under the moon or sun: whole LEDs on the surface and just beneath,
         # each one coming and going on its own slow beat
         for lx, col, strength in s["lights"]:
-            half = int(4 + amp * 0.6)
-            slot = int(now / 0.7)
+            half = int(5 + amp * 0.5)
+            slot = int(now / 0.9)
             for x in range(max(QUAY_X, lx - half), min(W, lx + half + 1)):
-                for j, dy in enumerate((0, 3, 6, 10)):
+                for j, dy in enumerate((2, 4, 6, 9, 12, 16)):
                     yy = surf_i[x] + dy
                     if yy >= self.ground[x]:
                         break
                     hsh = (x * 73856093 ^ dy * 19349663 ^ slot * 83492791) & 0xFFFF
-                    p = (1 - abs(x - lx) / (half + 1)) * strength * (0.9 - 0.2 * j)
-                    if hsh / 65535.0 < p * 0.7:
-                        img[yy, x] = np.clip(col * (1.0 if dy == 0 else 0.8), 0, 255).astype(np.uint8)
+                    p = (1 - abs(x - lx) / (half + 1)) * strength * (1.0 - 0.13 * j)
+                    if hsh / 65535.0 < p * 0.55:
+                        img[yy, x] = np.clip(col * (0.95 - 0.06 * j), 0, 255).astype(np.uint8)
         return Image.fromarray(img, "RGB")
 
 

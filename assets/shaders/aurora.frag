@@ -17,11 +17,11 @@ float n2(vec2 p){ return sin(p.x * 1.7 + sin(p.y * 1.3)) * 0.5 + sin(p.y * 2.3 -
 // b = (brightness, rays, corona, patches)
 // c = (dawn, stars, back curtain, ripple)
 void stage(int k, out vec4 a, out vec4 b, out vec4 c){
-  if (k == 0)      { a = vec4(0.300, 0.050, 0.004, 0.050); b = vec4(0.62, 0.10, 0.0, 0.0); c = vec4(0.0, 1.00, 0.00, 0.2); }
+  if (k == 0)      { a = vec4(0.300, 0.050, 0.004, 0.050); b = vec4(0.72, 0.10, 0.0, 0.0); c = vec4(0.0, 1.00, 0.00, 0.2); }
   else if (k == 1) { a = vec4(0.340, 0.060, 0.022, 0.100); b = vec4(0.90, 0.45, 0.0, 0.0); c = vec4(0.0, 0.80, 0.30, 1.0); }
   else if (k == 2) { a = vec4(0.360, 0.015, 0.095, 0.200); b = vec4(1.10, 0.85, 0.0, 0.0); c = vec4(0.0, 0.55, 0.75, 0.7); }
   else if (k == 3) { a = vec4(0.380, 0.000, 0.030, 0.170); b = vec4(0.95, 1.00, 1.0, 0.0); c = vec4(0.0, 0.40, 0.40, 0.4); }
-  else if (k == 4) { a = vec4(0.370, 0.030, 0.060, 0.150); b = vec4(0.90, 0.30, 0.0, 1.0); c = vec4(0.0, 0.65, 0.30, 0.3); }
+  else if (k == 4) { a = vec4(0.370, 0.030, 0.060, 0.150); b = vec4(1.05, 0.30, 0.0, 1.0); c = vec4(0.0, 0.65, 0.30, 0.3); }
   else             { a = vec4(0.300, 0.050, 0.010, 0.110); b = vec4(0.55, 0.05, 0.0, 0.25); c = vec4(1.0, 0.25, 0.00, 0.1); }
 }
 
@@ -61,7 +61,7 @@ float curtain(float x, float y, float t, vec4 a, vec4 b, vec4 c, float drift, fl
   float below = exp(-h * h / (0.00016 + 0.006 * b.w));     // patches spill below the hem
   float above = exp(-max(h, 0.0) / H) * (0.72 + 0.28 * exp(-max(h, 0.0) / 0.018));
   float prof = h < 0.0 ? below : above;
-  float m = mix(1.0, 0.3 + 1.0 * rn, R * smoothstep(-0.01, 0.05, h));
+  float m = mix(1.0, 0.45 + 0.85 * rn, R * smoothstep(-0.01, 0.05, h));
   float edgeOn = 1.0 + 0.5 * min(cp * cp * 12.0, 1.0); // brighter where the sheet folds edge-on
   return b.x * prof * m * edgeOn;
 }
@@ -98,11 +98,19 @@ void mainImage(out vec4 o, in vec2 fc){
   vec4 a2 = a; a2.x += 0.10; a2.z *= 0.8; a2.w *= 0.8;
   float L2 = c.z * 0.5 * curtain(x + 0.21, y, t * 0.8, a2, b, c, -drift * 0.7 + 3.0, 0.74, h2);
 
-  // patches: the sheet breaks into soft pools of light that pulse
-  float pn = n2(vec2(x * 7.0 + t * 0.03, y * 4.0 - t * 0.02) + 1.3 * iEvolve.z);
-  float pulse = 0.65 + 0.35 * sin(t * 0.9 + 5.0 * n2(vec2(x * 4.0, y * 3.0) + 3.0));
-  float mask = mix(1.0, smoothstep(-0.25, 0.6, pn) * pulse * 1.25, b.w);
-  L1 *= mask; L2 *= mask;
+  // patches: the sheet gathers into soft pools of light along its hem, each pulsing at its own pace
+  float xx = x + t * 0.006, cell = floor(xx / 0.2), pools = 0.0;
+  for (int i = -1; i <= 1; i++) {
+    float id = cell + float(i), hs = hash(vec2(id, 7.3));
+    float cx = (id + 0.5 + 0.5 * (hs - 0.5)) * 0.2 + 0.03 * sin(t * 0.07 + hs * 9.0);
+    float w = 0.055 + 0.03 * hash(vec2(id, 2.1));
+    float hc = 0.025 + 0.035 * hash(vec2(id, 5.7)) + 0.012 * sin(t * 0.11 + id);
+    float pu = 0.5 + 0.5 * sin(t * (0.35 + 0.35 * hs) + hs * 6.28 + 2.0 * iEvolve.z);
+    float dx = (xx - cx) / w, dh = (h1 - hc) / (0.035 + 0.015 * hs);
+    pools += (0.35 + 0.75 * pu) * exp(-dx * dx - dh * dh);
+  }
+  L1 = mix(L1, b.x * 1.25 * pools + 0.12 * L1, b.w);
+  L2 *= 1.0 - 0.8 * b.w;
 
   vec3 tint1 = mix(iColB, iColC, 0.75 * exp(-abs(h1) / 0.02));
   tint1 = mix(tint1, mix(iColB, iColA * 2.2, 0.65), smoothstep(0.04, 0.32, h1));
@@ -124,7 +132,7 @@ void mainImage(out vec4 o, in vec2 fc){
   col += aur * (1.0 - land);
 
   // the mountains: dark, the ridge catching the glow of the sky
-  float rimLight = clamp(0.55 * glow * (1.0 - 0.6 * b.z) + 0.8 * c.x, 0.0, 1.0);
+  float rimLight = clamp(0.62 + 0.3 * glow * (1.0 - 0.6 * b.z) + 0.8 * c.x, 0.0, 1.0);
   vec3 ground = iColA * 0.10;
   col = mix(col, ground, land);
   col += mix(iColB, iColC, 0.5) * rimLight * 0.75 * exp(-pow((y - ridge + 0.004) / 0.005, 2.0));

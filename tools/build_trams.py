@@ -96,7 +96,8 @@ def is_vbz(name):
 
 
 def extract(path, start):
-    days = [start + datetime.timedelta(d) for d in range(DAYS)]
+    # start one day early so trips running past midnight from the day before `start` are present
+    days = [start + datetime.timedelta(d) for d in range(-1, DAYS)]
     keys = [d.strftime("%Y%m%d") for d in days]
     z = zipfile.ZipFile(path)
     feed = next(rows(z, "feed_info.txt"), {}).get("feed_version", "")

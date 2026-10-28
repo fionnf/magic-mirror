@@ -179,10 +179,11 @@ class TramMap:
 
     # ---- a frame ------------------------------------------------------------------------------------------
     def day_index(self, date):
-        """Which of the timetable's days stands for this date (the nearest, when it is not covered)."""
+        """Which of the timetable's days stands for this date (the nearest one with the same weekday, when it is not covered)."""
         if date in self.days:
             return self.days.index(date)
-        return min(range(len(self.days)), key=lambda i: abs((self.days[i] - date).days))
+        same = [i for i, d in enumerate(self.days) if d.weekday() == date.weekday()]
+        return min(same or range(len(self.days)), key=lambda i: abs((self.days[i] - date).days))
 
     def active(self, di, secs):
         """Trips of timetable day di on the road at secs after that day's midnight: (pattern, profile, tau)."""

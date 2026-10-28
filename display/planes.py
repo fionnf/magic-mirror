@@ -1,5 +1,6 @@
 """Planes: the sky over Zürich as live art. Every aircraft in range (adsb.lol, open ADS-B data, no
-key) drifts across the wall as a point of light with its flight number, leaving a one-LED trail that
+key) drifts across the wall as a point of light with its flight number and the far end of its route
+(LX318 LHR; adsbdb.com, cached), leaving a one-LED trail that
 fades over minutes, so the approaches and departures of Zürich airport slowly draw themselves. Low
 aircraft are warm amber, high ones rose. Underneath, a faint map: the lakes, the rivers, the runways
 and a dot for the apartment (assets/maps/zurich.json, from tools/build_maps.py).
@@ -12,6 +13,7 @@ reported speed and track, so the motion is continuous.
 import json
 import math
 import os
+import re
 import threading
 import time
 
@@ -27,6 +29,10 @@ CENTRE = (47.405, 8.545)                  # a little north of home, so the airpo
 KM_W = 60.0                               # the wall shows 60 km across (and 80 km top to bottom)
 URL = "https://api.adsb.lol/v2/point/{:.4f}/{:.4f}/40".format(*CENTRE)
 EVERY = 10.0
+ROUTE_URL = "https://api.adsbdb.com/v0/callsign/{}"      # callsign -> airline, origin, destination
+AIRLINE_URL = "https://api.adsbdb.com/v0/airline/{}"     # ICAO airline -> IATA code
+LOOKUPS_PER_FETCH = 4                     # new callsigns looked up per 10 s, so a busy sky never floods it
+HOME_AIRPORT = "ZRH"
 FADE = 150.0                              # seconds for a trail to fall to 1/e
 LOW_COL = np.array([255, 150, 55], np.float32)    # below ~2 km: approach and climb-out
 HIGH_COL = np.array([235, 95, 135], np.float32)   # cruise
@@ -69,6 +75,7 @@ def base_map():
 class Sky:
     def __init__(self):
         self.ac, self.ok = {}, False                  # hex -> {lat, lon, gs (m/s), track, alt (ft), t, flight}
+        self.names, self.airlines = {}, {}            # callsign -> (label, far end, looked up at); ICAO -> IATA
         self.trail = np.zeros((H, W, 3), np.float32)
         self.base = base_map().astype(np.float32)
         self.drawn, self.last = {}, None
@@ -90,10 +97,51 @@ class Sky:
                 for k in [k for k, v in self.ac.items() if now - v["t"] > 60]:
                     del self.ac[k]
                 self.ok = True
+                todo = [cs for cs in {a["flight"] for a in self.ac.values()}
+                        if cs and now - self.names.get(cs, ("", "", -1e9))[2] > 6 * 3600]
+                for cs in todo[:LOOKUPS_PER_FETCH]:
+                    self.names[cs] = self._lookup(cs, requests) + (now,)
             except Exception as e:
                 self.ok = False
                 print(f"[planes] {str(e)[:100]}", flush=True)
             time.sleep(EVERY)
+
+    def _lookup(self, cs, requests):
+        """(label, far end) for a callsign. The flight number people book is the airline's IATA code and
+        the number - but only when the callsign is the ICAO code plus digits (SWR318 -> LX318). Callsigns
+        with letters (SWR18Y, EZY45KA) are not the flight number, so those show the airline alone. The
+        far end is where it is going, or where it comes from when it is landing here. A private plane's
+        callsign is its registration and stays as it is."""
+        route, iata = None, None
+        try:
+            r = requests.get(ROUTE_URL.format(cs), timeout=8).json().get("response")
+            route = r.get("flightroute") if isinstance(r, dict) else None
+        except Exception:
+            pass
+        m = re.fullmatch(r"([A-Z]{3})(\d{1,4})|([A-Z]{3})\d[0-9A-Z]{0,3}", cs)
+        icao = (m.group(1) or m.group(3)) if m else None
+        if route and (route.get("airline") or {}).get("iata"):
+            iata = route["airline"]["iata"]
+        elif icao:
+            if icao not in self.airlines:
+                try:
+                    r = requests.get(AIRLINE_URL.format(icao), timeout=8).json().get("response")
+                    self.airlines[icao] = (r[0].get("iata") if isinstance(r, list) and r else None) or ""
+                except Exception:
+                    return cs, ""                              # try again next time round
+            iata = self.airlines[icao] or None
+        if iata and m and m.group(2):
+            label = iata + str(int(m.group(2)))                # SWR0318 -> LX318
+        elif iata and m:
+            label = iata
+        else:
+            label = cs
+        far = ""
+        if route:
+            o = (route.get("origin") or {}).get("iata_code") or ""
+            d = (route.get("destination") or {}).get("iata_code") or ""
+            far = o if d == HOME_AIRPORT else d
+        return label, far
 
     @staticmethod
     def _now_pos(a, now):
@@ -133,9 +181,16 @@ class Sky:
             if 0 <= x < W and 0 <= y < H:
                 img[y, x] = col                                      # the plane: one bright LED
                 if flight:
-                    w = pixelfont.width(flight)
-                    tx = x + 3 if x + 3 + w <= W else x - 2 - w      # beside it, on the side with room
-                    pixelfont.draw(img, flight, tx, min(H - 5, max(0, y - 2)), col * 0.6)
+                    label, far = self.names.get(flight, (flight, "", 0))[:2]
+                    ty = min(H - 5, max(0, y - 2))
+                    for text in ([label + " " + far] if far else []) + [label]:   # with the far end if it fits
+                        w = pixelfont.width(text)
+                        tx = x + 3 if x + 3 + w <= W else x - 2 - w   # beside it, on the side with room
+                        if tx >= 0 or text == label:
+                            break
+                    pixelfont.draw(img, label, tx, ty, col * 0.6)
+                    if text != label:
+                        pixelfont.draw(img, far, tx + pixelfont.width(label) + 4, ty, col * 0.38)
         return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
 
 

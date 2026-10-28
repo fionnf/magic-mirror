@@ -37,7 +37,7 @@ NX, NY = 6, 8                  # the grid of wind points over the picture
 REGIONS = {
     #       centre of the picture   km per LED  home (one faint LED)  map
     "ch": ((46.80, 8.21), 2.0, (47.3726, 8.5398), "switzerland.json"),
-    "ie": ((53.41, -7.95), 1.95, (51.527, -9.547), "ireland.json"),
+    "ie": ((53.30, -9.60), 3.0, (51.527, -9.547), "ireland.json"),   # zoomed out and west: the Atlantic too
 }
 
 N = 1700                       # points of light
@@ -86,6 +86,7 @@ class Wind:
         self.key = key
         centre, self.km, home, mapname = REGIONS[key]
         self.lat0, self.lon0 = centre
+        self.area = [self.lat0, self.lon0, self.km]
         self.coslat = math.cos(math.radians(self.lat0))
         self.base = self._base_map(os.path.join(ROOT, "assets", "maps", mapname), home).astype(np.float32)
         # the grid: the centres of a 6 x 8 tiling of the picture, as lat/lon for the API
@@ -104,9 +105,11 @@ class Wind:
         self.phase = self._phase(self.x, self.y)
         self.last, self.last_frame, self.ok = None, time.time(), False
         rec = _read_cache().get(key)
-        if rec and rec.get("grid") == [NX, NY]:
+        if not (rec and rec.get("grid") == [NX, NY] and rec.get("area") == self.area):
+            rec = None                                        # fetched for another grid or another view
+        if rec:
             self._use(rec, ease=False)
-        self.fetched = rec.get("t", 0.0) if rec and rec.get("grid") == [NX, NY] else 0.0
+        self.fetched = rec.get("t", 0.0) if rec else 0.0
         if fetch:
             threading.Thread(target=self._fetch_loop, daemon=True).start()
 
@@ -163,7 +166,7 @@ class Wind:
                 if r.status_code == 429:                             # the free tier's daily limit: come back later
                     raise RuntimeError("429 " + r.text[:80])
                 r.raise_for_status()
-                rec = self.parse(r.json())
+                rec = {**self.parse(r.json()), "area": self.area}
                 self._use(rec, ease=True)
                 _write_cache(self.key, rec)
                 self.ok, wait, backoff = True, EVERY, 120.0

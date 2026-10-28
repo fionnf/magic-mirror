@@ -55,3 +55,6 @@ panel_setup/rods_reconnect
 panel_setup/rods_disconnected
 panel_setup/now.png
 panel_setup/now.json
+
+# live pieces: last good data, kept on the Pi
+panel_setup/*_cache.json

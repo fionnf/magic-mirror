@@ -55,7 +55,7 @@ void main(){
     vec2 p = m + q - iFrame.zw * iResolution;
     vec4 c = vec4(0.0); mainImage(c, p); _out = vec4(clamp(c.rgb, 0.0, 1.0), 1.0); }
 """
-GROUNDED = {"cutcurves", "neonarc"}   # stand on the bottom edge: never tilt or lift
+GROUNDED = {"neonarc"}   # stand on the bottom edge: never tilt or lift
 _FIELD = re.compile(r"(fc|fragCoord)(\.xy)?\s*/\s*iResolution")
 
 
@@ -242,7 +242,7 @@ CURATED = {   # (shadow, mid, highlight) per piece - the gallery's look; the VJ 
     # rim, light escaping round dark shapes, cut-paper curves, topographic lines, a neon tube, a sphere of
     # points, one lit orb, light through blinds
     "inkdrop": ("#0c1a3a", "#2c4a80", "#efe6d2"),
-    "cutcurves": ("#1a1410", "#d85a3a", "#efe2c6"), "contours": ("#0e1410", "#3a6a52", "#d8f0dc"),
+    "contours": ("#0e1410", "#3a6a52", "#d8f0dc"),
     "neonarc": ("#120610", "#c0287a", "#ff9ad0"), "pointcloud": ("#04060c", "#3a5ad0", "#d8e8ff"),
     "blinds": ("#140e0a", "#a8602a", "#ffd8a0"),
     # recreated from the house's own reference images (Pinterest board + pictures sent in chat)
@@ -269,7 +269,7 @@ def _rgb(h):
 
 def gallery_pieces(Wd, Hd):
     """One piece per shader, each in its curated palette (newest, strongest first)."""
-    order = ["metamorphosis", "glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "conic", "cutcurves", "aperture", "eclipse",
+    order = ["metamorphosis", "glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "conic", "aperture", "eclipse",
              "inkdrop", "orbit", "neonarc", "prism", "contours", "pointcloud", "blinds",
              "halo", "ribbon",
              "dandelion", "dotsphere",

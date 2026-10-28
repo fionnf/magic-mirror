@@ -267,7 +267,7 @@ Set by the app for each mode it starts, not meant for `.env`: `WALL_DAILY_DATE`,
 
 | Variable | Notes |
 |---|---|
-| `OTD_API_KEY` | In `.env.example` for live tram delays from opentransportdata.swiss. **Nothing in the code reads it yet**; the Tram map uses the timetable only |
+| `OTD_API_KEY` | Free key from [api-manager.opentransportdata.swiss](https://api-manager.opentransportdata.swiss) (GTFS-RT). Gives the Tram map real delays and cancellations (the wall shows `LIVE`); without it, or without the `gtfs-realtime-bindings` package, the trams run to the timetable (`TIMETABLE`). The feed is about 9 MB; it is fetched every `TRAM_LIVE_SECS` (default 120) while the piece is showing |
 
 **Shell scripts and CI**
 

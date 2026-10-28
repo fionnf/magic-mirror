@@ -621,6 +621,22 @@ def make_app(runner):
         resp.headers["Cache-Control"] = "no-store"
         return resp
 
+    @app.get("/api/look")
+    def look():
+        """How the wall turns a picture into light, for previews that should match it: the panel
+        brightness and PWM bits in use now (from the player's last frame, see led_matrix.led_lut),
+        the shadow lift and the daily art's light of the day."""
+        led = {}
+        try:
+            with open(os.path.join(HERE, "now.json")) as fh:
+                led = json.load(fh)
+        except Exception:
+            pass
+        import config
+        from display import daily
+        return jsonify({"led": led, "lift": config.ART_SHADOW_LIFT, "grade": daily._GRADE,
+                        "grade_k": daily._GRADE_K})
+
     @app.get("/")
     def index():
         return send_from_directory(WEB_DIR, "index.html")

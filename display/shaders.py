@@ -237,8 +237,7 @@ CURATED = {   # (shadow, mid, highlight) per piece - the gallery's look; the VJ 
     "tide": ("#05081a", "#1a598c", "#ccf2ff"), "aperture": ("#02020c", "#2a30d0", "#c070ff"),
     "conic": ("#1a0614", "#2048e0", "#f4ead0"), "prism": ("#ff7a2a", "#e04070", "#7a5cff"),
     # the second collection: light fields, one form in space, cut paper, fine lines, water and weather
-    "ribbon": ("#0a0714", "#5a2c8c", "#f0d6ff"), "rothko": ("#2a0a08", "#9a2a1a", "#f08a48"),
-    "ridges": ("#141a2a", "#4a5a84", "#d8e0f0"),
+    "ribbon": ("#0a0714", "#5a2c8c", "#f0d6ff"),
     "orbit": ("#06060c", "#3850b8", "#c8d8ff"), "dandelion": ("#0a0a12", "#6a5a9a", "#fff4d8"), # remade from the mood board: light through frosted glass, an ink orb on paper, a disc with a burning
     # rim, light escaping round dark shapes, cut-paper curves, topographic lines, a neon tube, a sphere of
     # points, one lit orb, light through blinds
@@ -270,8 +269,8 @@ def _rgb(h):
 
 def gallery_pieces(Wd, Hd):
     """One piece per shader, each in its curated palette (newest, strongest first)."""
-    order = ["metamorphosis", "glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "conic", "cutcurves", "aperture", "rothko", "eclipse",
-             "inkdrop", "orbit", "neonarc", "prism", "contours", "ridges", "pointcloud", "blinds",
+    order = ["metamorphosis", "glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "conic", "cutcurves", "aperture", "eclipse",
+             "inkdrop", "orbit", "neonarc", "prism", "contours", "pointcloud", "blinds",
              "halo", "ribbon",
              "dandelion", "dotsphere",
              "tide"]

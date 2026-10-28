@@ -86,6 +86,16 @@ def _is_on(status):
     return None
 
 
+def _brightness(status):
+    """Bulb brightness as 0-100, or None (newer bulbs report 10-1000 on dps 22, older 25-255 on dps 3)."""
+    dps = (status or {}).get("dps") or {}
+    if "22" in dps and str(dps.get("21", "white")) != "colour":
+        return max(1, min(100, round(int(dps["22"]) / 10)))
+    if "3" in dps:
+        return max(1, min(100, round(int(dps["3"]) / 2.55)))
+    return None
+
+
 def _run_each(devs, fn):
     """Run fn(device_dict) for every device in parallel; never blocks longer than ~TIMEOUT+1 s."""
     results = {}
@@ -108,7 +118,7 @@ def status():
         st = _connect(d).status()
         if st and st.get("Error"):
             return {"on": None, "error": str(st["Error"])[:80]}
-        return {"on": _is_on(st), "error": ""}
+        return {"on": _is_on(st), "error": "", "brightness": _brightness(st)}
     res = _run_each(devices(), one)
     return [{"name": d["name"], "kind": d["kind"], **res.get(d["name"], {"on": None, "error": "no answer"})}
             for d in devices()]
@@ -120,6 +130,34 @@ def _switch(d, on):
     if isinstance(r, dict) and r.get("Error"):
         return {"ok": False, "error": str(r["Error"])[:80]}
     return {"ok": True, "error": ""}
+
+
+def _look(d, brightness, warmth, colour):
+    """Set a bulb's light: brightness 1-100, warmth 0 (warm) - 100 (cool), or colour "#rrggbb"."""
+    if d["kind"] != "bulb":
+        return {"ok": False, "error": "not a bulb"}
+    dev = _connect(d)
+    if colour:
+        c = colour.lstrip("#")
+        r, g, b = (int(c[i:i + 2], 16) for i in (0, 2, 4))
+        dev.turn_on()
+        dev.set_colour(r, g, b)
+        if brightness is not None:                        # a colour's brightness is its value channel
+            import colorsys
+            h, sat, _ = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+            dev.set_colour(*(round(x * 255) for x in colorsys.hsv_to_rgb(h, sat, max(0.04, brightness / 100))))
+        return {"ok": True, "error": ""}
+    dev.turn_on()
+    if warmth is not None:
+        dev.set_white_percentage(max(1, min(100, int(brightness if brightness is not None else 100))), int(warmth))
+    elif brightness is not None:
+        dev.set_brightness_percentage(max(1, min(100, int(brightness))))
+    return {"ok": True, "error": ""}
+
+
+def set_look(names, brightness=None, warmth=None, colour=None):
+    group = [d for d in devices() if d["name"] in set(names)]
+    return _run_each(group, lambda d: _look(d, brightness, warmth, colour))
 
 
 def set_all(on):

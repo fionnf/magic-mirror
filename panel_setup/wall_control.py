@@ -1066,6 +1066,21 @@ def make_app(runner):
         _light_cache["t"] = 0
         return jsonify({"results": res})
 
+    @app.post("/api/lights/look")
+    def lights_look():
+        d = request.get_json(force=True, silent=True) or {}
+        names = [d["name"]] if d.get("name") else lt.room()
+        try:
+            colour = d.get("colour")
+            if colour and not re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
+                raise ValueError("colour must look like #ff8800")
+            res = lt.set_look(names, None if d.get("brightness") is None else int(d["brightness"]),
+                              None if d.get("warmth") is None else int(d["warmth"]), colour)
+        except (ValueError, TypeError) as e:
+            return jsonify({"error": str(e)}), 400
+        _light_cache["t"] = 0
+        return jsonify({"results": res})
+
     @app.post("/api/lights/members")
     def lights_members():
         names = (request.get_json(force=True, silent=True) or {}).get("names", [])

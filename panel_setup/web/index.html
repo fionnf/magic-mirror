@@ -792,13 +792,15 @@ async function shaderLib() {
 let ART = null, artFilter = 'all', musicArtFilter = 'all';
 async function loadArt() {
   if (!ART) { try { ART = await api('/api/art'); } catch (e) { return; } }
-  const chips = (sel, fn) => [{key: 'all', title: 'All'}].concat(ART.collections)
+  const chips = (sel, fn) => [{key: 'all', title: 'All'}].concat(ART.collections, fn === 'filterArt' ? [{key: 'live', title: 'Live boards'}] : [])
     .map(c => `<button class="${sel === c.key ? 'on' : ''}" onclick="${fn}('${c.key}')">${esc(c.title)}</button>`).join('');
   $('artChips').innerHTML = chips(artFilter, 'filterArt');
   const cur = STATUS.current === 'piece' ? STATUS.piece : null;
   const list = shownPieces();
   $('galleryHead').textContent = `Gallery · ${ART.pieces.length} pieces`;
-  $('artGrid').innerHTML = list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
+  $('artGrid').innerHTML = artFilter === 'live' ? liveBoards().map(m => `<button class="${STATUS.current === m.id ? 'sel' : ''}" onclick="play('${m.id}')">
+      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span>${esc(m.title)}</span></button>`).join('')
+    : list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
       <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   if (MUSIC.settings && MUSIC.settings.style === 'art') {
     $('musicArtChips').innerHTML = chips(musicArtFilter, 'filterMusicArt');
@@ -809,8 +811,14 @@ async function loadArt() {
         <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   }
 }
+const LIVE_IDS = ['trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'snow', 'tides', 'limmat', 'westcork', 'quakes'];
+function liveBoards() {                    // modes fed by real-time data, shown as a gallery chip
+  const q = ($('artFind').value || '').trim().toLowerCase();
+  return MODES.filter(m => LIVE_IDS.includes(m.id) && (!q || (m.title + ' ' + m.desc).toLowerCase().includes(q)));
+}
 function shownPieces() {
   const q = ($('artFind').value || '').trim().toLowerCase();
+  if (artFilter === 'live') return [];
   return ART.pieces.filter(p => (artFilter === 'all' || p.collection === artFilter) &&
     (!q || (p.title + ' ' + (p.collection_title || '')).toLowerCase().includes(q)));
 }
@@ -823,6 +831,7 @@ async function stepPiece(d) {
 }
 async function surprise() {
   if (!ART) await loadArt(); if (!ART) return;
+  if (artFilter === 'live') { const b = liveBoards(); if (b.length) play(b[Math.floor(Math.random() * b.length)].id); return; }
   const l = shownPieces().length ? shownPieces() : ART.pieces;
   hangPiece(l[Math.floor(Math.random() * l.length)].id);
 }

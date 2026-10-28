@@ -48,6 +48,12 @@
   .frame .grid { position: absolute; inset: 0; pointer-events: none;
     background: linear-gradient(transparent 99%, rgba(0,0,0,.35) 99%) 0 0 / 100% calc(100% / var(--rows, 3)),
                 linear-gradient(90deg, transparent 99.4%, rgba(0,0,0,.35) 99.4%) 0 0 / calc(100% / var(--cols, 3)) 100%; }
+  .frame .enlarge { position: absolute; top: 8px; right: 8px; z-index: 3; width: 32px; height: 32px; border-radius: 50%; border: 0; display: grid; place-items: center;
+    background: rgba(0,0,0,.55); color: #fff; opacity: .75; backdrop-filter: blur(6px); }
+  .frame .enlarge svg { width: 16px; height: 16px; }
+  body.bigwall { overflow: hidden; }
+  body.bigwall .frame { position: fixed; z-index: 60; top: 50%; left: 50%; transform: translate(-50%, -50%); grid-row: auto;
+    width: min(94vw, calc(94vh * var(--cols, 3) / var(--rows, 3))); box-shadow: 0 0 0 100vmax rgba(0,0,0,.9), 0 0 120px rgba(var(--glow), .45); }
   .label { text-align: left; margin: 0; align-self: end; }
   .label h1 { font: italic 400 clamp(24px, 6.5vw, 30px)/1.05 var(--serif); margin: 0; letter-spacing: -.01em; }
   .label p { margin: 3px 0 0; color: var(--muted); font-size: 13px; max-width: 34ch; }
@@ -212,7 +218,8 @@
   </div>
 </div>
 <div class="stage wrap">
-  <div class="frame" id="frame"><img id="now" alt="What the wall shows now"><canvas id="nowLed" aria-hidden="true"></canvas><div class="grid"></div></div>
+  <div class="frame" id="frame"><img id="now" alt="What the wall shows now"><canvas id="nowLed" aria-hidden="true"></canvas><div class="grid"></div>
+    <button class="enlarge" id="enlarge" onclick="toggleBig()" aria-label="Enlarge the wall preview" title="Enlarge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button></div>
   <div class="label">
     <h1 id="title">Fortuna wall</h1>
     <p id="sub"></p>
@@ -564,6 +571,15 @@ function refreshNow() {
   img.onload = () => { nowImg.src = img.src; ambient(img); leds(img); };
   img.crossOrigin = 'anonymous'; img.src = u('/api/now.png?t=' + Date.now());
 }
+function toggleBig(on) {                // the preview fills the screen; tap it, press Esc or the button again to close
+  const b = document.body, big = on === undefined ? !b.classList.contains('bigwall') : on;
+  b.classList.toggle('bigwall', big);
+  $('enlarge').setAttribute('aria-label', big ? 'Shrink the wall preview' : 'Enlarge the wall preview');
+  requestAnimationFrame(refreshNow);
+}
+$('frame').addEventListener('click', e => { if (document.body.classList.contains('bigwall') && !e.target.closest('#enlarge')) toggleBig(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleBig(false); });
+window.addEventListener('resize', () => { if (document.body.classList.contains('bigwall')) refreshNow(); });
 function leds(img) {                    // the preview as the wall really looks: one block per LED, round diodes, seams
   const F = window.Fortuna; if (!F || !F.ledify) return;
   const cv = $('nowLed'), w = img.naturalWidth || STATUS.wall_w || 192, h = img.naturalHeight || STATUS.wall_h || 256;

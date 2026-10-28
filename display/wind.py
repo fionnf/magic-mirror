@@ -300,3 +300,24 @@ def frame_ie(t):
 
 
 frame = frame_ch
+
+
+def _thumb(key, direction, speeds):
+    """A still for the app: the map with the wind drawn in as a typical, made-up westerly (no network, no saved
+    data) - an illustration of the piece, not today's wind."""
+    w = Wind(key, fetch=False)
+    rng = np.random.default_rng(7)
+    sp = [float(speeds[(i // NX + i % NX) % len(speeds)]) for i in range(NX * NY)]
+    w._use({"speed": sp, "dir": [direction + float(rng.uniform(-18, 18)) for _ in sp], "gust": [v * 1.5 for v in sp]}, ease=False)
+    img = None
+    for i in range(240):
+        img = w(i / 15.0)
+    return img
+
+
+def thumb_ch():
+    return _thumb("ch", 250.0, (4, 7, 11, 6, 9))
+
+
+def thumb_ie():
+    return _thumb("ie", 245.0, (9, 13, 17, 11, 15))

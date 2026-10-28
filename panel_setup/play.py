@@ -58,6 +58,18 @@ def _piece_frame(t):
     return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
 
 
+def _lazy(mod, attr):
+    """A live piece imported on first use, so one unfinished module never stops the others."""
+    cache = {}
+
+    def frame(t):
+        if "fn" not in cache:
+            import importlib
+            cache["fn"] = getattr(importlib.import_module("display." + mod), attr)
+        return cache["fn"](t)
+    return frame
+
+
 def _anims():
     from display import (welcome, pride_show, cards, maeva_story, dewa_story, art,
                          departures, music, shapes, light_art, artsy, shaders, daily, flow,
@@ -77,6 +89,13 @@ def _anims():
         "planes":  (planes.frame, 3600.0 * 24),
         "limmat":  (limmat.frame, 3600.0 * 24),
         "westcork": (westcork.frame, 3600.0 * 24),
+        "windch":  (_lazy("wind", "frame_ch"), 3600.0 * 24),
+        "windie":  (_lazy("wind", "frame_ie"), 3600.0 * 24),
+        "snow":    (_lazy("snow", "frame"), 3600.0 * 24),
+        "satellites": (_lazy("satellites", "frame"), 3600.0 * 24),
+        "tides":   (_lazy("tides", "frame"), 3600.0 * 24),
+        "tramlines": (_lazy("tramlines", "frame"), 3600.0 * 24),
+        "quakes":  (_lazy("quakes", "frame"), 3600.0 * 24),
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),
         "maeva":   (maeva_story.frame, maeva_story.LOOP_SEC),
@@ -296,7 +315,7 @@ def main():
     up_lock, up_t, down_ok = 60.0, -1e9, 0.0       # after slowing down, do not speed up again for a while (it judders)
     t_prev, art_t, slow = None, None, 1.0           # the art's own clock, slowed while frames are held longer
     heat_t, heat_floor = 0.0, 0                     # thermal guard: a hot chip gets fewer frames to make
-    if a.anim in ("planes", "westcork"):            # single lit LEDs on black: deeper colour would slow the refresh (flicker)
+    if a.anim in ("planes", "westcork", "windch", "windie", "snow", "satellites", "tides", "tramlines", "quakes"):            # single lit LEDs on black: deeper colour would slow the refresh (flicker)
         os.environ["WALL_FIXED_DEPTH"] = "1"
     rods = None
     try:

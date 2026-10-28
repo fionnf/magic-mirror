@@ -54,9 +54,19 @@ MODES = [
     ("planes", "Art", "Planes", "Every aircraft over Zürich right now, drawing its path in light"),
     ("limmat", "Art", "Limmat", "The river flowing at its real speed, coloured by the lake's temperature"),
     ("westcork", "Art", "West Cork", "Mizen, Fastnet, Schull and Baltimore at night, every light flashing its real signal"),
+    ("windch", "Art", "Wind over Switzerland", "The real wind right now, thousands of points of light flowing over the country"),
+    ("windie", "Art", "Wind over Ireland", "The Atlantic wind over Ireland right now, flowing in light"),
+    ("snow", "Art", "Snow", "Switzerland in relief, every slope above today's snow line lit, snow falling where it falls"),
+    ("satellites", "Art", "Satellites", "The sky over Zürich: the ISS and the brightest satellites crossing it now"),
+    ("tides", "Art", "Tides", "The sea at Baltimore: the real tide rising and falling, the swell, the moon"),
+    ("tramlines", "Art", "Tram map", "Every Zürich tram moving on an Underground-style map of its lines"),
+    ("quakes", "Art", "Earthquakes", "A turning globe, every earthquake of the last day rippling out from where it struck"),
 ]
 MODE_IDS = {m[0] for m in MODES}
-LIVE_THUMBS = ["planes", "limmat", "westcork"]   # live modes whose module offers thumb()
+LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "westcork.thumb",   # mode -> module.thumb
+               "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "snow": "snow.thumb",
+               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb",
+               "quakes": "quakes.thumb"}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",
                  "mirror_auto": 0, "smart_crop": True, "art_speed": 0.12}
@@ -440,8 +450,9 @@ def make_thumbs():
             "wheel": lambda: icon("🎡", (40, 10, 50), "spin"),
         }
         import importlib
-        for mod in LIVE_THUMBS:                          # live pieces: a still from their map and saved data, no network
-            jobs[mod] = (lambda m: lambda: importlib.import_module("display." + m).thumb())(mod)
+        for mode, ref in LIVE_THUMBS.items():            # live pieces: a still from their map and saved data, no network
+            mod, fn = ref.split(".")
+            jobs[mode] = (lambda m, f: lambda: getattr(importlib.import_module("display." + m), f)())(mod, fn)
         for k, fn in jobs.items():
             path = os.path.join(THUMB_DIR, f"{k}.png")
             if os.path.exists(path):

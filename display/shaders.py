@@ -55,7 +55,7 @@ void main(){
     vec2 p = m + q - iFrame.zw * iResolution;
     vec4 c = vec4(0.0); mainImage(c, p); _out = vec4(clamp(c.rgb, 0.0, 1.0), 1.0); }
 """
-GROUNDED = {"arches", "cutcurves", "ember", "neonarc"}   # stand on the bottom edge: never tilt or lift
+GROUNDED = {"cutcurves", "neonarc"}   # stand on the bottom edge: never tilt or lift
 _FIELD = re.compile(r"(fc|fragCoord)(\.xy)?\s*/\s*iResolution")
 
 
@@ -232,15 +232,14 @@ class ShaderPiece:
 
 
 CURATED = {   # (shadow, mid, highlight) per piece - the gallery's look; the VJ recolours freely
-    "inkorbs": ("#081a4a", "#3c62a8", "#b8bfc4"), "cutpaper": ("#1a0605", "#a8261c", "#e6dccb"),
-    "dotsphere": ("#000000", "#6a5cff", "#66c8ff"),
+        "dotsphere": ("#000000", "#6a5cff", "#66c8ff"),
     "eclipse": ("#000000", "#3040e0", "#ff6a2a"), "halo": ("#140808", "#b02810", "#ff9a40"),
     "tide": ("#05081a", "#1a598c", "#ccf2ff"), "aperture": ("#02020c", "#2a30d0", "#c070ff"),
     "conic": ("#1a0614", "#2048e0", "#f4ead0"), "prism": ("#ff7a2a", "#e04070", "#7a5cff"),
     # the second collection: light fields, one form in space, cut paper, fine lines, water and weather
     "ribbon": ("#0a0714", "#5a2c8c", "#f0d6ff"), "rothko": ("#2a0a08", "#9a2a1a", "#f08a48"),
-    "arches": ("#120c08", "#c8603a", "#ecd8b8"), "ridges": ("#141a2a", "#4a5a84", "#d8e0f0"),
-    "orbit": ("#06060c", "#3850b8", "#c8d8ff"), "ember": ("#120606", "#b03a18", "#ffd48a"), "poolglass": ("#04101a", "#1a6a8a", "#c8f4ff"), "dandelion": ("#0a0a12", "#6a5a9a", "#fff4d8"), # remade from the mood board: light through frosted glass, an ink orb on paper, a disc with a burning
+    "ridges": ("#141a2a", "#4a5a84", "#d8e0f0"),
+    "orbit": ("#06060c", "#3850b8", "#c8d8ff"), "dandelion": ("#0a0a12", "#6a5a9a", "#fff4d8"), # remade from the mood board: light through frosted glass, an ink orb on paper, a disc with a burning
     # rim, light escaping round dark shapes, cut-paper curves, topographic lines, a neon tube, a sphere of
     # points, one lit orb, light through blinds
     "inkdrop": ("#0c1a3a", "#2c4a80", "#efe6d2"),
@@ -273,7 +272,7 @@ def gallery_pieces(Wd, Hd):
     """One piece per shader, each in its curated palette (newest, strongest first)."""
     order = ["metamorphosis", "glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "conic", "cutcurves", "aperture", "rothko", "eclipse",
              "inkdrop", "orbit", "neonarc", "prism", "contours", "ridges", "pointcloud", "blinds",
-             "arches", "inkorbs", "ember", "cutpaper", "poolglass", "halo", "ribbon",
+             "halo", "ribbon",
              "dandelion", "dotsphere",
              "tide"]
     have = names()

@@ -41,7 +41,7 @@ MODES = [
     ("piece", "Piece", "One piece", "A single piece from the gallery, as long as you like"),
     ("shaders", "Art", "Shaders", "Glass orb, halftone wave, conic tiles, eclipse, prism and 30 more"),
     ("artsy", "Art", "Artsy", "Marbling, op-art stripes, oil slick, a drifting Mondrian"),
-    ("glass", "Art", "Light Art", "Stained glass and long-exposure light trails"),
+    ("glass", "Art", "Light Art", "Long-exposure light trails"),
     ("art", "Art", "Art Gallery", "Ink flow, colour fields, moiré"),
     ("pride", "Shows", "Pride Show", "Disco ball, HOUSE FORTUNA, people nearby, vortex, heart"),
     ("dewa", "Shows", "Dewa's Story", "Edelweiss flight attendant, a date at every layover"),

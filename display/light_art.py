@@ -169,7 +169,7 @@ class LightGallery(art.Gallery):
         ocean = P([(2, 6, 25), (10, 60, 120), (20, 170, 190), (160, 240, 230)])
         dusk = P([(15, 6, 35), (90, 30, 110), (230, 90, 120), (255, 200, 140)])
         forest = P([(3, 12, 8), (15, 80, 60), (90, 190, 120), (230, 250, 190)])
-        self.pieces = [StainedGlass(W, H, indigo), Trails(W, H, forest), Trails(W, H, dusk, n=1500)]
+        self.pieces = [Trails(W, H, forest), Trails(W, H, dusk, n=1500)]
         # the watercolour-like nebulas and the second stained glass were removed (review 2026-10-13)
         self.last_t = None
         self.current = -1

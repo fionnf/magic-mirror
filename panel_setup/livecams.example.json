@@ -1,0 +1,22 @@
+{
+  "_readme": "Copy to panel_setup/livecams.json (git-ignored). Only use streams you are permitted to use on a display like this one: your own IP cameras, webcams published under an open licence, or a provider's feed where its terms allow. Keys starting with _ are ignored.",
+  "cams": [
+    {
+      "name": "Crossing",
+      "url": "https://example.invalid/your-licensed-stream/playlist.m3u8",
+      "_url": "HLS .m3u8, MJPEG http(s) stream, rtsp://user:pass@host/stream, a local video file (looped), or an image URL (polled every 'poll' seconds, default 3).",
+      "label": "Crossing, Tokyo",
+      "x": 0.5,
+      "y": 0.55,
+      "zoom": 1.3,
+      "_focus": "x, y: focus point as a fraction of the frame; zoom 1 = full frame height cropped to the portrait wall, 2 = twice as close.",
+      "pan": true,
+      "_pan": "slow drift left and right across the frame.",
+      "rotation": 0,
+      "flip": false,
+      "led": false,
+      "_led": "true: ordered dither against the 6-bit LED banding."
+    },
+    { "name": "test" }
+  ]
+}

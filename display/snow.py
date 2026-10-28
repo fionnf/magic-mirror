@@ -243,39 +243,30 @@ class Snow:
                 "depth": max(0.0, num("snow_depth") or 0.0)}
 
     # ---------------------------------------------------------------- drawing
-    def _line_now(self, t):
-        if self.fresh:
-            with self.lock:
-                self.fresh = False
-                self._derive()
-            self.line_from, self.line_to, self.ease_t0 = self._current_line(t), self.f_line.copy(), t
-        if self.start is None:
-            self.start = t
+    def _line_at(self, t):
+        """(line field, cache key) at time t: the intro sweep, an ease to new data, or still."""
         u = (t - self.start) / INTRO
         if u < 1.0:                                    # the snow line comes down from the summits
             s = 1.0 - (1.0 - u) ** 3
-            return 4800.0 + (self.line_to - 4800.0) * s, ("intro", int(u * 400))
+            return 4800.0 + (self.line_to - 4800.0) * s, ("intro", int(u * 300))
         if self.ease_t0 is not None:
             v = (t - self.ease_t0) / EASE
             if v < 1.0:
                 s = v * v * (3 - 2 * v)
-                return self.line_from + (self.line_to - self.line_from) * s, ("ease", self.ease_t0, int(v * 400))
+                return self.line_from + (self.line_to - self.line_from) * s, ("ease", self.ease_t0, int(v * 300))
             self.ease_t0 = None
         return self.line_to, ("still", id(self.line_to))
 
-    def _current_line(self, t):
-        line, _ = self._line_now_peek(t)
-        return line
-
-    def _line_now_peek(self, t):
-        if self.start is not None and (t - self.start) < INTRO:
-            s = 1.0 - (1.0 - (t - self.start) / INTRO) ** 3
-            return 4800.0 + (self.line_to - 4800.0) * s, None
-        if self.ease_t0 is not None and (t - self.ease_t0) < EASE:
-            v = (t - self.ease_t0) / EASE
-            s = v * v * (3 - 2 * v)
-            return self.line_from + (self.line_to - self.line_from) * s, None
-        return self.line_to, None
+    def _line_now(self, t):
+        if self.start is None:
+            self.start = t
+        if self.fresh:                                 # new data: ease from wherever the line is now
+            with self.lock:
+                self.fresh = False
+                self._derive()
+            self.line_from, self.line_to, self.ease_t0 = self._line_at(t)[0].copy(), self.f_line.copy(), t
+            self.cached_key = None
+        return self._line_at(t)
 
     def _compose(self, line):
         from display import pixelfont
@@ -292,7 +283,7 @@ class Snow:
         img[self.y0:self.y0 + self.bh] = PAL[idx]
         hx, hy = self.home
         if 0 <= hx < W and 0 <= hy < H:
-            img[hy, hx] = np.maximum(img[hy, hx], HOME_COL)
+            img[hy, hx] = HOME_COL
         if self.label:
             pixelfont.draw(img, self.label, W - 2 - pixelfont.width(self.label), H - 8, TEXT_COL)
         return img
@@ -340,12 +331,14 @@ _dead = None
 
 def frame(t):
     global _snow, _dead
-    try:
-        if _snow is None:
-            _snow = Snow()
-        return _snow(t)
-    except Exception as e:                             # never take the wall down: a quiet black frame
-        if _dead is None:
-            _dead = Image.new("RGB", (W, H))
+    if _dead is None:
+        try:
+            if _snow is None:
+                _snow = Snow()
+            return _snow(t)
+        except Exception as e:                         # never take the wall down: a quiet black frame
             print(f"[snow] {str(e)[:160]}", flush=True)
-        return _dead
+            if _snow is None:
+                _dead = Image.new("RGB", (W, H))       # no relief: stay black, do not retry every frame
+            return Image.new("RGB", (W, H))
+    return _dead

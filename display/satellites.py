@@ -52,7 +52,7 @@ DAY = np.array([150, 170, 210], np.float32)           # sunlit, but so is our sk
 SHADOW = np.array([105, 112, 200], np.float32)        # in the Earth's shadow
 LOW = 0.72                                            # below 10 degrees: a little dimmer
 RING = np.array([34, 62, 124], np.float32)            # the horizon at night: the deepest blue the wall shows
-RING_DAY = np.array([110, 160, 215], np.float32)
+RING_DAY = np.array([70, 112, 180], np.float32)
 GLOW = np.array([240, 120, 40], np.float32)           # the horizon where the sun is, at dusk and dawn
 SKY = np.array([10, 46, 128], np.float32)             # the dome by day (on every other LED: the wall's
                                                       # dimmest blue, halved), in civil twilight on one in four

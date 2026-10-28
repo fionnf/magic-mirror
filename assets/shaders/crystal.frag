@@ -51,7 +51,7 @@ float crystal(vec2 uv){
   for (int i = 0; i < 3; i++) {
     float fi = float(i);
     float x = L * (0.40 + 0.20 * fi + 0.025 * iEvolve.x);
-    float l = L * B1 * (0.36 - 0.06 * fi - 0.05 * fi * fi) * (1.0 + 0.08 * iEvolve.y);
+    float l = L * B1 * (0.31 - 0.04 * fi - 0.05 * fi * fi) * (1.0 + 0.08 * iEvolve.y);
     float wb = w * 0.8 * gb;
     d = smin(d, spike(q, vec2(x, 0.0), 1.0472, l, wb), k);
     for (int j = 0; j < 2; j++) {                        // fronds off the branch, parallel to the arm
@@ -87,16 +87,15 @@ void mainImage(out vec4 o, in vec2 fc){
   vec3 Lt = normalize(vec3(cos(la), sin(la), 0.9 + 0.2 * iEvolve.w));
   float dif = max(dot(N, Lt), 0.0);
   float spec = pow(max(dot(N, normalize(Lt + vec3(0.0, 0.0, 1.0))), 0.0), mix(18.0, 60.0, wet));
-  float body = smoothstep(0.004, -0.004, d);
   float edge = exp(-pow(d / 0.006, 2.0));
   vec3 ice = mix(iColB * 0.62, mix(iColB, iColC, 0.45), dif * dif);   // each facet flat in the cold light
-  vec3 water = mix(iColB * 0.55, iColB * 0.8, dif);
-  float caustic = smoothstep(0.6, 0.95, dot(-gn, -Lt.xy)) * smoothstep(0.07, 0.0, depth) * wet;
+  vec3 water = mix(iColB * 0.62, mix(iColB, iColC, 0.25), dif);
+  float body = smoothstep(0.004, -0.004, d);
+  float caustic = smoothstep(0.6, 0.95, dot(-gn, -Lt.xy)) * smoothstep(0.07, 0.0, depth) * wet * body;
   vec3 col = iColA * 0.12 + iColB * 0.10 * exp(-max(d, 0.0) * 9.0);   // the room, a faint cold glow
   col = mix(col, mix(ice, water, wet), body);
   col += iColC * body * spec * mix(0.9, 1.3, wet);       // glints
   col += iColC * caustic * 0.6;
   col += iColC * edge * (0.35 + 0.4 * dif);              // the bright cut edge
-  float rings = exp(-pow((dot(abs(vec2(uv.x * 0.5 + abs(uv.y) * 0.866, 0.0)), vec2(1.0)) - 0.0) / 1e3, 2.0));
   o = vec4(col, 1.0);
 }

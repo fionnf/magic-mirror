@@ -93,6 +93,7 @@ def _anims():
         "windie":  (_lazy("wind", "frame_ie"), 3600.0 * 24),
         "windeu":  (_lazy("wind", "frame_eu"), 3600.0 * 24),
         "polarbears": (_lazy("polarbears", "frame"), 3600.0 * 24),
+        "livecam": (_lazy("livecam", "frame"), 3600.0 * 24),
         "snow":    (_lazy("snow", "frame"), 3600.0 * 24),
         "satellites": (_lazy("satellites", "frame"), 3600.0 * 24),
         "tides":   (_lazy("tides", "frame"), 3600.0 * 24),

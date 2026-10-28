@@ -56,6 +56,7 @@ MODES = [
     ("westcork", "Art", "West Cork", "Mizen, Fastnet, Schull and Baltimore at night, every light flashing its real signal"),
     ("windch", "Art", "Wind over Switzerland", "The real wind right now, thousands of points of light flowing over the country"),
     ("windie", "Art", "Wind over Ireland", "The Atlantic wind over Ireland right now, flowing in light"),
+    ("livecam", "Live", "Live cam", "A public webcam from your own livecams.json, tuned for the LEDs (a NO SIGNAL card if none is set up)"),
     ("polarbears", "Art", "Polar bears of Svalbard", "Recorded 2012 collar tracks of Svalbard polar bears, each with its number, over today's sea ice (a replay, not live)"),
     ("windeu", "Art", "Wind over Europe", "The real wind from Iceland to Switzerland right now: the Atlantic, the storm tracks, flowing in light"),
     ("snow", "Art", "Snow", "Switzerland in relief, every slope above today's snow line lit, snow falling where it falls"),
@@ -66,7 +67,7 @@ MODES = [
 ]
 MODE_IDS = {m[0] for m in MODES}
 LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "westcork.thumb",   # mode -> module.thumb
-               "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "snow": "snow.thumb",
+               "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "snow": "snow.thumb",
                "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb",
                "quakes": "quakes.thumb"}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,

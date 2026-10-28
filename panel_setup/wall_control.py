@@ -56,6 +56,9 @@ MODES = [
     ("westcork", "Art", "West Cork", "Mizen, Fastnet, Schull and Baltimore at night, every light flashing its real signal"),
     ("windch", "Art", "Wind over Switzerland", "The real wind right now, thousands of points of light flowing over the country"),
     ("windie", "Art", "Wind over Ireland", "The Atlantic wind over Ireland right now, flowing in light"),
+    ("storks", "Art", "Storks", "A year of white-stork migration in an hour: real GPS tracks of storks from the Swiss border region and beyond, to Spain and Africa (recorded, not live)"),
+    ("nighttrains", "Art", "Night trains", "Every European night train on its timetable, with sleeping cities and the real night side of the Earth"),
+    ("issday", "Art", "The ISS's day", "The space station's ground track drawing itself across a world map, with the real night side and a pulse when it passes Zürich"),
     ("skylines", "Art", "Skylines", "A new city skyline every hour under its real live sky: the real sun and moon, stars, lit windows and live weather"),
     ("livecam", "Live", "Live cam", "A public webcam from your own livecams.json, tuned for the LEDs (a NO SIGNAL card if none is set up)"),
     ("polarbears", "Art", "Polar bears of Svalbard", "Recorded 2012 collar tracks of Svalbard polar bears, each with its number, over today's sea ice (a replay, not live)"),
@@ -68,7 +71,7 @@ MODES = [
 ]
 MODE_IDS = {m[0] for m in MODES}
 LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "westcork.thumb",   # mode -> module.thumb
-               "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "snow": "snow.thumb",
+               "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "storks": "storks.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
                "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb",
                "quakes": "quakes.thumb"}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,

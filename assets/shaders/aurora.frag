@@ -19,9 +19,9 @@ float n2(vec2 p){ return sin(p.x * 1.7 + sin(p.y * 1.3)) * 0.5 + sin(p.y * 2.3 -
 void stage(int k, out vec4 a, out vec4 b, out vec4 c){
   if (k == 0)      { a = vec4(0.300, 0.050, 0.004, 0.050); b = vec4(0.62, 0.10, 0.0, 0.0); c = vec4(0.0, 1.00, 0.00, 0.2); }
   else if (k == 1) { a = vec4(0.340, 0.060, 0.022, 0.100); b = vec4(0.90, 0.45, 0.0, 0.0); c = vec4(0.0, 0.80, 0.30, 1.0); }
-  else if (k == 2) { a = vec4(0.360, 0.015, 0.060, 0.200); b = vec4(1.10, 0.85, 0.0, 0.0); c = vec4(0.0, 0.55, 0.75, 0.7); }
-  else if (k == 3) { a = vec4(0.380, 0.000, 0.030, 0.300); b = vec4(1.20, 1.00, 1.0, 0.0); c = vec4(0.0, 0.40, 0.40, 0.4); }
-  else if (k == 4) { a = vec4(0.390, 0.030, 0.045, 0.170); b = vec4(1.00, 0.35, 0.1, 1.0); c = vec4(0.0, 0.65, 0.30, 0.3); }
+  else if (k == 2) { a = vec4(0.360, 0.015, 0.095, 0.200); b = vec4(1.10, 0.85, 0.0, 0.0); c = vec4(0.0, 0.55, 0.75, 0.7); }
+  else if (k == 3) { a = vec4(0.380, 0.000, 0.030, 0.170); b = vec4(0.95, 1.00, 1.0, 0.0); c = vec4(0.0, 0.40, 0.40, 0.4); }
+  else if (k == 4) { a = vec4(0.370, 0.030, 0.060, 0.150); b = vec4(0.90, 0.30, 0.0, 1.0); c = vec4(0.0, 0.65, 0.30, 0.3); }
   else             { a = vec4(0.300, 0.050, 0.010, 0.110); b = vec4(0.55, 0.05, 0.0, 0.25); c = vec4(1.0, 0.25, 0.00, 0.1); }
 }
 
@@ -58,7 +58,7 @@ float curtain(float x, float y, float t, vec4 a, vec4 b, vec4 c, float drift, fl
   float rn = rays(u + drift * 0.3, t, 1.0 + 0.2 * iEvolve.y);
   float R = b.y * mix(1.0, fade, co);
   float H = a.w * (0.75 + 0.6 * rn * R);                 // the rays reach up to different heights
-  float below = exp(-h * h / 0.00016);
+  float below = exp(-h * h / (0.00016 + 0.006 * b.w));     // patches spill below the hem
   float above = exp(-max(h, 0.0) / H) * (0.72 + 0.28 * exp(-max(h, 0.0) / 0.018));
   float prof = h < 0.0 ? below : above;
   float m = mix(1.0, 0.3 + 1.0 * rn, R * smoothstep(-0.01, 0.05, h));
@@ -94,21 +94,21 @@ void mainImage(out vec4 o, in vec2 fc){
   // the two curtains, the far one higher, fainter and drifting the other way
   float drift = t * 0.012;
   float h1, h2;
-  float L1 = curtain(x, y, t, a, b, c, drift, 0.50, h1);
+  float L1 = curtain(x, y, t, a, b, c, drift, 0.62, h1);
   vec4 a2 = a; a2.x += 0.10; a2.z *= 0.8; a2.w *= 0.8;
-  float L2 = c.z * 0.5 * curtain(x + 0.21, y, t * 0.8, a2, b, c, -drift * 0.7 + 3.0, 0.62, h2);
+  float L2 = c.z * 0.5 * curtain(x + 0.21, y, t * 0.8, a2, b, c, -drift * 0.7 + 3.0, 0.74, h2);
 
   // patches: the sheet breaks into soft pools of light that pulse
-  float pn = n2(vec2(x * 5.0 + t * 0.02, y * 4.0 - t * 0.015) + 1.3 * iEvolve.z);
-  float pulse = 0.55 + 0.45 * sin(t * 0.9 + 5.0 * n2(vec2(x * 2.0, y * 2.0) + 3.0));
-  float mask = mix(1.0, smoothstep(-0.15, 0.55, pn) * pulse * 1.5, b.w);
+  float pn = n2(vec2(x * 7.0 + t * 0.03, y * 4.0 - t * 0.02) + 1.3 * iEvolve.z);
+  float pulse = 0.65 + 0.35 * sin(t * 0.9 + 5.0 * n2(vec2(x * 4.0, y * 3.0) + 3.0));
+  float mask = mix(1.0, smoothstep(-0.25, 0.6, pn) * pulse * 1.25, b.w);
   L1 *= mask; L2 *= mask;
 
   vec3 tint1 = mix(iColB, iColC, 0.75 * exp(-abs(h1) / 0.02));
   tint1 = mix(tint1, mix(iColB, iColA * 2.2, 0.65), smoothstep(0.04, 0.32, h1));
   vec3 tint2 = mix(iColB, iColA * 2.2, 0.35 + 0.5 * smoothstep(0.0, 0.25, h2));
   vec3 aur = tint1 * L1 + tint2 * L2;
-  aur += iColC * 0.45 * max(L1 - 0.85, 0.0);             // the hottest light whitens
+  aur += iColC * 0.45 * max(L1 - 0.85, 0.0) * (1.0 - 0.7 * b.w);             // the hottest light whitens
   float glow = b.x * (1.0 - 0.5 * b.w);
   aur += iColB * 0.07 * glow * smoothstep(0.85, 0.25, y);  // the sky lit by it
 

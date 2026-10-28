@@ -43,6 +43,7 @@ DAY = 86400.0
 CX, CY, R = (W - 1) / 2.0, 106.0, 92.0         # the globe on the wall (LEDs); the text sits under it
 PITCH = 2                                      # one dot in every PITCH x PITCH LEDs
 TURN = 240.0                                   # seconds per turn
+TURN_STEPS = 1440                              # the turn moves in quarter degrees (0.4 LED at the middle)
 VIEW_LAT = math.radians(18.0)                  # we look down on it a little from the north ...
 ROLL = math.radians(-20.0)                     # ... and its axis leans, like a desk globe
 TEXT_Y = 222
@@ -75,8 +76,7 @@ SAMPLE = [  # a still for the app when there is no cache yet: a few real quakes 
 def dim(c, f):
     """c * f, but a channel that was lit stays at the wall's dimmest visible step (so a dimmed amber stays
     amber, instead of falling to red when its green drops out)."""
-    c = np.asarray(c, np.float32)
-    return np.where(c >= 94, np.maximum(c * f, 100.0), 0.0).astype(np.float32)
+    return tuple(max(v * f, 100.0) if v >= 94 else 0.0 for v in c)
 
 
 def depth_colour(d):
@@ -148,6 +148,7 @@ class Globe:
         self.rim = self.mu < 0.16                            # the outermost dots
         self.quakes, self.seen, self.generated, self.fetched = [], {}, None, 0.0
         self.last_mod = None
+        self.key, self.base = None, None
         self._load_cache()
         self.last_frame = time.time()
         self.thread = None
@@ -189,9 +190,13 @@ class Globe:
             seen = self.seen.get(qid, t)
             start = seen if 0 < seen - t < 3600 else t      # reported late: its ripple starts when it arrives
             rho, dur, per, life = ripple(mag)
+            v = unit(lat, lon)
+            e1 = np.cross(v, [0.0, 0.0, 1.0])                # two directions along the surface, for rings
+            e1 = e1 / np.linalg.norm(e1) if np.linalg.norm(e1) > 1e-6 else np.array([1.0, 0.0, 0.0])
             out.append({"id": qid, "t": t, "start": start, "mag": mag, "depth": depth,
-                        "place": short_place(place), "v": unit(lat, lon), "col": depth_colour(depth),
-                        "rho": math.radians(rho), "dur": dur, "per": per, "life": life})
+                        "place": short_place(place), "v": v, "e1": e1, "e2": np.cross(v, e1),
+                        "col": depth_colour(depth), "rho": math.radians(rho), "dur": dur, "per": per,
+                        "life": life})
         self.quakes = sorted(out, key=lambda q: q["mag"])   # the strongest drawn last, on top
 
     def _fetch_loop(self):
@@ -250,19 +255,14 @@ class Globe:
     def render(self, now, spin=None, sun=None):
         """The globe at time now; spin (seconds) sets the turn and sun (a unit vector) the light, when
         they are not now's own."""
-        lam0 = -2 * math.pi * (((now if spin is None else spin) / TURN) % 1.0) + math.pi   # west to east
-        img = np.zeros((H, W, 3), np.float32)
-        # the land, lit by the real sun
-        lon = self.gdlon + lam0
-        col = ((lon / (2 * math.pi) + 0.5) % 1.0 * self.mw).astype(np.int32) % self.mw
-        land = self.mask[self.row, col]
+        steps = int(((now if spin is None else spin) / TURN) % 1.0 * TURN_STEPS)
+        lam0 = math.pi - 2 * math.pi * steps / TURN_STEPS          # the Earth turns west to east
         M = self._basis(lam0)
-        cos_sun = self.gview @ (M @ (sun_vector(now) if sun is None else sun))
-        day = np.clip((cos_sun + 0.08) / 0.16, 0.0, 1.0)[:, None]  # a soft twilight band
-        c = (LAND_NIGHT + (LAND_DAY - LAND_NIGHT) * day) * self.limb
-        rim = self.rim & ~land
-        img[self.gy[land], self.gx[land]] = c[land]
-        img[self.gy[rim], self.gx[rim]] = RIM
+        named = self.named(now)
+        key = (steps, int(now // 60), None if named is None else named["id"], sun is None)
+        if key != self.key:                                         # the globe itself, ~6 times a second
+            self.key, self.base = key, self._base(lam0, M, now if sun is None else sun, named)
+        img = self.base.copy()
         if not self.quakes:
             return img
         # the rings: each quake echoes every few minutes, weaker as it ages, gone after its life
@@ -277,11 +277,7 @@ class Globe:
             rho = q["rho"] * (1.0 - (1.0 - ph) ** 2)                # fast at first, settling
             n = max(10, int(2 * math.pi * math.sin(rho) * R * 1.4))
             th = np.linspace(0, 2 * math.pi, n, endpoint=False)
-            cv = q["v"]
-            e1 = np.cross(cv, [0.0, 0.0, 1.0])
-            e1 = e1 / (np.linalg.norm(e1) + 1e-9) if np.linalg.norm(e1) > 1e-6 else np.array([1.0, 0, 0])
-            e2 = np.cross(cv, e1)
-            pts = (math.cos(rho) * cv + math.sin(rho) * (np.cos(th)[:, None] * e1 + np.sin(th)[:, None] * e2))
+            pts = math.cos(rho) * q["v"] + math.sin(rho) * (np.cos(th)[:, None] * q["e1"] + np.sin(th)[:, None] * q["e2"])
             if strength < 0.5:                                      # fading: the ring breaks into dots
                 keep = ((np.arange(n) * 0.6180339) % 1.0) < strength * 2.0
                 pts = pts[keep]
@@ -294,7 +290,6 @@ class Globe:
         # the quakes themselves
         V = np.array([q["v"] for q in self.quakes])
         x, y, z = self._project(M, V)
-        named = self.named(now)
         blink = 0.5 + 0.5 * math.cos(now * 2.4)
         for q, qx, qy, qz in zip(self.quakes, x, y, z):
             if qz < 0.03 or not (1 <= qx < W - 1 and 1 <= qy < H - 1):
@@ -311,6 +306,20 @@ class Globe:
                 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                     img[qy + dy, qx + dx] = np.maximum(img[qy + dy, qx + dx], arm)
             img[qy, qx] = c
+        return img
+
+    def _base(self, lam0, M, sun, named):
+        """The dots of the globe (land lit by the sun, the faint rim) and the name at the bottom."""
+        img = np.zeros((H, W, 3), np.float32)
+        lon = self.gdlon + lam0
+        col = ((lon / (2 * math.pi) + 0.5) % 1.0 * self.mw).astype(np.int32) % self.mw
+        land = self.mask[self.row, col]
+        s = sun_vector(sun) if np.isscalar(sun) else sun
+        day = np.clip((self.gview @ (M @ s) + 0.08) / 0.16, 0.0, 1.0)[:, None]   # a soft twilight band
+        c = (LAND_NIGHT + (LAND_DAY - LAND_NIGHT) * day) * self.limb
+        rim = self.rim & ~land
+        img[self.gy[land], self.gx[land]] = c[land]
+        img[self.gy[rim], self.gx[rim]] = RIM
         if named is not None:
             self._label(img, named)
         return img

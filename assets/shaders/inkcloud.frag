@@ -28,7 +28,7 @@ const vec4 K[48] = vec4[48](
   vec4(0.0, -0.37, 0.26, 0.045), vec4(-0.17, -0.365, 0.1, 0.04), vec4(0.17, -0.365, 0.1, 0.04), vec4(0.0, -0.355, 0.11, 0.045),
   vec4(-0.09, -0.37, 0.09, 0.04), vec4(0.09, -0.37, 0.09, 0.04), vec4(-0.23, -0.375, 0.06, 0.03), vec4(0.23, -0.375, 0.06, 0.03),
   vec4(0.0, 0.0, 0.07, 0.078), vec4(0.0, -0.18, 0.02, 0.06), vec4(0.0, -0.18, 0.02, 0.06), vec4(0.0, 0.01, 0.045, 0.05),
-  vec4(0.0, -0.09, 0.035, 0.06), vec4(0.0, -0.09, 0.035, 0.06), vec4(0.0, -0.24, 0.017, 0.05), vec4(0.0, -0.24, 0.017, 0.05));
+  vec4(0.0, -0.09, 0.035, 0.06), vec4(0.0, -0.09, 0.035, 0.06), vec4(0.0, -0.235, 0.022, 0.045), vec4(0.0, -0.235, 0.022, 0.045));
 // how late each blob sets off when its form flows into the next (the trail behind the falling drop,
 // the column rising out of the middle of the pool, the tail following the drop up)
 const float DL[48] = float[48](
@@ -71,22 +71,27 @@ float shape(vec2 uv, float t, int k, float s, out vec2 wuv){
   wuv = swirl(uv, w);
   if (k != 3) return blobs(wuv, k, kn, s, t);
   // the cloud rains itself away while the pool fills along the bottom (they never touch: the rain joins them)
-  float a = blobs(wuv, 3, 3, 0.0, t) + 0.125 * smoothstep(0.15, 0.9, s) + 0.25 * smoothstep(0.85, 1.0, s);
-  float b = blobs(wuv, 4, 4, 0.0, t) + 0.065 * (1.0 - smoothstep(0.05, 0.75, s)) + 0.25 * (1.0 - smoothstep(0.0, 0.1, s));
+  float sc = 1.0 - 0.75 * smoothstep(0.1, 0.92, s);          // the cloud shrinks into itself as it rains
+  vec2 cc = vec2(0.0, 0.17);
+  float a = blobs((wuv - cc) / sc + cc, 3, 3, 0.0, t) * sc + 0.3 * smoothstep(0.82, 1.0, s);
+  float sp = 0.45 + 0.55 * smoothstep(0.05, 0.85, s);          // the pool spreads out from where the rain lands
+  vec2 pc = vec2(0.0, -0.41);
+  float b = blobs((wuv - pc) / sp + pc, 4, 4, 0.0, t) * sp + 0.03 * (1.0 - smoothstep(0.05, 0.6, s)) + 0.25 * (1.0 - smoothstep(0.0, 0.1, s));
   return smin(a, b, 0.05);
 }
 
 float rain(vec2 uv, float t, float p){
-  float amt = smoothstep(2.2, 2.6, p) * (1.0 - smoothstep(3.8, 4.08, p));
+  float amt = smoothstep(2.2, 2.6, p) * (1.0 - smoothstep(3.85, 4.1, p));
   if (amt <= 0.0) return 0.0;
   float ybot = mix(0.07, -0.4, smoothstep(2.2, 2.75, p));      // the front of the first rain
-  float ytop = mix(0.1, -0.4, smoothstep(3.75, 4.08, p));         // the last of it, falling after the cloud
+  float sc = 1.0 - 0.75 * smoothstep(0.1, 0.92, clamp((p - 3.15) / 0.85, 0.0, 1.0));
+  float ytop = mix(0.17 - 0.12 * sc, -0.4, smoothstep(3.85, 4.1, p));   // under the shrinking cloud, then falling after it
   float cw = 0.03, i = floor(uv.x / cw), hi = h1(i), hj = h1(i + 17.0);
   float xc = (i + 0.5 + 0.3 * (hj - 0.5)) * cw;
   float v = uv.y * 2.6 + t * (1.6 + 0.8 * hi) + hi * 7.0, f = fract(v);
   float seg = smoothstep(0.0, 0.06, f) * smoothstep(0.5, 0.2, f);
   float line = exp(-pow((uv.x - xc) / 0.0055, 2.0));
-  float on = step(hj, 0.25 + 0.75 * amt) * smoothstep(0.26, 0.2, abs(uv.x));
+  float on = step(hj, 0.25 + 0.75 * amt) * smoothstep(0.03 + 0.23 * sc, 0.23 * sc - 0.01, abs(uv.x));
   return amt * seg * line * on * smoothstep(ybot, ybot + 0.03, uv.y) * smoothstep(ytop, ytop - 0.03, uv.y);
 }
 

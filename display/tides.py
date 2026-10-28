@@ -59,16 +59,16 @@ M2_PERIOD, S2_PERIOD, SYNODIC = 12.4206012 * 3600, 12.0 * 3600, 29.530589 * 8640
 SPRING_LAG = 1.5 * 86400                      # springs come ~1.5 days after new and full moon
 
 # --- the picture ---------------------------------------------------------------------------------
-PX_PER_M = 11                                 # tide drawn true to scale: 11 LEDs to the metre
-DATUM_Y = 197                                 # chart datum (LAT, 0 m) on the wall
+PX_PER_M = 14                                 # tide drawn true to scale: 14 LEDs to the metre
+DATUM_Y = 203                                 # chart datum (LAT, 0 m) on the wall
 QUAY_X = 20                                   # the quay's face
 QUAY_TOP = DATUM_Y - 5 * PX_PER_M
-SEABED = 226
+SEABED = 228
 SKY_BOTTOM = QUAY_TOP - 4                     # the moon and sun live above this
 SURFACE = np.array([165, 205, 232], np.float32)
 DEEP = [(np.array(c, np.float32), d) for c, d in (       # lines below the surface: colour, depth
     ((100, 155, 205), 7), ((0, 155, 200), 15), ((0, 110, 175), 25), ((0, 60, 160), 38))]
-STONE, STONE_DIM = (150, 135, 110), (104, 96, 84)
+STONE, STONE_DIM = (165, 160, 125), (112, 110, 100)
 SAND = (160, 118, 40)
 LAND = (112, 104, 96)
 BEACON = (235, 232, 220)
@@ -476,7 +476,7 @@ class Harbour:
         lo = np.minimum(yi, np.where(prev < yi, prev + 1, yi))
         hi = np.maximum(yi, np.where(prev > yi, prev - 1, yi))
         lo = np.maximum(lo, below)
-        hi = np.minimum(hi, self.ground - 1)
+        hi = np.minimum(hi, self.ground - 3)
         band0, band1 = max(0, int(lo.min())), min(H, int(hi.max()) + 1)
         if band1 <= band0:
             return
@@ -498,7 +498,7 @@ class Harbour:
         hs, tp = s["hs"], s["tp"]
         L = 9.81 * tp * tp / (2 * math.pi)                      # metres
         lam = max(60.0, min(150.0, L * 0.7))                    # LEDs
-        amp = min(16.0, hs * 0.5 * PX_PER_M * 0.45)             # sheltered in the harbour
+        amp = min(18.0, hs * 0.5 * PX_PER_M * 0.38)             # sheltered in the harbour
         towards = ((s["dir"] or 260.0) + 180.0) % 360.0
         sign = -1.0 if math.sin(math.radians(towards)) >= 0 else 1.0     # east is on the left
         k = 2 * math.pi / lam
@@ -530,7 +530,7 @@ class Harbour:
                         break
                     hsh = (x * 73856093 ^ dy * 19349663 ^ slot * 83492791) & 0xFFFF
                     p = (1 - abs(x - lx) / (half + 1)) * strength * (0.9 - 0.2 * j)
-                    if hsh / 65535.0 < p * 0.55:
+                    if hsh / 65535.0 < p * 0.7:
                         img[yy, x] = np.clip(col * (1.0 if dy == 0 else 0.8), 0, 255).astype(np.uint8)
         return Image.fromarray(img, "RGB")
 

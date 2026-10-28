@@ -104,7 +104,7 @@
 
   /* today's piece: a wall label */
   .today { display: grid; gap: 10px; }
-  .today h3 { font: italic 400 26px/1.1 var(--serif); margin: 8px 0 4px; }
+  .today h3 { font: italic 400 22px/1.1 var(--serif); margin: 0; }
   .today p { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
   .today .listen { font-size: 13px; }
   .chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; }
@@ -728,9 +728,8 @@ function describeDaily(ed) {
   if (SCRUB.piece && window.Fortuna) window.Fortuna.remove(SCRUB.piece);   // its canvas is about to be replaced
   SCRUB.piece = null;
   const hanging = DAILY.chosenMeta && DAILY.chosenMeta.date === ed.date && STATUS.current === 'daily';
-  $('today').innerHTML = `<h3>${esc(ed.name)}</h3><p>${esc(ed.description || '')}</p>${ed.listening ? `<p class="listen">${esc(ed.listening)}</p>` : ''}
-    <div class="row"><button class="btn primary" id="hangBtn" onclick="showDaily('${ed.date === DAILY.today ? '' : ed.date}')">${hanging ? 'On the wall now' : 'Hang it'}</button>
-      <span class="hint" id="hangHint" style="margin:0"></span></div>`;
+  $('today').innerHTML = `<div class="row between"><h3>${esc(ed.name)}</h3><button class="btn primary" id="hangBtn" onclick="showDaily('${ed.date === DAILY.today ? '' : ed.date}')">${hanging ? 'On the wall now' : 'Hang it'}</button></div>
+    <details class="more"><summary id="hangHint">About this piece</summary><p>${esc(ed.description || '')}</p>${ed.listening ? `<p class="listen">${esc(ed.listening)}</p>` : ''}</details>`;
   SCRUB.date = ed.date; updateHang();
 }
 function updateHang() {                    // the label under the preview follows the wall and the date

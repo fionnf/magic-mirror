@@ -40,13 +40,14 @@ REGIONS = {
     "ie": ((53.41, -7.95), 1.95, (51.527, -9.547), "ireland.json"),
 }
 
-N = 2600                       # points of light
+N = 1700                       # points of light
 K = 0.5                        # LEDs per second for each m/s of wind
 TAU = 0.85                     # seconds for a trail to fall to 1/e (about five LED steps from head to dark)
 LIFE = (6.0, 14.0)             # each light lives this long, then is born again somewhere else...
 RAMP = 1.2                     # ...fading in and out over this, so the field never clumps or pops
 EASE = 60.0                    # seconds for a new fetch to blend in
-GUST_LEN = 46.0                # LEDs between gust bands
+GUST_LEN = 40.0                # LEDs across a gust patch
+GUST_EVERY = 6.0               # seconds between surges
 # Colour by the wind each light feels (m/s): still = deep teal, breeze = ice, fresh = warm white,
 # strong = amber, gale = coral and rose. Every stop keeps a channel well above the LEDs' dark floor.
 SPEEDS = np.array([0.0, 2.0, 4.0, 7.0, 11.0, 15.0, 20.0, 27.0], np.float32)
@@ -92,7 +93,7 @@ class Wind:
         self.gy = (np.arange(NY) + 0.5) * H / NY
         self.lats = [round(self.lat0 - (y - H / 2) * self.km / 111.32, 3) for y in self.gy for _ in self.gx]
         self.lons = [round(self.lon0 + (x - W / 2) * self.km / (111.32 * self.coslat), 3) for _ in self.gy for x in self.gx]
-        self.field, self.prev, self.t_new = None, None, 0.0      # (u, v, gust, dir_x, dir_y, mean) per LED
+        self.field, self.prev, self.t_new = None, None, 0.0      # (u, v, gust at every LED, mean direction)
         self.arrived = None
         self.trail = np.zeros((H, W, 3), np.float32)
         rng = np.random.default_rng()
@@ -100,6 +101,7 @@ class Wind:
         self.x, self.y = rng.uniform(0, W, N), rng.uniform(0, H, N)
         self.life = rng.uniform(*LIFE, N)
         self.age = rng.uniform(0, 1, N) * self.life
+        self.phase = self._phase(self.x, self.y)
         self.last, self.last_frame, self.ok = None, time.time(), False
         rec = _read_cache().get(key)
         if rec and rec.get("grid") == [NX, NY]:
@@ -107,6 +109,11 @@ class Wind:
         self.fetched = rec.get("t", 0.0) if rec and rec.get("grid") == [NX, NY] else 0.0
         if fetch:
             threading.Thread(target=self._fetch_loop, daemon=True).start()
+
+    def _phase(self, x, y):
+        """Each light's place in the gust cycle, from where it was born: neighbours surge together."""
+        return (np.sin(x * (2 * math.pi / GUST_LEN)) + np.sin(y * (2 * math.pi / (GUST_LEN * 1.3)) + 1.0)
+                + 0.35 * self.rng.standard_normal(len(x))) * 1.6
 
     # ---------------------------------------------------------------- map ---
     def to_px(self, lat, lon):
@@ -204,8 +211,7 @@ class Wind:
 
         mu, mv = float(u.mean()), float(v.mean())
         mean = math.hypot(mu, mv)
-        d = (mu / mean, mv / mean) if mean > 0.2 else (1.0, 0.0)
-        field = (up(u), up(v), up(gu), d, float(np.hypot(u, v).mean()))
+        field = (up(u), up(v), up(gu), (mu / mean, mv / mean) if mean > 0.5 else None)
         self.prev = self.field if (ease and self.field is not None) else None
         self.field, self.t_new = field, time.time()
 
@@ -238,21 +244,32 @@ class Wind:
                 v = p[1][iy, ix] + (v - p[1][iy, ix]) * a
                 g = p[2][iy, ix] + (g - p[2][iy, ix]) * a
         s = np.hypot(u, v)
-        # gusts: bands across the mean wind that travel with it; inside a band the air runs at up to
-        # the gust speed. Patchy along the band, so it reads as gusts, not as a wave machine.
-        dx, dy = f[3]
-        along = (self.x * dx + self.y * dy - t * K * f[4]) * (2 * math.pi / GUST_LEN)
-        across = (self.y * dx - self.x * dy) * (2 * math.pi / (GUST_LEN * 1.7)) + 0.9 * math.sin(t * 0.07)
-        pulse = np.clip(np.sin(along), 0, None) ** 2 * (0.55 + 0.45 * np.sin(across))
-        boost = 1 + (g / np.maximum(s, 0.3) - 1) * pulse * 0.8
+        # gusts: every few seconds a light surges towards the gust speed and back, in step with the
+        # lights born near it, so patches of the field rush and brighten - as hard as the real gusts.
+        pulse = np.clip(np.sin(t * (2 * math.pi / GUST_EVERY) + self.phase), 0, None) ** 3
+        boost = 1 + (g / np.maximum(s, 0.3) - 1) * pulse * 0.7
         self.x += u * boost * (K * dt)
         self.y += v * boost * (K * dt)
         self.age += dt
-        dead = (self.age > self.life) | (self.x < 0) | (self.x >= W) | (self.y < 0) | (self.y >= H)
+        out = (self.x < 0) | (self.x >= W) | (self.y < 0) | (self.y >= H)
+        dead = out | (self.age > self.life)
         if dead.any():
             n = int(dead.sum())
             self.x[dead], self.y[dead] = self.rng.uniform(0, W, n), self.rng.uniform(0, H, n)
             self.age[dead], self.life[dead] = 0.0, self.rng.uniform(*LIFE, n)
+            if f[3] is not None and out.any():
+                # a light that blew off the picture comes back in where the wind blows in, already lit,
+                # so the upwind side is as full as the rest
+                dx, dy = f[3]
+                px, py = self.x[out], self.y[out]
+                with np.errstate(divide="ignore"):
+                    tx = np.where(dx > 1e-3, px / dx, np.where(dx < -1e-3, (W - 1e-3 - px) / -dx, np.inf))
+                    ty = np.where(dy > 1e-3, py / dy, np.where(dy < -1e-3, (H - 1e-3 - py) / -dy, np.inf))
+                back = np.minimum(tx, ty)
+                self.x[out] = np.clip(px - dx * back, 0, W - 1e-3)
+                self.y[out] = np.clip(py - dy * back, 0, H - 1e-3)
+                self.age[out] = RAMP
+            self.phase[dead] = self._phase(self.x[dead], self.y[dead])
         feel = s * boost
         lvl = np.minimum(1.0, np.minimum(self.age, self.life - self.age) / RAMP)
         lvl *= min(1.0, (t - self.arrived) / 3.0)                     # the first data fades in

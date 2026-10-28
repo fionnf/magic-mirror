@@ -80,7 +80,7 @@ void mainImage(out vec4 o, in vec2 fc){
   float h = max(rr - 1.0, 0.0);
   float stream = 0.94 + 0.06 * sin(h * 9.0 - t * 0.25 + 3.0 * fine);
   float cor = pow(exp(-h / w), 0.7) * (0.7 + 0.3 * fine) * stream * step(1.0, rr);
-  vec3 pearl = mix(iColC, iColB, smoothstep(0.0, 0.9, h));
+  vec3 pearl = mix(iColC, iColB, smoothstep(0.1, 1.3, h));
   col += pearl * cor * 1.2 * corA * occ;
 
   // the chromosphere: a thin red rim just outside the limb, seen only beside the moon's edge
@@ -105,7 +105,7 @@ void mainImage(out vec4 o, in vec2 fc){
   float mu = sqrt(max(1.0 - rr * rr, 0.0));
   float limb = 0.74 + 0.26 * mu;
   float stir = 0.015 * sin(uv.x * 23.0 + sin(uv.y * 19.0 + t * 0.05) * 1.5 + t * 0.04);
-  vec3 face = mix(warm * iColC * 0.95, iColC, mu) * (limb + stir) * 0.97;
+  vec3 face = mix(warm * 0.95, iColC, mu) * (limb + stir) * 0.97;
   float disc = smoothstep(px, -px, dSun) * occ;
   col = mix(col, face, disc);
 

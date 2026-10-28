@@ -213,15 +213,18 @@ def _clip(line, box):
 def switzerland():
     border = [r for f in natural_earth("ne_10m_admin_0_countries") if f["properties"]["ADMIN"] == "Switzerland"
               for r in _rings(f["geometry"])]
-    lakes = []
+    lakes, seen = [], set()
     for f in natural_earth("ne_10m_lakes") + natural_earth("ne_10m_lakes_europe"):
         name = f["properties"].get("name")
+        if name in seen:                             # some lakes are in both layers
+            continue
         rings = _rings(f["geometry"])
         # ne_10m_lakes calls Lago Maggiore "Lago di Como" and leaves the Untersee unnamed: tell them by place
         lon = sum(p[1] for r in rings for p in r) / max(1, sum(len(r) for r in rings))
         lat = sum(p[0] for r in rings for p in r) / max(1, sum(len(r) for r in rings))
         if name in CH_LAKES or (name == "Lago di Como" and lon < 8.9) or (name is None and 8.8 < lon < 9.2 and 47.6 < lat < 47.8):
             lakes += rings
+            seen.add(name)
     return {"border": [simplify(r, 1.0) for r in border],
             "lakes": [simplify(r, 0.5) for r in lakes if len(r) > 3]}
 

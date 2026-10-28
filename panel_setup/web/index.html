@@ -101,11 +101,6 @@
   .preview canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; display: block; }
   .preview img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .preview canvas.failed, .preview.gl img { display: none; }
-  .hour { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
-  .hour output { font: italic 400 22px/1 var(--serif); min-width: 3.2em; }
-  .hour input { flex: 1; }
-  .hour button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 7px 12px; font-size: 13px; }
-  .hour button.on { background: var(--ink); color: var(--room); border-color: var(--ink); }
 
   /* today's piece: a wall label */
   .today { display: grid; gap: 10px; }
@@ -720,15 +715,10 @@ function describeDaily(ed) {
   if (SCRUB.piece && window.Fortuna) window.Fortuna.remove(SCRUB.piece);   // its canvas is about to be replaced
   SCRUB.piece = null;
   const hanging = DAILY.chosenMeta && DAILY.chosenMeta.date === ed.date && STATUS.current === 'daily';
-  $('today').innerHTML = `<div class="preview" id="preview"><img src="${u('/daily/' + ed.date + '.png')}" alt=""><canvas aria-hidden="true"></canvas></div>
-    <div class="hour"><output id="hourOut">now</output><input type="range" id="hour" min="0" max="23.99" step="0.05" value="${new Date().getHours()}" aria-label="Hour of the day">
-      <button data-hm="now" class="on" onclick="setHourMode('now')">Now</button><button data-hm="day" onclick="setHourMode('day')">Whole day</button></div>
-    <h3>${esc(ed.name)}</h3><p>${esc(ed.description || '')}</p>${ed.listening ? `<p class="listen">${esc(ed.listening)}</p>` : ''}
+  $('today').innerHTML = `<h3>${esc(ed.name)}</h3><p>${esc(ed.description || '')}</p>${ed.listening ? `<p class="listen">${esc(ed.listening)}</p>` : ''}
     <div class="row"><button class="btn primary" id="hangBtn" onclick="showDaily('${ed.date === DAILY.today ? '' : ed.date}')">${hanging ? 'On the wall now' : 'Hang it'}</button>
       <span class="hint" id="hangHint" style="margin:0"></span></div>`;
   SCRUB.date = ed.date; updateHang();
-  $('hour').addEventListener('input', () => setHourMode('pick'));
-  previewDaily(ed);
 }
 function updateHang() {                    // the label under the preview follows the wall and the date
   const b = $('hangBtn'), h = $('hangHint'); if (!b || !SCRUB.date) return;
@@ -791,43 +781,13 @@ async function sleepIn(m) { try { STATUS = await api('/api/sleep', {minutes: m})
 async function sleepAtTime() { try { STATUS = await api('/api/sleep', {at: $('sleepAt').value}); render(); sleepSheet.close(); toast('Off at ' + $('sleepAt').value); } catch (e) { toast(e.message); } }
 async function sleepCancel() { STATUS = await api('/api/sleep', {}); render(); sleepSheet.close(); toast('Staying on'); }
 
-/* ---------- the scrubber: see a piece at any hour before it hangs ---------- */
+/* ---------- shader library loader ---------- */
 let SCRUB = {piece: null, date: null, mode: 'now'};
 async function shaderLib() {
   if (window.Fortuna) return window.Fortuna;
   await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'gallery.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); }).catch(() => {});
   return window.Fortuna;
 }
-async function previewDaily(ed) {
-  SCRUB.date = ed.date;
-  const F = await shaderLib(), box = $('preview'), cv = box.querySelector('canvas');
-  if (!F || !F.gl) return;
-  const [w, h] = [STATUS.wall_w || 192, STATUS.wall_h || 256];
-  if (!SCRUB.piece) {
-    SCRUB.piece = F.add(cv, {always: true, w, h, pal: ed.palette || ['#000', '#444', '#fff'], day: ed.hours || [], onfail: () => box.classList.remove('gl'),
-      draw: glc => {                          // as the wall would light it at that hour: its colour work, then LED by LED
-        const p = SCRUB.piece, d = new Date(), hour = p && p.over.clock != null ? p.over.clock : d.getHours() + d.getMinutes() / 60;
-        F.ledify(fitCanvas(cv), wallLook(glc, w, h, hour), w, h, {x: 0, y: 0, w: cv.width, h: cv.height}, {bloom: false});
-      }});
-  }
-  const p = SCRUB.piece; p.pal = ed.palette || p.pal; p.day = ed.hours || []; p.failed = false; cv.classList.remove('failed');
-  try { F.setSource(p, await (await fetch(u('/daily/' + ed.date + '.frag'))).text()); box.classList.add('gl'); } catch (e) { box.classList.remove('gl'); }
-  setHourMode(SCRUB.mode);
-}
-const hh = h => { const m = Math.round(h * 60) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
-function setHourMode(mode) {
-  SCRUB.mode = mode; const p = SCRUB.piece; if (!p) return;
-  document.querySelectorAll('.hour button').forEach(b => b.classList.toggle('on', b.dataset.hm === mode));
-  if (mode === 'now') { delete p.over.clock; p.speed = 1; $('hourOut').textContent = 'now'; }
-  if (mode === 'pick') { p.over.clock = +$('hour').value; p.speed = 1; $('hourOut').textContent = hh(p.over.clock); }
-  if (mode === 'day') { p.over.clock = p.over.clock ?? new Date().getHours(); p.speed = 20; }
-}
-(function tickHour(last) {
-  const now = performance.now(), p = SCRUB.piece;
-  if (p && SCRUB.mode === 'day') { p.over.clock = (p.over.clock + (now - last) / 1000 * 24 / 60) % 24; $('hour').value = p.over.clock; $('hourOut').textContent = hh(p.over.clock); }
-  requestAnimationFrame(() => tickHour(now));
-})(performance.now());
-
 /* ---------- the gallery: every piece, one tap to hang ---------- */
 let ART = null, artFilter = 'all', musicArtFilter = 'all';
 async function loadArt() {

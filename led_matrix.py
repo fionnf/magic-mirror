@@ -20,30 +20,57 @@ _snap_t = [0.0]
 _snap_q = []
 
 
+def led_lut(hw, bits):
+    """What the eye gets from each channel value 0..255, as an sRGB value for a screen: the panel
+    library's own mapping (rpi-rgb-led-matrix lib/framebuffer.cc) - the value read as CIE lightness
+    scaled by the hardware brightness hw (1..100), turned into light in 11 bit planes, of which only the
+    top `bits` are shown (the lower planes are dropped, so dark values fall to black and fades step).
+    Relative to the wall's own white at this brightness: on a phone the colours and tones are true, the
+    overall light level is the screen's."""
+    c = np.arange(256, dtype=np.float64)
+    v = c * hw / 255.0
+    y11 = np.rint(2047.0 * np.where(v <= 8.0, v / 902.3, ((v + 16.0) / 116.0) ** 3))
+    step = 1 << (11 - int(bits))
+    shown = np.floor(y11 / step) * step
+    y = shown / max(shown[255], 1.0)
+    srgb = np.where(y <= 0.0031308, 12.92 * y, 1.055 * np.power(y, 1 / 2.4) - 0.055)
+    return np.clip(np.rint(srgb * 255.0), 0, 255).astype(np.uint8)
+
+
 def _snap_writer():
+    import json
     import time
+    luts = {}
     while True:
         time.sleep(0.2)
         if not _snap_q:
             continue
-        image, level = _snap_q.pop()
+        image, led = _snap_q.pop()
         _snap_q.clear()
         try:
-            a = np.asarray(image, np.float32)
-            if level < 0.999:                                 # the brightness setting, as the panels apply it
-                a = a * level
+            a = np.asarray(image, np.uint8)
+            if led is not None:                               # as the panels light it (see led_lut)
+                key = (led["hw"], led["bits"])
+                if key not in luts:
+                    luts[key] = led_lut(*key)
+                a = luts[key][a]
             tmp = SNAPSHOT + ".tmp.png"
-            Image.fromarray(np.clip(a + 0.5, 0, 255).astype(np.uint8), "RGB").save(tmp, compress_level=1)
+            Image.fromarray(a, "RGB").save(tmp, compress_level=1)
             os.replace(tmp, SNAPSHOT)
+            info = os.path.splitext(SNAPSHOT)[0] + ".json"
+            with open(info + ".tmp", "w") as fh:
+                json.dump(led or {}, fh)
+            os.replace(info + ".tmp", info)
         except Exception:
             pass
 
 
-def write_snapshot(image, level=1.0):
+def write_snapshot(image, led=None):
     """What the wall shows, for the app's live preview, at most once a second: the exact pixels
     (TOTAL_WIDTH x TOTAL_HEIGHT, lossless PNG) after the wall's own colour work (shadow lift, power
-    limit) and at the brightness setting `level` (0..1). Encoded and written on a side thread, so the
-    frame loop never waits on it (a late frame is a visible hitch)."""
+    limit), then lit as the panels light them when led = {"hw", "bits", "brightness"} is given (see
+    led_lut; now.json next to it carries those numbers for the app). Encoded and written on a side
+    thread, so the frame loop never waits on it (a late frame is a visible hitch)."""
     import threading
     import time
     now = time.monotonic()
@@ -52,7 +79,7 @@ def write_snapshot(image, level=1.0):
     if _snap_t[0] == 0.0:
         threading.Thread(target=_snap_writer, daemon=True).start()
     _snap_t[0] = now
-    _snap_q.append((np.array(image, np.uint8, copy=True), float(level)))
+    _snap_q.append((np.array(image, np.uint8, copy=True), led))
 
 
 class LedMatrix:
@@ -270,7 +297,8 @@ class LedMatrix:
             image = image.convert("RGB")
         t0 = time.perf_counter()
         strip = self._remap(image)
-        write_snapshot(self._shown, self._brightness / 100.0)
+        write_snapshot(self._shown, {"hw": self._hw_brightness(self._brightness), "brightness": self._brightness,
+                                     "bits": int(getattr(LedMatrix, "_bits_now", config.MATRIX_PWM_BITS))})
         # Static content (idle text, held frames) costs nothing: skip the
         # upload when nothing changed — the panels keep showing the last frame.
         if self._prev is not None and np.array_equal(strip, self._prev):

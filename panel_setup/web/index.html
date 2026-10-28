@@ -42,7 +42,7 @@
   }
   .frame img { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: pixelated; }
   .frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; image-rendering: pixelated; }
-  .frame.led img { visibility: hidden; }
+  .frame.led img, .frame.led .grid { visibility: hidden; }   /* drawn LED by LED, seams exact */
   .frame.off img, .frame.off canvas { opacity: 0; }
   .frame img, .frame canvas { transition: opacity .6s; }
   .frame .grid { position: absolute; inset: 0; pointer-events: none;
@@ -556,13 +556,66 @@ function refreshNow() {
   img.onload = () => { nowImg.src = img.src; ambient(img); leds(img); };
   img.crossOrigin = 'anonymous'; img.src = u('/api/now.png?t=' + Date.now());
 }
-function leds(img) {                    // the preview as the wall really looks: round diodes, glow, seams
+function leds(img) {                    // the preview as the wall really looks: one block per LED, round diodes, seams
   const F = window.Fortuna; if (!F || !F.ledify) return;
-  const cv = $('nowLed'), w = img.naturalWidth || STATUS.wall_w || 192, h = img.naturalHeight || STATUS.wall_h || 256, r = devicePixelRatio || 1;
-  const cell = Math.max(1, Math.floor(cv.clientWidth * r / w));
-  if (cv.width !== w * cell) { cv.width = w * cell; cv.height = h * cell; }
-  const x = cv.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, cv.width, cv.height);
+  const cv = $('nowLed'), w = img.naturalWidth || STATUS.wall_w || 192, h = img.naturalHeight || STATUS.wall_h || 256;
+  const x = fitCanvas(cv);
   try { F.ledify(x, img, w, h, {x: 0, y: 0, w: cv.width, h: cv.height}, {bloom: false}); $('frame').classList.add('led'); } catch (e) {}
+}
+function fitCanvas(cv) {                // one canvas pixel per screen pixel, so every LED is a whole block (no resampling)
+  const r = devicePixelRatio || 1, W = Math.round(cv.clientWidth * r), H = Math.round(cv.clientHeight * r);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const x = cv.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, W, H);
+  return x;
+}
+/* How the wall turns a picture into light (/api/look), for previews rendered here: the light of the day
+   (daily art), the shadow lift, then the panels' own mapping at the brightness and PWM bits in use -
+   the same steps as display/daily.py, led_matrix.py _lift and led_matrix.led_lut. */
+let LOOK = null;
+async function loadLook() {
+  try { const l = await api('/api/look'); l.liftLut = liftLut(l.lift || 0); l.ledLut = l.led && l.led.hw ? ledLut(l.led.hw, l.led.bits) : null; LOOK = l; } catch (e) {}
+}
+function liftLut(k) {
+  const s = new Float32Array(256);
+  for (let m = 0; m < 256; m++) {
+    const g = 255 * Math.pow(Math.max(m, 1) / 255, 0.55), t = Math.min(1, Math.max(0, (m - 60) / 140)), w = 1 - t * t * (3 - 2 * t);
+    s[m] = m > 0 ? (m + k * (g - m) * w) / m : 1;
+  }
+  return s;
+}
+function ledLut(hw, bits) {
+  const y11 = c => { const v = c * hw / 255; return Math.round(2047 * (v <= 8 ? v / 902.3 : ((v + 16) / 116) ** 3)); };
+  const step = 2 ** (11 - bits), shown = c => Math.floor(y11(c) / step) * step, white = Math.max(shown(255), 1);
+  return Uint8Array.from({length: 256}, (_, c) => { const y = shown(c) / white;
+    return Math.round(255 * (y <= 0.0031308 ? 12.92 * y : 1.055 * y ** (1 / 2.4) - 0.055)); });
+}
+function dayGrade(hour) {
+  const G = (LOOK && LOOK.grade) || [], k = LOOK ? LOOK.grade_k : 0;
+  for (let i = 0; i + 1 < G.length; i++) {
+    const [h0, ...c0] = G[i], [h1, ...c1] = G[i + 1];
+    if (h0 <= hour && hour <= h1) {
+      let f = (hour - h0) / (h1 - h0); f = f * f * (3 - 2 * f);
+      const [r, g, b, v] = c0.map((a, j) => a + (c1[j] - a) * f);
+      return [r, g, b].map(x => 1 + (x * v - 1) * k);
+    }
+  }
+  return [1, 1, 1];
+}
+const lookCv = document.createElement('canvas'), lookCtx = lookCv.getContext('2d', {willReadFrequently: true});
+function wallLook(src, w, h, hour) {
+  if (lookCv.width !== w || lookCv.height !== h) { lookCv.width = w; lookCv.height = h; }
+  lookCtx.drawImage(src, 0, 0, w, h);
+  if (!LOOK) return lookCv;
+  const im = lookCtx.getImageData(0, 0, w, h), d = im.data, g = dayGrade(hour), L = LOOK.liftLut, P = LOOK.ledLut;
+  for (let i = 0; i < d.length; i += 4) {
+    let r = Math.min(255, d[i] * g[0]) | 0, gg = Math.min(255, d[i + 1] * g[1]) | 0, b = Math.min(255, d[i + 2] * g[2]) | 0;
+    const s = L[Math.max(r, gg, b)];
+    r = Math.min(255, r * s) | 0; gg = Math.min(255, gg * s) | 0; b = Math.min(255, b * s) | 0;
+    if (P) { r = P[r]; gg = P[gg]; b = P[b]; }
+    d[i] = r; d[i + 1] = gg; d[i + 2] = b;
+  }
+  lookCtx.putImageData(im, 0, 0);
+  return lookCv;
 }
 /* swipe the wall left or right: the next or previous collection */
 (() => {
@@ -749,10 +802,13 @@ async function previewDaily(ed) {
   SCRUB.date = ed.date;
   const F = await shaderLib(), box = $('preview'), cv = box.querySelector('canvas');
   if (!F || !F.gl) return;
-  const [w, h] = [STATUS.wall_w || 192, STATUS.wall_h || 192];
+  const [w, h] = [STATUS.wall_w || 192, STATUS.wall_h || 256];
   if (!SCRUB.piece) {
-    cv.width = w; cv.height = h;
-    SCRUB.piece = F.add(cv, {always: true, w, h, pal: ed.palette || ['#000', '#444', '#fff'], day: ed.hours || [], onfail: () => box.classList.remove('gl')});
+    SCRUB.piece = F.add(cv, {always: true, w, h, pal: ed.palette || ['#000', '#444', '#fff'], day: ed.hours || [], onfail: () => box.classList.remove('gl'),
+      draw: glc => {                          // as the wall would light it at that hour: its colour work, then LED by LED
+        const p = SCRUB.piece, d = new Date(), hour = p && p.over.clock != null ? p.over.clock : d.getHours() + d.getMinutes() / 60;
+        F.ledify(fitCanvas(cv), wallLook(glc, w, h, hour), w, h, {x: 0, y: 0, w: cv.width, h: cv.height}, {bloom: false});
+      }});
   }
   const p = SCRUB.piece; p.pal = ed.palette || p.pal; p.day = ed.hours || []; p.failed = false; cv.classList.remove('failed');
   try { F.setSource(p, await (await fetch(u('/daily/' + ed.date + '.frag'))).text()); box.classList.add('gl'); } catch (e) { box.classList.remove('gl'); }
@@ -1030,9 +1086,9 @@ async function start() {
   started = true;
   if (welcome.piece && window.Fortuna) { window.Fortuna.remove(welcome.piece); welcome.piece = null; }   // the door piece stops once inside
   $('qrImg').src = $('qrLink').href = u('/d/qr.png');
-  shaderLib(); loadScenes(); loadDaily(); loadMusic(); refreshNow(); loadArt(); loadVersion();
+  shaderLib(); loadScenes(); loadDaily(); loadMusic(); refreshNow(); loadArt(); loadVersion(); loadLook();
   try { const t = localStorage.getItem('tab'); if (t) document.querySelector(`nav [data-tab="${t}"]`).click(); } catch (e) {}
-  setInterval(refresh, 3000); setInterval(loadMusic, 5000); setInterval(loadDaily, 60000); setInterval(refreshNow, 1500); setInterval(loadScenes, 30000);
+  setInterval(refresh, 3000); setInterval(loadMusic, 5000); setInterval(loadDaily, 60000); setInterval(refreshNow, 1500); setInterval(loadScenes, 30000); setInterval(loadLook, 15000);
   const rows = Math.round((STATUS.wall_h || 192) / 64), cols = Math.round((STATUS.wall_w || 192) / 64);
   document.documentElement.style.setProperty('--aspect', `${cols} / ${rows}`);
   document.documentElement.style.setProperty('--rows', rows); document.documentElement.style.setProperty('--cols', cols);

@@ -41,7 +41,7 @@ MODES = [
     ("piece", "Piece", "One piece", "A single piece from the gallery, as long as you like"),
     ("shaders", "Art", "Shaders", "Glass orb, halftone wave, conic tiles, eclipse, prism and 30 more"),
     ("artsy", "Art", "Artsy", "Marbling, op-art stripes, oil slick, a drifting Mondrian"),
-    ("glass", "Art", "Light Art", "Stained glass and long-exposure light trails"),
+    ("glass", "Art", "Light Art", "Long-exposure light trails"),
     ("art", "Art", "Art Gallery", "Ink flow, colour fields, moiré"),
     ("pride", "Shows", "Pride Show", "Disco ball, HOUSE FORTUNA, people nearby, vortex, heart"),
     ("dewa", "Shows", "Dewa's Story", "Edelweiss flight attendant, a date at every layover"),
@@ -899,33 +899,6 @@ def make_app(runner):
         runner.play("daily")
         return jsonify(runner.status())
 
-    @app.get("/api/loops")
-    def loops_list():
-        from display import loops as lp
-        b = lp.LoopBank()
-        out = [{"name": k, "pack": k.split("__")[0], "seconds": v.get("seconds"), "motion": v.get("motion"),
-                "bright": v.get("bright")} for k, v in sorted(b.clips.items(), key=lambda kv: kv[1].get("motion", 0))]
-        return jsonify(out)
-
-    @app.get("/loops/thumb/<name>.jpg")
-    def loop_thumb(name):
-        from display import loops as lp
-        from PIL import Image
-        b = lp.LoopBank()
-        if name not in b.clips:
-            return jsonify({"error": "no such loop"}), 404
-        path = os.path.join(THUMB_DIR, "loop_" + name + ".jpg")
-        if not os.path.exists(path):
-            import cv2
-            cap = cv2.VideoCapture(b.path(name))
-            cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, b.clips[name].get("frames", 2) // 2))
-            ok, fr = cap.read()
-            cap.release()
-            if not ok:
-                return jsonify({"error": "cannot read"}), 500
-            Image.fromarray(cv2.cvtColor(fr, cv2.COLOR_BGR2RGB)).resize((96, 96)).save(path, quality=80)
-        return send_from_directory(THUMB_DIR, "loop_" + name + ".jpg", max_age=86400)
-
     @app.get("/api/music")
     def music_get():
         from display import music as mu
@@ -950,7 +923,7 @@ def make_app(runner):
         st = mu.load_settings()
         old_source = st.get("source")
         for k in ("style", "palette", "vibe", "source", "sensitivity", "ai", "shazam",
-                  "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt", "mode", "party", "loop", "loop_music", "art", "cast_follow", "cast_devices", "cover_show", "cover_colours"):
+                  "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt", "mode", "party", "art", "cast_follow", "cast_devices", "cover_show", "cover_colours"):
             if k in d:
                 st[k] = d[k]
         mu._write_json(mu.SETTINGS_FILE, st)
@@ -1057,12 +1030,45 @@ def make_app(runner):
         members = set(lt.room())
         return jsonify({"configured": True, "installed": True,
                         "devices": [{**x, "room": x["name"] in members} for x in _light_cache["data"]],
-                        "schedule": lt.schedule(), "room": sorted(members)})
+                        "schedule": lt.schedule(), "room": sorted(members), "scenes": lt.scenes()})
+
+    @app.post("/api/lights/import")
+    def lights_import():
+        try:
+            res = lt.import_room()
+        except Exception as e:
+            return jsonify({"error": "Could not read Smart Life: " + str(e)[:120]}), 502
+        _light_cache["t"] = 0
+        return jsonify(res)
+
+    @app.post("/api/lights/scene")
+    def lights_scene():
+        try:
+            return jsonify(lt.run_scene((request.get_json(force=True, silent=True) or {}).get("id", "")))
+        except KeyError as e:
+            return jsonify({"error": str(e)}), 404
+        except Exception as e:
+            return jsonify({"error": "Smart Life said no: " + str(e)[:100]}), 502
 
     @app.post("/api/lights/room")
     def lights_room():
         on = bool((request.get_json(force=True, silent=True) or {}).get("on", False))
         res = lt.set_group(lt.room(), on)
+        _light_cache["t"] = 0
+        return jsonify({"results": res})
+
+    @app.post("/api/lights/look")
+    def lights_look():
+        d = request.get_json(force=True, silent=True) or {}
+        names = [d["name"]] if d.get("name") else lt.room()
+        try:
+            colour = d.get("colour")
+            if colour and not re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
+                raise ValueError("colour must look like #ff8800")
+            res = lt.set_look(names, None if d.get("brightness") is None else int(d["brightness"]),
+                              None if d.get("warmth") is None else int(d["warmth"]), colour)
+        except (ValueError, TypeError) as e:
+            return jsonify({"error": str(e)}), 400
         _light_cache["t"] = 0
         return jsonify({"results": res})
 

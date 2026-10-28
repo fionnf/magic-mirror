@@ -173,18 +173,12 @@ whose motion follows the beat, with scene changes on 4-bar boundaries. Brightnes
 the beat. Optional "let the wall listen" (under More) estimates the level from loudness, beat lock,
 tempo and bass (`display/intensity.py`). The app shows the live microphone (level, bass, detected
 beats) next to the Sensitivity slider: raise it if the trace stays flat while music plays.
-"Video loops only" plays the clip library (pick one, or Auto); "Music affects the loops" sets how.
 
 ## AI (Claude)
 All AI features call the Anthropic API through `ai_client.ask()` (model `config.AI_MODEL`, low
 effort, server-side refusal fallbacks, structured JSON where needed). Put `ANTHROPIC_API_KEY=...`
 in `.env` on the laptop and copy it to the Pi (`scp .env pi@<ip>:~/magic-mirror/.env`), then
 restart `wall-control`. Without a key every feature falls back to built-in text/rules.
-
-## Video loops
-`tools/make_loops.py <folders>` converts any video folder to 192 × 192 clips in `assets/loops/`
-(with an index of motion/brightness the curator uses); deploy copies them. The current library is
-abstract Beeple clips (CC) and calm Mixkit footage; originals live in `~/Movies/VJ Loops/`.
 
 ## The Fortuna gallery (public feed)
 

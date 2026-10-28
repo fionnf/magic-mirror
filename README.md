@@ -2,7 +2,7 @@
 
 A 192 × 192 pixel LED art wall for a living room: nine 64 × 64 HUB75 panels driven by a
 Raspberry Pi 4, controlled from a phone web app. It shows slow generative art, GPU shaders and
-video loops, responds (subtly) to the music in the room, and can also act as a camera mirror
+responds (subtly) to the music in the room, and can also act as a camera mirror
 with AI one-liners and a receipt printer.
 
 ![front](hardware/led-wall-frame/images/01_front.png)
@@ -12,7 +12,7 @@ with AI one-liners and a receipt printer.
 | Mode | What you see |
 |---|---|
 | **Art** (Artsy, Shaders, Shapes, Light Art, Lava & Coral) | Slow galleries that cross-fade; pace set in the app ("Art pace") |
-| **Music** | Art that follows the room's sound. The party slider goes from "art just breathes" to dance floor; pieces, video loops and shaders are curated per level; a beat tracker, Shazam song names, an optional Claude designer |
+| **Music** | Art that follows the room's sound. The party slider goes from "art just breathes" to dance floor; pieces and shaders are curated per level; a beat tracker, Shazam song names, an optional Claude designer |
 | **Mirror** | Camera silhouette, countdown photo, a Claude one-liner, aura reading, pixel selfie, printed receipt; people recognition is opt-in |
 | **Shows & live** | Welcome / Pride / story animations, VBZ-style tram board for Rennweg |
 | **Extras** | Smart Life lights (living-room group), guest dedications via QR, a tour that rotates through everything |
@@ -76,7 +76,6 @@ lights.py                     Smart Life (Tuya) local control
 display/                      everything drawn on the wall
   art.py shapes.py light_art.py artsy.py organic.py     generative galleries
   shaders.py (+ assets/shaders/*.frag)                  GPU shaders (EGL on the Pi)
-  loops.py (+ assets/loops, tools/make_loops.py)        video loops
   music.py beat.py intensity.py vj_fx.py                music engine
   departures.py welcome.py pride_show.py …              live boards and shows
 panel_setup/                  wall_control.py (app server + process runner), web/ (the app),

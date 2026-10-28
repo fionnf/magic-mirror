@@ -101,11 +101,6 @@
   .preview canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; display: block; }
   .preview img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .preview canvas.failed, .preview.gl img { display: none; }
-  .hour { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
-  .hour output { font: italic 400 22px/1 var(--serif); min-width: 3.2em; }
-  .hour input { flex: 1; }
-  .hour button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 7px 12px; font-size: 13px; }
-  .hour button.on { background: var(--ink); color: var(--room); border-color: var(--ink); }
 
   /* today's piece: a wall label */
   .today { display: grid; gap: 10px; }
@@ -124,6 +119,7 @@
   .gallery .any img { background: linear-gradient(135deg, rgb(var(--glow)), #000); }
   .find { display: flex; gap: 8px; margin: 0 0 10px; }
   .find input { flex: 1; min-width: 0; }
+  h3.sub { font: 500 13px/1 var(--sans, inherit); color: var(--muted); margin: 16px 0 8px; text-transform: uppercase; letter-spacing: .06em; }
   .sw { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
   .sw button { width: 38px; height: 38px; border-radius: 50%; border: 2px solid transparent; outline: 1px solid var(--line); }
   .sw button.on { border-color: var(--ink); }
@@ -299,18 +295,11 @@
     </section>
     <section>
       <h2>What the wall shows</h2>
-      <span class="seg" id="musicShow"><button data-ms2="auto">Chosen for the music</button><button data-ms2="art">Art</button><button data-ms2="loops">Video loops</button></span>
+      <span class="seg" id="musicShow"><button data-ms2="auto">Chosen for the music</button><button data-ms2="art">Art</button></span>
       <div id="musicArtBox" hidden style="margin-top:12px">
         <p class="hint" style="margin:0 0 10px">Pieces from the gallery, in their own colours, moving with the music. Pick one or let them change.</p>
         <div class="chips" id="musicArtChips"></div>
         <div class="gallery" id="musicArtGrid"></div>
-      </div>
-      <div id="loopBox" hidden>
-        <div class="row between" style="margin:10px 0">
-          <span class="hint" style="margin:0">Music moves them</span>
-          <span class="seg"><button data-lm="off">Not at all</button><button data-lm="bass">With the bass</button><button data-lm="tempo">To the beat</button></span>
-        </div>
-        <div class="strip" id="loops"></div>
       </div>
     </section>
     <details class="more"><summary>Speakers and album covers</summary>
@@ -344,6 +333,25 @@
 
   <!-- ROOM -->
   <div class="view" id="v-room">
+    <section id="lightsSec" hidden>
+      <h2>Living room lights</h2>
+      <div class="row"><button class="btn primary" onclick="roomPower(true)">All on</button><button class="btn" onclick="roomPower(false)">All off</button></div>
+      <div class="strip" id="lightPresets" style="margin-top:12px"></div>
+      <div class="strip" id="lightScenes" style="margin-top:8px" hidden></div>
+      <div class="row" style="margin-top:8px"><button class="btn" id="lightImport" onclick="importLights()">Import living room from Smart Life</button></div>
+      <h3 class="sub">Brightness</h3>
+      <input type="range" id="lightBri" min="1" max="100" step="1" aria-label="Room brightness">
+      <h3 class="sub">Warmth</h3>
+      <input type="range" id="lightWarm" min="0" max="100" step="1" aria-label="Warm to cool white" style="background:linear-gradient(90deg,#ffa63d,#fff,#9cc8ff);border-radius:999px">
+      <div class="ends"><span>candle</span><span>daylight</span></div>
+      <h3 class="sub">Colour</h3>
+      <div class="sw" id="lightSw"></div>
+      <h3 class="sub">Each light</h3>
+      <div class="list" id="lightList"></div>
+      <div class="row" style="margin-top:12px"><label class="hint" style="margin:0" for="lightOff">Lights off at</label>
+        <input type="time" id="lightOff" aria-label="Daily lights-off time"><button class="btn" onclick="saveLightOff()">Set</button><button class="btn" onclick="clearLightOff()">Clear</button></div>
+      <p class="hint" id="lightHint"></p>
+    </section>
     <section>
       <h2>Colour rods, living room</h2>
       <span class="seg" id="rodMode" style="display:flex;flex-wrap:wrap;border-radius:18px">
@@ -720,15 +728,10 @@ function describeDaily(ed) {
   if (SCRUB.piece && window.Fortuna) window.Fortuna.remove(SCRUB.piece);   // its canvas is about to be replaced
   SCRUB.piece = null;
   const hanging = DAILY.chosenMeta && DAILY.chosenMeta.date === ed.date && STATUS.current === 'daily';
-  $('today').innerHTML = `<div class="preview" id="preview"><img src="${u('/daily/' + ed.date + '.png')}" alt=""><canvas aria-hidden="true"></canvas></div>
-    <div class="hour"><output id="hourOut">now</output><input type="range" id="hour" min="0" max="23.99" step="0.05" value="${new Date().getHours()}" aria-label="Hour of the day">
-      <button data-hm="now" class="on" onclick="setHourMode('now')">Now</button><button data-hm="day" onclick="setHourMode('day')">Whole day</button></div>
-    <h3>${esc(ed.name)}</h3><p>${esc(ed.description || '')}</p>${ed.listening ? `<p class="listen">${esc(ed.listening)}</p>` : ''}
+  $('today').innerHTML = `<h3>${esc(ed.name)}</h3><p>${esc(ed.description || '')}</p>${ed.listening ? `<p class="listen">${esc(ed.listening)}</p>` : ''}
     <div class="row"><button class="btn primary" id="hangBtn" onclick="showDaily('${ed.date === DAILY.today ? '' : ed.date}')">${hanging ? 'On the wall now' : 'Hang it'}</button>
       <span class="hint" id="hangHint" style="margin:0"></span></div>`;
   SCRUB.date = ed.date; updateHang();
-  $('hour').addEventListener('input', () => setHourMode('pick'));
-  previewDaily(ed);
 }
 function updateHang() {                    // the label under the preview follows the wall and the date
   const b = $('hangBtn'), h = $('hangHint'); if (!b || !SCRUB.date) return;
@@ -791,54 +794,26 @@ async function sleepIn(m) { try { STATUS = await api('/api/sleep', {minutes: m})
 async function sleepAtTime() { try { STATUS = await api('/api/sleep', {at: $('sleepAt').value}); render(); sleepSheet.close(); toast('Off at ' + $('sleepAt').value); } catch (e) { toast(e.message); } }
 async function sleepCancel() { STATUS = await api('/api/sleep', {}); render(); sleepSheet.close(); toast('Staying on'); }
 
-/* ---------- the scrubber: see a piece at any hour before it hangs ---------- */
+/* ---------- shader library loader ---------- */
 let SCRUB = {piece: null, date: null, mode: 'now'};
 async function shaderLib() {
   if (window.Fortuna) return window.Fortuna;
   await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'gallery.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); }).catch(() => {});
   return window.Fortuna;
 }
-async function previewDaily(ed) {
-  SCRUB.date = ed.date;
-  const F = await shaderLib(), box = $('preview'), cv = box.querySelector('canvas');
-  if (!F || !F.gl) return;
-  const [w, h] = [STATUS.wall_w || 192, STATUS.wall_h || 256];
-  if (!SCRUB.piece) {
-    SCRUB.piece = F.add(cv, {always: true, w, h, pal: ed.palette || ['#000', '#444', '#fff'], day: ed.hours || [], onfail: () => box.classList.remove('gl'),
-      draw: glc => {                          // as the wall would light it at that hour: its colour work, then LED by LED
-        const p = SCRUB.piece, d = new Date(), hour = p && p.over.clock != null ? p.over.clock : d.getHours() + d.getMinutes() / 60;
-        F.ledify(fitCanvas(cv), wallLook(glc, w, h, hour), w, h, {x: 0, y: 0, w: cv.width, h: cv.height}, {bloom: false});
-      }});
-  }
-  const p = SCRUB.piece; p.pal = ed.palette || p.pal; p.day = ed.hours || []; p.failed = false; cv.classList.remove('failed');
-  try { F.setSource(p, await (await fetch(u('/daily/' + ed.date + '.frag'))).text()); box.classList.add('gl'); } catch (e) { box.classList.remove('gl'); }
-  setHourMode(SCRUB.mode);
-}
-const hh = h => { const m = Math.round(h * 60) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
-function setHourMode(mode) {
-  SCRUB.mode = mode; const p = SCRUB.piece; if (!p) return;
-  document.querySelectorAll('.hour button').forEach(b => b.classList.toggle('on', b.dataset.hm === mode));
-  if (mode === 'now') { delete p.over.clock; p.speed = 1; $('hourOut').textContent = 'now'; }
-  if (mode === 'pick') { p.over.clock = +$('hour').value; p.speed = 1; $('hourOut').textContent = hh(p.over.clock); }
-  if (mode === 'day') { p.over.clock = p.over.clock ?? new Date().getHours(); p.speed = 20; }
-}
-(function tickHour(last) {
-  const now = performance.now(), p = SCRUB.piece;
-  if (p && SCRUB.mode === 'day') { p.over.clock = (p.over.clock + (now - last) / 1000 * 24 / 60) % 24; $('hour').value = p.over.clock; $('hourOut').textContent = hh(p.over.clock); }
-  requestAnimationFrame(() => tickHour(now));
-})(performance.now());
-
 /* ---------- the gallery: every piece, one tap to hang ---------- */
 let ART = null, artFilter = 'all', musicArtFilter = 'all';
 async function loadArt() {
   if (!ART) { try { ART = await api('/api/art'); } catch (e) { return; } }
-  const chips = (sel, fn) => [{key: 'all', title: 'All'}].concat(ART.collections)
+  const chips = (sel, fn) => [{key: 'all', title: 'All'}].concat(ART.collections, fn === 'filterArt' ? [{key: 'live', title: 'Live boards'}] : [])
     .map(c => `<button class="${sel === c.key ? 'on' : ''}" onclick="${fn}('${c.key}')">${esc(c.title)}</button>`).join('');
   $('artChips').innerHTML = chips(artFilter, 'filterArt');
   const cur = STATUS.current === 'piece' ? STATUS.piece : null;
   const list = shownPieces();
   $('galleryHead').textContent = `Gallery · ${ART.pieces.length} pieces`;
-  $('artGrid').innerHTML = list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
+  $('artGrid').innerHTML = artFilter === 'live' ? liveBoards().map(m => `<button class="${STATUS.current === m.id ? 'sel' : ''}" onclick="play('${m.id}')">
+      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span>${esc(m.title)}</span></button>`).join('')
+    : list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
       <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   if (MUSIC.settings && MUSIC.settings.style === 'art') {
     $('musicArtChips').innerHTML = chips(musicArtFilter, 'filterMusicArt');
@@ -849,8 +824,14 @@ async function loadArt() {
         <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   }
 }
+const LIVE_IDS = ['trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'snow', 'tides', 'limmat', 'westcork', 'quakes'];
+function liveBoards() {                    // modes fed by real-time data, shown as a gallery chip
+  const q = ($('artFind').value || '').trim().toLowerCase();
+  return MODES.filter(m => LIVE_IDS.includes(m.id) && (!q || (m.title + ' ' + m.desc).toLowerCase().includes(q)));
+}
 function shownPieces() {
   const q = ($('artFind').value || '').trim().toLowerCase();
+  if (artFilter === 'live') return [];
   return ART.pieces.filter(p => (artFilter === 'all' || p.collection === artFilter) &&
     (!q || (p.title + ' ' + (p.collection_title || '')).toLowerCase().includes(q)));
 }
@@ -863,6 +844,7 @@ async function stepPiece(d) {
 }
 async function surprise() {
   if (!ART) await loadArt(); if (!ART) return;
+  if (artFilter === 'live') { const b = liveBoards(); if (b.length) play(b[Math.floor(Math.random() * b.length)].id); return; }
   const l = shownPieces().length ? shownPieces() : ART.pieces;
   hangPiece(l[Math.floor(Math.random() * l.length)].id);
 }
@@ -883,6 +865,7 @@ const RODS = {auto: 'Warm orange, and the colours of the wall while the art of t
 const SWATCHES = ['#ff6a00', '#ff2d2d', '#ff4fd6', '#8a5cff', '#1f67ff', '#00d4ff', '#00ff7a', '#ffd400', '#ffffff'];
 let ROD = {};
 async function loadRoom() {
+  loadLights();
   try { ROD = await api('/api/rods'); } catch (e) { return; }
   document.querySelectorAll('[data-rm]').forEach(b => b.classList.toggle('on', b.dataset.rm === ROD.mode));
   $('rodHint').textContent = RODS[ROD.mode] || '';
@@ -894,6 +877,50 @@ async function loadRoom() {
   const n = ['Rod 1', 'Rod 2'];
   $('rodStatus').innerHTML = (ROD.status || []).map((st, i) => `<span><i class="${st === 'on' ? 'on' : ''}"></i>${n[i] || 'Rod'} ${st === 'on' ? 'connected' : st === 'connecting' ? 'connecting…' : st === 'disconnected' ? 'disconnected' : 'not connected'}</span>`).join('');
 }
+/* ---------- living room lights (Smart Life) ---------- */
+const LIGHT_PRESETS = [
+  {n: 'Bright', b: 100, w: 70}, {n: 'Evening', b: 55, w: 10}, {n: 'Dim', b: 18, w: 0}, {n: 'Candle', b: 8, w: 0},
+  {n: 'Movie', b: 12, c: '#ff6a00'}, {n: 'Party', b: 80, c: '#8a5cff'}, {n: 'Ocean', b: 50, c: '#00d4ff'}];
+let LIGHTS = {};
+async function loadLights() {
+  try { LIGHTS = await api('/api/lights'); } catch (e) { return; }
+  $('lightsSec').hidden = !LIGHTS.configured;
+  if (!LIGHTS.configured) return;
+  $('lightHint').textContent = !LIGHTS.installed ? 'The lights library (tinytuya) is not installed on the wall.' : '';
+  $('lightPresets').innerHTML = LIGHT_PRESETS.map((p, i) => `<button onclick="lightPreset(${i})"><span style="${p.c ? 'color:' + p.c : ''}">${p.n}</span></button>`).join('');
+  $('lightScenes').hidden = !(LIGHTS.scenes || []).length;
+  $('lightScenes').innerHTML = (LIGHTS.scenes || []).map(sc => `<button onclick="runLightScene('${esc(sc.id)}')"><span>${esc(sc.name)}</span></button>`).join('');
+  $('lightSw').innerHTML = SWATCHES.map(c => `<button style="background:${c}" onclick="lookLights({colour:'${c}'})" aria-label="${c}"></button>`).join('') +
+    `<input type="color" id="lightPick" value="#ff6a00" aria-label="Pick a colour">`;
+  $('lightPick').addEventListener('change', e => lookLights({colour: e.target.value}));
+  $('lightList').innerHTML = (LIGHTS.devices || []).map((d, i) => `<button data-i="${i}" onclick="toggleLight(${i})" ${d.error ? 'title="' + esc(d.error) + '"' : ''}>
+      <i class="dot ${d.on ? 'on' : ''}" style="width:12px;height:12px;border-radius:50%;background:${d.on ? 'rgb(var(--glow))' : 'var(--line)'}"></i>
+      <span><b>${esc(d.name)}</b><small>${d.error ? 'No answer' : d.on ? 'On' + (d.brightness ? ' · ' + d.brightness + '%' : '') : d.on === false ? 'Off' : 'Unknown'}</small></span>
+      <input type="range" min="1" max="100" value="${d.brightness || 100}" ${d.kind !== 'bulb' ? 'hidden' : ''} onclick="event.stopPropagation()" onchange="lookLights({brightness:+this.value}, ${i})" aria-label="${esc(d.name)} brightness" style="width:90px"></button>`).join('');
+  const on = (LIGHTS.devices || []).find(d => d.on && d.brightness);
+  if (on && document.activeElement !== $('lightBri')) $('lightBri').value = on.brightness;
+  if (LIGHTS.schedule && LIGHTS.schedule.off) $('lightOff').value = LIGHTS.schedule.off;
+}
+async function importLights() {
+  const b = $('lightImport'); b.disabled = true; toast('Reading Smart Life…');
+  try { const r = await api('/api/lights/import', {}); toast(`Living room: ${r.room.length} lights, ${r.scenes.length} scenes`); loadLights(); }
+  catch (e) { toast(e.message); } finally { b.disabled = false; }
+}
+async function runLightScene(id) { try { await api('/api/lights/scene', {id}); toast('Scene on'); setTimeout(loadLights, 1500); } catch (e) { toast(e.message); } }
+async function roomPower(on) { try { await api('/api/lights/room', {on}); toast(on ? 'Lights on' : 'Lights off'); setTimeout(loadLights, 800); } catch (e) { toast(e.message); } }
+async function toggleLight(i) {
+  const d = LIGHTS.devices[i]; if (!d) return;
+  try { await api('/api/lights/one', {name: d.name, on: !d.on}); setTimeout(loadLights, 800); } catch (e) { toast(e.message); }
+}
+async function lookLights(look, i) {
+  const body = {...look}; if (i != null) body.name = LIGHTS.devices[i].name;
+  try { await api('/api/lights/look', body); setTimeout(loadLights, 1000); } catch (e) { toast(e.message); }
+}
+function lightPreset(i) { const p = LIGHT_PRESETS[i]; lookLights(p.c ? {colour: p.c, brightness: p.b} : {brightness: p.b, warmth: p.w}); $('lightBri').value = p.b; toast(p.n); }
+$('lightBri').addEventListener('change', e => lookLights({brightness: +e.target.value}));
+$('lightWarm').addEventListener('change', e => lookLights({warmth: +e.target.value, brightness: +$('lightBri').value}));
+async function saveLightOff() { try { await api('/api/lights/schedule', {off: $('lightOff').value || null}); toast('Lights go off at ' + $('lightOff').value); } catch (e) { toast(e.message); } }
+async function clearLightOff() { try { await api('/api/lights/schedule', {off: null}); $('lightOff').value = ''; toast('Schedule cleared'); } catch (e) { toast(e.message); } }
 async function connectRods() {
   try { await api('/api/rods/connect', {}); toast('Connecting the rods…'); $('rodConnect').disabled = true;
         setTimeout(loadRoom, 4000); setTimeout(() => { loadRoom(); $('rodConnect').disabled = false; }, 12000); }
@@ -954,12 +981,10 @@ async function loadMusic() {
   $('party').disabled = autoOn;
   if (document.activeElement !== $('sens')) $('sens').value = s.sensitivity;
   $('tAuto').checked = autoOn; $('tShz').checked = !!s.shazam; $('tWall').checked = !!s.song_on_wall; $('tReact').checked = !!s.art_reacts;
-  const show = s.style === 'loops' ? 'loops' : s.style === 'art' ? 'art' : 'auto';
+  const show = s.style === 'art' ? 'art' : 'auto';
   document.querySelectorAll('[data-ms2]').forEach(b => b.classList.toggle('on', b.dataset.ms2 === show));
-  $('loopBox').hidden = show !== 'loops'; $('musicArtBox').hidden = show !== 'art';
+  $('musicArtBox').hidden = show !== 'art';
   if (show === 'art') loadArt();
-  document.querySelectorAll('[data-lm]').forEach(b => b.classList.toggle('on', b.dataset.lm === s.loop_music));
-  if (s.style === 'loops') loadLoops(s.loop || '');
   $('tCast').checked = !!s.cast_follow; $('tCover').checked = !!s.cover_show; $('tCoverCol').checked = !!s.cover_colours;
   const sp = MUSIC.speakers || [], sn = MUSIC.speaker_now;
   $('castChips').hidden = !s.cast_follow || !sp.length;
@@ -986,15 +1011,6 @@ musicSwitch('tAuto', 'mode', c => c ? 'auto' : 'manual'); musicSwitch('tShz', 's
 $('tPresence').addEventListener('change', e => api('/api/presence', {on: e.target.checked}).then(r => { STATUS = r; render(); toast(e.target.checked ? 'People on the art' : 'People off'); }).catch(err => toast(err.message))); musicSwitch('tCover', 'cover_show'); musicSwitch('tCoverCol', 'cover_colours');
 document.querySelectorAll('[data-ms2]').forEach(b => b.onclick = () =>
   api('/api/music', {style: b.dataset.ms2, start: true}).then(r => { STATUS = r.status || STATUS; loadMusic(); }).catch(e => toast(e.message)));
-document.querySelectorAll('[data-lm]').forEach(b => b.onclick = () => api('/api/music', {loop_music: b.dataset.lm}).then(loadMusic));
-let LOOPS = null, loopSel = null;
-async function loadLoops(sel) {
-  if (!LOOPS) { try { LOOPS = await api('/api/loops'); } catch (e) { return; } }
-  if (loopSel === sel && $('loops').children.length) return; loopSel = sel;
-  const tile = (name, label, img) => `<button class="${sel === name ? 'sel' : ''}" onclick="api('/api/music',{loop:'${name}'}).then(loadMusic)">
-    ${img ? `<img src="${img}" alt="" loading="lazy">` : `<img alt="" style="background:linear-gradient(135deg,rgb(var(--glow)),#000)">`}<span>${label}</span></button>`;
-  $('loops').innerHTML = tile('', 'Any', null) + LOOPS.map(l => tile(l.name, l.name.split('__')[1].replace(/^(beeple-|mixkit-)/, ''), u('/loops/thumb/' + l.name + '.jpg'))).join('');
-}
 async function scopeTick() {
   if (!$('v-music').classList.contains('on') || STATUS.current !== 'music') return;
   let d; try { d = await api('/api/audio'); } catch (e) { return; }

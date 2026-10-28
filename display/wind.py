@@ -3,6 +3,7 @@ the real 10 m wind of the moment, each leaving a short trail that fades, so the 
 on a still day the lights barely creep and glow a cool deep teal; a breeze turns them ice white; a
 föhn storm or an Atlantic gale sends warm amber and coral streaks racing across the wall. Gusts
 travel through the field as bands where the lights surge and brighten, as strong as the gusts are.
+In a gale the field thins a little, so the long streaks never bury the land.
 Underneath, very quiet, the country: Switzerland's border and its big lakes, or Ireland's coast, with
 one faint LED for home (Rennweg in Zürich; Schull in West Cork). Maps: assets/maps/switzerland.json
 and ireland.json (Natural Earth, from tools/build_maps.py).
@@ -49,10 +50,14 @@ EASE = 60.0                    # seconds for a new fetch to blend in
 GUST_LEN = 40.0                # LEDs across a gust patch
 GUST_EVERY = 6.0               # seconds between surges
 # Colour by the wind each light feels (m/s): still = deep teal, breeze = ice, fresh = warm white,
-# strong = amber, gale = coral and rose. Every stop keeps a channel well above the LEDs' dark floor.
+# strong = amber, gale = coral and rose. Every stop keeps a channel well above the LEDs' dark floor,
+# and the warm ones keep their second channel high too, so a fading trail stays its colour for most
+# of its length instead of dropping to plain red (the LEDs show nothing below about 94).
 SPEEDS = np.array([0.0, 2.0, 4.0, 7.0, 11.0, 15.0, 20.0, 27.0], np.float32)
 COLS = np.array([(30, 108, 150), (50, 130, 192), (110, 172, 222), (172, 212, 238),
-                 (246, 232, 200), (255, 192, 112), (255, 132, 112), (255, 96, 150)], np.float32)
+                 (246, 232, 200), (255, 206, 136), (255, 160, 136), (255, 140, 184)], np.float32)
+THIN = (9.0, 20.0, 0.55)       # mean wind (m/s) where the field starts to thin, where it is thinnest, how thin:
+                               # a gale's long streaks would otherwise bury the coast
 BORDER = (36, 64, 116)         # the quiet map: just over the LEDs' floor, a deep blue line
 LAKE = (36, 64, 116)
 HOME_LED = (128, 120, 112)
@@ -63,9 +68,20 @@ _cache_lock = threading.Lock()
 def _read_cache():
     try:
         with open(CACHE) as fh:
-            return json.load(fh)
+            c = json.load(fh)
+        return c if isinstance(c, dict) else {}
     except Exception:
         return {}
+
+
+def _valid(rec):
+    """A cache record this version can draw: the right grid, lists of the right length, a time."""
+    try:
+        return (isinstance(rec, dict) and rec.get("grid") == [NX, NY]
+                and all(isinstance(rec.get(k), list) and len(rec[k]) == NX * NY for k in ("speed", "dir", "gust"))
+                and isinstance(rec.get("t"), (int, float)) and math.isfinite(rec["t"]))
+    except Exception:
+        return False
 
 
 def _write_cache(key, rec):
@@ -101,12 +117,17 @@ class Wind:
         self.x, self.y = rng.uniform(0, W, N), rng.uniform(0, H, N)
         self.life = rng.uniform(*LIFE, N)
         self.age = rng.uniform(0, 1, N) * self.life
+        self.rank = np.arange(N) / N                                 # which lights a gale thins out first
         self.phase = self._phase(self.x, self.y)
         self.last, self.last_frame, self.ok = None, time.time(), False
+        self.fetched = 0.0
         rec = _read_cache().get(key)
-        if rec and rec.get("grid") == [NX, NY]:
-            self._use(rec, ease=False)
-        self.fetched = rec.get("t", 0.0) if rec and rec.get("grid") == [NX, NY] else 0.0
+        try:
+            if _valid(rec) and self._use(rec, ease=False):
+                self.fetched = float(rec["t"])
+        except Exception as e:                                       # a bad cache: draw the map, fetch now
+            self.field = None
+            print(f"[wind {key}] cache ignored: {str(e)[:80]}", flush=True)
         if fetch:
             threading.Thread(target=self._fetch_loop, daemon=True).start()
 
@@ -144,7 +165,7 @@ class Wind:
     # --------------------------------------------------------------- data ---
     def _fetch_loop(self):
         import requests
-        wait = max(0.0, self.fetched + EVERY - time.time())
+        wait = min(EVERY, max(0.0, self.fetched + EVERY - time.time()))   # a cache from the future: clamp
         backoff = 120.0
         while True:
             time.sleep(min(wait, 10.0))
@@ -164,7 +185,8 @@ class Wind:
                     raise RuntimeError("429 " + r.text[:80])
                 r.raise_for_status()
                 rec = self.parse(r.json())
-                self._use(rec, ease=True)
+                if not self._use(rec, ease=True):                    # an answer with no wind in it
+                    raise ValueError("no usable wind in the answer")
                 _write_cache(self.key, rec)
                 self.ok, wait, backoff = True, EVERY, 120.0
             except Exception as e:
@@ -185,13 +207,15 @@ class Wind:
                 "speed": sp, "dir": di, "gust": gu}
 
     def _use(self, rec, ease):
-        """A cache record -> the wind at every LED (bilinear between the grid points)."""
+        """A cache record -> the wind at every LED (bilinear between the grid points). False if unusable."""
         sp = np.array([np.nan if v is None else v for v in rec["speed"]], np.float32)
         di = np.array([np.nan if v is None else v for v in rec["dir"]], np.float32)
         gu = np.array([np.nan if v is None else v for v in rec["gust"]], np.float32)
         good = np.isfinite(sp) & np.isfinite(di)
+        sp = np.where(good, np.clip(sp, 0, 60), np.nan)             # nonsense speeds stay on the picture
+        gu = np.clip(gu, 0, 80)
         if not good.any():
-            return
+            return False
         r = np.radians(np.where(good, di, 0))
         u = np.where(good, -sp * np.sin(r), 0)                      # the way the air goes, east...
         v = np.where(good, sp * np.cos(r), 0)                       # ...and down the picture (south)
@@ -211,9 +235,12 @@ class Wind:
 
         mu, mv = float(u.mean()), float(v.mean())
         mean = math.hypot(mu, mv)
-        field = (up(u), up(v), up(gu), (mu / mean, mv / mean) if mean > 0.5 else None)
+        ms = float(sp[good].mean())
+        dens = 1 - (1 - THIN[2]) * min(1.0, max(0.0, (ms - THIN[0]) / (THIN[1] - THIN[0])))
+        field = (up(u), up(v), up(gu), (mu / mean, mv / mean) if mean > 0.5 else None, dens)
         self.prev = self.field if (ease and self.field is not None) else None
         self.field, self.t_new = field, time.time()
+        return True
 
     # -------------------------------------------------------------- frame ---
     def __call__(self, t):
@@ -233,7 +260,7 @@ class Wind:
         ix = np.clip(self.x.astype(np.int32), 0, W - 1)
         iy = np.clip(self.y.astype(np.int32), 0, H - 1)
         u, v, g = f[0][iy, ix], f[1][iy, ix], f[2][iy, ix]
-        p = self.prev
+        p, dens = self.prev, f[4]
         if p is not None:                                            # a new fetch eases in
             a = (time.time() - self.t_new) / EASE
             if a >= 1:
@@ -243,6 +270,7 @@ class Wind:
                 u = p[0][iy, ix] + (u - p[0][iy, ix]) * a
                 v = p[1][iy, ix] + (v - p[1][iy, ix]) * a
                 g = p[2][iy, ix] + (g - p[2][iy, ix]) * a
+                dens = p[4] + (dens - p[4]) * a
         s = np.hypot(u, v)
         # gusts: every few seconds a light surges towards the gust speed and back, in step with the
         # lights born near it, so patches of the field rush and brighten - as hard as the real gusts.
@@ -273,10 +301,40 @@ class Wind:
         feel = s * boost
         lvl = np.minimum(1.0, np.minimum(self.age, self.life - self.age) / RAMP)
         lvl *= min(1.0, (t - self.arrived) / 3.0)                     # the first data fades in
+        if dens < 1.0:                                               # in a gale only some of the lights show
+            lvl *= np.clip((dens - self.rank) * 25.0, 0.0, 1.0)
         col = np.stack([np.interp(feel, SPEEDS, COLS[:, c]) for c in range(3)], 1) * lvl[:, None]
-        ix = self.x.astype(np.int32)
-        iy = self.y.astype(np.int32)
-        self.trail[iy, ix] = np.maximum(self.trail[iy, ix], col)
+        o = np.argsort(col.sum(1))                                  # where lights share an LED the brightest
+        ix = self.x[o].astype(np.int32)                             # is written last, so it wins
+        iy = self.y[o].astype(np.int32)
+        self.trail[iy, ix] = np.maximum(self.trail[iy, ix], col[o])
+
+
+# a typical day for the app's still when there is no cache yet: a south-westerly over Ireland, a
+# gentle Bise (from the north-east) over Switzerland
+TYPICAL = {"ie": (6.0, 225.0, 9.0), "ch": (3.0, 50.0, 5.0)}
+
+
+def _thumb(key):
+    """A still for the app, with no network: the cached wind if there is any, else a typical day."""
+    w = Wind(key, fetch=False)
+    if w.field is None:
+        sp, di, gu = TYPICAL[key]
+        n = np.arange(NX * NY)
+        w._use({"speed": list(sp * (1 + 0.25 * np.sin(n * 0.9))), "dir": list(di + 12 * np.cos(n * 0.7)),
+                "gust": [gu] * (NX * NY)}, ease=False)
+    img = None
+    for i in range(150):
+        img = w(i / 30)
+    return img
+
+
+def thumb_ch():
+    return _thumb("ch")
+
+
+def thumb_ie():
+    return _thumb("ie")
 
 
 _w = {}

@@ -14,8 +14,9 @@ imiTidePrediction, Water_Level in metres above LAT every 5 minutes, interpolated
 water from IMI_TidePrediction_HighLow). The swell is the Irish Weather Buoy Network (dataset
 IWBNetwork), station M3 south-west of Mizen Head - WaveHeight (significant wave height) and Tp (peak
 period) and MeanWaveDirection, hourly - with M5 off Waterford standing in when M3 is silent.
-Predictions are fetched every 3 hours for the next two days, the buoy every 30 minutes, on a side
-thread, and kept in panel_setup/tides_cache.json; with no data at all the tide carries on from a
+Predictions are fetched every 3 hours (the curve for the next two days, high and low water for two
+weeks), the buoy every 30 minutes, on a side thread - after a failure the next try waits 5 minutes,
+then 10, 20, up to an hour - and kept in panel_setup/tides_cache.json; with no data the tide carries on from a
 harmonic estimate (the principal lunar M2 and solar S2 tides, springs and neaps following the moon)
 anchored to the last high water known, so the picture never stops.
 
@@ -44,12 +45,16 @@ ERDDAP = "https://erddap.marine.ie/erddap/tabledap/"
 STATION = "Union_Hall"                        # nearest tide station to Baltimore (13 km east)
 CURVE_URL = (ERDDAP + "imiTidePrediction.csv?time,Water_Level,Water_Level_ODM"
              "&stationID=%22" + STATION + "%22&time%3E=now-6hours&time%3C=now%2B2days")
+# two weeks of high and low waters (about 60 rows): the harmonic fallback stays anchored to a real
+# high water through an outage of days
 EVENTS_URL = (ERDDAP + "IMI_TidePrediction_HighLow.csv?time,tide_time_category,Water_Level_ODMalin"
-              "&stationID=%22" + STATION + "%22&time%3E=now-1day&time%3C=now%2B3days")
-BUOY_URL = (ERDDAP + "IWBNetwork.csv?station_id,time,WaveHeight,WavePeriod,Tp,MeanWaveDirection"
+              "&stationID=%22" + STATION + "%22&time%3E=now-1day&time%3C=now%2B14days")
+BUOY_URL = (ERDDAP + "IWBNetwork.csv?station_id,time,WaveHeight,WavePeriod,Tp,MeanWaveDirection,QC_Flag"
             "&time%3E=now-12hours")
 BUOYS = ("M3", "M5")                          # M3 off Mizen; M5 off Waterford if M3 is silent
-TIDE_EVERY, BUOY_EVERY, RETRY = 3 * 3600.0, 1800.0, 300.0
+QC_OK = (0, 1, 2)                             # SeaDataNet: unknown, good, probably good (9 = missing)
+TIDE_EVERY, BUOY_EVERY = 3 * 3600.0, 1800.0
+RETRY, RETRY_MAX = 300.0, 3600.0              # after a failure: 5 min, doubling to an hour at most
 
 # The tide when nothing is known: Union Hall's M2 and S2 (metres), mean level above LAT and a real
 # high water (2026-10-28 05:50 UTC, 1.66 m OD Malin) to anchor the phase.
@@ -84,6 +89,52 @@ def _iso(s):
     return datetime.strptime(s.strip(), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
 
 
+def _num(v):
+    """A finite float, or None."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) else None
+
+
+def _clean(c):
+    """The cached data with anything of the wrong shape or value dropped (never raises)."""
+    def items(k):
+        v = c.get(k)
+        return v if isinstance(v, list) else []
+    if not isinstance(c, dict):
+        return {}
+    out = {}
+    curve = []
+    for p in items("curve"):
+        if isinstance(p, (list, tuple)) and len(p) >= 2:
+            t, h = _num(p[0]), _num(p[1])
+            if t is not None and h is not None and -5 < h < 15:
+                curve.append([t, h])
+    out["curve"] = sorted(curve)
+    events = []
+    for e in items("events"):
+        if isinstance(e, (list, tuple)) and len(e) >= 3 and e[1] in ("H", "L"):
+            t, h = _num(e[0]), _num(e[2])
+            if t is not None and h is not None:
+                events.append([t, e[1], h])
+    out["events"] = sorted(events)
+    b = c.get("buoy")
+    if isinstance(b, dict):
+        t, hs, tp = _num(b.get("time")), _num(b.get("hs")), _num(b.get("tp"))
+        if t is not None and hs is not None and tp is not None and 0 < hs < 25 and 2 < tp < 30:
+            out["buoy"] = {"station": str(b.get("station", "")), "time": t, "hs": hs, "tp": tp,
+                           "dir": _num(b.get("dir"))}
+    off = _num(c.get("odm_to_lat"))
+    if off is not None and 0 < off < 5:
+        out["odm_to_lat"] = off
+    f = c.get("fetched")
+    if isinstance(f, dict):
+        out["fetched"] = {k: _num(f.get(k)) for k in ("tide", "buoy") if _num(f.get(k)) is not None}
+    return out
+
+
 def _rows(text):
     """ERDDAP .csv: a header row, a units row, then data."""
     rows = list(csv.reader(io.StringIO(text)))
@@ -94,7 +145,9 @@ class Sea:
     def __init__(self, fetch=True):
         self.lock = threading.Lock()
         self.data = {"curve": [], "events": [], "buoy": None, "odm_to_lat": ODM_TO_LAT}
-        self.fetched = {"tide": 0.0, "buoy": 0.0}
+        self.fetched = {"tide": 0.0, "buoy": 0.0}           # last success
+        self.next_try = {"tide": 0.0, "buoy": 0.0}          # no attempt before this (after a failure)
+        self.fails = {"tide": 0, "buoy": 0}
         self._load()
         self._arrays()
         if fetch:
@@ -103,7 +156,7 @@ class Sea:
     def _load(self):
         try:
             with open(CACHE) as fh:
-                c = json.load(fh)
+                c = _clean(json.load(fh))
             self.data.update({k: c[k] for k in ("curve", "events", "buoy", "odm_to_lat") if k in c})
             self.fetched.update(c.get("fetched", {}))
         except Exception:
@@ -124,26 +177,36 @@ class Sea:
             self.ct = np.array([p[0] for p in c], np.float64)
             self.ch = np.array([p[1] for p in c], np.float64)
 
+    def _attempt(self, key, fn, requests, now):
+        """One fetch; a failure holds off the next attempt 5 min, 10, 20 ... up to an hour. So does a
+        success that still leaves the tide uncovered (a short prediction), so that never hammers."""
+        try:
+            fn(requests)
+            self.fetched[key] = now
+            self._save()
+            if key == "tide" and not self._covered(now + 6 * 3600):
+                self.fails[key] += 1
+                self.next_try[key] = now + min(RETRY_MAX, RETRY * 2 ** (self.fails[key] - 1))
+            else:
+                self.fails[key], self.next_try[key] = 0, 0.0
+        except Exception as e:
+            self.fails[key] += 1
+            self.next_try[key] = now + min(RETRY_MAX, RETRY * 2 ** (self.fails[key] - 1))
+            print(f"[tides] {key}: {str(e)[:100]}", flush=True)
+
     def _loop(self):
-        import requests
+        try:
+            import requests
+        except Exception as e:                          # no requests: the model and the cache carry on
+            print(f"[tides] no requests: {e}", flush=True)
+            return
         while True:
             now = time.time()
-            try:
-                if now - self.fetched["tide"] > TIDE_EVERY or not self._covered(now + 6 * 3600):
-                    self._fetch_tide(requests)
-                    self.fetched["tide"] = now
-                    self._save()
-            except Exception as e:
-                self.fetched["tide"] = now - TIDE_EVERY + RETRY        # try again in 5 minutes
-                print(f"[tides] tide: {str(e)[:100]}", flush=True)
-            try:
-                if now - self.fetched["buoy"] > BUOY_EVERY:
-                    self._fetch_buoy(requests)
-                    self.fetched["buoy"] = now
-                    self._save()
-            except Exception as e:
-                self.fetched["buoy"] = now - BUOY_EVERY + RETRY
-                print(f"[tides] buoy: {str(e)[:100]}", flush=True)
+            if now >= self.next_try["tide"] and (now - self.fetched["tide"] > TIDE_EVERY
+                                                 or not self._covered(now + 6 * 3600)):
+                self._attempt("tide", self._fetch_tide, requests, now)
+            if now >= self.next_try["buoy"] and now - self.fetched["buoy"] > BUOY_EVERY:
+                self._attempt("buoy", self._fetch_buoy, requests, now)
             time.sleep(30)
 
     def _covered(self, t):
@@ -157,45 +220,59 @@ class Sea:
         curve, offs = [], []
         for row in rows:
             try:
-                t, h = _iso(row[i_t]), float(row[i_h])
+                t, h = _iso(row[i_t]), _num(row[i_h])
             except (ValueError, IndexError):
                 continue
+            if h is None or not -5 < h < 15:
+                continue
             curve.append([t, h])
-            try:
-                offs.append(h - float(row[i_o]))
-            except (ValueError, IndexError):
-                pass
+            o = _num(row[i_o]) if i_o < len(row) else None
+            if o is not None:
+                offs.append(h - o)
         if len(curve) < 10:
             raise ValueError("tide: too few rows")
         off = float(np.median(offs)) if offs else self.data["odm_to_lat"]
-        r = requests.get(EVENTS_URL, timeout=30)
-        r.raise_for_status()
-        head, rows = _rows(r.text)
-        i_t, i_c, i_h = head.index("time"), head.index("tide_time_category"), head.index("Water_Level_ODMalin")
-        events = []
-        for row in rows:
-            try:
-                events.append([_iso(row[i_t]), row[i_c].strip().upper()[:1], round(float(row[i_h]) + off, 2)])
-            except (ValueError, IndexError):
-                continue
+        if not (math.isfinite(off) and 0 < off < 5):
+            off = self.data["odm_to_lat"]
+        # keep the curve even if the high/low request below fails
         self.data.update(curve=sorted(curve), odm_to_lat=round(off, 3))
-        if events:
-            self.data["events"] = sorted(events)
         self._arrays()
+        try:
+            r = requests.get(EVENTS_URL, timeout=30)
+            r.raise_for_status()
+            head, rows = _rows(r.text)
+            i_t, i_c, i_h = head.index("time"), head.index("tide_time_category"), head.index("Water_Level_ODMalin")
+            events = []
+            for row in rows:
+                try:
+                    t, k, h = _iso(row[i_t]), row[i_c].strip().upper()[:1], _num(row[i_h])
+                except (ValueError, IndexError):
+                    continue
+                if h is not None and k in ("H", "L"):
+                    events.append([t, k, round(h + off, 2)])
+            if events:
+                self.data["events"] = sorted(events)
+        except Exception as e:
+            print(f"[tides] high/low: {str(e)[:100]}", flush=True)
 
     def _fetch_buoy(self, requests):
         r = requests.get(BUOY_URL, timeout=30)
         r.raise_for_status()
         head, rows = _rows(r.text)
         ix = {k: head.index(k) for k in ("station_id", "time", "WaveHeight", "WavePeriod", "Tp", "MeanWaveDirection")}
+        i_q = head.index("QC_Flag") if "QC_Flag" in head else None
         best = {}
         for row in rows:
             try:
-                st, t, hs = row[ix["station_id"]], _iso(row[ix["time"]]), float(row[ix["WaveHeight"]])
+                st, t, hs = row[ix["station_id"]], _iso(row[ix["time"]]), _num(row[ix["WaveHeight"]])
             except (ValueError, IndexError):
                 continue
-            if st not in BUOYS or not (0.05 < hs < 25):
+            if st not in BUOYS or hs is None or not (0.05 < hs < 25):
                 continue
+            if i_q is not None and i_q < len(row) and row[i_q].strip():
+                q = _num(row[i_q])
+                if q is None or int(q) not in QC_OK:
+                    continue
 
             def num(k):
                 try:
@@ -220,7 +297,9 @@ class Sea:
         with self.lock:
             ct, ch = self.ct, self.ch
         if len(ct) > 1 and ct[0] <= t <= ct[-1]:
-            return float(np.interp(t, ct, ch))
+            v = float(np.interp(t, ct, ch))
+            if math.isfinite(v):
+                return v
         return self.harmonic(t)
 
     def harmonic(self, t):
@@ -228,8 +307,6 @@ class Sea:
         for e in self.data["events"]:
             if e[1] == "H" and e[0] <= t:
                 hw = e[0]
-        if hw < t - 30 * 86400:                     # a stale anchor is fine: M2 is very regular
-            pass
         w2, ws = 2 * math.pi / M2_PERIOD, 2 * math.pi / S2_PERIOD
         tau = (moon_elongation(hw) % 180.0) / 360.0 * SYNODIC - SPRING_LAG   # since the last springs
         phi = (ws - w2) * tau                       # S2 against M2 at the anchor
@@ -307,11 +384,22 @@ def sky(t):
     return {"sun": _altaz(ls, 0.0, d), "moon": _altaz(lm, bm, d), "elong": (lm - ls) % 360.0, "beta": bm}
 
 
+SKY_X0, SKY_X1 = QUAY_X + 22, W - 18             # where east (az 90) and west (az 270) stand
+
+
 def sky_px(alt, az):
-    """Looking out of the harbour to the south: east on the left, west on the right; the zenith up top."""
-    x = (az - 90.0) / 180.0 * (W - 40) + 20
+    """Looking out of the harbour to the south: east on the left, west on the right; the zenith up top.
+    North of east or west (the summer sun, the moon at its far risings) is folded into the margins,
+    a fifth as fast, so it still moves and is never pinned against an edge."""
+    az %= 360.0
+    if 90.0 <= az <= 270.0:
+        x = SKY_X0 + (az - 90.0) / 180.0 * (SKY_X1 - SKY_X0)
+    elif az < 90.0:
+        x = SKY_X0 - (90.0 - az) * 0.2
+    else:
+        x = SKY_X1 + (az - 270.0) * 0.2
     y = SKY_BOTTOM - 8 - max(0.0, alt) / 62.0 * (SKY_BOTTOM - 24)
-    return int(round(min(W - 9, max(QUAY_X + 8, x)))), int(round(max(10, y)))
+    return int(round(min(W - 8, max(QUAY_X + 8, x)))), int(round(max(10, y)))
 
 
 def disc(r, sun_dir, phase_angle):
@@ -453,10 +541,10 @@ class Harbour:
             y += 7
         # the moon's phase beside the words when it is below the horizon
         if moon_px is None:
-            lit, dark = disc(2, (1.0 if sk["elong"] < 180 else -1.0, 0.0),
+            lit, dark = disc(4, (1.0 if sk["elong"] < 180 else -1.0, 0.0),
                              180.0 - sk["elong"] if sk["elong"] < 180 else sk["elong"] - 180.0)
-            cx, cy = W - 8, H - 2 - 7 * len(lines) + 2
-            self._stamp(img, cx, cy, lit, MOON)
+            self._stamp(img, W - 9, H - 7, dark, MOON_DARK)
+            self._stamp(img, W - 9, H - 7, lit, MOON)
         hs, tp, wdir, _ = self.sea.swell(now)
         return {"img": img, "lights": lights, "hs": hs, "tp": tp, "dir": wdir}
 
@@ -489,7 +577,12 @@ class Harbour:
     def __call__(self, t):
         now = time.time()
         if now - self.slow_at > 20 or self.slow is None:
-            self.slow, self.slow_at = self._slow_layer(now), now
+            try:
+                self.slow = self._slow_layer(now)
+            except Exception as e:                              # bad data: the bare harbour
+                print(f"[tides] slow layer: {str(e)[:100]}", flush=True)
+                self.slow = {"img": self.base.copy(), "lights": [], "hs": 1.0, "tp": 9.0, "dir": 260.0}
+            self.slow_at = now
         s = self.slow
         img = s["img"].copy()
         level = self.sea.level(now)
@@ -522,12 +615,15 @@ class Harbour:
         # each one coming and going on its own slow beat
         for lx, col, strength in s["lights"]:
             half = int(5 + amp * 0.5)
-            slot = int(now / 0.9)
-            for x in range(max(QUAY_X, lx - half), min(W, lx + half + 1)):
+            x0 = max(QUAY_X + 2, lx - half)
+            if lx - x0 < 4:                                     # against the quay: no path, only specks
+                continue
+            for x in range(x0, min(W, lx + half + 1)):
                 for j, dy in enumerate((2, 4, 6, 9, 12, 16)):
                     yy = surf_i[x] + dy
-                    if yy >= self.ground[x]:
+                    if yy < 0 or yy >= self.ground[x]:
                         break
+                    slot = int(now / 0.9 + (x * 0.37 + dy * 0.61) % 1.0)     # each LED on its own beat
                     hsh = (x * 73856093 ^ dy * 19349663 ^ slot * 83492791) & 0xFFFF
                     p = (1 - abs(x - lx) / (half + 1)) * strength * (1.0 - 0.13 * j)
                     if hsh / 65535.0 < p * 0.55:
@@ -543,8 +639,20 @@ def thumb():
     return Harbour(fetch=False)(0.0)
 
 
+_last = None
+
+
 def frame(t):
-    global _h
-    if _h is None:
-        _h = Harbour()
-    return _h(t)
+    """Never raises: on any surprise the last good picture (or a dark one) stands in."""
+    global _h, _last
+    try:
+        if _h is None:
+            _h = Harbour()
+        _last = _h(t)
+    except Exception as e:
+        print(f"[tides] frame: {str(e)[:100]}", flush=True)
+        if _h is not None:
+            _h.slow = None                                      # rebuild the slow layer next time
+        if _last is None:
+            _last = Image.new("RGB", (W, H))
+    return _last

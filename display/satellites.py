@@ -49,11 +49,13 @@ CX, CY, R = (W - 1) / 2.0, (H - 1) / 2.0, min(W, H) / 2.0 - 4.0     # the dome: 
 SEEN = np.array([255, 205, 120], np.float32)          # sunlit while we are in the dark: look up
 SEEN_ISS = np.array([255, 250, 225], np.float32)
 DAY = np.array([150, 170, 210], np.float32)           # sunlit, but so is our sky
+DAY_TRAIL = np.array([0, 104, 160], np.float32)       # its trail: red and green drop out together, no teal
 SHADOW = np.array([105, 112, 200], np.float32)        # in the Earth's shadow
 LOW = 0.72                                            # below 10 degrees: a little dimmer
 RING = np.array([34, 62, 124], np.float32)            # the horizon at night: the deepest blue the wall shows
 RING_DAY = np.array([70, 112, 180], np.float32)
-GLOW = np.array([240, 120, 40], np.float32)           # the horizon where the sun is, at dusk and dawn
+GLOW = np.array([240, 120, 0], np.float32)            # the horizon where the sun is, at dusk and dawn,
+EMBER = np.array([170, 0, 0], np.float32)             # stepped (no blends: those turn magenta and grey on LEDs)
 SKY = np.array([10, 46, 128], np.float32)             # the dome by day (on every other LED: the wall's
                                                       # dimmest blue, halved), in civil twilight on one in four
 SUN = np.array([255, 190, 70], np.float32)
@@ -179,6 +181,29 @@ def parse_tle(text):
         if b.startswith("1 ") and c.startswith("2 ") and len(b) >= 63 and len(c) >= 63 and not a.startswith(("1 ", "2 ")):
             out.append((a.strip(), b, c))
     return out
+
+
+def _checksum_ok(line):
+    if len(line) < 69 or not line[68].isdigit():
+        return False
+    return sum(int(ch) if ch.isdigit() else ch == "-" for ch in line[:68]) % 10 == int(line[68])
+
+
+def valid(tle):
+    """True when every field the propagators read parses and both lines pass their checksum."""
+    try:
+        _, l1, l2 = tle
+        if not (_checksum_ok(l1) and _checksum_ok(l2)):
+            return False
+        int(l1[2:7])
+        tle_epoch(l1)
+        float(l1[33:43])
+        float("0." + l2[26:33].strip())
+        for a, b in ((8, 16), (17, 25), (34, 42), (43, 51), (52, 63)):
+            float(l2[a:b])
+        return float(l2[52:63]) > 0.5
+    except (ValueError, TypeError, IndexError):
+        return False
 
 
 def tle_epoch(l1):
@@ -315,9 +340,9 @@ def pick(groups):
 
 class Satellites:
     def __init__(self, fetch=True):
-        self.prop, self.ids, self.labels = None, [], []
-        self.fetched = 0.0
-        self.samples = None                                   # (prop, t0, fix0, t1, fix1)
+        self.data = None                                      # (propagator, catalogue numbers, labels),
+        self.fetched = 0.0                                    # swapped as one tuple: frames never see a mix
+        self.samples = None                                   # (data, t0, fix0, t1, fix1)
         self.trail = np.zeros((H, W, 3), np.float32)
         self.drawn = {}                                       # catalogue number -> last LED
         self.base, self.base_t = None, -1e9
@@ -334,7 +359,8 @@ class Satellites:
 
     # ---------------------------------------------------------- data
     def _set(self, tles, fetched):
-        tles = [x for x in tles if abs(time.time() - tle_epoch(x[1])) < 30 * 86400]
+        now = time.time()
+        tles = [x for x in tles if valid(x) and abs(now - tle_epoch(x[1])) < 30 * 86400]
         if len(tles) < 5:
             return False
         try:
@@ -343,8 +369,8 @@ class Satellites:
             print(f"[satellites] {str(e)[:100]}", flush=True)
             return False
         nums = [int(l1[2:7]) for _, l1, _ in tles]
-        self.ids, self.labels = nums, [STATIONS.get(n, "") for n in nums]
-        self.prop, self.fetched = prop, fetched                # swapped last: the frame thread picks it up
+        self.fetched = min(fetched, now)                       # a clock that ran ahead must not stop refreshes
+        self.data = (prop, nums, [STATIONS.get(n, "") for n in nums])
         return True
 
     def _load_cache(self):
@@ -361,14 +387,16 @@ class Satellites:
         wait = RETRY[0]
         while True:
             age = time.time() - self.fetched
-            if age < REFRESH and self.prop is not None:
+            if 0 <= age < REFRESH and self.data is not None:
                 time.sleep(min(REFRESH - age, 900.0))
                 continue
+            answered = False                                   # CelesTrak replied (with anything at all)
             try:
                 groups = []
                 for url in URLS:
                     try:
                         r = requests.get(url, timeout=30, headers={"User-Agent": "magic-mirror-wall/1.0"})
+                        answered = True
                         r.raise_for_status()
                         groups.append(parse_tle(r.text))
                     except Exception as e:
@@ -387,8 +415,11 @@ class Satellites:
                 wait = RETRY[0]
             except Exception as e:
                 print(f"[satellites] {str(e)[:100]}", flush=True)
-                time.sleep(wait)
-                wait = min(wait * 2, RETRY[1])
+                if answered:                                   # the server is up but had nothing for us:
+                    time.sleep(RETRY[1])                       # keep to its one-download-per-2-h rule
+                else:                                          # no connection: nobody is bothered, retry sooner
+                    time.sleep(wait)
+                    wait = min(wait * 2, RETRY[1])
 
     # ---------------------------------------------------------- geometry
     def _fix(self, prop, unix):
@@ -402,15 +433,27 @@ class Satellites:
         along = r @ s
         lit = (along > 0) | (np.linalg.norm(r - along[:, None] * s, axis=1) > RE)
         sun_el = look(to_ecef(s, g)[None], distant=True)[1][0]
-        light = np.where(lit, np.where((sun_el < math.radians(-6)) & (el > math.radians(10)), 2, 1), 0)
+        light = np.where(lit, 2 if sun_el < math.radians(-6) else 1, 0)     # 2: look up (dimmer below 10 deg)
         el = np.where(ok, el, -1.0)
         return np.stack([x, y, el, light.astype(np.float64)], 1)
 
-    def _ring_pixels(self):
-        import cv2
-        m = np.zeros((H, W), np.uint8)
-        cv2.circle(m, (int(round(CX * 16)), int(round(CY * 16))), int(round(R * 16)), 255, 1, cv2.LINE_8, shift=4)
-        ys, xs = np.nonzero(m)
+    @staticmethod
+    def _ring_pixels():
+        """The horizon as a thin 8-connected circle of whole LEDs (one octant, mirrored eight ways)."""
+        ox, oy = CX % 1.0, CY % 1.0                            # 0.5 when the centre falls between LEDs
+        pts = set()
+        k = 0
+        while True:
+            dx = k + ox
+            dy = round(math.sqrt(max(R * R - dx * dx, 0.0)) - oy) + oy
+            if dx > dy:
+                break
+            for a, b in ((dx, dy), (dy, dx)):
+                for sx in (-1, 1):
+                    for sy in (-1, 1):
+                        pts.add((int(round(CX + sx * a)), int(round(CY + sy * b))))
+            k += 1
+        xs, ys = (np.array(v) for v in zip(*sorted(pts)))
         return ys, xs, np.arctan2(CX - xs, CY - ys)            # the azimuth of each ring LED
 
     def _base(self, unix):
@@ -431,7 +474,9 @@ class Satellites:
         ring = RING + (RING_DAY - RING) * day
         twi = max(0.0, 1.0 - abs(sel_d + 4.0) / 8.0)            # strongest with the sun 4 degrees down
         near = np.clip(np.cos(az - saz), 0, 1) ** 3 * twi
-        img[ys, xs] = ring[None] + (GLOW - ring)[None] * near[:, None]
+        img[ys, xs] = ring
+        img[ys[near > 0.22], xs[near > 0.22]] = EMBER
+        img[ys[near > 0.5], xs[near > 0.5]] = GLOW
         pixelfont.draw(img, "N", int(round(CX)) - 1, int(round(CY - R)) - 8, MARK)
         if self.night > 0:                                      # the stars: bright ones come out first
             ra = np.radians([st[0] * 15.0 for st in STARS])
@@ -489,16 +534,14 @@ class Satellites:
                     img[yc + dy, xc + dx] = MOON * (1.0 if q < 0.55 else 0.82)
 
     # ---------------------------------------------------------- frames
-    def _positions(self, unix):
-        prop = self.prop
-        if prop is None:
-            return None
+    def _positions(self, data, unix):
+        prop = data[0]
         sm = self.samples
-        if sm is None or sm[0] is not prop or not (sm[1] <= unix < sm[3] + STEP):
+        if sm is None or sm[0] is not data or not (sm[1] <= unix < sm[3] + STEP):
             t0 = math.floor(unix / STEP) * STEP
-            sm = (prop, t0, self._fix(prop, t0), t0 + STEP, self._fix(prop, t0 + STEP))
+            sm = (data, t0, self._fix(prop, t0), t0 + STEP, self._fix(prop, t0 + STEP))
         elif unix >= sm[3]:                                         # one new fix a second
-            sm = (prop, sm[3], sm[4], sm[3] + STEP, self._fix(prop, sm[3] + STEP))
+            sm = (data, sm[3], sm[4], sm[3] + STEP, self._fix(prop, sm[3] + STEP))
         self.samples = sm
         f = (unix - sm[1]) / STEP
         a, b = sm[2], sm[4]
@@ -514,20 +557,22 @@ class Satellites:
         if self.base is None or abs(unix - self.base_t) > 20.0:
             self.base, self.base_t = self._base(unix), unix
         self.trail *= math.exp(-dt / FADE)
-        pos = self._positions(unix)
+        data = self.data                                            # one read: the fetch thread may swap it
+        pos = None if data is None else self._positions(data, unix)
         heads = []
         seen = set()
         if pos is not None:
+            ids, labels = data[1], data[2]
             for k in np.nonzero(pos[:, 2] > 0.0)[0]:
                 x, y, el, light = pos[k]
                 p = (int(round(x)), int(round(y)))
                 if not self.inside[p[1], p[0]]:
                     continue
-                num, label = self.ids[k], self.labels[k]
+                num, label = ids[k], labels[k]
                 if light == 2:
                     col, tcol = (SEEN_ISS if label else SEEN), SEEN * 0.78
                 elif light == 1:
-                    col, tcol = DAY * (1.25 if label else 1.0), DAY * 0.62
+                    col, tcol = DAY * (1.25 if label else 1.0), DAY_TRAIL
                 else:
                     col, tcol = SHADOW * (1.25 if label else 1.0), SHADOW * 0.55
                 if el < math.radians(10):

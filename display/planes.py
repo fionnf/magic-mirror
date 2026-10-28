@@ -73,13 +73,14 @@ def base_map():
 
 
 class Sky:
-    def __init__(self):
+    def __init__(self, fetch=True):
         self.ac, self.ok = {}, False                  # hex -> {lat, lon, gs (m/s), track, alt (ft), t, flight}
         self.names, self.airlines = {}, {}            # callsign -> (label, far end, looked up at); ICAO -> IATA
         self.trail = np.zeros((H, W, 3), np.float32)
         self.base = base_map().astype(np.float32)
         self.drawn, self.last = {}, None
-        threading.Thread(target=self._fetch_loop, daemon=True).start()
+        if fetch:
+            threading.Thread(target=self._fetch_loop, daemon=True).start()
 
     def _fetch_loop(self):
         import requests
@@ -195,6 +196,22 @@ class Sky:
 
 
 _sky = None
+
+
+def thumb():
+    """A still for the app: the map with a few approach paths into Zürich drawn in (no network)."""
+    sky = Sky(fetch=False)
+    paths = [((47.70, 8.75), 205.0, 2500.0, "LX318"), ((47.62, 8.33), 140.0, 9000.0, "EK87"),
+             ((47.20, 8.70), 330.0, 30000.0, "")]
+    for (lat, lon), track, alt, fl in paths:
+        sky.ac[fl or "x"] = {"lat": lat, "lon": lon, "gs": 120.0, "track": track, "t": 0.0, "alt": alt, "flight": fl}
+    img = None
+    for i in range(60):                                  # a minute of flight, fast-forwarded
+        for a in sky.ac.values():
+            a["t"] = -i * 4.0
+        sky.trail *= 1.0
+        img = sky(i * 0.5)
+    return img
 
 
 def frame(t):

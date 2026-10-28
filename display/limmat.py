@@ -49,10 +49,11 @@ def colours(temp):
 
 
 class Limmat:
-    def __init__(self):
+    def __init__(self, fetch=True):
         self.data = _load()
         self.T, self.e, self.last = 0.0, fullness(self.data["flow"]), None
-        threading.Thread(target=self._fetch_loop, daemon=True).start()
+        if fetch:
+            threading.Thread(target=self._fetch_loop, daemon=True).start()
 
     def _fetch_loop(self):
         import requests
@@ -95,6 +96,14 @@ class Limmat:
 
 
 _lim = None
+
+
+def thumb():
+    """A still for the app, from the last saved values (no network)."""
+    lim, img = Limmat(fetch=False), None
+    for i in range(100):
+        img = lim(i * 0.04)
+    return img
 
 
 def frame(t):

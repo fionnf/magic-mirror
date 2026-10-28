@@ -51,11 +51,22 @@ MODES = [
     ("music", "Live", "Music", "Art that breathes with the music in the room"),
     ("ambient", "Live", "Art + trams", "Lava & Coral with a small Rennweg tram strip"),
     ("trams", "Live", "Tram board", "Live departures from Rennweg, split-flap style"),
-    ("planes", "Live", "Planes", "Every aircraft over Zürich right now, drawing its path in light"),
-    ("limmat", "Live", "Limmat", "The river flowing at its real speed, coloured by the lake's temperature"),
-    ("westcork", "Live", "West Cork", "Mizen, Fastnet, Schull and Baltimore at night, every light flashing its real signal"),
+    ("planes", "Art", "Planes", "Every aircraft over Zürich right now, drawing its path in light"),
+    ("limmat", "Art", "Limmat", "The river flowing at its real speed, coloured by the lake's temperature"),
+    ("westcork", "Art", "West Cork", "Mizen, Fastnet, Schull and Baltimore at night, every light flashing its real signal"),
+    ("windch", "Art", "Wind over Switzerland", "The real wind right now, thousands of points of light flowing over the country"),
+    ("windie", "Art", "Wind over Ireland", "The Atlantic wind over Ireland right now, flowing in light"),
+    ("snow", "Art", "Snow", "Switzerland in relief, every slope above today's snow line lit, snow falling where it falls"),
+    ("satellites", "Art", "Satellites", "The sky over Zürich: the ISS and the brightest satellites crossing it now"),
+    ("tides", "Art", "Tides", "The sea at Baltimore: the real tide rising and falling, the swell, the moon"),
+    ("tramlines", "Art", "Tram map", "Every Zürich tram moving on an Underground-style map of its lines"),
+    ("quakes", "Art", "Earthquakes", "A turning globe, every earthquake of the last day rippling out from where it struck"),
 ]
 MODE_IDS = {m[0] for m in MODES}
+LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "westcork.thumb",   # mode -> module.thumb
+               "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "snow": "snow.thumb",
+               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb",
+               "quakes": "quakes.thumb"}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",
                  "mirror_auto": 0, "smart_crop": True, "art_speed": 0.12}
@@ -438,6 +449,10 @@ def make_thumbs():
             "mirror": lambda: icon("🪞", (10, 40, 30), "silhouette"),
             "wheel": lambda: icon("🎡", (40, 10, 50), "spin"),
         }
+        import importlib
+        for mode, ref in LIVE_THUMBS.items():            # live pieces: a still from their map and saved data, no network
+            mod, fn = ref.split(".")
+            jobs[mode] = (lambda m, f: lambda: getattr(importlib.import_module("display." + m), f)())(mod, fn)
         for k, fn in jobs.items():
             path = os.path.join(THUMB_DIR, f"{k}.png")
             if os.path.exists(path):
@@ -620,6 +635,22 @@ def make_app(runner):
         resp = send_from_directory(HERE, "now.png", max_age=0, mimetype="image/png")
         resp.headers["Cache-Control"] = "no-store"
         return resp
+
+    @app.get("/api/look")
+    def look():
+        """How the wall turns a picture into light, for previews that should match it: the panel
+        brightness and PWM bits in use now (from the player's last frame, see led_matrix.led_lut),
+        the shadow lift and the daily art's light of the day."""
+        led = {}
+        try:
+            with open(os.path.join(HERE, "now.json")) as fh:
+                led = json.load(fh)
+        except Exception:
+            pass
+        import config
+        from display import daily
+        return jsonify({"led": led, "lift": config.ART_SHADOW_LIFT, "grade": daily._GRADE,
+                        "grade_k": daily._GRADE_K})
 
     @app.get("/")
     def index():

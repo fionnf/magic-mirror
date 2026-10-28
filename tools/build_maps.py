@@ -5,6 +5,7 @@ contributors, ODbL). Run on the laptop; the result is committed, so the wall nee
     python3 tools/build_maps.py westcork   -> assets/maps/westcork.json (coastline, navigation lights)
     python3 tools/build_maps.py switzerland -> assets/maps/switzerland.json (border, big lakes)  } Natural Earth,
     python3 tools/build_maps.py ireland     -> assets/maps/ireland.json  (the island's coastline) } for wind.py
+    python3 tools/build_maps.py europe      -> assets/maps/europe.json   (Iceland to Switzerland) for the Europe wind map
 
 Shapes are lists of [lat, lon] points, simplified to ~40 m (finer than one LED).
 """
@@ -236,11 +237,21 @@ def ireland():
     return {"coast": [c for c in coast if len(c) > 1]}
 
 
+def europe():
+    """Iceland to Switzerland for the Europe wind map: the coast at 1:50m, the Swiss border, thin."""
+    box = (42.0, -27.0, 70.5, 16.0)
+    coast = [run for f in natural_earth("ne_50m_coastline") for r in _rings(f["geometry"]) for run in _clip(r, box)]
+    coast = [simplify(c, 2.0) for c in coast if len(c) > 1]
+    border = [simplify(r, 2.0) for f in natural_earth("ne_50m_admin_0_countries") if f["properties"]["ADMIN"] == "Switzerland"
+              for r in _rings(f["geometry"])]
+    return {"coast": [c for c in coast if len(c) > 1], "border": border}
+
+
 if __name__ == "__main__":
     name = sys.argv[1]
-    if name in ("switzerland", "ireland"):
-        out = {"switzerland": switzerland, "ireland": ireland}[name]()
-        out["source"] = "Natural Earth 1:10m (public domain)"
+    if name in ("switzerland", "ireland", "europe"):
+        out = {"switzerland": switzerland, "ireland": ireland, "europe": europe}[name]()
+        out["source"] = "Natural Earth 1:10m/1:50m (public domain)"
         path = os.path.join(OUT, name + ".json")
         with open(path, "w") as fh:
             json.dump(out, fh, separators=(",", ":"))

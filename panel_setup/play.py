@@ -91,6 +91,7 @@ def _anims():
         "westcork": (westcork.frame, 3600.0 * 24),
         "windch":  (_lazy("wind", "frame_ch"), 3600.0 * 24),
         "windie":  (_lazy("wind", "frame_ie"), 3600.0 * 24),
+        "windeu":  (_lazy("wind", "frame_eu"), 3600.0 * 24),
         "snow":    (_lazy("snow", "frame"), 3600.0 * 24),
         "satellites": (_lazy("satellites", "frame"), 3600.0 * 24),
         "tides":   (_lazy("tides", "frame"), 3600.0 * 24),
@@ -315,7 +316,7 @@ def main():
     up_lock, up_t, down_ok = 60.0, -1e9, 0.0       # after slowing down, do not speed up again for a while (it judders)
     t_prev, art_t, slow = None, None, 1.0           # the art's own clock, slowed while frames are held longer
     heat_t, heat_floor = 0.0, 0                     # thermal guard: a hot chip gets fewer frames to make
-    if a.anim in ("planes", "westcork", "windch", "windie", "snow", "satellites", "tides", "tramlines", "quakes"):            # single lit LEDs on black: deeper colour would slow the refresh (flicker)
+    if a.anim in ("planes", "westcork", "windch", "windie", "windeu", "snow", "satellites", "tides", "tramlines", "quakes"):            # single lit LEDs on black: deeper colour would slow the refresh (flicker)
         os.environ["WALL_FIXED_DEPTH"] = "1"
     rods = None
     try:

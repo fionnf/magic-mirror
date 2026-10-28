@@ -1,0 +1,51 @@
+{
+ "name": "Lantern Under Still Water",
+ "description": "A single veil of aqua light hangs in deep petrol water like sun that has sunk a long way down, widening and rising through the day while a faint shadow-twin drifts beside it.",
+ "image": "2026-10-28.png",
+ "animation_source": "2026-10-28.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-28"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#0a2a30 #1f5f66 #8fc4c0"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "The bass breath slowly widens and lifts the veil, tension draws its folds tighter, the key leans its tint between teal and aqua, treble adds a fine suspended haze, and each hour's energy is left as a faint sediment band along the floor of the water.",
+ "palette": [
+  "#0a2a30",
+  "#1f5f66",
+  "#8fc4c0"
+ ],
+ "source_sha256": "c5c53cbfee4ef438bb56f3b1a13238f87017e0a4628f71684aaa513f62cad71b",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 5,
+ "created": 1793177912.6019044,
+ "curator": {
+  "score": 7,
+  "verdict": "A single soft aqua veil on a true petrol ground follows the direction closely, reads clearly on a coarse grid, and grows gently from a thin sliver to a fuller glowing form across the day, nothing like the recent warm-on-black pieces. The arc is quiet but real, though the shadow-twin barely registers and the bright patch at the bottom edge in the later stills slightly distracts from the one form."
+ },
+ "direction": "Petrol depth"
+}

@@ -16,8 +16,13 @@ def render_silhouette(mask: np.ndarray, colour=config.SILHOUETTE_COLOUR,
     if (getattr(config, "SILHOUETTE_DETAIL", False) and alpha is not None and alpha.shape == mask.shape
             and np.array_equal(alpha > 0.5, mask > 127)):
         rim = np.clip(alpha - cv2.erode(alpha, np.ones((3, 3), np.uint8)), 0, 1)     # a bright edge line
-        light = alpha * (0.30 + 0.70 * detail)                       # shadows stay above the LEDs' dark floor
-        rgb = light[:, :, None] * c + rim[:, :, None] * (0.45 * c + 40.0 * min(1.0, brightness))
+        colour = vision.last["colour"]
+        if getattr(config, "SILHOUETTE_STYLE", "tint") == "colour" and colour is not None and colour.shape[:2] == mask.shape:
+            body = alpha[:, :, None] * colour * 255.0 * float(max(0.0, min(1.0, brightness)))   # you, in your own colours
+            rgb = body + rim[:, :, None] * 28.0 * min(1.0, brightness)
+        else:
+            light = alpha * (0.30 + 0.70 * detail)                   # shadows stay above the LEDs' dark floor
+            rgb = light[:, :, None] * c + rim[:, :, None] * (0.45 * c + 40.0 * min(1.0, brightness))
         return Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB")
     rgb = (mask > 127)[:, :, None] * c.astype(np.uint8)         # (h, w, 3) uint8, no fancy-index write
     return Image.fromarray(rgb, "RGB")

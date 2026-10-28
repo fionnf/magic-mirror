@@ -105,6 +105,7 @@ LIVE_SILHOUETTE_FPS = 10
 SILHOUETTE_DIFF_THRESHOLD = 30
 # Silhouette maths runs on this small size (w, h), not the full frame.
 SILHOUETTE_PROC_SIZE = (240, 180)      # the mask is found at this size (was 160 x 120): cleaner edges
+SILHOUETTE_STYLE = "colour"         # "colour": you in the camera's own colours; "tint": shaded in SILHOUETTE_COLOUR
 SILHOUETTE_DETAIL = True              # shade the silhouette with the camera's own light (face, hair, folds) and a soft edge; False = flat colour
 # Flip the live silhouette left-right so the wall acts like a mirror. Only the
 # display is flipped; photos for the AI / receipts stay as the camera saw them.

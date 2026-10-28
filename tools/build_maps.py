@@ -3,6 +3,8 @@ contributors, ODbL). Run on the laptop; the result is committed, so the wall nee
 
     python3 tools/build_maps.py zurich     -> assets/maps/zurich.json   (lakes, rivers, runways)
     python3 tools/build_maps.py westcork   -> assets/maps/westcork.json (coastline, navigation lights)
+    python3 tools/build_maps.py switzerland -> assets/maps/switzerland.json (border, big lakes)  } Natural Earth,
+    python3 tools/build_maps.py ireland     -> assets/maps/ireland.json  (the island's coastline) } for wind.py
 
 Shapes are lists of [lat, lon] points, simplified to ~40 m (finer than one LED).
 """
@@ -170,8 +172,77 @@ def westcork(els):
     return {"coast": coast, "lights": lights}
 
 
+# ---- whole countries, for the wind (display/wind.py): Natural Earth 1:10m (public domain), whose
+# detail (~1 km) is about one LED at the 2 km per LED the country pieces are drawn at.
+NE = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/{}.geojson"
+CH_LAKES = ("Lake Geneva", "Bodensee", "Zürichsee", "Neuchâtel", "Vierwaldstättersee", "Bielersee", "Thunersee",
+            "Brienzersee", "Zugersee", "Walensee", "Lago di Lugano - Ceresio", "MURTENSEE")
+
+
+def natural_earth(layer):
+    import tempfile
+    cache = os.path.join(tempfile.gettempdir(), f"fortuna_ne_{layer}.geojson")
+    if not os.path.exists(cache) or "--fresh" in sys.argv:
+        req = urllib.request.Request(NE.format(layer), headers={"User-Agent": "fortuna-wall/1.0 (private art project)"})
+        with urllib.request.urlopen(req, timeout=300) as r, open(cache, "wb") as fh:
+            fh.write(r.read())
+    with open(cache) as fh:
+        return json.load(fh)["features"]
+
+
+def _rings(g):
+    """Outer rings of a (Multi)Polygon, or the lines of a (Multi)LineString, as [lat, lon] lists."""
+    c = g["coordinates"]
+    parts = {"Polygon": [c[0]], "MultiPolygon": [p[0] for p in c],
+             "LineString": [c], "MultiLineString": c}.get(g["type"], [])
+    return [[[p[1], p[0]] for p in part] for part in parts]
+
+
+def _clip(line, box):
+    """The runs of a line that lie inside box (lat0, lon0, lat1, lon1)."""
+    out, cur = [], []
+    for p in line:
+        if box[0] <= p[0] <= box[2] and box[1] <= p[1] <= box[3]:
+            cur.append(p)
+        elif cur:
+            out.append(cur)
+            cur = []
+    return out + ([cur] if cur else [])
+
+
+def switzerland():
+    border = [r for f in natural_earth("ne_10m_admin_0_countries") if f["properties"]["ADMIN"] == "Switzerland"
+              for r in _rings(f["geometry"])]
+    lakes = []
+    for f in natural_earth("ne_10m_lakes") + natural_earth("ne_10m_lakes_europe"):
+        name = f["properties"].get("name")
+        rings = _rings(f["geometry"])
+        # ne_10m_lakes calls Lago Maggiore "Lago di Como" and leaves the Untersee unnamed: tell them by place
+        lon = sum(p[1] for r in rings for p in r) / max(1, sum(len(r) for r in rings))
+        lat = sum(p[0] for r in rings for p in r) / max(1, sum(len(r) for r in rings))
+        if name in CH_LAKES or (name == "Lago di Como" and lon < 8.9) or (name is None and 8.8 < lon < 9.2 and 47.6 < lat < 47.8):
+            lakes += rings
+    return {"border": [simplify(r, 1.0) for r in border],
+            "lakes": [simplify(r, 0.5) for r in lakes if len(r) > 3]}
+
+
+def ireland():
+    box = (50.8, -11.6, 56.0, -4.4)                  # the island and the sea round it (Kintyre and Galloway show)
+    coast = [run for f in natural_earth("ne_10m_coastline") for r in _rings(f["geometry"]) for run in _clip(r, box)]
+    coast = [simplify(c, 1.0) for c in coast if len(c) > 1]
+    return {"coast": [c for c in coast if len(c) > 1]}
+
+
 if __name__ == "__main__":
     name = sys.argv[1]
+    if name in ("switzerland", "ireland"):
+        out = {"switzerland": switzerland, "ireland": ireland}[name]()
+        out["source"] = "Natural Earth 1:10m (public domain)"
+        path = os.path.join(OUT, name + ".json")
+        with open(path, "w") as fh:
+            json.dump(out, fh, separators=(",", ":"))
+        print(path, os.path.getsize(path) // 1024, "KB", {k: len(v) for k, v in out.items() if isinstance(v, list)})
+        sys.exit()
     els = fetch(QUERIES[name], name)
     out = {"zurich": zurich, "westcork": westcork}[name](els)
     out["source"] = "(c) OpenStreetMap contributors, ODbL"

@@ -309,9 +309,9 @@ def sky(t):
 
 def sky_px(alt, az):
     """Looking out of the harbour to the south: east on the left, west on the right; the zenith up top."""
-    x = (az - 90.0) / 180.0 * (W - 24) + 12
-    y = SKY_BOTTOM - 6 - max(0.0, alt) / 62.0 * (SKY_BOTTOM - 22)
-    return int(round(x)), int(round(max(10, y)))
+    x = (az - 90.0) / 180.0 * (W - 40) + 20
+    y = SKY_BOTTOM - 8 - max(0.0, alt) / 62.0 * (SKY_BOTTOM - 24)
+    return int(round(min(W - 9, max(QUAY_X + 8, x)))), int(round(max(10, y)))
 
 
 def disc(r, sun_dir, phase_angle):
@@ -333,8 +333,8 @@ def _ground():
     x = np.arange(W, dtype=np.float32)
     g = SEABED + 2.0 * np.sin(x / 9.0) + 1.5 * np.sin(x / 23.0 + 1.0)
     shore = np.clip((x - 112) / 80.0, 0, 1)                              # the shore, rising right
-    climb = SEABED - 18 - (SEABED - 18 - (QUAY_TOP - 26)) * shore ** 1.5
-    g = np.where(x >= 112, np.minimum(g, climb + 2.0 * np.sin(x / 5.0)), g)
+    climb = SEABED - (SEABED - (QUAY_TOP - 26)) * shore ** 1.6 + 1.5 * np.sin(x / 5.0) * shore
+    g = np.where(x >= 112, np.minimum(g, climb), g)
     g[x < QUAY_X] = SEABED
     return np.round(g).astype(np.int32)
 
@@ -433,7 +433,9 @@ class Harbour:
             phase_angle = 180.0 - math.degrees(math.acos(max(-1, min(1, math.cos(math.radians(sk["elong"])) * math.cos(math.radians(sk["beta"]))))))
             lit, dark = disc(6, (dx / n, dy / n), phase_angle)
             if night and illum < 0.6:
-                self._stamp(img, mx, my, dark, MOON_DARK)    # earthshine on the old moon
+                rim = dark & ~np.pad(np.pad(dark, 1)[2:, 1:-1] & np.pad(dark, 1)[:-2, 1:-1]
+                                     & np.pad(dark, 1)[1:-1, 2:] & np.pad(dark, 1)[1:-1, :-2], 0)
+                self._stamp(img, mx, my, rim, MOON_DARK)     # earthshine: the old moon's dark rim
             self._stamp(img, mx, my, lit, MOON * (0.85 if not night else 1.0))
             if night and illum > 0.08:
                 lights.append((mx, MOON, illum))
@@ -495,15 +497,17 @@ class Harbour:
         # the swell: deep-water wavelength from the period, drawn shortened so a few crests show
         hs, tp = s["hs"], s["tp"]
         L = 9.81 * tp * tp / (2 * math.pi)                      # metres
-        lam = max(70.0, min(240.0, L * 1.4))                    # LEDs
+        lam = max(60.0, min(150.0, L * 0.7))                    # LEDs
         amp = min(16.0, hs * 0.5 * PX_PER_M * 0.45)             # sheltered in the harbour
         towards = ((s["dir"] or 260.0) + 180.0) % 360.0
         sign = -1.0 if math.sin(math.radians(towards)) >= 0 else 1.0     # east is on the left
         k = 2 * math.pi / lam
         w = 2 * math.pi / tp
-        ph = k * self.xs - sign * w * now
+        ph0 = (sign * w * now) % (2 * math.pi)                  # in float64 first: now is ~1.8e9
+        ph = k * self.xs - ph0
         chop_l = lam * 0.29
-        chop = 0.22 * amp * np.sin(2 * math.pi / chop_l * self.xs - sign * w * 1.9 * now * 0.53 + 1.3)
+        ph1 = (sign * w * 1.007 * now) % (2 * math.pi)
+        chop = 0.22 * amp * np.sin(2 * math.pi / chop_l * self.xs - ph1 + 1.3)
         # a slight peak to the crests (troughs long, crests short), as a real swell
         wave = amp * (np.sin(ph) + 0.18 * np.cos(2 * ph))
         surf = mean_y - wave - chop

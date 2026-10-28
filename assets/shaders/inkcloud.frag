@@ -20,15 +20,15 @@ const vec4 K[48] = vec4[48](
   vec4(0.0, 0.37, 0.075, 0.082), vec4(-0.02, 0.37, 0.04, 0.04), vec4(0.02, 0.37, 0.04, 0.04), vec4(0.0, 0.36, 0.04, 0.05),
   vec4(0.0, 0.38, 0.035, 0.05), vec4(0.0, 0.385, 0.03, 0.05), vec4(0.0, 0.35, 0.04, 0.04), vec4(0.0, 0.38, 0.04, 0.04),
   vec4(0.0, -0.05, 0.15, 0.075), vec4(-0.15, -0.03, 0.075, 0.07), vec4(0.15, -0.03, 0.075, 0.07), vec4(0.0, 0.07, 0.045, 0.08),
-  vec4(0.0, 0.2, 0.028, 0.08), vec4(0.0, 0.33, 0.018, 0.07), vec4(0.0, -0.1, 0.1, 0.05), vec4(0.0, 0.41, 0.012, 0.05),
+  vec4(0.0, 0.2, 0.03, 0.08), vec4(0.0, 0.31, 0.022, 0.07), vec4(0.0, -0.1, 0.1, 0.05), vec4(0.0, 0.37, 0.018, 0.05),
   vec4(0.0, 0.12, 0.24, 0.065), vec4(-0.17, 0.15, 0.085, 0.075), vec4(0.17, 0.16, 0.09, 0.075), vec4(-0.05, 0.21, 0.11, 0.1),
   vec4(0.08, 0.22, 0.1, 0.09), vec4(-0.01, 0.29, 0.075, 0.07), vec4(-0.13, 0.23, 0.07, 0.065), vec4(0.19, 0.2, 0.06, 0.06),
   vec4(0.0, 0.1, 0.25, 0.06), vec4(-0.18, 0.13, 0.08, 0.065), vec4(0.18, 0.135, 0.085, 0.065), vec4(-0.06, 0.18, 0.1, 0.085),
   vec4(0.08, 0.185, 0.1, 0.08), vec4(0.0, 0.245, 0.07, 0.06), vec4(-0.13, 0.19, 0.065, 0.055), vec4(0.19, 0.17, 0.055, 0.05),
-  vec4(0.0, -0.43, 0.3, 0.045), vec4(-0.2, -0.425, 0.12, 0.04), vec4(0.2, -0.425, 0.12, 0.04), vec4(0.0, -0.415, 0.12, 0.045),
-  vec4(-0.1, -0.43, 0.1, 0.04), vec4(0.1, -0.43, 0.1, 0.04), vec4(-0.27, -0.435, 0.07, 0.03), vec4(0.27, -0.435, 0.07, 0.03),
+  vec4(0.0, -0.37, 0.26, 0.045), vec4(-0.17, -0.365, 0.1, 0.04), vec4(0.17, -0.365, 0.1, 0.04), vec4(0.0, -0.355, 0.11, 0.045),
+  vec4(-0.09, -0.37, 0.09, 0.04), vec4(0.09, -0.37, 0.09, 0.04), vec4(-0.23, -0.375, 0.06, 0.03), vec4(0.23, -0.375, 0.06, 0.03),
   vec4(0.0, 0.0, 0.07, 0.078), vec4(0.0, -0.18, 0.02, 0.06), vec4(0.0, -0.18, 0.02, 0.06), vec4(0.0, 0.01, 0.045, 0.05),
-  vec4(0.0, -0.09, 0.035, 0.06), vec4(0.0, -0.09, 0.035, 0.06), vec4(0.0, -0.26, 0.012, 0.05), vec4(0.0, -0.26, 0.012, 0.05));
+  vec4(0.0, -0.09, 0.035, 0.06), vec4(0.0, -0.09, 0.035, 0.06), vec4(0.0, -0.24, 0.017, 0.05), vec4(0.0, -0.24, 0.017, 0.05));
 // how late each blob sets off when its form flows into the next (the trail behind the falling drop,
 // the column rising out of the middle of the pool, the tail following the drop up)
 const float DL[48] = float[48](
@@ -36,11 +36,11 @@ const float DL[48] = float[48](
   0.1, 0.0, 0.0, 0.15, 0.2, 0.25, 0.1, 0.3,
   0.0, 0.05, 0.05, 0.1, 0.1, 0.15, 0.1, 0.15,
   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-  0.0, 0.22, 0.22, 0.0, 0.12, 0.12, 0.32, 0.32,
-  0.0, 0.2, 0.2, 0.0, 0.1, 0.1, 0.3, 0.3);
+  0.1, 0.18, 0.18, 0.0, 0.1, 0.1, 0.25, 0.25,
+  0.0, 0.14, 0.14, 0.0, 0.07, 0.07, 0.22, 0.22);
 // the two vortices that curl the ink (x, y of the right one, strength, width)
 const vec4 SW[6] = vec4[6](vec4(0.1, 0.37, 0.0, 0.07), vec4(0.165, 0.0, 2.8, 0.07), vec4(0.2, 0.2, 1.3, 0.07),
-  vec4(0.2, 0.16, 0.6, 0.07), vec4(0.2, -0.43, 0.0, 0.07), vec4(0.1, 0.0, 0.0, 0.07));
+  vec4(0.2, 0.16, 0.6, 0.07), vec4(0.2, -0.37, 0.0, 0.07), vec4(0.1, 0.0, 0.0, 0.07));
 
 vec2 swirl(vec2 uv, vec4 w){
   for (int i = 0; i < 2; i++) {
@@ -53,12 +53,13 @@ vec2 swirl(vec2 uv, vec4 w){
 
 float blobs(vec2 uv, int k, int kn, float s, float t){
   float d = 1e3;
+  float kk = 0.035 + (k >= 4 ? 0.06 * sin(3.14159 * s) : 0.0);   // the pool and the drop hold together as they pull up
   for (int i = 0; i < 8; i++) {
     float dl = DL[k * 8 + i];
     vec4 c = mix(K[k * 8 + i], K[kn * 8 + i], smoothstep(dl, dl + 0.65, s));
     float fi = float(i);
     c.xy += 0.005 * vec2(sin(t * 1.3 + fi * 2.1), cos(t * 1.1 + fi * 1.7));     // the ink never quite still
-    d = smin(d, ell(uv - c.xy, c.zw), 0.035);
+    d = smin(d, ell(uv - c.xy, c.zw), kk);
   }
   return d;
 }
@@ -70,16 +71,16 @@ float shape(vec2 uv, float t, int k, float s, out vec2 wuv){
   wuv = swirl(uv, w);
   if (k != 3) return blobs(wuv, k, kn, s, t);
   // the cloud rains itself away while the pool fills along the bottom (they never touch: the rain joins them)
-  float a = blobs(wuv, 3, 3, 0.0, t) + 0.35 * smoothstep(0.0, 0.75, s);
-  float b = blobs(wuv, 4, 4, 0.0, t) + 0.3 * (1.0 - smoothstep(0.25, 1.0, s));
+  float a = blobs(wuv, 3, 3, 0.0, t) + 0.125 * smoothstep(0.15, 0.9, s) + 0.25 * smoothstep(0.85, 1.0, s);
+  float b = blobs(wuv, 4, 4, 0.0, t) + 0.065 * (1.0 - smoothstep(0.05, 0.75, s)) + 0.25 * (1.0 - smoothstep(0.0, 0.1, s));
   return smin(a, b, 0.05);
 }
 
 float rain(vec2 uv, float t, float p){
-  float amt = smoothstep(2.2, 2.6, p) * (1.0 - smoothstep(3.75, 4.1, p));
+  float amt = smoothstep(2.2, 2.6, p) * (1.0 - smoothstep(3.8, 4.08, p));
   if (amt <= 0.0) return 0.0;
-  float ybot = mix(0.07, -0.47, smoothstep(2.2, 2.75, p));      // the front of the first rain
-  float ytop = mix(0.1, -0.47, smoothstep(3.6, 4.1, p));         // the last of it, falling after the cloud
+  float ybot = mix(0.07, -0.4, smoothstep(2.2, 2.75, p));      // the front of the first rain
+  float ytop = mix(0.1, -0.4, smoothstep(3.75, 4.08, p));         // the last of it, falling after the cloud
   float cw = 0.03, i = floor(uv.x / cw), hi = h1(i), hj = h1(i + 17.0);
   float xc = (i + 0.5 + 0.3 * (hj - 0.5)) * cw;
   float v = uv.y * 2.6 + t * (1.6 + 0.8 * hi) + hi * 7.0, f = fract(v);

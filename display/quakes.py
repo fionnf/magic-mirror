@@ -52,8 +52,8 @@ LAND_DAY = np.array([120, 225, 160], np.float32)   # sunlit land: a pale mint
 LAND_NIGHT = np.array([30, 100, 205], np.float32)  # the night side: deep blue
 RIM = np.array([20, 40, 100], np.float32)       # the edge of the globe, faintly, so the oceans have a shore
 SHALLOW = np.array([255, 165, 40], np.float32)  # < 70 km
-MIDDLE = np.array([255, 70, 120], np.float32)   # 70 - 300 km
-DEEP = np.array([185, 100, 255], np.float32)    # > 300 km
+MIDDLE = np.array([255, 50, 120], np.float32)   # 70 - 300 km
+DEEP = np.array([180, 60, 255], np.float32)    # > 300 km
 TEXT = np.array([200, 200, 190], np.float32)
 
 SAMPLE = [  # a still for the app when there is no cache yet: a few real quakes of a day in October 2026
@@ -247,8 +247,9 @@ class Globe:
         sy = CY - R * (-u * math.sin(ROLL) + w * math.cos(ROLL))
         return np.rint(sx).astype(np.int32), np.rint(sy).astype(np.int32), p[..., 2]
 
-    def render(self, now, spin=None):
-        """The globe at time now; spin (seconds) sets the turn, when it is not now's own."""
+    def render(self, now, spin=None, sun=None):
+        """The globe at time now; spin (seconds) sets the turn and sun (a unit vector) the light, when
+        they are not now's own."""
         lam0 = -2 * math.pi * (((now if spin is None else spin) / TURN) % 1.0) + math.pi   # west to east
         img = np.zeros((H, W, 3), np.float32)
         # the land, lit by the real sun
@@ -256,7 +257,7 @@ class Globe:
         col = ((lon / (2 * math.pi) + 0.5) % 1.0 * self.mw).astype(np.int32) % self.mw
         land = self.mask[self.row, col]
         M = self._basis(lam0)
-        cos_sun = self.gview @ (M @ sun_vector(now))
+        cos_sun = self.gview @ (M @ (sun_vector(now) if sun is None else sun))
         day = np.clip((cos_sun + 0.08) / 0.16, 0.0, 1.0)[:, None]  # a soft twilight band
         c = (LAND_NIGHT + (LAND_DAY - LAND_NIGHT) * day) * self.limb
         rim = self.rim & ~land
@@ -306,7 +307,7 @@ class Globe:
                 lvl = 0.6 + 0.4 * blink
             c = dim(q["col"], lvl)
             if q["mag"] >= 4.5:
-                arm = dim(c, 0.72 if q["mag"] >= 5.5 else 0.45)
+                arm = dim(c, 0.8 if q["mag"] >= 5.5 else 0.62)
                 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                     img[qy + dy, qx + dx] = np.maximum(img[qy + dy, qx + dx], arm)
             img[qy, qx] = c
@@ -361,7 +362,7 @@ def thumb():
     big = max(g.quakes, key=lambda q: q["mag"] if now - q["t"] < DAY else 0)
     lon = math.atan2(big["v"][1], big["v"][0])
     spin = ((math.pi - lon) / (2 * math.pi)) % 1.0 * TURN    # turned so the strongest faces us
-    img = g.render(now, spin)
+    img = g.render(now, spin, sun=unit(15.0, math.degrees(lon) - 35.0))   # and lit, morning on its left
     return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
 
 

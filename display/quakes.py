@@ -47,6 +47,7 @@ TURN_STEPS = 1440                              # the turn moves in quarter degre
 VIEW_LAT = math.radians(18.0)                  # we look down on it a little from the north ...
 ROLL = math.radians(-20.0)                     # ... and its axis leans, like a desk globe
 TEXT_Y = 222
+RINGS = 18                                     # at most this many rings at once (the strongest), for speed
 
 # colours (the wall shows nothing below ~94 in a channel and only ~5 steps above it: 94 149 188 219 245)
 LAND_DAY = np.array([120, 225, 160], np.float32)   # sunlit land: a pale mint
@@ -77,6 +78,11 @@ def dim(c, f):
     """c * f, but a channel that was lit stays at the wall's dimmest visible step (so a dimmed amber stays
     amber, instead of falling to red when its green drops out)."""
     return tuple(max(v * f, 100.0) if v >= 94 else 0.0 for v in c)
+
+
+def dim_v(c, f):
+    """dim() for arrays of colours (n x 3) and factors (n x 1)."""
+    return np.where(c >= 94, np.maximum(c * f, 100.0), 0.0).astype(np.float32)
 
 
 def depth_colour(d):
@@ -147,6 +153,7 @@ class Globe:
         self.limb = (0.62 + 0.38 * np.sqrt(self.mu)).astype(np.float32)[:, None]
         self.rim = self.mu < 0.16                            # the outermost dots
         self.quakes, self.seen, self.generated, self.fetched = [], {}, None, 0.0
+        self.state = ([], np.zeros((0, 3)), np.zeros(0), np.zeros(0, np.float32), np.zeros((0, 3), np.float32))
         self.last_mod = None
         self.key, self.base = None, None
         self._load_cache()
@@ -184,7 +191,9 @@ class Globe:
         for q in raw:
             try:
                 qid, t, lat, lon, depth, mag, place = q
-                t, mag, depth = float(t), float(mag), float(depth or 0)
+                t, mag, depth, lat, lon = float(t), float(mag), float(depth or 0), float(lat), float(lon)
+                if not all(map(math.isfinite, (t, mag, depth, lat, lon))):
+                    continue
             except Exception:
                 continue
             seen = self.seen.get(qid, t)
@@ -197,7 +206,13 @@ class Globe:
                         "place": short_place(place), "v": v, "e1": e1, "e2": np.cross(v, e1),
                         "col": depth_colour(depth), "rho": math.radians(rho), "dur": dur, "per": per,
                         "life": life})
-        self.quakes = sorted(out, key=lambda q: q["mag"])   # the strongest drawn last, on top
+        out.sort(key=lambda q: q["mag"])                    # the strongest drawn last, on top
+        V = np.array([q["v"] for q in out]).reshape(-1, 3)
+        T = np.array([q["t"] for q in out], np.float64)
+        MAG = np.array([q["mag"] for q in out], np.float32)
+        COL = np.array([q["col"] for q in out], np.float32).reshape(-1, 3)
+        self.state = (out, V, T, MAG, COL)                   # one swap, so a frame never sees half of it
+        self.quakes = out
 
     def _fetch_loop(self):
         import requests
@@ -220,13 +235,20 @@ class Globe:
                 first = not self.seen and not self.quakes    # first ever: nothing counts as new
                 raw = []
                 for f in feats:
-                    p, c = f.get("properties") or {}, (f.get("geometry") or {}).get("coordinates") or []
-                    if p.get("mag") is None or len(c) < 2 or p.get("type", "earthquake") != "earthquake":
+                    try:                                     # one odd feature is skipped, not the feed
+                        p, c = f.get("properties") or {}, (f.get("geometry") or {}).get("coordinates") or []
+                        if p.get("mag") is None or len(c) < 2 or p.get("type", "earthquake") != "earthquake":
+                            continue
+                        qid, t = f.get("id") or p.get("code"), p["time"] / 1000.0
+                        row = [qid, t, float(c[1]), float(c[0]), float(c[2] or 0) if len(c) > 2 else 0.0,
+                               float(p["mag"]), p.get("place") or ""]
+                        if not all(map(math.isfinite, row[1:6])):
+                            continue
+                    except Exception:
                         continue
-                    qid, t = f.get("id") or p.get("code"), p["time"] / 1000.0
                     if qid not in self.seen:
                         self.seen[qid] = t if first else now
-                    raw.append([qid, t, c[1], c[0], c[2] if len(c) > 2 else 0.0, p["mag"], p.get("place") or ""])
+                    raw.append(row)
                 self.seen = {k: v for k, v in self.seen.items() if now - v < DAY + 7200}
                 self.fetched, self.last_mod, wait = now, r.headers.get("Last-Modified"), 0.0
                 self._set(raw)
@@ -263,49 +285,65 @@ class Globe:
         if key != self.key:                                         # the globe itself, ~6 times a second
             self.key, self.base = key, self._base(lam0, M, now if sun is None else sun, named)
         img = self.base.copy()
-        if not self.quakes:
+        quakes, V, T, MAG, COL = self.state
+        if not quakes:
             return img
-        # the rings: each quake echoes every few minutes, weaker as it ages, gone after its life
-        for q in self.quakes:
+        # the rings: each quake echoes every few minutes, weaker as it ages, gone after its life. Only
+        # the strongest few that are ringing and not hidden behind the globe; all built in one go.
+        facing = V @ M[2]
+        rings = []
+        for i in range(len(quakes) - 1, -1, -1):
+            q = quakes[i]
             age = now - q["start"]
             if age < 0 or age > q["life"]:
                 continue
             ph = (age % q["per"]) / q["dur"]
             if ph >= 1.0:
                 continue
-            strength = (1.0 - age / q["life"]) * (1.0 - ph) ** 0.8
             rho = q["rho"] * (1.0 - (1.0 - ph) ** 2)                # fast at first, settling
-            n = max(10, int(2 * math.pi * math.sin(rho) * R * 1.4))
-            th = np.linspace(0, 2 * math.pi, n, endpoint=False)
-            pts = math.cos(rho) * q["v"] + math.sin(rho) * (np.cos(th)[:, None] * q["e1"] + np.sin(th)[:, None] * q["e2"])
-            if strength < 0.5:                                      # fading: the ring breaks into dots
-                keep = ((np.arange(n) * 0.6180339) % 1.0) < strength * 2.0
-                pts = pts[keep]
-                if not len(pts):
-                    continue
+            if facing[i] < 0.05 - math.sin(rho):                    # the whole ring is round the back
+                continue
+            strength = (1.0 - age / q["life"]) * (1.0 - ph) ** 0.8
+            rings.append((i, rho, strength))
+            if len(rings) >= RINGS:
+                break
+        if rings:
+            rings.sort(key=lambda r: r[2])                          # brightest written last
+            idx = np.array([r[0] for r in rings])
+            rho = np.array([r[1] for r in rings])
+            st = np.array([r[2] for r in rings])
+            n = np.maximum(10, (2 * math.pi * np.sin(rho) * R * 1.4).astype(np.int64))
+            off = np.concatenate([[0], np.cumsum(n)[:-1]])
+            ring = np.repeat(np.arange(len(rings)), n)
+            k = np.arange(int(n.sum())) - off[ring]                 # each point's place on its ring
+            keep = (st[ring] >= 0.5) | (((k * 0.6180339) % 1.0) < st[ring] * 2.0)   # fading: dots
+            ring, k = ring[keep], k[keep]
+            th = 2 * math.pi * k / n[ring]
+            E1 = np.array([quakes[i]["e1"] for i in idx])[ring]
+            E2 = np.array([quakes[i]["e2"] for i in idx])[ring]
+            pts = (np.cos(rho)[ring, None] * V[idx[ring]]
+                   + np.sin(rho)[ring, None] * (np.cos(th)[:, None] * E1 + np.sin(th)[:, None] * E2))
             x, y, z = self._project(M, pts)
             ok = (z > 0.05) & (x >= 0) & (x < W) & (y >= 0) & (y < H)
-            c = dim(q["col"], 0.5 + 0.5 * min(1.0, strength * 2.0))
-            img[y[ok], x[ok]] = np.maximum(img[y[ok], x[ok]], c)
-        # the quakes themselves
-        V = np.array([q["v"] for q in self.quakes])
+            C = np.array([dim(quakes[i]["col"], 0.5 + 0.5 * min(1.0, sg * 2.0)) for i, sg in zip(idx, st)],
+                         np.float32)[ring]
+            x, y, C = x[ok], y[ok], C[ok]
+            img[y, x] = np.maximum(img[y, x], C)
+        # the quakes themselves (all at once: a busy day has hundreds)
         x, y, z = self._project(M, V)
-        blink = 0.5 + 0.5 * math.cos(now * 2.4)
-        for q, qx, qy, qz in zip(self.quakes, x, y, z):
-            if qz < 0.03 or not (1 <= qx < W - 1 and 1 <= qy < H - 1):
-                continue
-            age = now - q["t"]
-            if age > DAY + 1800:
-                continue
-            lvl = 1.0 - 0.35 * min(1.0, max(0.0, age / DAY))
-            if named is q:
-                lvl = 0.6 + 0.4 * blink
-            c = dim(q["col"], lvl)
-            if q["mag"] >= 4.5:
-                arm = dim(c, 0.8 if q["mag"] >= 5.5 else 0.62)
-                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                    img[qy + dy, qx + dx] = np.maximum(img[qy + dy, qx + dx], arm)
-            img[qy, qx] = c
+        age = now - T
+        lvl = 1.0 - 0.35 * np.clip(age / DAY, 0.0, 1.0)
+        if named is not None:
+            lvl[[i for i, q in enumerate(quakes) if q is named]] = 0.6 + 0.2 * (1.0 + math.cos(now * 2.4))
+        ok = (z >= 0.03) & (x >= 1) & (x < W - 1) & (y >= 1) & (y < H - 1) & (age <= DAY + 1800)
+        C = dim_v(COL, lvl[:, None])
+        big = ok & (MAG >= 4.5)
+        if big.any():
+            arm = dim_v(C[big], np.where(MAG[big] >= 5.5, 0.8, 0.62)[:, None].astype(np.float32))
+            bx, by = x[big], y[big]
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                np.maximum.at(img, (by + dy, bx + dx), arm)
+        img[y[ok], x[ok]] = C[ok]
         return img
 
     def _base(self, lam0, M, sun, named):
@@ -327,7 +365,7 @@ class Globe:
     def named(self, now):
         """The M5+ quake whose name is showing: of those in their first three hours, one strongest per
         place, newest first, each for twelve seconds in turn."""
-        recent = [q for q in self.quakes if q["mag"] >= 5.0 and 0 <= now - q["start"] < 3 * 3600]
+        recent = [q for q in self.state[0] if q["mag"] >= 5.0 and 0 <= now - q["start"] < 3 * 3600]
         if not recent:
             return None
         best = {}
@@ -368,9 +406,9 @@ def thumb():
         g._set([[i, now - h * 3600.0, la, lo, d, m, p] for i, h, la, lo, d, m, p in SAMPLE])
     elif now - g.fetched > DAY:
         now = g.fetched                                   # an old cache: show it as it was then
-    big = max(g.quakes, key=lambda q: q["mag"] if now - q["t"] < DAY else 0)
+    big = g.named(now) or max(g.quakes, key=lambda q: q["mag"] if now - q["t"] < DAY else 0)
     lon = math.atan2(big["v"][1], big["v"][0])
-    spin = ((math.pi - lon) / (2 * math.pi)) % 1.0 * TURN    # turned so the strongest faces us
+    spin = ((math.pi - lon) / (2 * math.pi)) % 1.0 * TURN    # turned so the named (or strongest) faces us
     img = g.render(now, spin, sun=unit(15.0, math.degrees(lon) - 35.0))   # and lit, morning on its left
     return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
 

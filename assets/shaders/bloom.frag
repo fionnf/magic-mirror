@@ -31,24 +31,40 @@ float vesica(vec2 p, float h, float w){               // a leaf: tips at (0, +-h
   return ((p.y - h) * d > p.x * h) ? length(p - vec2(0.0, h)) : length(p - vec2(-d, 0.0)) - r;
 }
 
+// the stem: a leaning body (x as a function of height) and a curled arc at the tip
+vec2 sRoot, sC; float sLean, sSway, sLa, sPhi, sThB, sB0, sR;
+float lean(float s){ return -(sLean * cos(3.4 * s) - 0.05) + sSway * s; }      // heading off vertical
+vec2 basePos(float s){ return sRoot + vec2(-0.66 * (-sLean * sin(3.4 * s) / 3.4 + 0.05 * s + 0.5 * sSway * s * s), 0.62 * s); }
+vec2 stemAt(float s, out float th){                    // a point on the stem at s (0 root .. g tip) and its heading
+  if (s <= sB0) { th = 1.5708 + lean(s); return basePos(s); }
+  float f = (s - sB0) / max(sLa, 1e-4);
+  if (sPhi > 0.02) { th = sThB + f * sPhi; return sC + sR * dirv(th - 1.5708); }
+  th = sThB; return basePos(sB0) + 0.66 * (s - sB0) * dirv(sThB);
+}
+
+float wave(float u){ float y = fract(u) * 2.0 - 1.0; return 4.0 * y * (1.0 - abs(y)); }   // ~ sin(2 pi u), cheaply
 vec3 col;
 void glow(float d, float w, float a, vec3 tint){      // a line of light: bright core, soft halo
   col += a * (tint * smoothstep(w, w * 0.15, d) + iColB * 0.4 * exp(-max(d, 0.0) / 0.016));
 }
 
-// one seed: achene at A pointing along b, stalk to the parachute at A + L along b, parachute opened pap
+// one seed: achene at A pointing along the angle b, stalk to the parachute at A + L along b, parachute opened pap
 void seed(vec2 p, vec2 A, float b, float L, float pap, float ach, float vis){
-  if (vis <= 0.0 || length(p - A) > L + 0.08) return;
-  vec2 q = rotv(p - A, 1.5708 - b);                    // local: the seed points up +y
+  if (vis <= 0.0 || length(p - A) > L + 0.065) return;
+  vec2 dv = dirv(b);
+  if (length(p - A - 0.5 * L * dv) > 0.5 * L + 0.06) return;
+  vec2 v = p - A, q = vec2(dot(v, vec2(dv.y, -dv.x)), dot(v, dv));   // local: the seed points up +y
   float as = max(ach, 0.001);
-  float da = tear(q / as, 0.0105, 0.0035, 0.026) * as;
-  col += vis * (iColC * smoothstep(0.004, -0.001, da) + iColB * 0.3 * exp(-max(da, 0.0) / 0.01));
+  if (length(q) < 0.03 * as + 0.05) {
+    float da = tear(q / as, 0.0105, 0.0035, 0.026) * as;
+    col += vis * (iColC * smoothstep(0.004, -0.001, da) + iColB * 0.3 * exp(-max(da, 0.0) / 0.01));
+  }
   float h, top = 0.026 * as;
   if (L > top + 0.002) glow(segd(q, vec2(0.0, top), vec2(0.0, L), h), 0.0032, vis * 0.9, mix(iColB, iColC, 0.6));
   vec2 c = q - vec2(0.0, L);
   float dotA = smoothstep(0.03, 0.06, L);
   col += vis * dotA * (iColC * smoothstep(0.009, 0.004, length(c)) * (0.8 + 0.3 * iBright));
-  if (pap > 0.01) {                                    // the parachute: a fan of fine rays
+  if (pap > 0.01 && dot(c, c) < 0.0036) {             // the parachute: a fan of fine rays
     float r = length(c), a = atan(c.x, c.y), span = 1.25 * pap, st = span / 3.0;
     float k = clamp(floor(a / st + 0.5), -3.0, 3.0);
     float dr = length(c - r * vec2(sin(k * st), cos(k * st)));
@@ -105,26 +121,38 @@ void mainImage(out vec4 o, in vec2 fc){
 
   // --- the stem: drawn from the seed, its tip hooked over while it grows
   vec2 P = vec2(0.0, y0 + 0.012), T = P, N1 = P, N2 = P;
-  float th = 1.5708, tth = th, n1t = th, n2t = th;
+  float tth = 1.5708, n1t = tth, n2t = tth;
   if (g > 0.001) {
-    float lean = 0.28 + 0.06 * iEvolve.x;
-    float sl = g * 0.66 / 24.0;
+    sRoot = P;
+    sLean = 0.28 + 0.06 * iEvolve.x;
+    sSway = 0.035 * sin(t * 0.37) + 0.02 * sin(t * 0.61 + 1.0);
     float hook = 3.2 * (1.0 - smoothstep(0.45, 1.0, g));
-    float sway = 0.035 * sin(t * 0.37) + 0.02 * sin(t * 0.61 + 1.0);
-    float dmin = 1e3, sAt = 0.0;
-    for (int i = 0; i < 24; i++) {
-      float s = (float(i) + 0.5) / 24.0 * g;
-      float w = clamp((s - (g - 0.28)) / 0.28, 0.0, 1.0);
-      th = 1.5708 - (lean * cos(s * 3.4) - 0.05) + sway * s + hook * w * w;
-      vec2 Q = P + sl * dirv(th);
-      float h, dd = segd(p, P, Q, h);
-      if (dd < dmin) { dmin = dd; sAt = (float(i) + h) / 24.0 * g; }
-      float f1 = 0.28 / g * 24.0 - float(i), f2 = 0.47 / g * 24.0 - float(i);
-      if (f1 >= 0.0 && f1 < 1.0) { N1 = mix(P, Q, f1); n1t = th; }
-      if (f2 >= 0.0 && f2 < 1.0) { N2 = mix(P, Q, f2); n2t = th; }
-      P = Q;
+    // a gently leaning body up to sB, then the last stretch curled over in an arc that opens as it grows
+    float sB = max(g - 0.28, 0.0);
+    sLa = g - sB; sPhi = 0.85 * hook;
+    sThB = 1.5708 + lean(sB); sB0 = sB;
+    vec2 B = basePos(sB);
+    float la = 0.66 * sLa;
+    sR = la / max(sPhi, 0.02);
+    sC = B + sR * dirv(sThB + 1.5708);
+    // distance to the body: the point at the pixel's height (clamped to its ends)
+    float sp = clamp((p.y - P.y) / 0.62, 0.0, sB);
+    vec2 q = basePos(sp);
+    float dB = length(vec2((p.x - q.x) * cos(lean(sp)), p.y - q.y));
+    // distance to the curled tip
+    float th;
+    T = stemAt(g, th); tth = th;
+    float dA, along;
+    if (sPhi > 0.02) {
+      vec2 v = p - sC;
+      float ph = mod(atan(v.y, v.x) - (sThB - 1.5708), 6.28318);
+      if (ph < sPhi) { dA = abs(length(v) - sR); along = ph / sPhi; }
+      else { float d1 = length(p - B), d2 = length(p - T); dA = min(d1, d2); along = d1 < d2 ? 0.0 : 1.0; }
+    } else {
+      float h; dA = segd(p, B, T, h); along = h;
     }
-    T = P; tth = th;
+    float dmin = min(dB, dA), sAt = dB < dA ? sp : sB + along * sLa;
+    N1 = stemAt(0.28, n1t); N2 = stemAt(0.47, n2t);
     float sap = 1.0 + 0.5 * exp(-pow((sAt / max(g, 0.01) - fract(t * 0.045)) * 7.0, 2.0));
     glow(dmin, 0.0065 - 0.0025 * sAt, 0.95 * sap, mix(iColB, iColC, 0.3 + 0.45 * sAt));
 
@@ -137,6 +165,7 @@ void mainImage(out vec4 o, in vec2 fc){
       if (u <= 0.0) continue;
       float ang = nt + side * ((0.95 + 0.15 * iEvolve.y) * u + 0.25 * age) - 0.2 * side * (1.0 - u);
       float L = (j == 0 ? 0.078 : 0.07) * u;
+      if (length(p - nd) > 2.0 * L + 0.06) continue;   // far from this leaf
       vec2 q = rotv(p - nd, 1.5708 - ang);
       q.x -= 0.012 * sin(3.1416 * clamp(q.y / (2.0 * L), 0.0, 1.0)) * side;   // a slight curve
       float d = vesica((q - vec2(0.0, L)) / u, L / u, 0.024) * u;
@@ -169,9 +198,10 @@ void mainImage(out vec4 o, in vec2 fc){
         float sd = phi == 0.0 ? 0.6 : sign(phi);
         piv += vec2(0.03 * sd * tau + 0.035 * sin(tau * 1.4 + fi) * min(tau, 1.0), -0.05 * tau - 0.028 * tau * tau);
         ax += sd * 0.45 * tau;
-        a = 1.0 - smoothstep(0.6, 4.2, tau);
+        a = 1.0 - smoothstep(0.5, 3.2, tau);
         if (a <= 0.0) continue;
       }
+      if (length(p - piv) > 0.17 * s + 0.06) continue;  // far from this petal
       vec2 q = rotv(p - piv, 1.5708 - ax) / s;
       float d = tear(q, 0.012, 0.042, 0.12) * s;
       if (tau > 0.0) {
@@ -201,7 +231,8 @@ void mainImage(out vec4 o, in vec2 fc){
     float da = (a - k * sector) * r;
     float kk = mod(k, 20.0);
     float tr = 44.0 + 6.0 * fract(kk * 0.618 + 0.21);
-    float len = 0.13 * smoothstep(36.5 + 2.5 * hash(kk + 3.0), 40.0 + 2.5 * hash(kk + 3.0), m);
+    float hk = 2.5 * fract(kk * 0.4142 + 0.53);
+    float len = 0.13 * smoothstep(36.5 + hk, 40.0 + hk, m);
     if (m < tr && len > 0.02) {
       float d = length(vec2(da, r - clamp(r, 0.02, len)));
       glow(d, 0.0032, 0.85, mix(iColB, iColC, 0.6));
@@ -210,20 +241,24 @@ void mainImage(out vec4 o, in vec2 fc){
   }
 
   // --- the seeds on the air
-  if (m > 44.0 && m < 57.5) {
+  if (m > 44.0 && m < 54.0) {
+    vec2 ra = dirv(hr), rs = dirv(6.28318 / 20.0);
     for (int i = 0; i < 20; i++) {
       float kk = float(i);
+      vec2 out0 = ra;                                  // dirv(al), stepped round without trig
+      ra = vec2(ra.x * rs.x - ra.y * rs.y, ra.y * rs.x + ra.x * rs.y);
       float tr = 44.0 + 6.0 * fract(kk * 0.618 + 0.21);
       float tau = m - tr;
-      if (tau < 0.0 || tau > 6.0) continue;
+      if (tau < 0.0 || tau > 3.9) continue;
+      vec2 vel = (0.045 + 0.03 * fract(kk * 0.7549 + 0.31)) * normalize(vec2(1.0, 0.02 + 0.7 * fract(kk * 0.5698 + 0.77)));   // the air fans them out to the right
+      vec2 A = F + out0 * (0.02 + 0.07 * smoothstep(0.0, 1.6, tau)) + vel * (tau + 0.15 * tau * tau)
+             + vec2(0.015, 0.01) * wave(0.2546 * tau + 0.159 * kk) * min(tau, 1.0);
+      if (length(p - A) > 0.175) continue;            // far from this seed
       float al = hr + kk * 6.28318 / 20.0;
       float dA = mod(1.5708 - al + 3.1416, 6.28318) - 3.1416;
-      float b = al + dA * smoothstep(0.0, 2.2, tau);
-      vec2 vel = vec2(0.02 + 0.03 * hash(kk), 0.012 + 0.02 * hash(kk + 7.0));
-      vec2 A = F + dirv(al) * (0.02 + 0.07 * smoothstep(0.0, 1.6, tau)) + vel * (tau + 0.15 * tau * tau)
-             + vec2(0.015 * sin(1.6 * tau + kk), 0.01 * sin(2.1 * tau + 2.0 * kk)) * min(tau, 1.0);
-      float edge = (1.0 - smoothstep(0.34, 0.45, A.y + 0.11)) * (1.0 - smoothstep(0.28, 0.38, abs(A.x)));   // gone before the frame's edge
-      seed(p, A, b, 0.11, smoothstep(0.0, 1.0, tau), smoothstep(0.0, 0.8, tau), edge * (1.0 - smoothstep(2.6, 5.2, tau)));
+      float b = al + dA * smoothstep(0.0, 2.2, tau);    // it turns its parachute to the sky
+      float edge = (1.0 - smoothstep(0.3, 0.4, A.y + 0.11)) * (1.0 - smoothstep(0.26, 0.37, abs(A.x)));   // gone before the frame's edge
+      seed(p, A, b, 0.11, smoothstep(0.0, 1.0, tau), smoothstep(0.0, 0.8, tau), edge * (1.0 - smoothstep(1.9, 3.9, tau)));
     }
   }
 

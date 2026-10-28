@@ -1,14 +1,17 @@
 // Totality: a total solar eclipse danced once round the clock face every hour - the sun alone and glowing, the dark moon sliding across it to a pearly corona and back.
 // :00 the sun hangs alone, gently glowing. :05 the dark moon arrives from the upper right and takes a
 // bite, by :13 a broad crescent sun with the moon's silhouette standing in its glow. :20 only a thin
-// crescent is left, and at :24 it shrinks to a single bead - the diamond ring flashes, a thin red rim
-// of chromosphere beside it. :26 to :34 totality: a black disc in a pearly corona, two long streamers
-// and fine plumes drifting slowly outward, a few red prominences licking the edge. :36 the second
-// diamond ring flashes on the other side, :40 a thin crescent reopens there, :47 a broad crescent,
-// and by :55 the moon has slid away to the lower left and the full sun glows alone again.
-// Lit as eclipse light, kept soft for a room: a warm white disc darkening to gold at the limb, a glow
-// that hugs whatever is left of the sun and dims the room as the sun narrows, a pearl-white corona
-// cooling to blue at its tips, the prominences and flash rim in the deep red.
+// crescent is left, and the corona begins to show on the moon's far edge, spreading round to meet the
+// crescent; at :24 the crescent shrinks to a single bead - the diamond ring flashes, a thin red rim of
+// chromosphere beside it. :25 to :35 totality: a black disc in a pearly corona, long streamers running up
+// and down the frame and fine plumes drifting slowly outward, a few red prominences licking the edge.
+// :35 the second diamond ring flashes on the other side, the corona draws back in as a thin crescent
+// reopens there (:40), :47 a broad crescent, and by :55 the moon has slid away to the lower left and the
+// full sun glows alone again.
+// Lit as eclipse light, kept soft for a room: a flat warm white disc darkening to gold only at the limb,
+// a glow that hugs whatever is left of the sun and dims the room as the sun narrows, a white corona
+// hugging the moon's edge, greying to pearl as it fades and cooling to blue at its tips, the prominences
+// and flash rim in the deep red.
 float ease(float a, float b, float m){ return smoothstep(a, b, m); }
 
 // where the moon is, in sun radii along its path, at minute m of the hour (rests at every stage)
@@ -59,8 +62,8 @@ void mainImage(out vec4 o, in vec2 fc){
   float vis = showing(off, RM);                                      // fraction of the sun still showing
   float dvis = max(dSun, -dMoon * here - (1.0 - here));              // distance to what is left of the sun
 
-  float corA = smoothstep(0.38, 0.05, ao) * here;                    // the corona comes out as the glare goes
-  float flash = smoothstep(0.34, 0.08, ao) * here;                   // red limb and prominences
+  float corA = smoothstep(18.5, 25.0, m) * smoothstep(41.5, 35.0, m);                    // the corona comes out as the glare goes
+  float flash = smoothstep(0.27, 0.08, ao) * here;                   // red limb and prominences
   float bead = smoothstep(0.05, 0.10, ao) * smoothstep(0.30, 0.12, ao) * here;   // the diamond ring
 
   vec3 warm = iColC * iColC;                                         // the palette's light, warmer
@@ -68,20 +71,27 @@ void mainImage(out vec4 o, in vec2 fc){
 
   // the glow round whatever is left of the sun, dimming the room as the sun narrows
   float g = max(dvis, 0.0);
-  float glow = (0.55 * exp(-g / 0.03) + 0.16 * exp(-g / 0.12)) * pow(vis, 0.55) * (1.0 + 0.06 * sin(t * 0.4) + 0.08 * iBreath);
-  col += warm * glow * occ;
+  float br = pow(vis, 0.55) * (1.0 + 0.06 * sin(t * 0.4) + 0.08 * iBreath);
+  col += (iColC * 0.5 * exp(-g / 0.018) + warm * 0.16 * exp(-g / 0.12)) * br * occ;
 
   // the corona: two long streamers and fine plumes, pearl white cooling to blue, drifting outward
-  float ax = 0.45 + 0.5 * iEvolve.x;
+  float ax = 1.35 + 0.3 * iEvolve.x;                                 // streamers run up and down the tall frame
   float eq = pow(abs(cos(a - ax)), 5.0);
   float fine = 0.5 + 0.25 * sin(a * 11.0 + 1.5 * sin(a * 5.0 + 0.3 * iEvolve.y) + t * 0.02)
                    + 0.25 * sin(a * 17.0 - 2.0 * sin(a * 3.0) - t * 0.015);
   float w = 0.16 + (0.55 + 0.15 * iEvolve.z) * eq + 0.22 * fine * (1.0 - eq) + 0.03 * iBreath;
+  w *= 0.03 + 0.97 * corA;                                           // it reaches out as it comes, draws in as it goes
   float h = max(rr - 1.0, 0.0);
-  float stream = 0.94 + 0.06 * sin(h * 9.0 - t * 0.25 + 3.0 * fine);
-  float cor = pow(exp(-h / w), 0.7) * (0.7 + 0.3 * fine) * stream * step(1.0, rr);
-  vec3 pearl = mix(iColC, iColB, smoothstep(0.1, 1.3, h));
-  col += pearl * cor * 1.2 * corA * occ;
+  float hc = max(min(dSun, mix(1.0, dMoon, here)) / R, 0.0);        // the corona hugs the moon's edge where it overhangs
+  float stream = 0.94 + 0.06 * sin(hc * 9.0 - t * 0.25 + 3.0 * fine);
+  float rays = 0.45 + 0.55 * fine * fine;
+  float cor = pow(exp(-hc / w), 0.7) * mix(rays, 1.0, exp(-hc / 0.12)) * stream;
+  cor *= smoothstep(1.0, 0.62, length(uv / vec2(0.40, 0.52)));      // kept well inside the frame
+  vec3 pearl = mix(iColC, iColB, 0.45 * smoothstep(0.05, 0.5, hc) + 0.55 * smoothstep(0.7, 1.6, hc));   // grey-pearl where it fades, blue at the tips
+  // it is first seen on the moon's leading edge, where the sky is darkest, and spreads round to the crescent
+  float lead = dot(uv / max(r, 1e-4), dir * sign(off));
+  float sweep = smoothstep(-0.3, 0.3, lead - 1.3 + 2.9 * clamp(corA / 0.45, 0.0, 1.0));
+  col += pearl * cor * 1.2 * sweep * occ;
 
   // the chromosphere: a thin red rim just outside the limb, seen only beside the moon's edge
   float rim = exp(-pow((rr - 1.02) / 0.035, 2.0));
@@ -101,11 +111,10 @@ void mainImage(out vec4 o, in vec2 fc){
   pr += smoothstep(0.012 * R + px, 0.0, arch) * step(1.0, rr) * 0.9;
   col += (iColA * 3.2 + iColC * 0.08 * exp(-h / 0.04)) * min(pr, 1.0) * flash * occ * step(1.0, rr);
 
-  // the sun's face: warm white darkening to gold at the limb, a faint slow stir of the surface
+  // the sun's face: flat warm white, darkening to gold only near the limb (reads as one tone on the LEDs)
   float mu = sqrt(max(1.0 - rr * rr, 0.0));
-  float limb = 0.74 + 0.26 * mu;
-  float stir = 0.015 * sin(uv.x * 23.0 + sin(uv.y * 19.0 + t * 0.05) * 1.5 + t * 0.04);
-  vec3 face = mix(warm * 0.95, iColC, mu) * (limb + stir) * 0.97;
+  float limb = 0.86 + 0.14 * smoothstep(0.0, 0.5, mu);              // flat face, darkening only near the limb
+  vec3 face = mix(warm, iColC, smoothstep(0.0, 0.55, mu)) * limb * 0.92;
   float disc = smoothstep(px, -px, dSun) * occ;
   col = mix(col, face, disc);
 
@@ -116,7 +125,7 @@ void mainImage(out vec4 o, in vec2 fc){
   vec2 bp = -dir * (off < 0.0 ? -1.0 : 1.0) * R;
   vec2 q = uv - bp;
   float db = length(q);
-  float spikes = (exp(-abs(q.x + q.y) / (0.006 + 0.03 * db)) + exp(-abs(q.x - q.y) / (0.006 + 0.03 * db))) * exp(-db / 0.07);
+  float spikes = smoothstep(-0.01, 0.02, dMoon) * (exp(-abs(q.x + q.y) / (0.006 + 0.03 * db)) + exp(-abs(q.x - q.y) / (0.006 + 0.03 * db))) * exp(-db / 0.07);
   col += iColC * bead * (1.2 * exp(-pow(db / 0.016, 2.0)) + 0.5 * exp(-db / 0.05) + 0.35 * spikes);
 
   o = vec4(col, 1.0);

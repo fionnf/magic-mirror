@@ -236,7 +236,12 @@ LABELS = {
 }
 HOME = "Rennweg"
 CENTRE = (47.3745, 8.5395)               # the magnification is around HB / Paradeplatz / Central
-# Hand adjustments: stop name -> (x, y) on the wall, pinned before the relaxation.
+MARGIN = (10, 9, 10, 9)                  # left, top, right, bottom: room for the end labels
+FISHEYE = float(os.environ.get("TRAMS_FE", 0.7))                           # km: inside this the map is to scale, outside it is squeezed
+GAP = 4                                  # LEDs between neighbouring stops at the least
+HOP = (4, 7)                             # LEDs a hop between two stops would like to be: least, most
+ANCHOR = 0.12                            # how firmly the stops hold to the magnified geography
+# Hand adjustments: stop name -> (x, y) on the wall, applied to the junctions after the relaxation.
 OVERRIDES = {}
 
 
@@ -245,8 +250,322 @@ def project(lat, lon):
     return ((lon - CENTRE[1]) * 111.32 * math.cos(math.radians(CENTRE[0])), (CENTRE[0] - lat) * 111.32)
 
 
+def fisheye(x, y):
+    r = math.hypot(x, y)
+    if r < 1e-9:
+        return 0.0, 0.0
+    k = FISHEYE * math.asinh(r / FISHEYE) / r
+    return x * k, y * k
+
+
+DIRS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
+
+
+def snap_dir(vx, vy):
+    a = math.atan2(vy, vx)
+    return DIRS[int(round(a / (math.pi / 4))) % 8]
+
+
+def cheb(v):
+    return max(abs(v[0]), abs(v[1]))
+
+
+def dijkstra(adj, a, b):
+    import heapq
+    dist, prev, q = {a: 0.0}, {}, [(0.0, a)]
+    while q:
+        d, u = heapq.heappop(q)
+        if u == b:
+            break
+        if d > dist[u]:
+            continue
+        for v, w in adj[u].items():
+            if d + w < dist.get(v, 1e18):
+                dist[v], prev[v] = d + w, u
+                heapq.heappush(q, (d + w, v))
+    if b not in dist:
+        return None
+    path = [b]
+    while path[-1] != a:
+        path.append(prev[path[-1]])
+    return path[::-1]
+
+
+def polyline(pa, pb, mid=None):
+    """Corner points from pa to pb: straight if the run is octilinear, else a straight part and a
+    45-degree part, bent on the side nearer `mid` (where the stops in between really are)."""
+    dx, dy = pb[0] - pa[0], pb[1] - pa[1]
+    if dx == 0 or dy == 0 or abs(dx) == abs(dy):
+        return [list(pa), list(pb)]
+    sx, sy = (dx > 0) - (dx < 0), (dy > 0) - (dy < 0)
+    m = min(abs(dx), abs(dy))
+    diag = (sx * m, sy * m)
+    c1 = (pa[0] + diag[0], pa[1] + diag[1])                     # diagonal first
+    c2 = (pb[0] - diag[0], pb[1] - diag[1])                     # straight first
+    if mid is not None:
+        d1 = (c1[0] - mid[0]) ** 2 + (c1[1] - mid[1]) ** 2
+        d2 = (c2[0] - mid[0]) ** 2 + (c2[1] - mid[1]) ** 2
+        c = c1 if d1 < d2 else c2
+    else:
+        c = c2 if abs(dx) > abs(dy) else c1
+    return [list(pa), list(c), list(pb)]
+
+
+def walk(corners):
+    """Every LED along the corner points, one per step (diagonal steps count one)."""
+    out = [tuple(corners[0])]
+    for (x0, y0), (x1, y1) in zip(corners, corners[1:]):
+        n = max(abs(x1 - x0), abs(y1 - y0))
+        sx, sy = (x1 > x0) - (x1 < x0), (y1 > y0) - (y1 < y0)
+        for i in range(1, n + 1):
+            out.append((x0 + sx * i, y0 + sy * i))
+    return out
+
+
 def build_layout(data):
-    raise NotImplementedError
+    stops = data["stops"]
+    names = [s[0] for s in stops]
+    keys = [s[3] for s in stops]
+    geo = [project(s[1], s[2]) for s in stops]
+    # the drawing graph: every hop of every pattern; a hop that skips stops another pattern serves
+    # (an express or a turn) is left out of the drawing and routed along the stopping track
+    hops = {}
+    for line, seq in data["patterns"]:
+        for a, b in zip(seq, seq[1:]):
+            if a != b:
+                hops.setdefault(frozenset((a, b)), set()).add(line)
+    dist = lambda a, b: math.hypot(geo[a][0] - geo[b][0], geo[a][1] - geo[b][1])
+    adj = {i: {} for i in range(len(stops))}
+    for h in hops:
+        a, b = tuple(h)
+        adj[a][b] = adj[b][a] = dist(a, b)
+    for h in sorted(hops, key=lambda h: -dist(*tuple(h))):
+        a, b = tuple(h)
+        w = adj[a].pop(b)
+        del adj[b][a]
+        p = dijkstra(adj, a, b)
+        if p is None or len(p) > 6 or sum(dist(u, v) for u, v in zip(p, p[1:])) > 1.35 * w:
+            adj[a][b] = adj[b][a] = w                          # a real track of its own
+    used = [i for i in adj if adj[i]]
+    # junctions: forks, ends and the termini of any line
+    ends = {seq[0] for _, seq in data["patterns"]} | {seq[-1] for _, seq in data["patterns"]}
+    junc = {i for i in used if len(adj[i]) != 2 or i in ends}
+    for nm, _ in OVERRIDES.items():
+        junc |= {i for i in used if names[i] == nm}
+    links, seen = [], set()
+    for j in sorted(junc):
+        for n in sorted(adj[j]):
+            if (j, n) in seen:
+                continue
+            chain = [j, n]
+            while chain[-1] not in junc:
+                nx = [v for v in adj[chain[-1]] if v != chain[-2]][0]
+                chain.append(nx)
+            if chain[-1] == j:                                  # a loop: its middle becomes a junction
+                junc.add(chain[len(chain) // 2])
+                return build_layout_retry(data)
+            seen.add((chain[-1], chain[-2]))
+            seen.add((j, n))
+            links.append(chain)
+    # first positions: the geography, magnified in the centre, stretched to the wall
+    fe = {i: fisheye(*geo[i]) for i in used}
+    xs, ys = [fe[i][0] for i in used], [fe[i][1] for i in used]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    sx = (W - 1 - MARGIN[0] - MARGIN[2]) / (x1 - x0)
+    sy = (H - 1 - MARGIN[1] - MARGIN[3]) / (y1 - y0)
+    sx, sy = min(sx, sy * 1.25), min(sy, sx * 1.4)
+    ox = MARGIN[0] + ((W - 1 - MARGIN[0] - MARGIN[2]) - (x1 - x0) * sx) / 2
+    oy = MARGIN[1] + ((H - 1 - MARGIN[1] - MARGIN[3]) - (y1 - y0) * sy) / 2
+    p0 = {i: ((fe[i][0] - x0) * sx + ox, (fe[i][1] - y0) * sy + oy) for i in used}
+    # relax every stop towards octilinear hops (linear least squares, a few dozen rounds): each hop
+    # keeps to its nearest 0/45/90 degree direction and is at least GAP long, chains run smoothly
+    # through their ordinary stops, stops that are not neighbours keep GAP apart, and everything is
+    # held lightly to the magnified geography (firmly where OVERRIDES pins it)
+    import numpy as np
+    N = len(used)
+    ui = {u: k for k, u in enumerate(used)}
+    edges = sorted({(min(a, b), max(a, b)) for a in used for b in adj[a]})
+    pos = np.array([p0[u] for u in used], float)
+    pins = {ui[i]: OVERRIDES[names[i]] for i in used if names[i] in OVERRIDES}
+    dirs = {}
+    nb = {u: set(adj[u]) for u in used}
+    # schematic maps space their stops nearly evenly: every hop wants HOP LEDs, a little more where
+    # the real hop is long (the outskirts), however squeezed the magnified geography is there
+    hop_len = {}
+    for a, b in edges:
+        g = math.hypot(p0[b][0] - p0[a][0], p0[b][1] - p0[a][1])
+        n = len(hops.get(frozenset((a, b)), ()))
+        hop_len[(a, b)] = max(HOP[0], min(HOP[1], g), n + 3)   # room for the rings round a wide bundle
+    width = {u: max([len(hops.get(frozenset((u, v)), ())) for v in adj[u]] + [1]) for u in used}
+    for it in range(int(os.environ.get("TRAMS_ITERS", 60))):
+        rows, rhs = [], []
+
+        def row(coefs, val, w):
+            r = np.zeros(2 * N)
+            for idx, c in coefs:
+                r[idx] += c * w
+            rows.append(r)
+            rhs.append(val * w)
+        for a, b in edges:
+            ia, ib = ui[a], ui[b]
+            v = pos[ib] - pos[ia]
+            if (a, b) not in dirs:
+                dirs[(a, b)] = snap_dir(*v)
+            dx, dy = dirs[(a, b)]
+            nx, ny = -dy, dx
+            row([(2 * ib, nx), (2 * ib + 1, ny), (2 * ia, -nx), (2 * ia + 1, -ny)], 0.0, 3.0)
+            m = max(abs(dx), abs(dy))
+            k = 1.0 / (dx * dx + dy * dy) * m                 # along the hop in steps (diagonal = 1)
+            along = (v[0] * dx + v[1] * dy) * k
+            row([(2 * ib, dx * k), (2 * ib + 1, dy * k), (2 * ia, -dx * k), (2 * ia + 1, -dy * k)],
+                max(along, GAP) if it < 3 else hop_len[(a, b)], 1.0)
+            gap = max(GAP, (width[a] + width[b]) / 2 + 1)
+            if along < gap:
+                row([(2 * ib, dx * k), (2 * ib + 1, dy * k), (2 * ia, -dx * k), (2 * ia + 1, -dy * k)], gap, 3.0)
+        for u in used:
+            if len(nb[u]) == 2 and u not in junc:
+                a, b = sorted(nb[u])
+                for c in range(2):
+                    row([(2 * ui[a] + c, 1), (2 * ui[b] + c, 1), (2 * ui[u] + c, -2)], 0.0, 0.6)
+        if it > 5:
+            near = pos[:, None, :] - pos[None, :, :]
+            dd = np.abs(near).max(axis=2)
+            wv = np.array([width[u] for u in used], float)
+            need = np.maximum(GAP, (wv[:, None] + wv[None, :]) / 2 + 2)
+            for ia, ib in zip(*np.nonzero((dd < need) & (np.triu(np.ones((N, N)), 1) > 0))):
+                a, b = used[ia], used[ib]
+                if b in nb[a]:
+                    continue
+                v = pos[ib] - pos[ia]
+                n = np.hypot(*v)
+                v = v / n if n > 1e-6 else np.array([1.0, 0.0])
+                row([(2 * ib, v[0]), (2 * ib + 1, v[1]), (2 * ia, -v[0]), (2 * ia + 1, -v[1])], need[ia, ib], 2.0)
+        for k, u in enumerate(used):
+            w = 4.0 if k in pins else ANCHOR
+            target = pins.get(k, p0[u])
+            for c in range(2):
+                row([(2 * k + c, 1)], target[c], w)
+        A = np.array(rows)
+        pos = np.linalg.lstsq(A, np.array(rhs), rcond=None)[0].reshape(-1, 2)
+    # onto the wall: one scale for both axes (the 45-degree runs stay 45 degrees), centred
+    lo, hi = pos.min(axis=0), pos.max(axis=0)
+    room = np.array([W - 1 - MARGIN[0] - MARGIN[2], H - 1 - MARGIN[1] - MARGIN[3]], float)
+    k = min(room[0] / (hi[0] - lo[0]), room[1] / (hi[1] - lo[1]))
+    print(f"schematic: {hi[0] - lo[0]:.0f} x {hi[1] - lo[1]:.0f} LEDs before fitting, scaled by {k:.2f}")
+    pos = (pos - lo) * k + np.array([MARGIN[0], MARGIN[1]]) + (room - (hi - lo) * k) / 2
+    solved = {u: pos[ui[u]] for u in used}
+    P = {j: (int(round(solved[j][0])), int(round(solved[j][1]))) for j in junc}
+    want = [(ch[0], ch[-1], None, None, ch) for ch in links]
+    # the links' routes and the stops along them
+    xy = {j: P[j] for j in junc}
+    out_links = []
+    for a, b, d, L, ch in want:
+        mids = ch[1:-1]
+        mid = None
+        if mids:
+            m = mids[len(mids) // 2]
+            mid = solved[m]
+        corners = polyline(P[a], P[b], mid)
+        path = walk(corners)
+        n = len(path) - 1
+        # stops along the route: half by their real spacing, half evenly
+        g = [0.0]
+        for u, v in zip(ch, ch[1:]):
+            g.append(g[-1] + float(np.hypot(*(solved[v] - solved[u]))) + 1e-6)
+        at = [0]
+        for k in range(1, len(ch) - 1):
+            f = 0.5 * g[k] / g[-1] + 0.5 * k / (len(ch) - 1)
+            at.append(int(round(f * n)))
+        at.append(n)
+        for k in range(1, len(at) - 1):                         # keep them apart where there is room
+            at[k] = max(at[k], at[k - 1] + min(GAP, max(1, n // (len(ch) - 1))))
+        for k in range(len(at) - 2, 0, -1):
+            at[k] = min(at[k], at[k + 1] - min(GAP, max(1, n // (len(ch) - 1))))
+        for k, u in enumerate(ch[1:-1], 1):
+            xy[u] = path[max(0, min(n, at[k]))]
+        lines = set()
+        for u, v in zip(ch, ch[1:]):
+            lines |= hops.get(frozenset((u, v)), set())
+        out_links.append({"stops": [keys[u] for u in ch], "at": at, "corners": corners, "lines": lines})
+    # every pattern's hops routed over the drawing graph, so each link knows all the lines on it
+    link_of = {}
+    for k, L in enumerate(out_links):
+        for u, v in zip(L["stops"], L["stops"][1:]):
+            link_of[frozenset((u, v))] = k
+    for line, seq in data["patterns"]:
+        for a, b in zip(seq, seq[1:]):
+            p = dijkstra(adj, a, b) if a != b else None
+            for u, v in zip(p or [], (p or [])[1:]):
+                k = link_of.get(frozenset((keys[u], keys[v])))
+                if k is not None:
+                    out_links[k]["lines"].add(line)
+    order_lines(out_links)
+    lab = {}
+    for i in used:
+        if names[i] in LABELS:
+            lab[keys[i]] = LABELS[names[i]]
+    home = next((keys[i] for i in used if names[i] == HOME), None)
+    return {
+        "w": W, "h": H, "built": data.get("built", ""),
+        "stops": {keys[i]: [xy[i][0], xy[i][1], names[i]] for i in used if i in xy},
+        "links": [[L["stops"], L["at"], L["corners"], L["lines"]] for L in out_links],
+        "labels": lab, "home": home,
+        "_doc": "stops: didok -> [x, y, name]; links: [stops along it, their step index along the route, "
+                "the route's corner points, the lines on it in their side-by-side order]",
+    }
+
+
+def build_layout_retry(data):
+    raise RuntimeError("loop in the network: add its middle stop to OVERRIDES")
+
+
+def order_lines(links):
+    """Side-by-side order of the lines on every link, so a line keeps its side through junctions:
+    a few rounds of swapping neighbours where that shortens the jogs at the link ends."""
+    for L in links:
+        L["lines"] = sorted(L["lines"], key=int)
+    at_node = {}
+    for k, L in enumerate(links):
+        at_node.setdefault(L["stops"][0], []).append((k, 0))
+        at_node.setdefault(L["stops"][-1], []).append((k, 1))
+
+    def offset(k, line, end):
+        L = links[k]
+        n = len(L["lines"])
+        slot = L["lines"].index(line) - (n - 1) / 2.0
+        c = L["corners"]
+        a, b = (c[0], c[1]) if end == 0 else (c[-2], c[-1])
+        d = (b[0] - a[0], b[1] - a[1])
+        m = max(abs(d[0]), abs(d[1])) or 1
+        d = (d[0] / m, d[1] / m)
+        return (-d[1] * slot, d[0] * slot)
+
+    def cost(k):
+        tot = 0.0
+        L = links[k]
+        for end in (0, 1):
+            node = L["stops"][-end]
+            for line in L["lines"]:
+                o = offset(k, line, end)
+                for k2, e2 in at_node[node]:
+                    if k2 != k and line in links[k2]["lines"]:
+                        o2 = offset(k2, line, e2)
+                        tot += math.hypot(o[0] - o2[0], o[1] - o2[1])
+        return tot
+
+    for _ in range(12):
+        changed = False
+        for k, L in enumerate(links):
+            best = cost(k)
+            for i in range(len(L["lines"]) - 1):
+                L["lines"][i], L["lines"][i + 1] = L["lines"][i + 1], L["lines"][i]
+                c = cost(k)
+                if c < best - 1e-9:
+                    best, changed = c, True
+                else:
+                    L["lines"][i], L["lines"][i + 1] = L["lines"][i + 1], L["lines"][i]
+        if not changed:
+            break
 
 
 def main():

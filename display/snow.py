@@ -6,13 +6,17 @@ real snowfall; where snow is lying below the line the ground keeps a soft glow, 
 The snow line is written small at the foot of the wall (SNOW 1400 M). One faint LED is Zürich.
 
 Data: Open-Meteo (open-meteo.com, free, no key), the current conditions on a 5 x 7 grid over the
-country, fetched every 45 min while the piece runs: freezing_level_height (m), snowfall (cm in the
+country, fetched every 45 min while the piece is on the wall (the side thread sleeps when it is not, and
+backs off when the API refuses): freezing_level_height (m), snowfall (cm in the
 last interval), precipitation (mm), snow_depth (m), temperature_2m (C), plus snowfall_height (m)
 where the API offers it. The snow line is snowfall_height if given, otherwise the freezing level
 less 300 m (snow falls through the 0 C level and melts on the way down within ~300 m: the MeteoSwiss
 rule of thumb), otherwise the point's own height plus temperature / 6.5 K per km, less 300 m. Between
 the grid points every field is spread with a smooth 40 km weighting, so the line differs north and
-south of the Alps as it really does. Last good data is kept in panel_setup/snow_cache.json.
+south of the Alps as it really does. snow_depth is the depth at each grid point's own model height,
+so it glows only on ground no more than 300 m below that. Last good data is kept in
+panel_setup/snow_cache.json; snowfall older than 3 h stops falling and a line older than 2 days gives
+way to the month's usual line, also while the piece runs with the network down.
 
 Relief: assets/maps/ch_relief.npz (tools/build_relief.py, AWS terrain tiles + Natural Earth), one
 mean elevation per LED, true proportions, the full width of the wall.
@@ -40,7 +44,10 @@ GRID_LON = (6.20, 6.90, 7.60, 8.30, 9.00, 9.70, 10.35)
 URL = "https://api.open-meteo.com/v1/forecast"
 VARS = ["temperature_2m", "precipitation", "snowfall", "snow_depth", "freezing_level_height"]
 EVERY = 45 * 60                                   # 35 points every 45 min = 1120 calls a day (free: 10 000)
-RETRY = 5 * 60
+RETRY = 5 * 60                                    # first retry after a failure, doubling up to EVERY
+IDLE = 5 * 60                                     # no frame for this long: another mode is up, stop asking
+RATE_AGE, LINE_AGE = 3 * 3600, 48 * 3600          # a snowfall rate is "now" for 3 h, a snow line for 2 days
+DEPTH_BELOW = 300.0                               # lying snow glows down to this far below its grid point
 BELOW_FREEZING = 300.0                            # snow line = freezing level - 300 m
 SIGMA_KM = 40.0                                   # how far a grid point's weather reaches
 EDGE_M = 120.0                                    # the snow line's own band, one level dimmer
@@ -56,9 +63,9 @@ PAL = np.array([
     (0, 0, 155),        # 2  steep sunlit slopes
     (0, 100, 100),      # 3  lakes (flat and still: one tone, unshaded)
     (0, 100, 155),      # 4  snow, faintest: the line's band in shade, a thin cover lit
-    (100, 155, 195),    # 5  snow in shade / the line's band
-    (155, 195, 225),    # 6  snow
-    (195, 225, 250),    # 7  snow in full light
+    (0, 155, 195),      # 5  snow in shade / the line's band
+    (100, 155, 195),    # 6  snow
+    (155, 195, 225),    # 7  snow in full light (white 250 is kept for the flakes, so they show on snow)
     (0, 0, 0),          # 8  outside Switzerland
 ], np.uint8)
 OUTSIDE = 8
@@ -85,8 +92,12 @@ def _hillshade(elev, km_px, z=2.5, az=315.0, alt=40.0):
     return hs, slope
 
 
+def _finite(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
 class Snow:
-    def __init__(self):
+    def __init__(self, fetch=True):
         self.elev, self.ch, self.lakes, lat_c, lon_c, km_px, self.y0 = _load_relief()
         self.bh = self.elev.shape[0]
         kx = math.cos(math.radians(lat_c)) * 111.32
@@ -121,12 +132,14 @@ class Snow:
         hx, hy = self.to_px(*HOME)
         self.home = (int(round(hx)), int(round(hy)))
         self.data, self.data_t = None, 0.0
-        self.no_height = False                        # the API refused snowfall_height once: stop asking
+        self.no_height = False                        # the API said it has no snowfall_height: stop asking
         self.lock = threading.Lock()
         self.fresh = False
+        self.label = ""
+        self._derive()                                 # the season's usual line until data is in
         self._load_cache()
         self.line_from = None                          # the line field easing from ...
-        self.line_to = self._line_field()              # ... to this
+        self.line_to = self.f_line.copy()              # ... to this
         self.ease_t0 = None
         self.start = None
         self.cached_key, self.cached_img = None, None
@@ -134,60 +147,96 @@ class Snow:
         self.spawn_acc = 0.0
         self.last_t = None
         self.rng = np.random.default_rng()
-        threading.Thread(target=self._fetch_loop, daemon=True).start()
+        self.last_frame = time.time()
+        if fetch:
+            threading.Thread(target=self._fetch_loop, daemon=True).start()
 
     # ---------------------------------------------------------------- data
     def _load_cache(self):
+        """Last good data, if it is whole: every point with finite numbers, else ignored."""
         try:
             with open(CACHE) as fh:
                 c = json.load(fh)
-            if len(c.get("points", [])) == len(self.pts):
-                self.data, self.data_t = c["points"], float(c.get("t", 0))
-                self._derive()
+            pts, t = c["points"], float(c["t"])
+            if not (isinstance(pts, list) and len(pts) == len(self.pts) and math.isfinite(t)):
+                return
+            for q in pts:
+                if not all(_finite(q.get(k)) for k in ("line", "rate", "depth")):
+                    return
+                if not all(_finite(q[k]) for k in ("precip", "elev") if k in q):
+                    return
+            self.data, self.data_t = pts, t
+            self._derive()
         except Exception:
-            pass
+            self.data, self.data_t = None, 0.0
+            self._derive()
+
+    def _age_state(self):
+        if self.data is None:
+            return (False, False)
+        age = time.time() - self.data_t
+        return (age < RATE_AGE, age < LINE_AGE)
 
     def _derive(self):
-        """Per-LED fields from the grid points (on data arrival only, never per frame)."""
-        age = time.time() - self.data_t
+        """Per-LED fields from the grid points (on data arrival or ageing only, never per frame).
+        Snowfall older than 3 h is dropped; with no line younger than 2 days, the month's usual line."""
+        self.age_state = now, recent = self._age_state()
+        if not recent:
+            self.f_line = np.full((self.bh, W), SEASON[time.localtime().tm_mon - 1], np.float32)
+            self.f_rate = np.zeros((self.bh, W), np.float32)
+            self.f_depth = np.zeros((self.bh, W), np.float32)
+            self.spawn_cells, self.snowing, self.label = (None, None, None), 0.0, ""
+            return
         p = self.data
+        n = len(p)
         line = np.array([q["line"] for q in p], np.float32)
-        rate = np.array([q["rate"] for q in p], np.float32) if age < 3 * 3600 else np.zeros(len(p), np.float32)
-        wet = np.array([q.get("precip", 0.0) for q in p], np.float32) if age < 3 * 3600 else np.zeros(len(p), np.float32)
-        depth = np.array([q["depth"] for q in p], np.float32) if age < 48 * 3600 else np.zeros(len(p), np.float32)
+        rate = np.array([q["rate"] for q in p], np.float32) if now else np.zeros(n, np.float32)
+        wet = np.array([q.get("precip", 0.0) for q in p], np.float32) if now else np.zeros(n, np.float32)
+        depth = np.array([q["depth"] for q in p], np.float32)
         f = lambda v: (self.wts @ v).reshape(self.bh, W)
-        self.f_line = f(line)
-        lf = self.f_line
+        lf = f(line)
         # snowfall per LED: the model's snowfall, or its precipitation (0.7 cm of snow per mm) on slopes
         # above the line - a valley grid point raining while the peaks around it get snow
         fr = np.maximum(f(rate), np.where(self.elev >= lf - 100.0, f(wet) * 0.7, 0.0))
         fr[~self.ch] = 0.0
+        # snow_depth is the depth at the grid point's own model height: a deep valley far below it
+        # does not share the snowpack, so it glows only down to DEPTH_BELOW under that height
+        fd = f(depth)
+        if all("elev" in q for q in p):
+            fd = np.where(self.elev >= f(np.array([q["elev"] for q in p], np.float32)) - DEPTH_BELOW, fd, 0.0)
         rows, cols = np.nonzero(fr > 0.02)
         w = fr[rows, cols]
-        self.f_rate, self.f_depth, self.snowing = fr, f(depth), float(fr.sum())
+        label = "SNOW {} M".format(int(round(float(np.median(lf[self.ch])) / 100.0) * 100))
+        self.f_line, self.f_rate, self.f_depth, self.snowing = lf, fr, fd, float(fr.sum())
         self.spawn_cells = (rows, cols, (np.cumsum(w) / w.sum()) if len(w) else None)
-        self.label = "SNOW {} M".format(int(round(float(np.median(lf[self.ch])) / 100.0) * 100)) if age < 48 * 3600 else ""
+        self.label = label
 
-    def _line_field(self):
-        if self.data is not None and time.time() - self.data_t < 48 * 3600:
-            return self.f_line.copy()
-        self.label = ""
-        self.f_rate = np.zeros((self.bh, W), np.float32)
-        self.f_depth = np.zeros((self.bh, W), np.float32)
-        self.spawn_cells, self.snowing = (None, None, None), 0.0
-        return np.full((self.bh, W), SEASON[time.localtime().tm_mon - 1], np.float32)
+    def _age_check(self):
+        """From the fetch thread: when the data crosses 3 h or 2 days with nothing new, let it go."""
+        if self._age_state() != self.age_state:
+            with self.lock:
+                self._derive()
+                self.fresh = True
 
     def _fetch_loop(self):
         import requests
-        if time.time() - self.data_t < EVERY - 60:
-            time.sleep(EVERY - (time.time() - self.data_t))
+        fails = 0
+        due = self.data_t + EVERY - 60                 # a fresh cache: wait for its turn
         while True:
-            ok = False
             try:
-                ok = self._fetch(requests)
+                self._age_check()
             except Exception as e:
                 print(f"[snow] {str(e)[:120]}", flush=True)
-            time.sleep(EVERY if ok else RETRY)
+            now = time.time()
+            if now >= due and now - self.last_frame < IDLE:     # only while the piece is on the wall
+                ok = False
+                try:
+                    ok = self._fetch(requests)
+                except Exception as e:
+                    print(f"[snow] {str(e)[:120]}", flush=True)
+                fails = 0 if ok else fails + 1
+                due = time.time() + (EVERY if ok else min(EVERY, RETRY * 2 ** (fails - 1)))
+            time.sleep(30)
 
     def _fetch(self, requests):
         vars_ = VARS + ([] if self.no_height else ["snowfall_height"])
@@ -195,7 +244,7 @@ class Snow:
                   "longitude": ",".join(str(p[1]) for p in self.pts),
                   "current": ",".join(vars_), "timezone": "GMT"}
         r = requests.get(URL, params=params, timeout=20)
-        if r.status_code == 400 and not self.no_height:        # the variable is not offered: ask without it
+        if r.status_code == 400 and not self.no_height and "snowfall_height" in (getattr(r, "text", "") or ""):   # not offered
             self.no_height = True
             print("[snow] no snowfall_height, using freezing level - 300 m", flush=True)
             return self._fetch(requests)
@@ -208,7 +257,8 @@ class Snow:
         if all(q is None for q in pts):
             raise ValueError("no usable values")
         fill = [q for q in pts if q is not None]           # a gap takes the mean of the rest
-        mean = {k: sum(q[k] for q in fill) / len(fill) for k in fill[0]}
+        keys = set.intersection(*(set(q) for q in fill))
+        mean = {k: sum(q[k] for q in fill) / len(fill) for k in keys}
         pts = [q if q is not None else dict(mean) for q in pts]
         with self.lock:
             self.data, self.data_t = pts, time.time()
@@ -236,10 +286,15 @@ class Snow:
             line = float(g.get("elevation") or 500.0) + num("temperature_2m") / 0.0065 - BELOW_FREEZING
         if line is None:
             return None
-        return {"line": max(0.0, min(5000.0, line)),
+        out = {"line": max(0.0, min(5000.0, line)),
                 "rate": max(0.0, (num("snowfall") or 0.0) / step),
                 "precip": max(0.0, (num("precipitation") or 0.0) / step),
                 "depth": max(0.0, num("snow_depth") or 0.0)}
+        if _finite(g.get("elevation")):
+            out["elev"] = float(g["elevation"])        # the grid point's model height, for the depth glow
+        if not all(_finite(v) for v in out.values()):
+            return None
+        return out
 
     # ---------------------------------------------------------------- drawing
     def _line_at(self, t):
@@ -314,6 +369,7 @@ class Snow:
         img[y[ok], x[ok]] = FLAKE
 
     def __call__(self, t):
+        self.last_frame = time.time()
         dt = 0.03 if self.last_t is None else max(0.0, min(0.5, t - self.last_t))
         self.last_t = t
         line, key = self._line_now(t)
@@ -326,6 +382,22 @@ class Snow:
 
 _snow = None
 _dead = None
+
+
+def thumb():
+    """A still for the app: the line from the cache (or the month's usual one), past the intro, with a
+    light snowfall on the lit slopes if none is falling. No network."""
+    s = Snow(fetch=False)
+    if s.spawn_cells[2] is None:
+        rows, cols = np.nonzero((s.elev >= s.f_line + EDGE_M) & s.ch & ~s.lakes)
+        if len(rows):
+            s.spawn_cells = (rows, cols, np.arange(1, len(rows) + 1) / len(rows))
+            s.snowing = 2500.0
+    img, t = None, 0.0
+    for i in range(80):                                # past the intro, then 4 s of snow, fast-forwarded
+        img = s(t)
+        t = INTRO + 1.0 + i * 0.05 if i else INTRO + 1.0
+    return img
 
 
 def frame(t):

@@ -58,3 +58,4 @@ panel_setup/now.json
 
 # live pieces: last good data, kept on the Pi
 panel_setup/*_cache.json
+panel_setup/*_cache.json.tmp

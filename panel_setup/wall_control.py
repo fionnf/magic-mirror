@@ -192,6 +192,8 @@ class Runner:
                    WALL_PRESENCE="1" if self.state.get("presence") else "0",
                    WALL_SMART_CROP="1" if self.state.get("smart_crop", True) else "0",
                    PYTHONUNBUFFERED="1")
+        if what == "mirror":
+            env["WALL_FIXED_DEPTH"] = "1"        # a mostly dark picture must not drop to the slower, flickery refresh
         if getattr(self, "boot_pending", False) and self.state.get("boot_welcome", True):
             env["WALL_BOOT"] = "1"               # first start after power-on: play the welcome once
         self.boot_pending = False

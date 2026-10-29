@@ -11,6 +11,8 @@ import argparse
 import signal
 import sys
 import time
+
+import numpy as np
 import math
 import threading
 import enum
@@ -293,8 +295,9 @@ class MagicMirror:
                 print("[IDLE] someone is back - silhouette")
                 self._art_on = False
 
-            # Only recompose + redraw when something visible changed (new
-            # silhouette frame or a new overlay) — not on every tick.
+            # Recompose when something changed (a new silhouette or overlay), but draw every tick:
+            # the wall glides towards each new camera frame instead of jumping to it 10 times a
+            # second, which also evens out the camera's exposure pumping.
             sp = self._sparkle
             sparkling = sp is not None and time.monotonic() < sp[2]
             key = (self._silhouette_version, id(self._overlay_image),
@@ -319,7 +322,16 @@ class MagicMirror:
                                      time.monotonic())
                     except Exception:
                         pass
-                self.matrix.draw(canvas)
+                self._target = np.asarray(canvas, np.float32)
+            target = getattr(self, "_target", None)
+            if target is not None:
+                shown = getattr(self, "_shown", None)
+                if shown is None or shown.shape != target.shape:
+                    shown = target.copy()
+                else:
+                    shown += (target - shown) * 0.35          # ~0.1 s to settle at 24 fps
+                self._shown = shown
+                self.matrix.draw(Image.fromarray(np.clip(shown + 0.5, 0, 255).astype(np.uint8), "RGB"))
             time.sleep(interval)
         return "short"
 

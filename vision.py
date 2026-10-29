@@ -60,6 +60,24 @@ def _small(img):
                       interpolation=cv2.INTER_AREA)
 
 
+_hold = {"m": None, "on": None}
+
+
+def _steady(level, thresh):
+    """A calm mask: the per-pixel level is averaged over the last few frames, and a pixel that is
+    already part of the person stays in until it falls well below the threshold (hysteresis). Camera
+    noise near the threshold made edge pixels flip on and off every frame - the mirror's flicker."""
+    m = level.astype(np.float32)
+    if _hold["m"] is None or _hold["m"].shape != m.shape:
+        _hold["m"], _hold["on"] = m, m > thresh
+    else:
+        _hold["m"] += (m - _hold["m"]) * 0.5
+    m = _hold["m"]
+    on = (m > thresh) | (_hold["on"] & (m > 0.6 * thresh))
+    _hold["on"] = on
+    return on.astype(np.uint8) * 255
+
+
 def silhouette_mask(frame: np.ndarray, background=None, subtractor=None) -> np.ndarray:
     """Return a uint8 0/255 mask at (TOTAL_WIDTH, TOTAL_HEIGHT)."""
     wall = config.TOTAL_WIDTH / config.TOTAL_HEIGHT
@@ -74,11 +92,9 @@ def silhouette_mask(frame: np.ndarray, background=None, subtractor=None) -> np.n
             _bg_cache["small"] = _small(background)
         grey = cv2.cvtColor(cv2.absdiff(small, _bg_cache["small"]),
                             cv2.COLOR_BGR2GRAY)
-        _, mask = cv2.threshold(grey, config.SILHOUETTE_DIFF_THRESHOLD,
-                                255, cv2.THRESH_BINARY)
+        mask = _steady(grey, config.SILHOUETTE_DIFF_THRESHOLD)
     else:
-        mask = subtractor.apply(small)
-        _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+        mask = _steady(subtractor.apply(small), 127)
     mask = cv2.medianBlur(mask, 3)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, _KERNEL)
     wall_size = (config.TOTAL_WIDTH, config.TOTAL_HEIGHT)

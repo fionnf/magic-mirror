@@ -421,6 +421,6 @@ the Pi bootstrap script and Smart Life import have not been verified on fresh se
 ## Licence
 
 The code, the generated art and the 3D models in `hardware/` are released under the [MIT licence](LICENSE).
-Third-party pieces keep their own terms, and data fetched at run time is not covered: the panel library
+Third-party pieces keep their own terms, and data fetched at run time is not covered. **Some bundled data is not MIT:** `assets/migrations/wanderers.json` (Ocean wanderers: Arctic tern and turtle tracks from OBIS-SEAMAP) is CC BY-NC 4.0, non-commercial only, with the datasets credited inside the file; `assets/migrations/polarbears.json` is CC BY 4.0 (Norwegian Polar Institute, credit required). Remove those files, or ask the data owners, before any commercial use: the panel library
 [hzeller/rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) is compiled on the Pi, not included here (its licence is GPL-2.0 per upstream; not checked here); the face models come from the OpenCV Zoo (YuNet MIT, SFace Apache-2.0,
 see `assets/models/README.md`); the maps are built from Natural Earth (public domain) and OpenStreetMap (ODbL) data; the timetable data comes from opentransportdata.swiss (check its terms of use).

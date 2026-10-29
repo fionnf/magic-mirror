@@ -1,0 +1,51 @@
+{
+ "name": "Veils Under the Lake",
+ "description": "A few soft curtains of aqua light hang in deep petrol water, swaying almost imperceptibly, gathering and drifting across the wall as the day sinks from morning clarity into a dense, luminous night.",
+ "image": "2026-10-29.png",
+ "animation_source": "2026-10-29.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-29"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#0a3a44 #1f6f78 #8fd6cf"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 5
+  }
+ ],
+ "listening": "The bass breath slowly widens the veils like a tide, tension draws them together, the key leans their tint within the teal family, treble softens or sharpens their edges, each song reseeds their spacing, and the day's hourly energy settles as faint sediment layers along the lake floor.",
+ "palette": [
+  "#0a3a44",
+  "#1f6f78",
+  "#8fd6cf"
+ ],
+ "source_sha256": "c4d31c913603ebaaeaf75fb14c5d1d52e4010b308181d93b1c195b996f2b2517",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 2,
+ "created": 1793264066.2740486,
+ "curator": {
+  "score": 5,
+  "verdict": "The petrol ground and muted aqua veils follow the direction and break cleanly from the recent warm-on-black days, but by evening the veils swell into bright, bulbous lobes that read as blobs rather than hanging light. The hard horizontal band that appears at the bottom from 3 pm on is a second, unexplained element that cuts the calm space."
+ },
+ "direction": "Petrol depth"
+}

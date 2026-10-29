@@ -1,7 +1,7 @@
 {
  "name": "Lantern Under Still Water",
  "description": "A single veil of aqua light hangs in deep petrol water like sun that has sunk a long way down, widening and rising through the day while a faint shadow-twin drifts beside it.",
- "image": "2026-10-28.png",
+ "image": "2026-10-28.final.png",
  "animation_source": "2026-10-28.frag",
  "attributes": [
   {
@@ -47,5 +47,11 @@
   "score": 7,
   "verdict": "A single soft aqua veil on a true petrol ground follows the direction closely, reads clearly on a coarse grid, and grows gently from a thin sliver to a fuller glowing form across the day, nothing like the recent warm-on-black pieces. The arc is quiet but real, though the shadow-twin barely registers and the bright patch at the bottom edge in the later stills slightly distracts from the one form."
  },
- "direction": "Petrol depth"
+ "direction": "Petrol depth",
+ "post": {
+  "caption": "The wall was offline today, so the lantern hung without a day to listen to, a single narrow veil of aqua resting in deep petrol water. With no breath to widen it and no hours to leave sediment along the floor, it stayed slender and close to the middle, its folds faintly drawn like light that has sunk a long way and decided to wait. A quiet still, more pause than record.",
+  "alt": "A tall, narrow, softly blurred crescent of pale aqua light glows just right of centre against a flat, deep teal-green background, fading at its top and bottom edges."
+ },
+ "final": true,
+ "closed_by": "cloud"
 }

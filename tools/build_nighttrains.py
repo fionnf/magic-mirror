@@ -13,6 +13,13 @@ BDZ, Ukrzaliznytsia ...), except the few lines that lie wholly east of the pictu
 secondary source: the timetable facts are re-keyed into a compact table and must be checked against the operators
 before anyone relies on them (the page says so itself). Times are local at each stop, as printed.
 
+LICENCE AND CREDIT. The database is the work of the volunteers of Back-on-Track.eu (https://back-on-track.eu).
+No open licence is stated for it that we know of (do not assume CC-BY: their terms may be non-commercial /
+no-derivatives), so the compiled services.json is used for a private, non-commercial art wall with this credit,
+and must not be republished (for example in a public repository) without their permission. SEASONS: the pages
+give weekday flags only, no season dates, so a seasonal train that is not running right now is still in the
+file (only lines with no running weekday at all are dropped, below): the wall cannot tell, and says so.
+
 Stops carry no coordinates in that database, so each station name is matched to a place in GeoNames
 (cities1000, CC BY 4.0, https://www.geonames.org) - the place with the most people of that name in the
 countries the line runs through. A match that would make the train go faster than 200 km/h between two stops

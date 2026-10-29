@@ -55,7 +55,7 @@ void main(){
     vec2 p = m + q - iFrame.zw * iResolution;
     vec4 c = vec4(0.0); mainImage(c, p); _out = vec4(clamp(c.rgb, 0.0, 1.0), 1.0); }
 """
-GROUNDED = {"arches", "cutcurves", "ember", "neonarc"}   # stand on the bottom edge: never tilt or lift
+GROUNDED = {"arches", "cutcurves", "ember", "neonarc", "bloom", "aurora"}   # stand on the bottom edge: never tilt or lift
 _FIELD = re.compile(r"(fc|fragCoord)(\.xy)?\s*/\s*iResolution")
 
 
@@ -250,6 +250,10 @@ CURATED = {   # (shadow, mid, highlight) per piece - the gallery's look; the VJ 
     # recreated from the house's own reference images (Pinterest board + pictures sent in chat)
     "glassorb": ("#140a3a", "#3a3cff", "#ece8ff"),
     "metamorphosis": ("#140a3a", "#5a3cff", "#f0e8ff"),   # the glass orb's hour-long transformation
+    # hour-long loops, each a transformation tied to the clock
+    "bloom": ("#0a0618", "#d04880", "#ffeedc"), "totality": ("#6a0c18", "#6c7cc0", "#fff2d6"),
+    "crystal": ("#060c24", "#3a86d8", "#eaf6ff"), "inkcloud": ("#05061c", "#3448e8", "#e4ecff"),
+    "aurora": ("#0c1a4c", "#22c47a", "#dcffe8"),
     "halftonewave": ("#8a2cff", "#2a6cff", "#7cff4a"),
     "dotring": ("#ff3aa0", "#ff8a2a", "#7a3cff"),
     "emberweb": ("#ff3a1a", "#2a4cff", "#ffa040"),
@@ -271,7 +275,7 @@ def _rgb(h):
 
 def gallery_pieces(Wd, Hd):
     """One piece per shader, each in its curated palette (newest, strongest first)."""
-    order = ["metamorphosis", "glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "conic", "cutcurves", "aperture", "rothko", "eclipse",
+    order = ["metamorphosis", "bloom", "totality", "crystal", "inkcloud", "aurora", "glassorb", "halftonewave", "dotring", "emberweb", "linewave", "slats", "pixelfield", "dotsea", "crossglow", "pill", "linefan", "bluering", "conic", "cutcurves", "aperture", "rothko", "eclipse",
              "inkdrop", "orbit", "neonarc", "prism", "contours", "ridges", "pointcloud", "blinds",
              "arches", "inkorbs", "ember", "cutpaper", "poolglass", "halo", "ribbon",
              "dandelion", "dotsphere",

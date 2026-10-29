@@ -90,23 +90,34 @@ ROWS = int(round(2 * LAT_TOP * PPD))                   # 124 LEDs tall
 Y0 = ((H - 2 * ROWS - 4) // 2, (H - 2 * ROWS - 4) // 2 + ROWS + 4)       # top row of the upper, lower strip
 
 # colours: the wall shows nothing below ~94 in a channel and only ~5 steps above it (94 149 188 219 245),
-# so every colour keeps its lit channels at or above 100 and a channel that is not meant to show is 0.
-COAST_DAY = np.array([0, 138, 112], np.float32)        # the coast where the sun is up
-COAST_TWI = np.array([0, 108, 176], np.float32)        # ... where it is rising or setting
-COAST_NIGHT = np.array([0, 0, 128], np.float32)        # ... and in the night
-TWILIGHT = np.array([0, 98, 142], np.float32)          # the dotted band of dusk and dawn
-FOOT = np.array([0, 112, 150], np.float32)             # the footprint ring
+# so every colour keeps its lit channels at or above 100 and a channel that is not meant to show is 0. The in-between
+# tones of the gradients (the twilight, the night side) are made by ORDERED DITHERING: a fixed Bayer matrix decides which
+# LEDs of an area are lit, so a soft gradient is a denser or sparser field of whole LEDs and never a dimmed one.
+SEA_DAY = np.array([0, 104, 150], np.float32)          # specks of the sunlit sea
+SEA_NIGHT = np.array([0, 0, 108], np.float32)          # ... and of the night's
+LAND_DAY = np.array([0, 150, 112], np.float32)         # sunlit land
+LAND_NIGHT = np.array([0, 0, 132], np.float32)         # land in the dark
+DUSK = np.array([200, 100, 138], np.float32)           # the twilight band: rose, warming to amber at the sun's edge
+DUSK_EDGE = np.array([255, 168, 100], np.float32)      # the line of sunrise and sunset itself
+LIGHTS = np.array([236, 156, 0], np.float32)           # the cities of the night side
+LIGHTS_BIG = np.array([255, 206, 96], np.float32)
+COAST_DAY = np.array([0, 150, 122], np.float32)        # the coast where the sun is up
+COAST_DUSK = np.array([196, 104, 150], np.float32)     # ... where it is rising or setting
+COAST_NIGHT = np.array([0, 0, 150], np.float32)        # ... and in the night
+GRAT = np.array([0, 0, 112], np.float32)               # the graticule, very faint
+FOOT = np.array([0, 124, 176], np.float32)             # the footprint ring
 HEAD_SUN = np.array([255, 250, 228], np.float32)
-HEAD_SHADOW = np.array([160, 160, 255], np.float32)
-HOME_LED = np.array([150, 140, 130], np.float32)
+HEAD_SHADOW = np.array([176, 168, 255], np.float32)
+HOME_LED = np.array([196, 188, 176], np.float32)
 PULSE = np.array([255, 196, 84], np.float32)
 PULSE_SEEN = np.array([255, 245, 210], np.float32)
 NOTE = np.array([108, 108, 120], np.float32)
 # track colour by age, in orbits (the track's age over the period): just behind the head to a day ago
-AGE_ORBITS = np.array([0.0, 0.08, 0.5, 1.0, 2.0, 3.0, 4.0, 6.0], np.float32)
-AGE_COLS = np.array([(255, 224, 124), (255, 206, 98), (255, 178, 74), (255, 140, 60), (232, 82, 100),
-                     (166, 60, 190), (120, 0, 160), (100, 0, 124)], np.float32)
-OLD_FROM, OLD_EVERY = 3.0, 3                           # beyond three orbits old: one LED in three
+AGE_ORBITS = np.array([0.0, 0.06, 0.5, 1.0, 2.0, 3.0, 4.5, 6.5], np.float32)
+AGE_COLS = np.array([(255, 238, 170), (255, 212, 110), (255, 178, 80), (255, 126, 90), (236, 84, 128),
+                     (170, 70, 200), (120, 40, 196), (100, 0, 150)], np.float32)
+AGE_DENS = np.array([1.0, 1.0, 0.96, 0.88, 0.66, 0.46, 0.34, 0.26], np.float32)     # share of the samples kept (ordered)
+OLD_FROM = 3.0                                         # beyond three orbits old the thread is a fine dotted hair
 ECC2 = 0.00669438                                      # WGS-84 eccentricity squared (geocentric -> geodetic lat)
 
 
@@ -117,6 +128,56 @@ def shade(col, f):
     c = np.asarray(col, np.float32) * f
     top = c.max(axis=-1, keepdims=True)
     return np.where(c >= 94.0, c, np.where((c >= top) & (top >= 40.0), 100.0, 0.0)).astype(np.float32)
+
+
+def _bayer(n):
+    m = np.zeros((1, 1))
+    while m.shape[0] < n:
+        m = np.block([[4 * m, 4 * m + 2], [4 * m + 3, 4 * m + 1]])
+    return ((m + 0.5) / (n * n)).astype(np.float32)
+
+
+BAYER = np.tile(_bayer(16), (H // 16 + 1, W // 16 + 1))[:H, :W]                       # an ordered threshold per LED
+NOISE = np.random.RandomState(11).random_sample((H, W)).astype(np.float32)          # a second, unrelated one
+JIT = 0.75 * BAYER + 0.25 * NOISE                                                    # ordered with a little jitter: no visible lattice
+
+# the cities whose lights show on the night side (lat, lon, size 1-3): the world's big conurbations, drawn as a few
+# LEDs each. Zürich is left out: it is the marker of home. Decoration of the dark, not data.
+CITIES = [
+    (40.7, -74.0, 3), (42.4, -71.1, 2), (38.9, -77.0, 2), (41.9, -87.6, 3), (34.1, -118.2, 3), (37.8, -122.4, 2),
+    (29.8, -95.4, 2), (33.7, -84.4, 2), (25.8, -80.2, 2), (32.8, -96.8, 2), (47.6, -122.3, 1), (39.7, -105.0, 1),
+    (45.5, -73.6, 2), (43.7, -79.4, 2), (19.4, -99.1, 3), (4.7, -74.1, 2), (-12.0, -77.0, 2), (-23.5, -46.6, 3),
+    (-22.9, -43.2, 3), (-34.6, -58.4, 3), (-33.5, -70.7, 2), (-15.8, -47.9, 1), (10.5, -66.9, 2), (-3.1, -60.0, 1),
+    (51.5, -0.1, 3), (48.9, 2.35, 3), (52.5, 13.4, 2), (50.1, 8.7, 2), (50.9, 6.9, 2), (52.4, 4.9, 2), (50.8, 4.4, 2),
+    (45.5, 9.2, 2), (41.9, 12.5, 2), (40.4, -3.7, 2), (41.4, 2.2, 2), (38.7, -9.1, 1), (48.2, 16.4, 1), (52.2, 21.0, 2),
+    (47.5, 19.0, 1), (44.4, 26.1, 1), (59.9, 30.3, 1), (55.8, 37.6, 3), (50.5, 30.5, 1), (41.0, 29.0, 3),
+    (39.9, 32.9, 1), (37.97, 23.7, 1), (30.0, 31.2, 3), (36.8, 10.2, 1), (33.6, -7.6, 1), (6.5, 3.4, 3),
+    (9.0, 38.7, 1), (-1.3, 36.8, 1), (-26.2, 28.0, 2), (-33.9, 18.4, 1), (-4.3, 15.3, 2), (-8.8, 13.2, 1),
+    (33.3, 44.4, 2), (35.7, 51.4, 2), (24.7, 46.7, 1), (25.2, 55.3, 1), (24.9, 67.0, 2), (31.5, 74.3, 2),
+    (28.6, 77.2, 3), (19.1, 72.9, 3), (13.1, 80.3, 2), (22.6, 88.4, 3), (23.8, 90.4, 3), (12.97, 77.6, 2),
+    (17.4, 78.5, 2), (39.9, 116.4, 3), (31.2, 121.5, 3), (23.1, 113.3, 3), (22.3, 114.2, 2), (30.6, 104.1, 2),
+    (30.6, 114.3, 2), (37.6, 127.0, 3), (35.7, 139.7, 3), (34.7, 135.5, 3), (35.2, 136.9, 2), (25.0, 121.5, 2),
+    (14.6, 121.0, 3), (10.8, 106.7, 2), (13.8, 100.5, 2), (1.35, 103.8, 2), (-6.2, 106.8, 3), (-7.3, 112.7, 2),
+    (3.1, 101.7, 2), (-33.9, 151.2, 2), (-37.8, 145.0, 2), (-27.5, 153.0, 1), (-31.95, 115.9, 1), (-36.85, 174.8, 1),
+    (21.3, -157.9, 1), (23.1, -82.4, 1), (18.5, -69.9, 1), (-0.2, -78.5, 1), (-16.5, -68.1, 1), (-34.9, -56.2, 1),
+]
+
+
+def city_lights():
+    """(H, W) uint8: 0 dark, 1 a dim light, 2 a bright one: the cities as LEDs with a scatter round the big ones."""
+    rng = np.random.RandomState(5)
+    out = np.zeros((H, W), np.uint8)
+    for lat, lon, size in CITIES:
+        x, y, inside = to_led(lat, lon)
+        if not inside[0]:
+            continue
+        x, y = int(x[0]), int(y[0])
+        out[y, x] = 2 if size >= 2 else 1
+        for _ in range(size * 2 + 1):
+            dx, dy = rng.randint(-size, size + 1), rng.randint(-size, size + 1)
+            if 0 <= x + dx < W and 0 <= y + dy < H and out[y + dy, x + dx] == 0:
+                out[y + dy, x + dx] = 1
+    return out
 
 
 # ------------------------------------------------------------------ orbit ---
@@ -250,6 +311,9 @@ class ISSDay:
         self.chequer = (xs + ys) % 2 == 0
         self.sparse = (xs % 2 == 0) & (ys % 2 == 0)
         self.cy, self.cx = np.nonzero(self.coast)
+        self.lights = city_lights()
+        self.grat = self._graticule()
+        self.bias = (self.land & ~self.coast)
         self.sky, self.sky_t = None, -1e9                  # the map under the track (coasts, terminator)
         self.track = None                                  # (times, x, y, last time) of the last day's orbit
         self.fetched = 0.0
@@ -368,18 +432,74 @@ class ISSDay:
         s = sat.sun_eci(j)
         return math.asin(max(-1.0, min(1.0, s[2]))), math.atan2(s[1], s[0]) - float(sat.gmst(j))
 
+    def _graticule(self):
+        """A very faint dotted graticule: every 30 degrees of latitude and longitude, a dot every 8 LEDs."""
+        g = np.zeros((H, W), bool)
+        for s_ in (0, 1):
+            for lat in range(-30, 31, 30):
+                y = Y0[s_] + int((LAT_TOP - lat) * PPD)
+                if Y0[s_] <= y < Y0[s_] + ROWS:
+                    g[y, 3::8] = True
+            lon0 = L0 + 180.0 * s_
+            for lon in range(int(math.ceil(lon0 / 30.0)) * 30, int(lon0 + 180), 30):
+                x = int((lon - lon0) * PPD)
+                if 0 <= x < W:
+                    g[Y0[s_] + 3:Y0[s_] + ROWS:8, x] = True
+        return g
+
+    @staticmethod
+    def _sstep(x, a, b):
+        t = np.clip((x - a) / (b - a), 0.0, 1.0)
+        return t * t * (3.0 - 2.0 * t)
+
     def _sky(self, unix):
-        """The map under the track, redrawn every 20 s: the coasts coloured by the sun's height there and
-        the dotted band of dusk and dawn."""
+        """The map under the track, redrawn every 20 s, all in ordered dither: the sea and land as fields of whole LEDs that
+        thin out into the night, a rose twilight band that warms to amber at the terminator itself, the coasts coloured by
+        the sun's height, and on the dark side the dim lights of the cities."""
         lat, lon = self._sun(unix)
         h = self.geo.sun_height(lat, lon)
-        img = np.zeros((H, W, 3), np.uint8)
         m = self.geo.mapped
-        img[m & (h < 0) & (h >= -3) & self.chequer] = TWILIGHT
-        img[m & (h < -3) & (h >= -7) & self.sparse] = TWILIGHT
+        img = np.zeros((H, W, 3), np.uint8)
+        sst = self._sstep
+        w_day = sst(h, -3.0, 7.0)                                   # 1 in full day, 0 once the sun is well down
+        w_nig = 1.0 - sst(h, -15.0, -5.0)                           # 1 in the night proper
+        band = np.exp(-((h + 3.0) / 3.6) ** 2)                      # the twilight band, centred 3 degrees below the horizon
+        edge = np.exp(-(h / 0.9) ** 2)                              # the terminator itself, a thread of amber
+        sea = m & ~self.land
+        land = m & self.land
+        # which kind of speck each LED would be (decided by the unrelated noise, so the mix is a soft blend)
+        n = NOISE
+        is_dusk = n < band * 0.75
+        is_day = ~is_dusk & (((n - band * 0.75) / np.maximum(1e-3, 1.0 - band * 0.75)) < w_day)
+        d_sea = np.interp(h, [-18, -6, 0, 8], [0.030, 0.050, 0.100, 0.150]) + 0.25 * band
+        d_land = np.interp(h, [-18, -6, 0, 8], [0.07, 0.10, 0.20, 0.27]) + 0.14 * band
+        lit_sea = sea & (JIT < d_sea)
+        lit_land = land & ~self.coast & (JIT < d_land)
+        img[lit_sea & ~is_dusk & ~is_day] = SEA_NIGHT
+        img[lit_sea & is_day] = SEA_DAY
+        img[lit_sea & is_dusk] = DUSK
+        img[lit_land & ~is_dusk & ~is_day] = LAND_NIGHT
+        img[lit_land & is_day] = LAND_DAY
+        img[lit_land & is_dusk] = DUSK
+        # a very faint graticule on the dark parts
+        gm = self.grat & m & (img.max(-1) == 0) & (BAYER < 0.75)
+        img[gm] = GRAT
+        # the cities, as the night comes on
+        ramp = np.clip((-5.0 - h) / 7.0, 0.0, 1.0)
+        city = (self.lights > 0) & (BAYER < 0.35 + 0.65 * ramp) & (ramp > 0.0)
+        img[city & (self.lights == 1)] = LIGHTS
+        img[city & (self.lights == 2)] = LIGHTS_BIG
+        # the terminator: a hair of amber where the sun stands on the horizon
+        te = m & (edge > 0.62) & (BAYER < 0.6)
+        img[te] = DUSK_EDGE
+        # the coasts: a hair-thin line, its colour the colour of the light it lies in
         ch = h[self.cy, self.cx]
-        col = np.where((ch > 0)[:, None], COAST_DAY, np.where((ch > -12)[:, None], COAST_TWI, COAST_NIGHT))
-        img[self.cy, self.cx] = col.astype(np.uint8)
+        cn = NOISE[self.cy, self.cx]
+        wd, bd = w_day[self.cy, self.cx], band[self.cy, self.cx]
+        col = np.where((cn < bd * 0.9)[:, None], COAST_DUSK,
+                       np.where((((cn - bd * 0.9) / np.maximum(1e-3, 1.0 - bd * 0.9)) < wd)[:, None], COAST_DAY, COAST_NIGHT))
+        keep = JIT[self.cy, self.cx] < 0.9
+        img[self.cy[keep], self.cx[keep]] = col[keep].astype(np.uint8)
         return img
 
     def _track(self, unix, prop):
@@ -426,30 +546,107 @@ class ISSDay:
         if len(tt):
             age = (unix - tt) / period
             col = np.stack([np.interp(age, AGE_ORBITS, AGE_COLS[:, k]) for k in range(3)], 1)
-            keep = (age < OLD_FROM) | (np.round(tt / STEP).astype(np.int64) % OLD_EVERY == 0)     # old orbits: dotted
-            img[ty[keep], tx[keep]] = np.clip(shade(col[keep], f), 0, 255).astype(np.uint8)
+            dens = np.interp(age, AGE_ORBITS, AGE_DENS)
+            keep = JIT[ty, tx] < dens                 # the thread thins with age: ordered, so it never twinkles
+            keep &= (age < OLD_FROM) | (np.round(tt / STEP).astype(np.int64) % 2 == 0)
+            c = shade(col, f * (1.0 - 0.18 * np.clip(age / 6.5, 0.0, 1.0))[:, None])
+            img[ty[keep], tx[keep]] = np.clip(c[keep], 0, 255).astype(np.uint8)
+            fresh = keep & (age < 0.045)              # the newest stretch swells, two LEDs wide: a comet's tail
+            if fresh.any():
+                wx, wy = np.minimum(tx[fresh] + 1, W - 1), ty[fresh]
+                img[wy, wx] = np.maximum(img[wy, wx], np.clip(shade(col[fresh], 0.55 * f), 0, 255).astype(np.uint8))
         # the station
         lat, lon, alt, lit, ok, r = positions(prop, np.array([unix]))
         lat, lon, alt, lit, ok = float(lat[0]), float(lon[0]), float(alt[0]), bool(lit[0]), bool(ok[0])
         if ok:
-            fp_lat, fp_lon = footprint(lat, lon, alt)
-            fx, fy, fin = to_led(fp_lat, fp_lon)
-            fx, fy = fx[fin][::2], fy[fin][::2]                              # dotted: every other point
-            img[fy, fx] = np.clip(shade(FOOT, f), 0, 255).astype(np.uint8)
+            self._footprint(img, unix, lat, lon, alt, f)
         self._home(img, unix, lat, lon, r[0] if ok else None, ok)
         if ok:
             hx, hy, hin = to_led(lat, lon)
             if hin[0]:
-                col = (HEAD_SUN if lit else HEAD_SHADOW) * (0.86 + 0.14 * math.sin(unix * 3.0))
-                img[hy[0], hx[0]] = np.clip(shade(col, max(f, 0.6)), 0, 255).astype(np.uint8)
+                self._station(img, unix, int(hx[0]), int(hy[0]), lit, f)
         if tle_age_days(tle, unix) > STALE_FROM:
             self.font.draw(img, "TLE " + tle_note(tle), 2, Y0[1] + ROWS - 6, NOTE)
         return Image.fromarray(img, "RGB")
 
+    @staticmethod
+    def _ring(img, cx, cy, rx, ry, col, dens, n=None, phase=0.0):
+        """A ring of whole LEDs (radii in LEDs), each kept when the ordered threshold under it is below `dens`."""
+        n = n or max(16, int(max(rx, ry) * 8))
+        a = np.linspace(0.0, 2 * math.pi, n, endpoint=False) + phase
+        px = np.round(cx + rx * np.cos(a)).astype(int)
+        py = np.round(cy + ry * np.sin(a)).astype(int)
+        ok = (px >= 0) & (px < W) & (py >= 0) & (py < H)
+        px, py = px[ok], py[ok]
+        k = BAYER[py, px] < dens
+        img[py[k], px[k]] = np.maximum(img[py[k], px[k]], np.clip(col, 0, 255).astype(np.uint8))
+
+    def _footprint(self, img, unix, lat, lon, alt, f):
+        """The station's horizon, a dotted ring that breathes (its density swells and ebbs on a 7 s beat), and a second, fainter
+        ring that opens out from the station and fades before it reaches the horizon."""
+        fp_lat, fp_lon = footprint(lat, lon, alt, 120)
+        fx, fy, fin = to_led(fp_lat, fp_lon)
+        fx, fy = fx[fin], fy[fin]
+        beat = 0.5 + 0.5 * math.sin(unix * 2 * math.pi / 7.0)
+        k = (JIT[fy, fx] < 0.38 + 0.38 * beat) & (np.arange(len(fx)) % 2 == 0)
+        img[fy[k], fx[k]] = np.clip(shade(FOOT, f), 0, 255).astype(np.uint8)
+        ph = (unix / 9.0) % 1.0                                              # the opening ring
+        if ph < 0.9:
+            sc = 0.12 + 0.88 * ph
+            p2, l2 = footprint(lat, lon, alt, 72)
+            p2 = lat + (p2 - lat) * sc
+            l2 = lon + (l2 - lon) * sc
+            gx, gy, gin = to_led(p2, l2)
+            gx, gy = gx[gin], gy[gin]
+            k = JIT[gy, gx] < 0.8 * (1.0 - ph / 0.9)
+            img[gy[k], gx[k]] = np.clip(shade(FOOT, f), 0, 255).astype(np.uint8)
+
+    def _station(self, img, unix, x, y, lit, f):
+        """The station: a hot core with a bloom of graded LEDs (a cross, its diagonals, a loose outer ring that twinkles slowly)
+        and its name, small, to one side."""
+        base = HEAD_SUN if lit else HEAD_SHADOW
+        glow = shade(base * np.array([1.0, 0.82, 0.55], np.float32) if lit else base, max(f, 0.7))
+        near = shade(glow, 0.80)
+        diag = shade(glow, 0.52)
+        put = lambda dx, dy, c: self._px(img, x + dx, y + dy, c)
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            put(dx, dy, near)
+        for dx, dy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+            put(dx, dy, diag)
+        beat = 0.5 + 0.5 * math.sin(unix * 2.2)
+        for k, (dx, dy) in enumerate(((-2, 0), (2, 0), (0, -2), (0, 2))):
+            if (k % 2 == 0) == (beat > 0.5):
+                put(dx, dy, shade(glow, 0.55))
+        for dx, dy in ((-3, 0), (3, 0), (0, -3), (0, 3)):
+            if JIT[min(H - 1, max(0, y + dy)), min(W - 1, max(0, x + dx))] < 0.5 * beat + 0.15:
+                put(dx, dy, shade(glow, 0.45))
+        self._px(img, x, y, np.clip(base * (0.9 + 0.1 * beat), 0, 255))
+        # label: "ISS" on the side with room, clear of Zürich's name when the two are close
+        s1 = "ISS"
+        w = self.font.width(s1)
+        zx, zy, _ = to_led(HOME[0], HOME[1])
+        zr = (int(zx[0]) - 4 - self.font.width("ZURICH") - 1, int(zy[0]) - 4, int(zx[0]) + 3, int(zy[0]) + 4)   # x0, y0, x1, y1
+        for lx, ly in ((x + 6, y - 3), (x - 6 - w, y - 3), (x + 6, y + 5), (x - 6 - w, y + 5), (x + 6, y - 10)):
+            if lx < 1 or lx + w >= W - 1 or ly < 1 or ly + 5 >= H - 1:
+                continue
+            if lx < zr[2] + 1 and lx + w > zr[0] - 1 and ly < zr[3] + 1 and ly + 5 > zr[1] - 1:
+                continue
+            break
+        img[max(0, ly - 1):ly + 6, max(0, lx - 1):min(W, lx + w + 1)] = 0
+        self.font.draw(img, s1, lx, ly, shade(base, 0.9))
+
+    @staticmethod
+    def _px(img, x, y, c):
+        if 0 <= x < W and 0 <= y < H:
+            img[y, x] = np.maximum(img[y, x], np.clip(c, 0, 255).astype(np.uint8))
+
     def _home(self, img, unix, lat, lon, r, ok):
-        """Zürich: one dim LED, and a ring of light pulsing out from it while the station is within 1,500 km."""
+        """Zürich: a dim steady LED with four faint points; while the station is within 1,500 km, rings of light open out from
+        it (faster the closer it gets), fading by ordered dither as they widen, in gold, or paler gold when it could be seen."""
         hx, hy, _ = to_led(HOME[0], HOME[1])
         hx, hy = int(hx[0]), int(hy[0])
+        for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2)):
+            self._px(img, hx + dx, hy + dy, shade(HOME_LED, 0.55))
         img[hy, hx] = HOME_LED.astype(np.uint8)
         if not ok:
             return
@@ -457,21 +654,24 @@ class ISSDay:
         if d > NEAR_KM:
             return
         close = 1.0 - d / NEAR_KM                                            # 0 at the edge, 1 overhead
-        period = 4.0 - 2.4 * close                                           # seconds a pulse takes
+        period = 4.6 - 2.6 * close                                           # seconds a pulse takes
         seen = self._visible(unix, r)
         col = PULSE_SEEN if seen else PULSE
-        for k in range(2 if seen or close > 0.5 else 1):                     # a second ring when it is near
-            ph = ((unix / period) + 0.5 * k) % 1.0
-            if ph > 0.85:
-                continue                                                     # the ring has faded out
-            rad = 1.5 + ph * (6.0 + 6.0 * close)
-            c = col * (1.0 if ph < 0.45 else 1.0 - (ph - 0.45) * 1.2)        # full, then dimming to ~half:
-            c = np.where(c >= 94.0, c, 0.0)                                  # the gold stays gold
-            a = np.linspace(0.0, 2 * math.pi, max(12, int(rad * 7)), endpoint=False)
-            px = np.round(hx + rad * np.cos(a)).astype(int)
-            py = np.round(hy + rad * np.sin(a)).astype(int)
-            fine = (px >= 0) & (px < W) & (py >= 0) & (py < H)
-            img[py[fine], px[fine]] = np.clip(c, 0, 255).astype(np.uint8)
+        reach = 5.0 + 6.0 * close
+        for k in range(3 if seen or close > 0.5 else 2):                     # up to three rings in flight, evenly spaced
+            ph = ((unix / period) + k / 3.0) % 1.0
+            rad = 1.6 + ph * reach
+            self._ring(img, hx, hy, rad, rad, shade(col, 1.0), 1.0 - ph * 0.92, n=max(14, int(rad * 7)))
+        # the label arrives with the first ring and fades with the last one gone
+        s = "ZURICH"
+        w = self.font.width(s)
+        fade = min(1.0, close * 3.0 + 0.2)
+        lx, ly = max(1, hx - 5 - w), hy - 2
+        img[ly - 1:ly + 6, max(0, lx - 1):lx + w + 1] = 0
+        for i, ch in enumerate(s):
+            gx = lx + i * 4
+            if BAYER[ly, min(W - 1, gx)] < fade:
+                self.font.draw(img, ch, gx, ly, shade(col, 0.8))
         img[hy, hx] = col.astype(np.uint8)
 
     def _visible(self, unix, r):

@@ -96,19 +96,27 @@ FADE_SEC = 2.5                   # the label fades in and out over this
 IDLE = 120.0                     # no frame drawn for this long: the piece is not showing, stop fetching
 EVERY = 6 * 3600.0               # OCEARCH is read this often
 STEP = 0.7                       # LEDs between samples along a path (so a thread is never broken)
-TAIL_LO = 0.42                   # the thread's last LED is this fraction of the head's brightness (the wall shows nothing below ~94)
 
 KINDS = {  # kind: (colour, thread length in LEDs, smoothing window in fixes, longest gap to draw across in days)
-    "tern":   ((255, 236, 150), 72.0, 7, 35.0),
-    "shark":  ((255, 84, 112), 46.0, 1, 30.0),
-    "turtle": ((70, 236, 140), 46.0, 1, 40.0),
-    "whale":  ((130, 150, 255), 52.0, 1, 30.0),
+    "tern":   ((255, 232, 150), 112.0, 7, 35.0),       # pale gold
+    "shark":  ((172, 140, 255), 76.0, 1, 30.0),        # steel-violet
+    "turtle": ((40, 236, 170), 76.0, 1, 40.0),         # sea-green
+    "whale":  ((110, 188, 255), 84.0, 1, 30.0),        # glacier blue
 }
-COAST_COL = (16, 30, 112)
-EQUATOR_COL = (12, 24, 100)
-HOME_COL = (90, 230, 140)
-TEXT_COL = (112, 122, 172)
-LEGEND_COL = (96, 108, 156)
+# The wall shows nothing below ~94 in a channel and only a handful of steps above it (94 149 188 219 245): every colour
+# keeps its lit channels at or above that floor, a channel that is not meant to show is 0, and the in-between tones of a
+# gradient are made by ordered dithering (a fixed Bayer matrix, so nothing shimmers), never by dimming a channel.
+FLOOR = 94.0
+OCEAN_DEEP = np.array([0, 0, 108], np.float32)           # specks of the deep basin
+OCEAN_SHELF = np.array([0, 100, 150], np.float32)        # specks along the continental shelves
+LAND_COL = np.array([100, 100, 160], np.float32)         # dim slate-lilac land relief
+COAST_COL = np.array([0, 108, 190], np.float32)      # the hair-thin coastline
+GRAT_COL = np.array([0, 0, 124], np.float32)             # graticule dots
+EQUATOR_COL = np.array([0, 96, 150], np.float32)
+HOME_COL = (100, 230, 140)
+TEXT_COL = (118, 130, 186)
+LEGEND_COL = (104, 116, 166)
+TAIL_LO = 0.30                                           # the thread's last LED is this share of the head's brightness
 
 _MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 _MDAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]       # the 366-day template of year_phase()
@@ -396,6 +404,10 @@ class Animal:
         self.id = str(rec["id"])
         self.kind = rec["kind"]
         self.col = np.array(KINDS[self.kind][0], np.float32)
+        self.c_core = self.col * 0.2 + 255.0 * 0.8           # the head's light and its halo, shaded once
+        self.c_near, self.c_diag, self.c_outer = (shade(self.col, f) for f in (0.88, 0.72, 0.72))
+        self.c_wide = shade(self.col, 0.72)
+        self.seed = (sum(ord(c) for c in str(rec["id"])) % 628) / 100.0
         self.length, k, self.gap = KINDS[self.kind][1], KINDS[self.kind][2], KINDS[self.kind][3]
         self.gap = float(rec.get("gap") or self.gap)
         self.name = clean_text(rec.get("name"), 18)
@@ -575,20 +587,74 @@ def load_coast():
         return []
 
 
+def bayer(n):
+    """An n x n (power of two) Bayer matrix scaled to thresholds in (0, 1): ordered dithering."""
+    m = np.zeros((1, 1))
+    while m.shape[0] < n:
+        m = np.block([[4 * m, 4 * m + 2], [4 * m + 3, 4 * m + 1]])
+    return ((m + 0.5) / (n * n)).astype(np.float32)
+
+
+BAYER = np.tile(bayer(16), (H // 16 + 1, W // 16 + 1))[:H, :W]            # one threshold per LED
+BAYER2 = np.random.RandomState(7).random_sample((H, W)).astype(np.float32)   # a second, unrelated threshold (white noise)
+
+
+def shade(col, f):
+    """col * f for a wall that shows nothing below ~94: a channel that falls under the floor drops out and the brightest
+    channel is held at it (a dimmed gold turns amber, then a dull orange; it never turns to mud)."""
+    c = np.asarray(col, np.float32) * f
+    top = c.max(axis=-1, keepdims=True)
+    return np.where(c >= FLOOR, c, np.where((c >= top) & (top >= 40.0), 100.0, 0.0)).astype(np.float32)
+
+
 def build_base():
-    """The still map: the coast one LED wide, the equator dotted, a mark for West Cork. float32 H x W x 3."""
+    """The still map, float32 H x W x 3: a dark ocean whose tone is made of dithered specks (denser and bluer-green on the
+    shelves, near the coasts), the land as dim slate relief (denser at the coast, thinning inland), a hair-thin coastline,
+    a very faint graticule and the dotted equator, a soft vignette."""
     import cv2
-    img = np.zeros((H, W, 3), np.uint8)
+    land = np.zeros((H, W), np.uint8)
+    rings = []
     for ring in load_coast():
         lat, lon = [p[0] for p in ring], [p[1] for p in ring]
         x, y = to_px(lat, lon)
         pts = np.stack([np.rint(x), np.rint(y)], 1).astype(np.int32)
-        cv2.polylines(img, [pts], False, COAST_COL, 1, cv2.LINE_8)
-    ey = int(round(to_px(0.0, 0.0)[1]))
-    for x in range(2, W, 6):                                   # the equator, dotted
-        if np.all(img[ey, x] == 0):
-            img[ey, x] = EQUATOR_COL
-    return img.astype(np.float32)
+        rings.append(pts)
+    if rings:
+        cv2.fillPoly(land, rings, 1)
+    sea = (land == 0).astype(np.uint8)
+    d_sea = cv2.distanceTransform(sea, cv2.DIST_L2, 3)                   # LEDs from the nearest land, over the sea
+    d_land = cv2.distanceTransform(land, cv2.DIST_L2, 3)                 # LEDs from the nearest sea, over the land
+    T1 = 0.72 * BAYER + 0.28 * BAYER2                                   # ordered, with a little jitter so sparse specks do not form a lattice
+
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    vig = 1.0 - 0.55 * np.clip((((xx - W / 2) / (W * 0.62)) ** 2 + ((yy - H * 0.55) / (H * 0.62)) ** 2) - 0.25, 0, 1.2)
+    shelf = np.exp(-d_sea / 7.0)
+    dens = (0.012 + 0.075 * shelf + 0.02 * (1.0 - yy / H)) * vig
+    teal = BAYER2[::-1, ::-1] < (0.10 + 0.55 * shelf)                                # which kind of speck
+    img = np.zeros((H, W, 3), np.float32)
+    on = (land == 0) & (T1 < dens)
+    img[on & ~teal] = OCEAN_DEEP
+    img[on & teal] = OCEAN_SHELF
+    # the graticule: a dot every 6 LEDs along every 20 degrees, brighter where lines cross
+    for lat in range(-60, 80, 20):
+        y = int(round(float(to_px(lat, 0.0)[1])))
+        if 0 <= y < H:
+            xs = np.arange(1, W, 6)
+            ok = (land[y, xs] == 0) & (img[y, xs].max(-1) == 0)
+            img[y, xs[ok]] = EQUATOR_COL if lat == 0 else GRAT_COL
+    for lon in range(-80, 40, 20):
+        x = int(round(float(to_px(0.0, lon)[0])))
+        if 0 <= x < W:
+            ys = np.arange(1, H, 6)
+            ok = (land[ys, x] == 0) & (img[ys, x].max(-1) == 0)
+            img[ys[ok], x] = GRAT_COL
+    # the land: slate specks, dense at the coast and thinning inland
+    ld = (0.035 + 0.30 * np.exp(-d_land / 6.0)) * vig
+    img[(land > 0) & (T1 < ld)] = LAND_COL
+    # the coastline: one LED wide, three in four lit (ordered), so it reads as a fine thread and not an outline
+    edge = (land > 0) & (d_land <= 1.0)
+    img[edge & (BAYER2 < 0.86)] = COAST_COL
+    return img
 
 
 class Wanderers:
@@ -686,16 +752,28 @@ class Wanderers:
                 lo += 1
             idx = np.arange(lo, i + 1)
             if len(idx):
-                frac = (a.ps[i] - a.ps[idx]) / a.length
-                lvl = 1.0 - (1.0 - TAIL_LO) * np.clip(frac, 0.0, 1.0)
-                keep = np.ones(len(idx), bool)
-                if a.typical:                                   # dotted: a pattern, not a track
-                    keep = (np.floor(a.ps[idx] / 1.6).astype(int) % 2) == 0
-                ix, iy = a.ix[idx][keep], a.iy[idx][keep]
+                frac = np.clip((a.ps[i] - a.ps[idx]) / a.length, 0.0, 1.0)
+                ix, iy = a.ix[idx], a.iy[idx]
                 ok = (ix >= 0) & (ix < W) & (iy >= 0) & (iy < H)
-                ix, iy, lv = ix[ok], iy[ok], lvl[keep][ok]
+                ix, iy, frac = ix[ok], iy[ok], frac[ok]
                 if len(ix):
-                    img[iy, ix] = np.maximum(img[iy, ix], a.col[None, :] * lv[:, None])
+                    # a comet: full and two LEDs wide at the head, tapering to a sparse dotted hair at the tail. The
+                    # level falls with the age along the thread; the density (ordered dither) falls faster, so the
+                    # end of the thread dissolves into specks instead of dimming into the dark floor.
+                    lvl = 1.0 - (1.0 - TAIL_LO) * frac
+                    keep = BAYER[iy, ix] < np.clip(1.25 - 1.15 * frac ** 1.25, 0.0, 1.0)
+                    if a.typical:                                    # dotted: a pattern, not a track
+                        keep &= (np.floor(a.ps[idx][ok] / 1.6).astype(int) % 2) == 0
+                    col = shade(a.col[None, :] * (0.55 + 0.45 * lvl[:, None]), 1.0)
+                    kx, ky = ix[keep], iy[keep]
+                    img[ky, kx] = np.maximum(img[ky, kx], col[keep])
+                    wide = keep & (frac < 0.04) & (not a.typical)
+                    if wide.any():                                   # the swelling of the comet's head
+                        wcol = a.c_wide
+                        for dx, dy in ((1, 0),):
+                            wx, wy = ix[wide] + dx, iy[wide] + dy
+                            m = (wx < W) & (wy < H)
+                            img[wy[m], wx[m]] = np.maximum(img[wy[m], wx[m]], wcol)
             hx, hy = int(round(x)), int(round(y))
             if 0 <= hx < W and 0 <= hy < H:
                 heads.append((a, hx, hy))
@@ -704,9 +782,8 @@ class Wanderers:
                 self.focus, self.focus_t = force_focus, t
         else:
             self._update_focus(heads, t)
-        breathe = 0.93 + 0.07 * math.sin(t * 2.0)
         for a, hx, hy in heads:
-            img[hy, hx] = (a.col * 0.6 + 255.0 * 0.4) * (breathe if a.id == self.focus else 1.0)
+            self._head(img, a, hx, hy, t)
         self._home(img, t)
         for a, hx, hy in heads:
             if a.id == self.focus:
@@ -714,78 +791,141 @@ class Wanderers:
         self._corners(img, phase)
         return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
 
+    @staticmethod
+    def _put(img, x, y, col):
+        if 0 <= x < W and 0 <= y < H:
+            img[y, x] = np.maximum(img[y, x], col)
+
+    def _head(self, img, a, hx, hy, t):
+        """An animal's light: a white-hot core with a halo of graded LEDs (a cross, then its diagonals, then a loose outer
+        ring that twinkles on a slow, per-animal beat)."""
+        focus = a.id == self.focus
+        core, near, diag, outer = a.c_core, a.c_near, a.c_diag, a.c_outer
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            self._put(img, hx + dx, hy + dy, near)
+        for dx, dy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+            self._put(img, hx + dx, hy + dy, diag)
+        beat = 0.5 + 0.5 * math.sin(t * 1.3 + a.seed)
+        for k, (dx, dy) in enumerate(((-2, 0), (2, 0), (0, -2), (0, 2))):
+            if (k % 2 == 0) == (beat > 0.5) or focus:
+                self._put(img, hx + dx, hy + dy, outer)
+        self._put(img, hx, hy, core)
+
     def _home(self, img, t):
-        """West Cork: one steady LED in green with a slow pulse of four dim ones around it, and its name."""
+        """West Cork: a steady green LED with a soft ring that breathes out and back, and its name, quietly."""
         x, y = self.hx, self.hy
-        img[y, x] = HOME_COL
-        pulse = 0.5 + 0.5 * math.sin(t * 1.1)
-        c = np.array(HOME_COL, np.float32) * (0.45 + 0.4 * pulse)
-        for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2)):
-            img[y + dy, x + dx] = np.maximum(img[y + dy, x + dx], c)
+        col = np.array(HOME_COL, np.float32)
+        ph = (t / 5.0) % 1.0
+        r = 2.0 + 3.0 * ph
+        thr = 1.0 - ph                                          # the ring thins out as it grows
+        for k in range(16):
+            a_ = k * math.pi / 8.0 + 0.3
+            px, py = int(round(x + r * math.cos(a_))), int(round(y + r * math.sin(a_)))
+            if 0 <= px < W and 0 <= py < H and BAYER[py, px] < thr * 0.9:
+                img[py, px] = np.maximum(img[py, px], shade(col, 0.62))
+        img[y, x] = col
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            self._put(img, x + dx, y + dy, shade(col, 0.42))
         s = "W CORK"
-        pixelfont.draw(img, s, x - 6 - pixelfont.width(s), y - 3, np.array(HOME_COL, np.float32) * 0.62)
+        pixelfont.draw(img, s, x - 7 - pixelfont.width(s), y - 2, shade(col, 0.72))
+
+    @staticmethod
+    def _text(img, s, x, y, col, a_in):
+        """Text that fades in and out by dissolving: each lit LED of a glyph appears when the ordered-dither threshold under it
+        falls below the fade, at the text's full level (so it stays above the wall's floor at every moment)."""
+        tmp = np.zeros((7, 4 * len(s) + 1, 3), np.float32)
+        pixelfont.draw(tmp, s, 0, 1, col)
+        ys, xs = np.nonzero(tmp.any(-1))
+        px, py = x + xs, y + ys - 1
+        ok = (px >= 0) & (px < W) & (py >= 0) & (py < H)
+        ys, xs, px, py = ys[ok], xs[ok], px[ok], py[ok]
+        k = BAYER[py, px] < a_in
+        img[py[k], px[k]] = np.maximum(img[py[k], px[k]], tmp[ys[k], xs[k]])
 
     def _label(self, img, a, hx, hy, t):
         lines = [s for s in a.label_lines() if s]
         a_in = min(1.0, max(0.0, (t - self.focus_t) / FADE_SEC), max(0.0, (self.focus_t + FOCUS_SEC - t) / FADE_SEC))
+        a_in = a_in * a_in * (3.0 - 2.0 * a_in)                  # eased
         if a_in <= 0.0:
             return
         w = max(pixelfont.width(s) for s in lines)
-        h = 7 * len(lines) - 2
-        # the ring round the focus: four dim LEDs a little way off
-        ring = a.col * (0.55 * a_in + 0.0)
-        for dx, dy in ((-3, 0), (3, 0), (0, -3), (0, 3)):
-            x, y = hx + dx, hy + dy
-            if 0 <= x < W and 0 <= y < H:
+        h = 6 * len(lines) - 1
+        # a dotted ring round the focus, turning slowly
+        ring = shade(a.col, 0.75)
+        for k in range(12):
+            ang = k * math.pi / 6.0 + t * 0.25
+            x, y = int(round(hx + 5.0 * math.cos(ang))), int(round(hy + 5.0 * math.sin(ang)))
+            if 0 <= x < W and 0 <= y < H and BAYER[y, x] < a_in:
                 img[y, x] = np.maximum(img[y, x], ring)
         best, lx, ly = None, None, None
-        for dx in (5, -5 - w, -w // 2):                       # beside the animal, or above or below it: where it hides least
-            for dy in (-h // 2, -h - 4, 5, -h - 10, 11):
+        for dx in (9, -9 - w):                                  # beside the animal, right first
+            for dy in (-h // 2, -h - 3, 4, -h - 9, 10):
                 x, y = hx + dx, hy + dy
-                if x < 2 or x + w > W - 2 or y < 10 or y + h > H - 10:
+                if x < 3 or x + w > W - 3 or y < 11 or y + h > H - 12:
                     continue
-                if dx == -w // 2 and abs(dy) < 5:
-                    continue
-                lit = int((img[max(0, y - 2):y + h + 1, max(0, x - 2):x + w + 2].max(-1) > 0).sum())
-                score = lit + (0 if dx > 0 else 3)
+                lit = int((img[max(0, y - 2):y + h + 2, max(0, x - 2):x + w + 2].max(-1) > 0).sum())
+                score = lit + (0 if dx > 0 else 6) + abs(dy + h // 2) * 0.5
                 if best is None or score < best:
                     best, lx, ly = score, x, y
         if best is None:
-            lx = min(max(2, hx + 5), W - 2 - w)
-            ly = min(max(10, hy - h // 2), H - 10 - h)
-        x0, x1, y0, y1 = max(0, lx - 2), min(W, lx + w + 2), max(0, ly - 2), min(H, ly + h + 1)
-        img[y0:y1, x0:x1] *= (1.0 - a_in)                    # a dark patch behind the text, so threads do not run through it
-        for n, s in enumerate(lines):
-            if n == 0:
-                col = a.col * 0.92
-            elif n == 1:
-                col = a.col * 0.66
+            lx = min(max(3, hx + 9), W - 3 - w)
+            ly = min(max(11, hy - h // 2), H - 12 - h)
+        # thin the picture behind the text (every other LED goes dark) so threads do not run through the letters, then
+        # the tidy leader: a dotted line from the ring to the middle of the text's near edge
+        x0, x1, y0, y1 = max(0, lx - 2), min(W, lx + w + 2), max(0, ly - 2), min(H, ly + h + 2)
+        cut = (BAYER2[y0:y1, x0:x1] < a_in)
+        img[y0:y1, x0:x1][cut] = 0.0
+        ex = lx - 3 if lx > hx else lx + w + 3
+        ey = ly + 2
+        n = int(max(abs(ex - hx), abs(ey - hy)))
+        lead = shade(a.col, 0.62)
+        for k in range(6, n + 1):
+            px, py = int(round(hx + (ex - hx) * k / n)), int(round(hy + (ey - hy) * k / n))
+            if k % 2 == 0 and 0 <= px < W and 0 <= py < H and BAYER[py, px] < a_in:
+                img[py, px] = np.maximum(img[py, px], lead)
+        for n_, s in enumerate(lines):
+            if n_ == 0:
+                col = shade(a.col, 0.86)
+            elif n_ == 1:
+                col = shade(a.col, 0.66)
             else:
-                col = np.array(TEXT_COL, np.float32) * 1.15
-            m = col.max()
-            if m < 135.0:
-                col = col * (135.0 / m)                      # the wall shows nothing dim: keep the text above its floor
-            pixelfont.draw(img, s, lx, ly + 7 * n, col * a_in)
+                col = shade(np.array(TEXT_COL, np.float32), 1.0)
+            self._text(img, s, lx, ly + 6 * n_, col, a_in)
 
     def _corners(self, img, phase):
         m, d = phase_date(phase)
-        pixelfont.draw(img, f"{_MONTHS[m]} {d}", 3, 3, TEXT_COL)
+        s = f"{_MONTHS[m]} {d}"
+        img[1:11, 1:5 + pixelfont.width(s) + 2] = 0.0                  # a clear patch under the small print
+        pixelfont.draw(img, s, 4, 4, np.array((168, 178, 226), np.float32))
         if any(a.typical for a in self.animals):
             s = "DOTTED LINES ARE TYPICAL ROUTES"
-            pixelfont.draw(img, s, W - 3 - pixelfont.width(s), 3, LEGEND_COL)
-        # a timeline along the foot: a tick at every month, the moving mark for the date shown, a green tick for today
-        y = H - 4
-        x0, x1 = 3, W - 4
-        img[y, x0:x1 + 1] = np.maximum(img[y, x0:x1 + 1], (30, 42, 100))
+            x = W - 4 - pixelfont.width(s)
+            img[1:11, x - 2:W - 1] = 0.0
+            pixelfont.draw(img, s, x, 4, np.array(LEGEND_COL, np.float32))
+        # the foot: a dotted year line, a short tick at every month with its initial, the part of the year gone brighter,
+        # the date shown as a small lamp and today as a green dot
+        y = H - 5
+        x0, x1 = 6, W - 7
+        img[y - 9:y + 4, 0:W] = 0.0                                    # a clear strip under the calendar
+        xp = x0 + int(phase * (x1 - x0))
+        base = np.array((0, 0, 118), np.float32)
+        past = np.array((0, 104, 186), np.float32)
+        for x in range(x0, x1 + 1):
+            if x % 2 == 0:
+                img[y, x] = np.maximum(img[y, x], past if x <= xp else base)
         day = 0
-        for n in _MDAYS:
-            x = x0 + int(day / 366.0 * (x1 - x0))
-            img[y - 1:y + 2, x] = np.maximum(img[y - 1:y + 2, x], (60, 74, 140))
+        for n, ini in zip(_MDAYS, "JFMAMJJASOND"):
+            xa = x0 + int(day / 366.0 * (x1 - x0))
+            xb = x0 + int((day + n) / 366.0 * (x1 - x0))
+            img[y - 1, xa] = np.maximum(img[y - 1, xa], (0, 0, 150))
+            cur = xa <= xp < xb
+            col = np.array((200, 210, 250) if cur else (104, 112, 160), np.float32)
+            pixelfont.draw(img, ini, (xa + xb) // 2 - 1, y - 8, col)
             day += n
         xt = x0 + int(year_phase(time.time()) * (x1 - x0))
-        img[y - 2:y + 3, xt] = HOME_COL
-        xp = x0 + int(phase * (x1 - x0))
-        img[y - 1:y + 2, xp] = (200, 210, 255)
+        img[y + 2, xt] = HOME_COL
+        for dx, dy, f in ((0, 0, 1.0), (-1, 0, 0.6), (1, 0, 0.6), (0, -1, 1.0), (0, 1, 0.6)):
+            img[y + dy, xp + dx] = np.maximum(img[y + dy, xp + dx], shade(np.array((235, 240, 255), np.float32), f))
 
     def __call__(self, t, phase0=None):
         self.last_frame = time.time()

@@ -222,17 +222,14 @@ def short(name):
 # ---------------------------------------------------------------------------------------------------
 # the schematic
 
-# The wall's few words: stop name -> (label, where the label goes relative to the stop: dx, dy of its
-# top-left corner). Only places that matter and fit.
+# The wall's few words: stop name -> its label (the display places it beside the stop where it fits).
 LABELS = {
     "Bahnhofplatz/HB": "HB", "Central": "CENTRAL", "Bellevue": "BELLEVUE", "Paradeplatz": "PARADEPL",
-    "Rennweg": "RENNWEG", "Oerlikon, Bahnhof": "OERLIKON", "Stadelhofen, Bahnhof": "STADELH",
+    "Rennweg": "RENNWEG", "Oerlikon, Bahnhof": "OERLIKON", "Milchbuck": "MILCHBUCK", "Enge, Bahnhof": "ENGE",
     "Flughafen, Fracht": "AIRPORT", "Stettbach, Bahnhof": "STETTBACH", "Schlieren, Geissweid": "SCHLIEREN",
-    "Triemli": "TRIEMLI", "Altstetten, Bahnhof N": "ALTSTETTEN", "Klusplatz": "KLUSPL",
-    "Rehalp": "REHALP", "Wollishoferplatz": "WOLLISHOFEN", "Tiefenbrunnen, Bahnhof": "TIEFENBR",
-    "Hardturm": "HARDTURM", "Zoo": "ZOO", "Hirzenbach": "HIRZENBACH", "Albisgütli": "ALBISGUETLI",
-    "Milchbuck": "MILCHBUCK", "Enge, Bahnhof": "ENGE", "Werdhölzli": "WERDHOELZLI",
-    "Albisrieden": "ALBISRIEDEN", "Seebach": "SEEBACH", "Auzelg": "AUZELG", "Frankental": "FRANKENTAL",
+    "Triemli": "TRIEMLI", "Klusplatz": "KLUSPL", "Rehalp": "REHALP", "Wollishoferplatz": "WOLLISHOFEN",
+    "Tiefenbrunnen, Bahnhof": "TIEFENBR", "Zoo": "ZOO", "Hirzenbach": "HIRZENBACH", "Albisgütli": "ALBISGUETLI",
+    "Seebach": "SEEBACH", "Frankental": "FRANKENTAL",
 }
 HOME = "Rennweg"
 CENTRE = (47.3745, 8.5395)               # the magnification is around HB / Paradeplatz / Central
@@ -241,8 +238,57 @@ FISHEYE = float(os.environ.get("TRAMS_FE", 0.7))                           # km:
 GAP = 4                                  # LEDs between neighbouring stops at the least
 HOP = (4, 7)                             # LEDs a hop between two stops would like to be: least, most
 ANCHOR = 0.12                            # how firmly the stops hold to the magnified geography
-# Hand adjustments: stop name -> (x, y) on the wall, applied to the junctions after the relaxation.
-OVERRIDES = {}
+# Hand adjustments. OVERRIDES: stop -> (x, y), pinned in the relaxation and kept exactly. VIAS: the
+# corner points of the run between two junctions, where one bend is not enough or bends the wrong way.
+OVERRIDES = {
+    # the centre: HB and Central, the Bahnhofstrasse (Rennweg) down to Paradeplatz, the lake front
+    "Bahnhofplatz/HB": (104, 116), "Central": (140, 116), "Bahnhofstrasse/HB": (104, 128),
+    "Paradeplatz": (104, 152), "Sihlpost/HB": (88, 122), "Stauffacher": (78, 140),
+    "Sihlstrasse": (90, 152), "Stockerstrasse": (96, 170), "Tunnelstrasse": (96, 180),
+    "Enge, Bahnhof": (96, 188), "Enge, Bahnhof/Bederstr.": (88, 188), "Bürkliplatz": (120, 172),
+    "Bellevue": (140, 172), "Stadelhofen, Bahnhof": (146, 178), "Kreuzplatz": (158, 178),
+    # west: the spokes to Frankental, Werdhölzli, Altstetten, Schlieren, Albisrieden and Triemli
+    "Hardbrücke, Bahnhof": (78, 112), "Schiffbau": (78, 104), "Technopark": (70, 104),
+    "Escher-Wyss-Platz": (86, 96), "Wipkingerplatz": (92, 90), "Hardturm": (62, 84),
+    "Werdhölzli": (14, 84), "Frankental": (16, 74), "Altstetten, Bahnhof N": (34, 92),
+    "Bezirksgebäude": (70, 132), "Kalkbreite/Bhf.Wiedikon": (58, 132), "Albisriederplatz": (42, 116),
+    "Kappeli": (42, 104), "Grimselstrasse": (38, 100), "Schlieren, Geissweid": (4, 100),
+    "Albisrieden": (10, 128), "Werd": (70, 148), "Wiedikon, Bahnhof": (62, 156),
+    "Heuried": (28, 156), "Triemli": (10, 168),
+    # south
+    "Laubegg": (74, 212), "Albisgütli": (52, 224), "Butzenstrasse": (96, 234),
+    "Wollishoferplatz": (96, 244), "Tiefenbrunnen, Bahnhof": (158, 224), "Rehalp": (186, 218),
+    # east
+    "Haldenegg": (144, 104), "ETH/Universitätsspital": (152, 118), "Platte": (152, 134),
+    "Kunsthaus": (152, 154), "Römerhof": (166, 162), "Klusplatz": (180, 162),
+    "Kirche Fluntern": (166, 128), "Zoo": (186, 110),
+    # north: Milchbuck, Oerlikon, the Glattal and the airport
+    "Schaffhauserplatz": (118, 78), "Milchbuck": (130, 66), "Universität Irchel": (138, 74),
+    "Langmauerstrasse": (152, 74), "Salersteig": (130, 56), "Sternen Oerlikon": (130, 46),
+    "Oerlikon, Bahnhof": (114, 46), "Oerlikon, Bahnhof Ost": (130, 36), "Leutschenbach": (144, 36),
+    "Messe/Hallenstadion": (144, 46), "Glattpark, Glattpark": (156, 30), "Auzelg": (168, 42),
+    "Flughafen, Fracht": (186, 8), "Seebach": (112, 22), "Bucheggplatz": (100, 66),
+    "Schwamendingerplatz": (160, 66), "Hirzenbach": (184, 52), "Stettbach, Bahnhof": (186, 86),
+}
+VIAS = {
+    ("Bahnhofstrasse/HB", "Central"): [(128, 128)],
+    ("Bahnhofplatz/HB", "Sihlpost/HB"): [(98, 122)],
+    ("Bahnhofstrasse/HB", "Sihlpost/HB"): [(94, 128)],
+    ("Sihlpost/HB", "Stauffacher"): [(88, 130)],
+    ("Stauffacher", "Stockerstrasse"): [(78, 162), (86, 170)],
+    ("Sihlstrasse", "Stockerstrasse"): [(90, 164)],
+    ("Paradeplatz", "Stockerstrasse"): [(104, 162)],
+    ("Paradeplatz", "Bürkliplatz"): [(120, 168)],
+    ("Central", "Kunsthaus"): [(146, 122), (146, 148)],
+    ("Haldenegg", "ETH/Universitätsspital"): [(144, 110)],
+    ("Haldenegg", "Schaffhauserplatz"): [(144, 92), (130, 78)],
+    ("Escher-Wyss-Platz", "Schaffhauserplatz"): [(94, 104), (110, 104), (118, 96)],
+    ("Escher-Wyss-Platz", "Hardturm"): [(74, 84)],
+    ("Wipkingerplatz", "Frankental"): [(76, 74)],
+    ("Technopark", "Altstetten, Bahnhof N"): [(58, 92)],
+    ("Stettbach, Bahnhof", "Auzelg"): [(190, 82), (190, 42)],
+    ("Bellevue", "Tiefenbrunnen, Bahnhof"): [(140, 206)],
+}
 
 
 def project(lat, lon):
@@ -454,6 +500,9 @@ def build_layout(data):
     print(f"schematic: {hi[0] - lo[0]:.0f} x {hi[1] - lo[1]:.0f} LEDs before fitting, scaled by {k:.2f}")
     pos = (pos - lo) * k + np.array([MARGIN[0], MARGIN[1]]) + (room - (hi - lo) * k) / 2
     solved = {u: pos[ui[u]] for u in used}
+    for u in used:
+        if names[u] in OVERRIDES:
+            solved[u] = np.array(OVERRIDES[names[u]], float)
     P = {j: (int(round(solved[j][0])), int(round(solved[j][1]))) for j in junc}
     want = [(ch[0], ch[-1], None, None, ch) for ch in links]
     # the links' routes and the stops along them
@@ -465,7 +514,16 @@ def build_layout(data):
         if mids:
             m = mids[len(mids) // 2]
             mid = solved[m]
-        corners = polyline(P[a], P[b], mid)
+        via = VIAS.get((names[a], names[b]))
+        if via is None and (names[b], names[a]) in VIAS:
+            via = VIAS[(names[b], names[a])][::-1]
+        if via:
+            corners = []
+            for q0, q1 in zip([P[a]] + via, via + [P[b]]):
+                c = polyline(tuple(q0), tuple(q1))
+                corners += c[1:] if corners else c
+        else:
+            corners = polyline(P[a], P[b], mid)
         path = walk(corners)
         n = len(path) - 1
         # stops along the route: half by their real spacing, half evenly

@@ -26,9 +26,9 @@ const vec4 K[48] = vec4[48](
   vec4(0.0, 0.1, 0.25, 0.06), vec4(-0.18, 0.13, 0.08, 0.065), vec4(0.18, 0.135, 0.085, 0.065), vec4(-0.06, 0.18, 0.1, 0.085),
   vec4(0.08, 0.185, 0.1, 0.08), vec4(0.0, 0.245, 0.07, 0.06), vec4(-0.13, 0.19, 0.065, 0.055), vec4(0.19, 0.17, 0.055, 0.05),
   vec4(0.0, -0.37, 0.26, 0.045), vec4(-0.17, -0.365, 0.1, 0.04), vec4(0.17, -0.365, 0.1, 0.04), vec4(0.0, -0.355, 0.11, 0.045),
-  vec4(-0.09, -0.37, 0.09, 0.04), vec4(0.09, -0.37, 0.09, 0.04), vec4(-0.23, -0.375, 0.06, 0.03), vec4(0.23, -0.375, 0.06, 0.03),
-  vec4(0.0, 0.0, 0.07, 0.078), vec4(0.0, -0.18, 0.02, 0.06), vec4(0.0, -0.18, 0.02, 0.06), vec4(0.0, 0.01, 0.045, 0.05),
-  vec4(0.0, -0.09, 0.035, 0.06), vec4(0.0, -0.09, 0.035, 0.06), vec4(0.0, -0.235, 0.022, 0.045), vec4(0.0, -0.235, 0.022, 0.045));
+  vec4(-0.09, -0.37, 0.09, 0.04), vec4(0.09, -0.37, 0.09, 0.04), vec4(-0.22, -0.373, 0.055, 0.036), vec4(0.22, -0.373, 0.055, 0.036),
+  vec4(0.0, 0.0, 0.07, 0.078), vec4(0.0, -0.175, 0.028, 0.055), vec4(0.0, -0.175, 0.028, 0.055), vec4(0.0, 0.01, 0.045, 0.05),
+  vec4(0.0, -0.09, 0.038, 0.06), vec4(0.0, -0.09, 0.038, 0.06), vec4(0.0, -0.235, 0.026, 0.042), vec4(0.0, -0.235, 0.026, 0.042));
 // how late each blob sets off when its form flows into the next (the trail behind the falling drop,
 // the column rising out of the middle of the pool, the tail following the drop up)
 const float DL[48] = float[48](
@@ -36,7 +36,7 @@ const float DL[48] = float[48](
   0.1, 0.0, 0.0, 0.15, 0.2, 0.25, 0.1, 0.3,
   0.0, 0.05, 0.05, 0.1, 0.1, 0.15, 0.1, 0.15,
   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-  0.2, 0.06, 0.06, 0.0, 0.12, 0.12, 0.0, 0.0,
+  0.14, 0.06, 0.06, 0.06, 0.03, 0.03, 0.0, 0.0,
   0.0, 0.14, 0.14, 0.0, 0.07, 0.07, 0.22, 0.22);
 // the two vortices that curl the ink (x, y of the right one, strength, width)
 const vec4 SW[6] = vec4[6](vec4(0.1, 0.37, 0.0, 0.07), vec4(0.165, 0.0, 2.8, 0.07), vec4(0.2, 0.2, 1.3, 0.07),
@@ -53,12 +53,16 @@ vec2 swirl(vec2 uv, vec4 w){
 
 float blobs(vec2 uv, int k, int kn, float s, float t){
   float d = 1e3;
-  float kk = 0.035 + (k >= 4 ? 0.06 * sin(3.14159 * s) : 0.0);   // the pool and the drop hold together as they pull up
+  float kk = 0.035 + (k == 4 ? 0.015 : 0.035) * sin(3.14159 * s);   // the ink holds together while it moves
   for (int i = 0; i < 8; i++) {
     float dl = DL[k * 8 + i];
-    vec4 c = mix(K[k * 8 + i], K[kn * 8 + i], smoothstep(dl, dl + 0.65, s));
-    float fi = float(i);
-    c.xy += 0.005 * vec2(sin(t * 1.3 + fi * 2.1), cos(t * 1.1 + fi * 1.7));     // the ink never quite still
+    vec4 c0 = K[k * 8 + i], c1 = K[kn * 8 + i];
+    vec4 c = mix(c0, c1, smoothstep(dl, dl + 0.65, s));
+    if (k == 4) {                                        // the pool gathers in first, then lifts
+      float g = smoothstep(dl, dl + 0.45, s);
+      c = vec4(mix(c0.x, c1.x, g), mix(c0.y, c1.y, smoothstep(dl + 0.15, dl + 0.8, s)), mix(c0.zw, c1.zw, g));
+    }
+    c.xy += 0.005 * vec2(sin(t * 1.3 + c.y * 3.0), cos(t * 1.1 + c.x * 3.0 + c.y * 2.0));   // the ink never quite still (it sways as one)
     d = smin(d, ell(uv - c.xy, c.zw), kk);
   }
   return d;
@@ -67,6 +71,7 @@ float blobs(vec2 uv, int k, int kn, float s, float t){
 float shape(vec2 uv, float t, int k, float s, out vec2 wuv){
   int kn = k == 5 ? 0 : k + 1;
   vec4 w = mix(SW[k], SW[kn], smoothstep(0.0, 1.0, s));
+  if (k == 0) w.z = SW[1].z * smoothstep(0.35, 1.0, s);      // the curl wakes once the falling drop has opened
   w.z *= 1.0 + 0.12 * sin(t * 0.7) + 0.15 * iEvolve.z;
   wuv = swirl(uv, w);
   if (k != 3) return blobs(wuv, k, kn, s, t);
@@ -104,8 +109,10 @@ void mainImage(out vec4 o, in vec2 fc){
   vec2 wuv, dum;
   float d = shape(uv, t, k, s, wuv) - 0.006 * iBreath;
   vec2 h = vec2(0.004, 0.0);
-  vec2 nrm = normalize(vec2(shape(uv + h.xy, t, k, s, dum) - shape(uv - h.xy, t, k, s, dum),
-                            shape(uv + h.yx, t, k, s, dum) - shape(uv - h.yx, t, k, s, dum)) + 1e-6);
+  vec2 gr = vec2(shape(uv + h.xy, t, k, s, dum) - shape(uv - h.xy, t, k, s, dum),
+                 shape(uv + h.yx, t, k, s, dum) - shape(uv - h.yx, t, k, s, dum)) / (2.0 * h.x);
+  vec2 nrm = gr / (length(gr) + 1e-4);
+  d = mix(d, d / clamp(length(gr), 0.35, 3.0), exp(-d * d / 0.0009));   // a true distance at the edge, so it keeps its width where the water shears
   float dark = smoothstep(2.1, 2.9, p) * (1.0 - smoothstep(3.3, 3.9, p));   // the cloud darkens before the rain
   float body = smoothstep(0.008, -0.012, d);
   float thick = clamp(-d / 0.08, 0.0, 1.0);

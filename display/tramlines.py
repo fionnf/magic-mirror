@@ -18,6 +18,7 @@ Everything is drawn on whole LEDs (no anti-aliasing).
 """
 import datetime
 import gzip
+import bisect
 import json
 import math
 import os
@@ -45,11 +46,12 @@ EVERY = 90.0                              # seconds between live calls (the limi
 STALE = 15 * 60.0                         # delays older than this are forgotten
 TZ = "Europe/Zurich"
 FADE = 40.0                               # seconds a tram takes to brighten in at its first stop / fade at its last
-LINE_LEVEL = 0.62                         # the network, dim; the trams are full colour
+LINE_PEAK = 120.0                         # the network, dim (its brightest channel; ~94 is black on the LEDs)
+TRAM_PEAK = 255.0                         # the trams: their line's colour at full strength, a white core
 # On black LEDs the black line 7 and the construction lines 50/51 (black on paper) become greys.
 DISPLAY = {"7": (150, 150, 158), "50": (205, 190, 165), "51": (205, 190, 165)}
 LABEL_COL = (150, 150, 160)
-RING_COL = (215, 215, 225)
+RING_COL = (150, 150, 160)
 HOME_COL = (255, 170, 60)
 
 
@@ -120,7 +122,11 @@ class Trams:
         with open(LAYOUT) as fh:
             lay = json.load(fh)
         self.days = [datetime.date.fromisoformat(s) for s in d["days"]]
-        self.colour = {l: np.array(DISPLAY.get(l, _rgb(c)), np.float32) for l, c in d["lines"].items()}
+        self.colour = {}
+        for l, c in d["lines"].items():
+            v = np.array(DISPLAY.get(l, _rgb(c)), np.float32)
+            self.colour[l] = v * (TRAM_PEAK / max(1.0, float(v.max())))
+        self.dim = {l: v * (LINE_PEAK / max(1.0, float(v.max()))) for l, v in self.colour.items()}
         keys = [s[3] for s in d["stops"]]
         self._build_map(lay)
         self._build_patterns(d, keys)
@@ -136,7 +142,7 @@ class Trams:
         self.t_dur = np.array([self.profiles[p][-1] for p in self.t_prof], np.float64)
         self.t_ok = np.array([self.pat_ok[p] for p in self.t_pat], bool)
         self.delays, self.cancelled, self.rt_at = {}, set(), 0.0
-        self.active, self.active_at = [], -1e9
+        self.active, self.active_at, self.active_rt, self._entries = [], -1e9, 0.0, {}
         self._load_cache()
         if fetch:
             threading.Thread(target=self._fetch_loop, daemon=True).start()
@@ -194,7 +200,7 @@ class Trams:
 
     def _build_patterns(self, d, keys):
         """For every stop pattern: the LEDs its trams pass, and where along them each stop is."""
-        self.pat_path, self.pat_stop, self.pat_line, self.pat_ok = [], [], [], []
+        self.pat_path, self.pat_stop, self.pat_line, self.pat_ok, self.pat_path_l = [], [], [], [], []
         self._pat_keys = [[keys[s] for s in seq] for _, seq in d["patterns"]]
         for line, seq in d["patterns"]:
             pix, at, ok = [], [], True
@@ -222,7 +228,8 @@ class Trams:
             self.pat_line.append(line)
             self.pat_ok.append(ok and len(pix) > 1)
             self.pat_path.append(np.array(pix if pix else [(0, 0)], np.int32))
-            self.pat_stop.append(np.array(at if at else [0], np.float64))
+            self.pat_path_l.append([tuple(q) for q in (pix if pix else [(0, 0)])])
+            self.pat_stop.append([float(v) for v in (at if at else [0])])
         self.base = self._draw_base()
 
     def _draw_base(self):
@@ -236,7 +243,7 @@ class Trams:
             drawn.add((line, path.tobytes()))
             x, y = path[:, 0], path[:, 1]
             m = (x >= 0) & (x < W) & (y >= 0) & (y < H)
-            img[y[m], x[m]] = self.colour[line] * LINE_LEVEL
+            img[y[m], x[m]] = self.dim[line]
             lines_px[y[m], x[m]] = True
         self._line_px = lines_px
         # interchanges: a ring round a stop where lines meet or part (or where two or more lines stop)
@@ -272,16 +279,19 @@ class Trams:
             x, y = self.xy[k]
             w = pixelfont.width(text)
             best = None
-            for r in (3, 4, 5, 6, 8):
-                for tx, ty in ((x + r, y - 2), (x - r - w + 1, y - 2), (x - w // 2, y - r - 4),
-                               (x - w // 2, y + r), (x + r, y - r - 2), (x - r - w + 1, y - r - 2),
-                               (x + r, y + r - 2), (x - r - w + 1, y + r - 2)):
-                    if tx < 0 or ty < 0 or tx + w > W or ty + 5 > H:
-                        continue
-                    if not taken[max(0, ty - 1):ty + 6, max(0, tx - 1):tx + w + 1].any():
-                        best = (tx, ty)
-                        break
-                if best:
+            cands = []
+            for ty in range(y - 14, y + 11):
+                for tx in range(x - w - 12, x + 13):
+                    # distance from the stop to the nearest point of the label, a little in favour of beside it
+                    ddx = max(tx - x, 0, x - (tx + w - 1))
+                    ddy = max(ty - y, 0, y - (ty + 4))
+                    cands.append((ddx * ddx + 1.6 * ddy * ddy, ty, tx))
+            cands.sort()
+            for dd, ty, tx in cands:
+                if dd < 4 or tx < 0 or ty < 0 or tx + w > W or ty + 5 > H:
+                    continue
+                if not taken[max(0, ty - 1):ty + 6, max(0, tx - 1):tx + w + 1].any():
+                    best = (tx, ty)
                     break
             if best:
                 tx, ty = best
@@ -317,39 +327,41 @@ class Trams:
         return datetime.datetime(day.year, day.month, day.day, tzinfo=self.tz).timestamp()
 
     def _select(self, now):
+        """The trips out now (or about to be, or just in), with their stop times ready to use."""
         today = datetime.datetime.fromtimestamp(now, self.tz).date()
-        act = []
+        act, cache = [], {} if self.rt_at != self.active_rt else self._entries
+        self._entries = {}
         for back in (1, 0):
             day = today - datetime.timedelta(days=back)
             di = self._day_index(day)
             base = self._midnight(day)
             e = now - base - self.t_t0
             m = (((self.t_mask >> di) & 1) == 1) & self.t_ok & (e > -FADE - 600) & (e < self.t_dur + FADE + 1800)
-            for i in np.nonzero(m)[0]:
-                act.append((int(i), base + self.t_t0[i]))
+            for i in np.nonzero(m)[0].tolist():
+                ent = cache.get((i, base))
+                if ent is None:
+                    if self.t_id[i] in self.cancelled:
+                        continue
+                    p = int(self.t_pat[i])
+                    ent = (base + float(self.t_t0[i]), self._times(i), self.pat_stop[p], p)
+                self._entries[(i, base)] = ent
+                act.append(ent)
         self.active = act
-        self.active_at = now
+        self.active_at, self.active_rt = now, self.rt_at
 
     def _times(self, i):
         """[arr0, dep0, arr1, dep1, ...] seconds after the first departure, with the live delays."""
         prof = self.profiles[self.t_prof[i]]
         dl = self.delays.get(self.t_id[i])
-        if dl is None:
-            return prof
-        return prof + dl
+        return (prof if dl is None else prof + dl).tolist()
 
     def render(self, now):
-        if now - self.active_at > 2.0 or now < self.active_at:
+        if now - self.active_at > 2.0 or now < self.active_at or self.rt_at != self.active_rt:
             self._select(now)
         img = self.base.copy()
         heads = []
-        for i, start in self.active:
-            if self.t_id[i] in self.cancelled:
-                continue
-            tm = self._times(i)
+        for start, tm, stops, p in self.active:
             e = now - start
-            p = self.t_pat[i]
-            stops = self.pat_stop[p]
             if e < tm[1]:                                   # waiting at the first stop: brightening
                 a = 1.0 - (tm[1] - e) / FADE
                 pos = stops[0]
@@ -358,32 +370,33 @@ class Trams:
                 pos = stops[-1]
             else:
                 a = 1.0
-                k = int(np.searchsorted(tm, e, side="right")) - 1
-                s = k // 2
-                if k % 2 == 1 and s + 1 < len(stops):        # between stop s and s+1
+                k = bisect.bisect_right(tm, e) - 1
+                s = k >> 1
+                if k & 1 and s + 1 < len(stops):            # between stop s and s+1
                     t0, t1 = tm[k], tm[k + 1]
                     f = 0.0 if t1 <= t0 else (e - t0) / (t1 - t0)
                     f = 0.6 * f + 0.4 * f * f * (3 - 2 * f)     # trams pull away and brake
                     pos = stops[s] + f * (stops[s + 1] - stops[s])
                 else:
                     pos = stops[min(s, len(stops) - 1)]
-            if a <= 0.0:
-                continue
-            heads.append((p, int(round(pos)), min(1.0, a)))
-        for p, j, a in heads:                                # the trams' bodies first, then the bright cores
-            path = self.pat_path[p]
-            col = self.colour[self.pat_line[p]]
-            for jj in (j - 1, j + 1):
-                if 0 <= jj < len(path):
-                    x, y = path[jj]
-                    if 0 <= x < W and 0 <= y < H:
-                        img[y, x] = np.maximum(img[y, x], col * a)
-        for p, j, a in heads:
-            x, y = self.pat_path[p][j]
-            if 0 <= x < W and 0 <= y < H:
+            if a > 0.0:
+                heads.append((p, int(pos + 0.5), a if a < 1.0 else 1.0))
+        if heads:
+            bx, by, bc, cx, cy, cc = [], [], [], [], [], []
+            for p, j, a in heads:
+                path = self.pat_path_l[p]
                 col = self.colour[self.pat_line[p]]
-                img[y, x] = np.maximum(img[y, x], (col * 0.45 + 255 * 0.55) * a)
-        self.n_trams = len(heads)
+                n = len(path)
+                for jj in (j - 1, j + 1):                   # the tram's body, a LED either side, in full colour
+                    if 0 <= jj < n:
+                        bx.append(path[jj][0]); by.append(path[jj][1]); bc.append(col * a)
+                cx.append(path[j][0]); cy.append(path[j][1]); cc.append((col * 0.3 + 178.5) * a)   # the core: near white
+            for xs, ys, cs in ((bx, by, bc), (cx, cy, cc)):
+                xs, ys = np.array(xs), np.array(ys)
+                ok = (xs >= 0) & (xs < W) & (ys >= 0) & (ys < H)
+                xs, ys, cs = xs[ok], ys[ok], np.array(cs, np.float32)[ok]
+                img[ys, xs] = np.maximum(img[ys, xs], cs)
+        self.n_trams, self._heads = len(heads), heads
         return Image.fromarray(img.astype(np.uint8), "RGB")
 
     # ------------------------------------------------------------------ live delays

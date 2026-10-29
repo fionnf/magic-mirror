@@ -230,7 +230,7 @@ void mainImage(out vec4 o, in vec2 fc){
     float k = floor(a / sector + 0.5);
     float da = (a - k * sector) * r;
     float kk = mod(k, 20.0);
-    float tr = 44.0 + 6.0 * fract(kk * 0.618 + 0.21);
+    float tr = 44.0 + 0.3 * mod(3.0 * kk, 20.0);      // when this ray's seed lets go
     float hk = 2.5 * fract(kk * 0.4142 + 0.53);
     float len = 0.13 * smoothstep(36.5 + hk, 40.0 + hk, m);
     if (m < tr && len > 0.02) {
@@ -241,20 +241,22 @@ void mainImage(out vec4 o, in vec2 fc){
   }
 
   // --- the seeds on the air
-  if (m > 44.0 && m < 54.0) {
-    vec2 ra = dirv(hr), rs = dirv(6.28318 / 20.0);
-    for (int i = 0; i < 20; i++) {
-      float kk = float(i);
-      vec2 out0 = ra;                                  // dirv(al), stepped round without trig
+  if (m > 44.0 && m < 54.0 && p.y > F.y - 0.3 && p.x > F.x - 0.3) {   // (they all fly up and right of the head)
+    // seed j lets go at 44 + 0.3 j from ray 7 j (mod 20), so the release hops round the head; only the
+    // fourteen that can be in the air now are visited
+    float j0 = floor((m - 44.0 - 3.9) / 0.3) + 1.0;
+    vec2 ra = dirv(hr + 7.0 * j0 * 0.314159), rs = dirv(7.0 * 0.314159);
+    for (int i = 0; i < 14; i++) {
+      float kk = j0 + float(i);
+      vec2 out0 = ra;                                  // the ray's direction, stepped round without trig
       ra = vec2(ra.x * rs.x - ra.y * rs.y, ra.y * rs.x + ra.x * rs.y);
-      float tr = 44.0 + 6.0 * fract(kk * 0.618 + 0.21);
-      float tau = m - tr;
-      if (tau < 0.0 || tau > 3.9) continue;
+      float tau = m - 44.0 - 0.3 * kk;
+      if (kk < 0.0 || kk > 19.0 || tau < 0.0 || tau > 3.9) continue;
       vec2 vel = (0.045 + 0.03 * fract(kk * 0.7549 + 0.31)) * normalize(vec2(1.0, 0.02 + 0.7 * fract(kk * 0.5698 + 0.77)));   // the air fans them out to the right
       vec2 A = F + out0 * (0.02 + 0.07 * smoothstep(0.0, 1.6, tau)) + vel * (tau + 0.15 * tau * tau)
              + vec2(0.015, 0.01) * wave(0.2546 * tau + 0.159 * kk) * min(tau, 1.0);
       if (length(p - A) > 0.175) continue;            // far from this seed
-      float al = hr + kk * 6.28318 / 20.0;
+      float al = hr + mod(7.0 * kk, 20.0) * 0.314159;
       float dA = mod(1.5708 - al + 3.1416, 6.28318) - 3.1416;
       float b = al + dA * smoothstep(0.0, 2.2, tau);    // it turns its parachute to the sky
       float edge = (1.0 - smoothstep(0.3, 0.4, A.y + 0.11)) * (1.0 - smoothstep(0.26, 0.37, abs(A.x)));   // gone before the frame's edge

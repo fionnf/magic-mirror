@@ -222,170 +222,547 @@ def short(name):
 
 # ---------------------------------------------------------------------------------------------------
 # the schematic
+#
+# A hand-set skeleton of the network in the style of the VBZ map: the junctions and termini sit where
+# POS puts them (wall LEDs), the stops between two of them are strung along the link, every link is an
+# octilinear run (straight + at most one 45 degree bend) and the lines of a link run side by side as
+# parallel one-LED lanes in an order chosen so that they stay in their lane through the junctions.
 
-# The wall's few words: stop name -> (label, where the label goes relative to the stop: dx, dy of its
-# top-left corner). Only places that matter and fit.
+# stop name -> (label shown on the wall)
 LABELS = {
     "Bahnhofplatz/HB": "HB", "Central": "CENTRAL", "Bellevue": "BELLEVUE", "Paradeplatz": "PARADEPL",
-    "Rennweg": "RENNWEG", "Oerlikon, Bahnhof": "OERLIKON", "Stadelhofen, Bahnhof": "STADELH",
-    "Flughafen, Fracht": "AIRPORT", "Stettbach, Bahnhof": "STETTBACH", "Schlieren, Geissweid": "SCHLIEREN",
-    "Triemli": "TRIEMLI", "Altstetten, Bahnhof N": "ALTSTETTEN", "Klusplatz": "KLUSPL",
-    "Rehalp": "REHALP", "Wollishoferplatz": "WOLLISHOFEN", "Tiefenbrunnen, Bahnhof": "TIEFENBR",
-    "Hardturm": "HARDTURM", "Zoo": "ZOO", "Hirzenbach": "HIRZENBACH", "Albisgütli": "ALBISGUETLI",
-    "Milchbuck": "MILCHBUCK", "Enge, Bahnhof": "ENGE", "Werdhölzli": "WERDHOELZLI",
-    "Albisrieden": "ALBISRIEDEN", "Seebach": "SEEBACH", "Auzelg": "AUZELG", "Frankental": "FRANKENTAL",
+    "Stadelhofen, Bahnhof": "STADELH", "Stauffacher": "STAUFF", "Hardbrücke, Bahnhof": "HARDBR",
+    "Oerlikon, Bahnhof": "OERLIKON", "Triemli": "TRIEMLI", "Zoo": "ZOO", "Flughafen, Fracht": "AIRPORT",
 }
 HOME = "Rennweg"
-CENTRE = (47.3745, 8.5395)               # the magnification is around HB / Paradeplatz / Central
-# Hand adjustments: stop name -> (x, y) on the wall, pinned before the relaxation.
-OVERRIDES = {}
-MAGNIFY = 0.42                           # radial power: distance from the centre ** MAGNIFY (1 = true to scale)
-MARGIN_X, MARGIN_Y = 8, 10  # wall edge kept clear for the terminus labels
-RELAX_ITERS = 300
-OCTILINEAR = 1.0                         # 1 = edges end up exactly on 0/45/90, less keeps the true geography
-SPRING = 0.06                            # pull of each stop back to its magnified geographic place
-STRAIGHTEN = 0.05                        # how hard a plain stop is pulled onto the line between its neighbours
-MIN_GAP = 8.0                            # LEDs between stops while relaxing
+ALIASES = {"Enge, Bahnhof/Bederstr.": "Enge, Bahnhof"}      # two platforms of one place: one point
+# Junctions and termini: stop name -> (x, y) on the 192x256 wall. HB top-centre, Bahnhofstrasse running
+# south to the lake at Bellevue, the Sihl side to the left, Zürichberg right, the airport in the corner.
+POS = {
+    "Flughafen, Fracht": (150, 8), "Glattpark, Glattpark": (136, 34), "Auzelg": (160, 44),
+    "Stettbach, Bahnhof": (176, 84), "Hirzenbach": (172, 58), "Seebach": (106, 16),
+    "Oerlikon, Bahnhof Ost": (108, 44), "Leutschenbach": (124, 44), "Sternen Oerlikon": (98, 54),
+    "Oerlikon, Bahnhof": (84, 54), "Bucheggplatz": (80, 70), "Milchbuck": (108, 68),
+    "Schwamendingerplatz": (150, 70), "Schaffhauserplatz": (94, 82), "Escher-Wyss-Platz": (54, 84),
+    "Frankental": (14, 40), "Hardturm": (20, 70), "Werdhölzli": (6, 56), "Schiffbau": (40, 100),
+    "Altstetten, Bahnhof N": (8, 90), "Bahnhofplatz/HB": (84, 112), "Bahnhofstrasse/HB": (84, 126),
+    "Central": (108, 112), "Haldenegg": (112, 102), "ETH/Universitätsspital": (132, 102),
+    "Platte": (142, 124), "Kirche Fluntern": (164, 116), "Zoo": (180, 98), "Kantonsschule": (130, 138),
+    "Kunsthaus": (118, 148), "Stauffacher": (50, 138), "Albisriederplatz": (24, 136),
+    "Albisrieden": (8, 150), "Schlieren, Geissweid": (8, 112), "Heuried": (20, 168), "Triemli": (8, 180),
+    "Paradeplatz": (84, 144), "Bürkliplatz": (86, 158), "Bellevue": (104, 166),
+    "Stadelhofen, Bahnhof": (116, 174), "Kreuzplatz": (134, 178), "Römerhof": (150, 160),
+    "Klusplatz": (172, 172), "Rehalp": (178, 206), "Tiefenbrunnen, Bahnhof": (150, 226),
+    "Tunnelstrasse": (66, 164), "Enge, Bahnhof": (56, 176), "Laubegg": (42, 192),
+    "Albisgütli": (24, 214), "Wollishoferplatz": (66, 246),
+}
+# Optional hand-set waypoints for a link: (stop name A, stop name B) -> [(x, y), ...] (octilinear steps).
+VIA = {}
+# bundles of up to this many lines are drawn with a dark LED between the lanes
+GAP_UP_TO = 3
+MIN_SHARE = 0.15                          # a line has a lane on a link if it runs there at least this often
+ALL_TICKS = 16                            # interchange ticks drawn (busiest first)
 LABEL_MAX_COST = 60
+Z_ORDER = ["7", "50", "51", "5", "13", "14", "12", "6", "8", "3", "11", "2", "15", "17", "10", "9", "4"]
 
 
 def project(lat, lon):
-    """Kilometres east and south of CENTRE."""
-    return ((lon - CENTRE[1]) * 111.32 * math.cos(math.radians(CENTRE[0])), (CENTRE[0] - lat) * 111.32)
+    """Kilometres east and south of the middle of town."""
+    return ((lon - 8.5395) * 111.32 * math.cos(math.radians(47.3745)), (47.3745 - lat) * 111.32)
 
 
-def build_layout(data):
-    """The wall schematic from the timetable: {w, h, stops [[x,y,name]], edges [{a,b,lines,pts}],
-    labels [[x,y,text]], home}. Every consecutive stop pair of every pattern is one edge (undirected, with the
-    set of lines that use it); every stop sits on a whole LED and every edge is a polyline of whole-LED
-    corners with 0/45/90 degree segments (a straight run plus at most one 45 degree bend)."""
+def _tps(src, dst, smooth=1.0):
+    """Thin-plate-spline warp from src points (n,2) to dst points (n,2); returns f(points (m,2)) -> (m,2)."""
     import numpy as np
-    names = [s[0] for s in data["stops"]]
-    edges = {}
-    for line, seq in data["patterns"]:
-        for a, b in zip(seq, seq[1:]):
-            if a != b:
-                edges.setdefault((min(a, b), max(a, b)), set()).add(line)
-    used = sorted({i for e in edges for i in e})
-    ix = {s: k for k, s in enumerate(used)}                    # stop index -> row in the working arrays
-    n = len(used)
-    km = np.array([project(data["stops"][s][1], data["stops"][s][2]) for s in used], float)
-    # 1. radial power compression around the centre: dense middle spread out, outskirts pulled in
-    r = np.hypot(km[:, 0], km[:, 1])
-    rmax = r.max()
-    k = np.where(r > 1e-9, (rmax * (np.maximum(r, 1e-9) / rmax) ** MAGNIFY) / np.maximum(r, 1e-9), 1.0)
-    pos = km * k[:, None]
-    # 2. fit to the wall, each axis on its own (a schematic need not keep the aspect)
-    lo, hi = pos.min(0), pos.max(0)
-    box_lo, box_hi = np.array([MARGIN_X, MARGIN_Y], float), np.array([W - 1 - MARGIN_X, H - 1 - MARGIN_Y], float)
-    pos = box_lo + (pos - lo) / (hi - lo) * (box_hi - box_lo)
-    home0 = pos.copy()
-    pinned = {}
-    for name, xy in OVERRIDES.items():
-        if name in names and names.index(name) in ix:
-            pinned[ix[names.index(name)]] = np.array(xy, float)
-            pos[ix[names.index(name)]] = xy
-    E = np.array([(ix[a], ix[b]) for a, b in edges], int)
-    degree = np.zeros(n, int)
-    np.add.at(degree, E.ravel(), 1)
-    deg2 = degree == 2
-    # 3. relax: edges turn towards the nearest of the eight directions, stops keep apart and near home
-    oct_dirs = np.array([(math.cos(i * math.pi / 4), math.sin(i * math.pi / 4)) for i in range(8)])
-    for it in range(RELAX_ITERS):
-        f = 1.0 - it / RELAX_ITERS
-        move = np.zeros_like(pos)
-        v = pos[E[:, 1]] - pos[E[:, 0]]
-        ln = np.hypot(v[:, 0], v[:, 1]) + 1e-9
-        best = oct_dirs[np.argmax(v @ oct_dirs.T / ln[:, None], axis=1)]
-        d = (best * ln[:, None] - v) * 0.5 * OCTILINEAR * (0.25 + 0.75 * (1 - f))
-        np.add.at(move, E[:, 0], -d)
-        np.add.at(move, E[:, 1], d)
-        move += (home0 - pos) * SPRING * (0.3 + 0.7 * f)
-        nb = np.zeros_like(pos)                                 # a stop with two neighbours drifts to their midpoint
-        np.add.at(nb, E[:, 0], pos[E[:, 1]])
-        np.add.at(nb, E[:, 1], pos[E[:, 0]])
-        move += np.where(deg2[:, None], nb / 2 - pos, 0.0) * STRAIGHTEN
-        diff = pos[:, None, :] - pos[None, :, :]
-        dist = np.hypot(diff[..., 0], diff[..., 1]) + np.eye(n) * 1e9
-        close = dist < MIN_GAP
-        push = np.where(close, (MIN_GAP - dist) / (dist * 2), 0.0)
-        move += (diff * push[..., None]).sum(1) * 0.6
-        pos += move
-        for i, xy in pinned.items():
-            pos[i] = xy
-        pos[:, 0] = np.clip(pos[:, 0], MARGIN_X, W - 1 - MARGIN_X)
-        pos[:, 1] = np.clip(pos[:, 1], MARGIN_Y, H - 1 - MARGIN_Y)
-    px = np.rint(pos).astype(int)
-    # whole LEDs: no two stops on one LED, and none right next to another
-    for _ in range(40):
-        moved = False
-        for i in range(n):
-            if i in pinned:
-                continue
-            for j in range(n):
-                if j != i and max(abs(px[i, 0] - px[j, 0]), abs(px[i, 1] - px[j, 1])) < 2:
-                    step = np.sign(pos[i] - pos[j]).astype(int)
-                    if not step.any():
-                        step = np.array([1, 0])
-                    px[i] += step * 2
-                    moved = True
-        if not moved:
-            break
-    # 4. route every edge: a straight run and at most one 45 degree bend, bend placed to stay clear
-    stop_at = {(int(x), int(y)): i for i, (x, y) in enumerate(px)}
-    taken = {}                                                  # pixel -> number of edges through it
-    routed = {}
-    order = sorted(range(len(E)), key=lambda e: -np.abs(px[E[e, 1]] - px[E[e, 0]]).max())
-    for e in order:
-        a, b = [int(v) for v in px[E[e, 0]]], [int(v) for v in px[E[e, 1]]]
-        dx, dy = int(b[0] - a[0]), int(b[1] - a[1])
-        sx, sy, m = (dx > 0) - (dx < 0), (dy > 0) - (dy < 0), min(abs(dx), abs(dy))
-        cands = [[tuple(a), tuple(b)]]
-        if dx and dy and abs(dx) != abs(dy):
-            cands = [[tuple(a), (a[0] + sx * m, a[1] + sy * m), tuple(b)],
-                     [tuple(a), (b[0] - sx * m, b[1] - sy * m), tuple(b)]]
-        best, best_cost = None, None
-        for c in cands:
-            cost = 0.0
-            for p in _pixels(c):
-                if p in stop_at and p != tuple(a) and p != tuple(b):
-                    cost += 50
-                cost += 3 * taken.get(p, 0)
-            if best_cost is None or cost < best_cost - 1e-9:
-                best, best_cost = c, cost
-        routed[e] = best
-        for p in _pixels(best):
-            taken[p] = taken.get(p, 0) + 1
-    out_edges = []
-    for e, ((a, b), lines) in enumerate(edges.items()):
-        out_edges.append({"a": a, "b": b, "lines": sorted(lines, key=int),
-                          "pts": [[int(x), int(y)] for x, y in routed[e]]})
-    # the output keeps the timetable's stop numbering (a stop no line serves sits off the wall at -1, -1)
-    out_stops = [[int(px[ix[i], 0]), int(px[ix[i], 1]), data["stops"][i][0]] if i in ix
-                 else [-1, -1, data["stops"][i][0]] for i in range(len(data["stops"]))]
-    labels = _place_labels(out_stops, out_edges)
-    home = next(i for i, s in enumerate(out_stops) if s[2] == HOME)
-    return {"w": W, "h": H, "stops": out_stops, "edges": out_edges, "labels": labels, "home": home}
+    n = len(src)
+
+    def U(r2):
+        return np.where(r2 > 0, r2 * np.log(np.maximum(r2, 1e-12)) * 0.5, 0.0)
+    d2 = ((src[:, None, :] - src[None, :, :]) ** 2).sum(-1)
+    K = U(d2) + np.eye(n) * smooth
+    P = np.hstack([np.ones((n, 1)), src])
+    A = np.zeros((n + 3, n + 3))
+    A[:n, :n], A[:n, n:], A[n:, :n] = K, P, P.T
+    b = np.zeros((n + 3, 2))
+    b[:n] = dst
+    w = np.linalg.solve(A, b)
+
+    def f(pts):
+        pts = np.asarray(pts, float).reshape(-1, 2)
+        r2 = ((pts[:, None, :] - src[None, :, :]) ** 2).sum(-1)
+        return U(r2) @ w[:n] + np.hstack([np.ones((len(pts), 1)), pts]) @ w[n:]
+    return f
 
 
-def _pixels(pts):
-    """Every whole LED on a polyline of 0/45/90 degree segments."""
-    out = []
-    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-        n = max(abs(x1 - x0), abs(y1 - y0))
-        sx, sy = (x1 > x0) - (x1 < x0), (y1 > y0) - (y1 < y0)
-        out += [(x0 + sx * i, y0 + sy * i) for i in range(n + 1)]
+def line(p, q):
+    """Whole LEDs from p to q (Bresenham), both ends included."""
+    (x0, y0), (x1, y1) = p, q
+    dx, dy = abs(x1 - x0), abs(y1 - y0)
+    sx, sy = (x1 > x0) - (x1 < x0), (y1 > y0) - (y1 < y0)
+    out, err = [(x0, y0)], dx - dy
+    while (x0, y0) != (x1, y1):
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x0 += sx
+        if e2 < dx:
+            err += dx
+            y0 += sy
+        out.append((x0, y0))
     return out
 
 
-def _place_labels(stops, edges):
+def poly(pts):
+    out = [tuple(pts[0])]
+    for a, b in zip(pts, pts[1:]):
+        out += line(tuple(a), tuple(b))[1:]
+    return out
+
+
+def _sgn(v):
+    return (v > 0) - (v < 0)
+
+
+def _octi_routes(a, b):
+    """Candidate centre lines from a to b: one straight run, or a straight run and one 45 degree bend."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    m = min(abs(dx), abs(dy))
+    if dx == 0 or dy == 0 or abs(dx) == abs(dy):
+        return [[a, b]]
+    sx, sy = _sgn(dx), _sgn(dy)
+    return [[a, (a[0] + sx * m, a[1] + sy * m), b], [a, (b[0] - sx * m, b[1] - sy * m), b]]
+
+
+def _kind(p, q):
+    dx, dy = q[0] - p[0], q[1] - p[1]
+    if dy == 0:
+        return "H"
+    if dx == 0:
+        return "V"
+    return "D1" if (dx > 0) == (dy > 0) else "D2"      # D1: x - y constant, D2: x + y constant
+
+
+def _left(p, q):
+    """Left-hand normal of the step p -> q (screen coordinates, y down)."""
+    ux, uy = _sgn(q[0] - p[0]), _sgn(q[1] - p[1])
+    return (uy, -ux)
+
+
+def _shift(p, q, o):
+    """How a lane o LEDs left of the centre line p -> q moves a point of it (horizontal for the diagonals)."""
+    lx, ly = _left(p, q)
+    return (o * lx, o * ly) if _kind(p, q) in ("H", "V") else (o * _sgn(lx), 0)
+
+
+def lane_poly(pts, o):
+    """The centre line pts (corners) moved o LEDs to its left: corners are the meets of the moved runs."""
+    if o == 0:
+        return [tuple(p) for p in pts]
+    segs = list(zip(pts, pts[1:]))
+    cons = []
+    for p, q in segs:
+        k, s = _kind(p, q), _shift(p, q, o)
+        base = {"H": p[1] + s[1], "V": p[0] + s[0], "D1": p[0] - p[1] + s[0], "D2": p[0] + p[1] + s[0]}[k]
+        cons.append((k, base))
+    first, last = segs[0], segs[-1]
+    sa, sb = _shift(*first, o), _shift(*last, o)
+    out = [(first[0][0] + sa[0], first[0][1] + sa[1])]
+    for (k1, c1), (k2, c2) in zip(cons, cons[1:]):
+        out.append(_meet(k1, c1, k2, c2, out[-1]))
+    out.append((last[1][0] + sb[0], last[1][1] + sb[1]))
+    return out
+
+
+def _meet(k1, c1, k2, c2, prev):
+    if k1 == k2:
+        return prev
+    pair = {k1: c1, k2: c2}
+    if "H" in pair and "V" in pair:
+        return (pair["V"], pair["H"])
+    if "H" in pair:
+        y = pair["H"]
+        return ((pair["D1"] + y) if "D1" in pair else (pair["D2"] - y), y)
+    if "V" in pair:
+        x = pair["V"]
+        return (x, (x - pair["D1"]) if "D1" in pair else (pair["D2"] - x))
+    x = (pair["D1"] + pair["D2"]) // 2
+    return (x, pair["D2"] - x)
+
+
+def build_layout(data):
+    """The wall schematic from the timetable: {w, h, stops [[x,y,name]], home, lanes, routes, marks, labels,
+    water}. See the comment above POS. lanes: one polyline per line on each link, drawn in order (each with
+    the LEDs it clears where it crosses another link); routes: for every timetable pattern the whole-LED
+    path of its trams (vertices) and the vertex of each of its stops."""
+    import numpy as np
+    import collections
+    names = [s[0] for s in data["stops"]]
+    nid = {n: i for i, n in enumerate(names)}
+    alias = list(range(len(names)))
+    for a, b in ALIASES.items():
+        if a in nid and b in nid:
+            alias[nid[a]] = nid[b]
+    trips = collections.Counter(t[0] for t in data["trips"])
+    pats = [(line, [alias[i] for i in seq]) for line, seq in data["patterns"]]
+    # 1. the links (consecutive stops) with how often each line runs on them
+    use = collections.defaultdict(collections.Counter)
+    for p, (line, seq) in enumerate(pats):
+        for a, b in zip(seq, seq[1:]):
+            if a != b:
+                use[(min(a, b), max(a, b))][line] += trips[p]
+    peak = collections.Counter()
+    for c in use.values():
+        for line, n in c.items():
+            peak[line] = max(peak[line], n)
+    lines_on = {e: frozenset(l for l, n in c.items() if n >= MIN_SHARE * peak[l]) for e, c in use.items()}
+    solid = {e: ls for e, ls in lines_on.items() if ls}
+    adj = collections.defaultdict(list)
+    for (a, b) in solid:
+        adj[a].append(b)
+        adj[b].append(a)
+    key = set()
+    for s, nb in adj.items():
+        e = lambda x: (min(s, x), max(s, x))
+        if len(nb) != 2 or solid[e(nb[0])] != solid[e(nb[1])] or names[s] in POS:
+            key.add(s)
+    # 2. chains: from a key stop along links of one line set to the next key stop
+    chains, seen = [], set()
+    for s in sorted(key):
+        for n in adj[s]:
+            if (min(s, n), max(s, n)) in seen:
+                continue
+            seq, prev = [s, n], s
+            seen.add((min(s, n), max(s, n)))
+            while seq[-1] not in key:
+                cur = seq[-1]
+                nxt = [x for x in adj[cur] if x != prev][0]
+                seen.add((min(cur, nxt), max(cur, nxt)))
+                prev = cur
+                seq.append(nxt)
+            chains.append(seq)
+    where = {}                                                      # link -> (chain, index of its first stop)
+    for ci, seq in enumerate(chains):
+        for i, (a, b) in enumerate(zip(seq, seq[1:])):
+            where[(min(a, b), max(a, b))] = (ci, i)
+    # 3. where the key stops are: hand-set, else warped from the geography by the hand-set ones
+    ll = np.array([project(data["stops"][i][1], data["stops"][i][2]) for i in range(len(names))])
+    placed = {nid[n]: xy for n, xy in POS.items() if n in nid and nid[n] in key}
+    ctl = sorted(placed)
+    warp = _tps(ll[ctl], np.array([placed[i] for i in ctl], float), smooth=2.0)
+    pos = {}
+    for s in key:
+        pos[s] = tuple(int(round(v)) for v in (placed[s] if s in placed else warp(ll[s])[0]))
+    for s in pos:
+        pos[s] = (min(max(pos[s][0], 3), W - 4), min(max(pos[s][1], 3), H - 4))
+    # 4. centre lines, the busiest links first, each avoiding what is already there
+    occupied = collections.Counter()
+    centre = {}
+    order = sorted(range(len(chains)), key=lambda c: (-len(solid[(min(chains[c][:2]), max(chains[c][:2]))]), -len(chains[c])))
+    for ci in order:
+        seq = chains[ci]
+        a, b = pos[seq[0]], pos[seq[-1]]
+        via = VIA.get((names[seq[0]], names[seq[-1]]))
+        if via:
+            cands = [[a] + [tuple(v) for v in via] + [b]]
+        else:
+            cands = _octi_routes(a, b)
+        mid = None
+        if len(seq) > 2:
+            mid = warp(ll[seq[len(seq) // 2]])[0]
+        best, bc = None, None
+        for cand in cands:
+            px = poly(cand)
+            cost = sum(4 * occupied[p] for p in px[2:-2])
+            if mid is not None:
+                cost += 0.05 * min(math.hypot(p[0] - mid[0], p[1] - mid[1]) for p in px)
+            if bc is None or cost < bc - 1e-9:
+                best, bc = cand, cost
+        best = [best[0]] + [p for i, p in enumerate(best[1:-1], 1) if _kind(best[i - 1], p) != _kind(p, best[i + 1])] + [best[-1]]
+        centre[ci] = best
+        for p in poly(best):
+            occupied[p] += 1
+    # 5. lanes: the lines of each chain in a left-to-right order that keeps each one level through junctions
+    lane_of = {}
+    for ci, seq in enumerate(chains):
+        ls = sorted(solid[(min(seq[0], seq[1]), max(seq[0], seq[1]))], key=int)
+        lane_of[ci] = ls
+    pitch = lambda k: 2 if k <= GAP_UP_TO else 1             # a dark LED between lanes while the bundle stays slim
+    offs = lambda k: [i * pitch(k) - ((k - 1) * pitch(k)) // 2 for i in range(k)]
+
+    def end_point(ci, line, at_start):
+        pts = centre[ci]
+        ls = lane_of[ci]
+        o = offs(len(ls))[ls.index(line)]
+        if at_start:
+            p, q = pts[0], pts[1]
+            s = _shift(p, q, o)
+            return (p[0] + s[0], p[1] + s[1])
+        p, q = pts[-2], pts[-1]
+        s = _shift(p, q, o)
+        return (q[0] + s[0], q[1] + s[1])
+
+    passes = set()                                      # (stop, chain a, at start of a, chain b, at start of b, line)
+    for p, (line, seq) in enumerate(pats):
+        prev = None
+        for a, b in zip(seq, seq[1:]):
+            w = where.get((min(a, b), max(a, b)))
+            if w is None:
+                prev = None
+                continue
+            ci, i = w
+            fwd = chains[ci][i] == a
+            if prev is not None and prev[0] != ci and line in lane_of[prev[0]] and line in lane_of[ci]:
+                passes.add((a, prev[0], not prev[1], ci, fwd, line))
+            prev = (ci, fwd)
+
+    chain_pass = collections.defaultdict(list)
+    for t in passes:
+        chain_pass[t[1]].append(t)
+        chain_pass[t[3]].append(t)
+
+    def local(ci):
+        t = 0.0
+        for a, c1, s1, c2, s2, line in chain_pass[ci]:
+            p, q = end_point(c1, line, s1), end_point(c2, line, s2)
+            t += math.hypot(p[0] - q[0], p[1] - q[1])
+        return t
+    multi = [c for c in lane_of if len(lane_of[c]) > 1]
+    for _ in range(60):
+        improved = False
+        for c in multi:
+            ls = lane_of[c]
+            for i in range(len(ls)):
+                for j in range(i + 1, len(ls)):
+                    before = local(c)
+                    ls[i], ls[j] = ls[j], ls[i]
+                    if local(c) < before - 1e-9:
+                        improved = True
+                    else:
+                        ls[i], ls[j] = ls[j], ls[i]
+        if not improved:
+            break
+    # 6. the lane polylines, the stops on them
+    lanes_xy = {}                                                   # (chain, line or None) -> LED path
+    stop_idx = {}                                                   # chain -> [index into a path of each stop]
+    centre_px = {ci: poly(centre[ci]) for ci in centre}
+    stops_xy = {}
+    for ci, seq in enumerate(chains):
+        px = centre_px[ci]
+        m = len(seq) - 1
+        fr = [k / m for k in range(m + 1)]
+        stop_idx[ci] = fr
+        for k, s in enumerate(seq):
+            stops_xy[s] = px[round(fr[k] * (len(px) - 1))]
+        ls = lane_of[ci]
+        o_list = offs(len(ls))
+        for line, o in zip(ls, o_list):
+            lanes_xy[(ci, line)] = poly(lane_poly(centre[ci], o))
+        lanes_xy[(ci, None)] = px
+    for s in key:
+        stops_xy[s] = pos[s]
+    # stops no solid link serves (rare variants): the warp of the geography
+    for s in range(len(names)):
+        if alias[s] != s:
+            continue
+        if s not in stops_xy:
+            stops_xy[s] = tuple(int(round(v)) for v in warp(ll[s])[0])
+    for s in range(len(names)):
+        if alias[s] != s:
+            stops_xy[s] = stops_xy[alias[s]]
+    for s, (x, y) in list(stops_xy.items()):
+        stops_xy[s] = (min(max(x, 1), W - 2), min(max(y, 1), H - 2))
+
+    def stop_at(ci, line, k):
+        path = lanes_xy.get((ci, line)) or lanes_xy[(ci, None)]
+        return path[round(stop_idx[ci][k] * (len(path) - 1))], round(stop_idx[ci][k] * (len(path) - 1))
+
+    # 7. every timetable pattern's route along its lanes
+    routes = {}
+    for p, (line, seq) in enumerate(pats):
+        pts, at = [], []
+        for n in range(1, len(seq)):
+            a, b = seq[n - 1], seq[n]
+            w = where.get((min(a, b), max(a, b))) if a != b else None
+            if w is None:                                       # no lane (a rare link, or the same place twice)
+                if not pts:
+                    pts = [stops_xy[a]]
+                    at.append(0)
+                if a != b and pts[-1] != stops_xy[b]:
+                    pts += line_pts(pts[-1], stops_xy[b])[1:]
+                at.append(len(pts) - 1)
+                continue
+            ci, i = w
+            path = lanes_xy.get((ci, line)) or lanes_xy[(ci, None)]
+            ia, ib = (i, i + 1) if chains[ci][i] == a else (i + 1, i)
+            ja = round(stop_idx[ci][ia] * (len(path) - 1))
+            jb = round(stop_idx[ci][ib] * (len(path) - 1))
+            seg = path[ja:jb + 1] if ja <= jb else path[jb:ja + 1][::-1]
+            if not pts:
+                pts = list(seg)
+                at.append(0)
+            else:
+                if pts[-1] != seg[0]:
+                    pts += line_pts(pts[-1], seg[0])[1:]
+                pts += seg[1:]
+            at.append(len(pts) - 1)
+        if not pts:
+            pts = [stops_xy[seq[0]]]
+            at = [0] * len(seq)
+        routes[p] = _compress(pts, at)
+    # 8. lane drawings in z-order, with the LEDs each clears where it crosses a link it does not meet
+    z = {l: (Z_ORDER.index(l) if l in Z_ORDER else 99) for l in {l for l, _ in pats}}
+    ends = {ci: {chains[ci][0], chains[ci][-1]} for ci in range(len(chains))}
+    own = {}
+    for (ci, line), path in lanes_xy.items():
+        if line is not None:
+            for p in path:
+                own.setdefault(p, set()).add(ci)
+    draw = []
+    for ci in sorted(range(len(chains)), key=lambda c: max([z[l] for l in lane_of[c]] or [0])):
+        ls = lane_of[ci]
+        if not ls:
+            continue
+        mine = set()
+        for line in ls:
+            mine.update(lanes_xy[(ci, line)])
+        clear = set()
+        for p in mine:
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    q = (p[0] + dx, p[1] + dy)
+                    if q in mine or q not in own:
+                        continue
+                    others = own[q] - {ci}
+                    if others and all(not (ends[ci] & ends[o]) for o in others) and all(
+                            (max([z[l] for l in lane_of[o]] or [0]), o) < (max(z[l] for l in ls), ci) for o in others):
+                        clear.add(q)
+        for line in sorted(ls, key=lambda l: z[l]):
+            draw.append({"l": line, "v": _vertices(lanes_xy[(ci, line)]), "c": [list(q) for q in clear] if line == ls[0] else []})
+    # connectors where a line passes from one link to the next
+    conn = set()
+    for a, c1, s1, c2, s2, line in passes:
+        p, q = end_point(c1, line, s1), end_point(c2, line, s2)
+        if p != q:
+            conn.add((line, p, q) if p < q else (line, q, p))
+    for line, p, q in sorted(conn):
+        draw.append({"l": line, "v": _vertices(line_pts(p, q)), "c": []})
+    # 9. marks: ticks across the bundles of the busiest junctions, bars at the ends of the lines
+    marks = _marks(chains, centre, lane_of, key, adj, offs, names)
+    out_stops = [[int(stops_xy[i][0]), int(stops_xy[i][1]), names[i]] for i in range(len(names))]
+    all_px = set()
+    for path in lanes_xy.values():
+        all_px.update(path)
+    all_px.update((m[0], m[1]) for m in marks)
+    labels = _place_labels(out_stops, all_px)
+    home = next(i for i, s in enumerate(out_stops) if s[2] == HOME)
+    water = _water(warp, ll)
+    return {"w": W, "h": H, "stops": out_stops, "home": home, "lanes": draw,
+            "routes": {str(p): r for p, r in routes.items()}, "marks": marks, "labels": labels, "water": water}
+
+
+def line_pts(p, q):
+    return line(tuple(p), tuple(q))
+
+
+def _vertices(px):
+    """Corner points of a whole-LED path (the LEDs between are the straight runs between them)."""
+    if len(px) < 3:
+        return [list(p) for p in px]
+    out = [px[0]]
+    for i in range(1, len(px) - 1):
+        d1 = (px[i][0] - px[i - 1][0], px[i][1] - px[i - 1][1])
+        d2 = (px[i + 1][0] - px[i][0], px[i + 1][1] - px[i][1])
+        if d1 != d2:
+            out.append(px[i])
+    out.append(px[-1])
+    return [list(p) for p in out]
+
+
+def _compress(px, at):
+    """A route as vertices, plus the vertex of each stop (stops are kept as vertices)."""
+    keep = set(at) | {0, len(px) - 1}
+    out, idx = [], {}
+    for i, p in enumerate(px):
+        if i in keep or (0 < i < len(px) - 1 and (px[i][0] - px[i - 1][0], px[i][1] - px[i - 1][1]) !=
+                         (px[i + 1][0] - px[i][0], px[i + 1][1] - px[i][1])):
+            idx[i] = len(out)
+            out.append(list(p))
+    # a stop LED repeated (same LED twice in a row) keeps its own vertex index
+    return {"v": out, "s": [idx[i] for i in at]}
+
+
+def _marks(chains, centre, lane_of, key, adj, offs, names):
+    """[[x, y, kind]]: kind 0 an interchange tick across the busiest bundle at the stop, 1 a bar closing a terminus."""
+    marks = []
+    info = {}
+    for ci, seq in enumerate(chains):
+        for end, s in ((0, seq[0]), (1, seq[-1])):
+            info.setdefault(s, []).append((ci, end))
+    ranked = []
+    for s, lst in info.items():
+        union = set()
+        for ci, _ in lst:
+            union.update(lane_of[ci])
+        ranked.append((len(union), len(lst), s))
+    ranked.sort(reverse=True)
+    ticks = [s for u, d, s in ranked if d >= 3 and u >= 3][:ALL_TICKS]
+    for s, lst in info.items():
+        term = len(lst) == 1
+        if s not in ticks and not term:
+            continue
+        ci, end = max(lst, key=lambda t: len(lane_of[t[0]]))
+        pts = centre[ci]
+        k = len(lane_of[ci])
+        o = offs(k)
+        if end == 0:
+            p, q = pts[0], pts[1]
+            at = p
+        else:
+            p, q = pts[-2], pts[-1]
+            at = q
+        ux, uy = _sgn(q[0] - p[0]), _sgn(q[1] - p[1])
+        if term:                                                     # one LED beyond the last stop, outwards
+            at = (at[0] - ux, at[1] - uy) if end == 0 else (at[0] + ux, at[1] + uy)
+        for t in range(o[0] - 1, o[-1] + 2):
+            sx, sy = _shift(p, q, t)
+            marks.append([at[0] + sx, at[1] + sy, 1 if term else 0])
+    return marks
+
+
+def _water(warp, ll):
+    """The lake and the rivers of assets/maps/zurich.json warped to the wall (dim background)."""
+    import numpy as np
+    try:
+        with open(os.path.join(HERE, "assets", "maps", "zurich.json")) as fh:
+            m = json.load(fh)
+    except Exception:
+        return {"lakes": [], "rivers": []}
+
+    def inside(poly_):
+        la = [p[0] for p in poly_]
+        lo = [p[1] for p in poly_]
+        return 47.20 < sum(la) / len(la) < 47.45 and 8.40 < sum(lo) / len(lo) < 8.80 and max(la) - min(la) > 0.003
+
+    def conv(pts):
+        a = np.array([project(*p) for p in pts], float)
+        w = warp(a)
+        return [[int(round(x)), int(round(y))] for x, y in w]
+    lakes = []
+    for lk in m.get("lakes", []):
+        if inside(lk) and len(lk) > 3:
+            lakes.append(conv(lk))
+    rivers = []
+    for r in m.get("rivers", []):
+        rr = [p for p in r if 47.30 < p[0] < 47.46 and 8.40 < p[1] < 8.66]
+        if len(rr) > 3:
+            rivers.append(conv(rr))
+    return {"lakes": lakes, "rivers": rivers}
+
+
+def _place_labels(stops, busy_px):
     """Each LABELS word beside its stop, on whichever side crosses the fewest lines and other words and stays
     on the wall."""
     glyph_w = lambda t: max(0, 4 * len(t) - 1)
-    busy = {}
-    for ed in edges:
-        for p in _pixels([tuple(q) for q in ed["pts"]]):
-            busy[p] = busy.get(p, 0) + 1
     dots = {(s[0], s[1]) for s in stops}
     placed, out = [], []
     wanted = [(i, LABELS[s[2]]) for i, s in enumerate(stops) if s[2] in LABELS]
@@ -393,19 +770,18 @@ def _place_labels(stops, edges):
     for i, text in wanted:
         x, y = stops[i][0], stops[i][1]
         w = glyph_w(text)
-        cands = [(x + 3, y - 2), (x - 2 - w, y - 2), (x - w // 2, y - 8), (x - w // 2, y + 4),
-                 (x + 3, y - 7), (x + 3, y + 3), (x - 2 - w, y - 7), (x - 2 - w, y + 3),
-                 (x + 2, y - 10), (x - 1 - w, y - 10), (x + 2, y + 6), (x - 1 - w, y + 6),
-                 (x + 6, y - 2), (x - 5 - w, y - 2), (x + 5, y - 6), (x - 4 - w, y + 2),
-                 (x - w // 2, y - 12), (x - w // 2, y + 8)]
+        cands = [(x + 5, y - 2), (x - 4 - w, y - 2), (x - w // 2, y - 9), (x - w // 2, y + 6),
+                 (x + 5, y - 8), (x + 5, y + 4), (x - 4 - w, y - 8), (x - 4 - w, y + 4),
+                 (x + 8, y - 2), (x - 7 - w, y - 2), (x - w // 2, y - 13), (x - w // 2, y + 10),
+                 (x + 10, y - 6), (x - 9 - w, y + 2), (x + 12, y + 3), (x + 12, y - 8), (x - 11 - w, y - 8), (x - 11 - w, y + 4)]
         best, best_cost = None, None
         for k, (tx, ty) in enumerate(cands):
-            if tx < 1 or ty < 1 or tx + w > W - 1 or ty + 5 > H - 1:
+            if tx < 1 or ty < 1 or tx + w > W - 1 or ty + 5 > H - 9:
                 continue
             cost = k * 0.5
             for xx in range(tx - 1, tx + w + 1):
                 for yy in range(ty - 1, ty + 6):
-                    cost += 1.0 * busy.get((xx, yy), 0) + (4 if (xx, yy) in dots else 0)
+                    cost += 1.5 * ((xx, yy) in busy_px) + (4 if (xx, yy) in dots else 0)
             for (ox, oy, ow) in placed:
                 if tx - 2 < ox + ow and ox - 2 < tx + w and ty - 2 < oy + 5 and oy - 2 < ty + 5:
                     cost += 200

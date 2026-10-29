@@ -1,15 +1,17 @@
-"""Tram map: every Zürich tram moving on an Underground-style map of its lines.
+"""Tram map: every Zürich tram moving on a simplified copy of the VBZ network map.
 
-The map is the schematic from tools/build_trams.py (assets/trams/layout.json: every stop on a whole LED,
-every link a straight run with at most one 45 degree bend, the centre magnified) and the timetable next to
-it (assets/trams/zurich_trams.json.gz: the VBZ trams for a week). Under it all is a still drawing: the
-links as faint lines (grey where several lines share them, tinted where one line has them to itself), a dot
-per stop, a few names and a marker on Rennweg, the apartment's stop.
+The map is the schematic from tools/build_trams.py (assets/trams/layout.json): the junctions and termini
+hand-placed on the wall in the shape of the official map (HB top-centre, the Bahnhofstrasse down to the lake,
+the Sihl on the left), every link an octilinear run, and the lines that share a link running side by side
+as parallel one-LED stripes, each in its own VBZ colour and in the same lane through the junctions. Under
+it a dim Zürichsee and Limmat/Sihl; on it a tick at the main interchanges, a bar closing each terminus, a
+few words and a marker on Rennweg, the apartment's stop. All of it is a still drawing made once.
 
 Every frame the real clock (Europe/Zürich) is looked up in the timetable: each trip that is on the road
 now - today's, and yesterday's that run past midnight - is placed between its stops by its own arrival and
-departure times and drawn as one bright LED in its line's colour with a short fading trail behind it.
-Timetable only: the trams are where they should be, not where they are (no network, no delays).
+departure times and drawn as one bright LED in its line's colour with a short fading trail behind it, on
+its own lane. With an opentransportdata key (Live) the delays and cancellations of the real trams are
+applied and the corner says LIVE; otherwise the trams run to the timetable (TIMETABLE).
 
 Everything is whole LEDs, no anti-aliasing (a soft dot gliding between LEDs shimmers). A tram steps from
 LED to LED along its route, so a link a minute long is crossed in a few LED-steps: slow, like the real thing.
@@ -36,14 +38,15 @@ DATA = os.path.join(HERE, "assets", "trams", "zurich_trams.json.gz")
 LAYOUT = os.path.join(HERE, "assets", "trams", "layout.json")
 
 TRAIL = (0.62, 0.45, 0.32, 0.22, 0.15, 0.10, 0.06)       # LEDs behind the head, as a share of its brightness
-EDGE_SHARED = (30, 30, 38)                         # a link several lines run along
-EDGE_TINT = 0.34                                   # a link one line has to itself: its colour at this level
-STOP, STOP_HUB = (78, 78, 92), (150, 150, 165)    # a stop; one where three or more lines meet
-LABEL = (62, 62, 80)
+STRIPE = 0.6                                       # a line's stripe on the map, as a share of its head's brightness
+TICK, BAR = (200, 200, 215), (225, 225, 235)       # an interchange; the end of a line
+LABEL = (58, 58, 76)
+LAKE, RIVER = (4, 11, 24), (8, 18, 36)             # the water, far below the lines
 HOME_MARK = (255, 200, 90)
-# Lines whose paper colour is black (7, 50, 51) or too dark/close to another to read on an LED become
-# these; everything else is the line colour stretched to full brightness.
-LED = {"5": (235, 112, 38), "7": (160, 165, 175), "50": (235, 235, 235), "51": (235, 235, 235)}
+# The line colours stretched to full brightness, except where that makes two lines alike or a black line
+# invisible: 5 brown -> orange, 7 black -> pale grey, 10 pink and 17 plum apart, the black 50/51 near white.
+LED = {"5": (235, 112, 38), "7": (190, 192, 200), "10": (255, 95, 175), "17": (190, 25, 100),
+       "50": (235, 235, 235), "51": (235, 235, 235)}
 
 
 LIVE_URL = "https://api.opentransportdata.swiss/la/gtfs-rt"      # the whole country, ~9 MB, GTFS-RT trip updates
@@ -136,13 +139,29 @@ def _led(line, hex_):
     return c * (255.0 / max(c.max(), 1.0))
 
 
+def _line(p, q):
+    """Whole LEDs from p to q (Bresenham), both ends included."""
+    (x0, y0), (x1, y1) = p, q
+    dx, dy = abs(x1 - x0), abs(y1 - y0)
+    sx, sy = (x1 > x0) - (x1 < x0), (y1 > y0) - (y1 < y0)
+    out, err = [(x0, y0)], dx - dy
+    while (x0, y0) != (x1, y1):
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x0 += sx
+        if e2 < dx:
+            err += dx
+            y0 += sy
+        out.append((x0, y0))
+    return out
+
+
 def _pixels(pts):
-    """Every whole LED on a polyline of 0/45/90 degree segments, in order, corners not repeated."""
+    """Every whole LED on a polyline of vertices, in order, corners not repeated."""
     out = [tuple(pts[0])]
-    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-        n = max(abs(x1 - x0), abs(y1 - y0))
-        sx, sy = (x1 > x0) - (x1 < x0), (y1 > y0) - (y1 < y0)
-        out += [(x0 + sx * i, y0 + sy * i) for i in range(1, n + 1)]
+    for p, q in zip(pts, pts[1:]):
+        out += _line(tuple(p), tuple(q))[1:]
     return out
 
 
@@ -169,11 +188,6 @@ class TramMap:
             self._resort(order)
         self.span = int((self.end - self.t0).max()) if len(trips) else 0
         self._prof_cache, self._route_cache = {}, {}
-        self.edge = {}
-        for e in lay["edges"]:
-            self.edge[(e["a"], e["b"])] = e["pts"]
-        self.sx = [s[0] for s in lay["stops"]]
-        self.sy = [s[1] for s in lay["stops"]]
         self.live = Live(self.tid)
         self.base = self._base()
         self.home = lay["stops"][lay["home"]][:2]
@@ -190,28 +204,33 @@ class TramMap:
     def _base(self):
         img = np.zeros((H, W, 3), np.uint8)
         lay = self.lay
-        hub = {}
-        for e in lay["edges"]:
-            for s in (e["a"], e["b"]):
-                hub.setdefault(s, set()).update(e["lines"])
-        shared = [e for e in lay["edges"] if len(e["lines"]) != 1]
-        single = [e for e in lay["edges"] if len(e["lines"]) == 1]
-        for group in (shared, single):
-            for e in group:
-                col = (np.array(EDGE_SHARED, np.float32) if len(e["lines"]) != 1
-                       else self.colour.get(e["lines"][0], np.array(EDGE_SHARED, np.float32)) * EDGE_TINT)
-                for x, y in _pixels(e["pts"]):
-                    if 0 <= x < W and 0 <= y < H:
-                        img[y, x] = np.maximum(img[y, x], col.astype(np.uint8))
-        for s, ls in hub.items():
-            x, y = self.lay["stops"][s][:2]
+        wat = lay.get("water", {})
+        from PIL import ImageDraw
+        im = Image.fromarray(img)
+        dr = ImageDraw.Draw(im)
+        for lake in wat.get("lakes", []):
+            if len(lake) >= 3:
+                dr.polygon([tuple(p) for p in lake], fill=LAKE)
+        for r in wat.get("rivers", []):
+            dr.line([tuple(p) for p in r], fill=RIVER, width=1)
+        img = np.array(im)
+        water = img.copy()
+        for lane in lay["lanes"]:                          # in z-order: a later link crosses over an earlier one
+            for x, y in lane["c"]:
+                if 0 <= x < W and 0 <= y < H:
+                    img[y, x] = water[y, x]
+            col = (self.colour.get(lane["l"], np.array((200, 200, 200), np.float32)) * STRIPE).astype(np.uint8)
+            for x, y in _pixels(lane["v"]):
+                if 0 <= x < W and 0 <= y < H:
+                    img[y, x] = col
+        for x, y, kind in lay["marks"]:
             if 0 <= x < W and 0 <= y < H:
-                img[y, x] = STOP_HUB if len(ls) >= 3 else STOP
-        hx, hy = lay["stops"][lay["home"]][:2]
-        img[hy, hx] = HOME_MARK
+                img[y, x] = BAR if kind else TICK
         from display import pixelfont
         for x, y, text in lay["labels"]:
             pixelfont.draw(img, text, x, y, LABEL)
+        hx, hy = lay["stops"][lay["home"]][:2]
+        img[hy, hx] = HOME_MARK
         return img
 
     # ---- a profile, a pattern's route --------------------------------------------------------------------
@@ -225,21 +244,13 @@ class TramMap:
         """(route LEDs as [(x, y)...], index of each stop of pattern p within them)."""
         r = self._route_cache.get(p)
         if r is None:
-            seq = self.patterns[p][1]
-            leds, at = [], [0]
-            for a, b in zip(seq, seq[1:]):
-                if (a, b) in self.edge:
-                    pts = self.edge[(a, b)]
-                elif (b, a) in self.edge:
-                    pts = self.edge[(b, a)]
-                else:
-                    pts = [[self.sx[a], self.sy[a]], [self.sx[b], self.sy[b]]]
-                if tuple(pts[0]) != (self.sx[a], self.sy[a]):          # stored from b to a
-                    pts = pts[::-1]
-                run = _pixels(pts)
-                leds += run[1:] if leds else run
-                at.append(len(leds) - 1)
-            r = self._route_cache[p] = (leds, at)
+            ro = self.lay["routes"][str(p)]
+            v = [tuple(q) for q in ro["v"]]
+            leds, at = [v[0]], {0: 0}
+            for k in range(1, len(v)):
+                leds += _line(v[k - 1], v[k])[1:]
+                at[k] = len(leds) - 1
+            r = self._route_cache[p] = (leds, [at[k] for k in ro["s"]])
         return r
 
     def _at(self, p, q, tau):

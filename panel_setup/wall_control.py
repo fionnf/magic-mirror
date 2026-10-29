@@ -60,12 +60,13 @@ MODES = [
     ("satellites", "Art", "Satellites", "The sky over Zürich: the ISS and the brightest satellites crossing it now"),
     ("tides", "Art", "Tides", "The sea at Baltimore: the real tide rising and falling, the swell, the moon"),
     ("tramlines", "Art", "Tram map", "Every Zürich tram moving on an Underground-style map of its lines"),
+    ("trains", "Art", "Trains", "Every train around Zürich moving on an S-Bahn map of its lines, live"),
     ("quakes", "Art", "Earthquakes", "A turning globe, every earthquake of the last day rippling out from where it struck"),
 ]
 MODE_IDS = {m[0] for m in MODES}
 LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "westcork.thumb",   # mode -> module.thumb
                "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "snow": "snow.thumb",
-               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb",
+               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "trains": "trains.thumb",
                "quakes": "quakes.thumb"}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",

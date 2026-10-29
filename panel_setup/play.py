@@ -95,6 +95,7 @@ def _anims():
         "satellites": (_lazy("satellites", "frame"), 3600.0 * 24),
         "tides":   (_lazy("tides", "frame"), 3600.0 * 24),
         "tramlines": (_lazy("tramlines", "frame"), 3600.0 * 24),
+        "trains":  (_lazy("trains", "frame"), 3600.0 * 24),
         "quakes":  (_lazy("quakes", "frame"), 3600.0 * 24),
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),
@@ -315,7 +316,7 @@ def main():
     up_lock, up_t, down_ok = 60.0, -1e9, 0.0       # after slowing down, do not speed up again for a while (it judders)
     t_prev, art_t, slow = None, None, 1.0           # the art's own clock, slowed while frames are held longer
     heat_t, heat_floor = 0.0, 0                     # thermal guard: a hot chip gets fewer frames to make
-    if a.anim in ("planes", "westcork", "windch", "windie", "snow", "satellites", "tides", "tramlines", "quakes"):            # single lit LEDs on black: deeper colour would slow the refresh (flicker)
+    if a.anim in ("planes", "westcork", "windch", "windie", "snow", "satellites", "tides", "tramlines", "trains", "quakes"):            # single lit LEDs on black: deeper colour would slow the refresh (flicker)
         os.environ["WALL_FIXED_DEPTH"] = "1"
     rods = None
     try:

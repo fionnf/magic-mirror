@@ -53,6 +53,7 @@ MODES = [
     ("trams", "Live", "Tram board", "Live departures from Rennweg, split-flap style"),
     ("planes", "Art", "Planes", "Every aircraft over Zürich right now, drawing its path in light"),
     ("limmat", "Art", "Limmat", "The river flowing at its real speed, coloured by the lake's temperature"),
+    ("exposure", "Live", "Long exposure", "The camera paints where people move, building up all evening like a long photograph"),
     ("westcork", "Art", "West Cork", "Mizen, Fastnet, Schull and Baltimore at night, every light flashing its real signal"),
     ("windch", "Art", "Wind over Switzerland", "The real wind right now, thousands of points of light flowing over the country"),
     ("windie", "Art", "Wind over Ireland", "The Atlantic wind over Ireland right now, flowing in light"),
@@ -147,7 +148,7 @@ class Runner:
     # -- commands
     def _cmd(self, what):
         if what in MODE_IDS:
-            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva", "flow")
+            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva", "flow", "exposure")
             return [PY, "panel_setup/play.py", what, "--fps", "29" if heavy else "58"]   # art: 58 fps when it can
         if what == "mirror":
             cmd = [PY, "-u", "main.py", "--no-touch", "--no-mqtt"]

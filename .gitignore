@@ -64,3 +64,5 @@ panel_setup/livecams.json
 matter/node_modules/
 panel_setup/matter_pairing.json
 panel_setup/wall_switch.json
+panel_setup/exposure_now.npz
+panel_setup/exposures/

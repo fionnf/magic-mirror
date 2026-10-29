@@ -73,7 +73,7 @@ def _lazy(mod, attr):
 def _anims():
     from display import (welcome, pride_show, cards, maeva_story, dewa_story, art,
                          departures, music, shapes, light_art, artsy, shaders, daily, flow,
-                         planes, limmat, westcork)
+                         planes, limmat, westcork, exposure)
     return {
         "music":   (music.frame, 600.0),
         "trams":   (departures.frame, 60.0),
@@ -89,6 +89,7 @@ def _anims():
         "planes":  (planes.frame, 3600.0 * 24),
         "limmat":  (limmat.frame, 3600.0 * 24),
         "westcork": (westcork.frame, 3600.0 * 24),
+        "exposure": (exposure.frame, 3600.0 * 24),
         "windch":  (_lazy("wind", "frame_ch"), 3600.0 * 24),
         "windie":  (_lazy("wind", "frame_ie"), 3600.0 * 24),
         "windeu":  (_lazy("wind", "frame_eu"), 3600.0 * 24),

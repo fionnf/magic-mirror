@@ -59,12 +59,17 @@ ICE_BASE = "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/geotiff/"
 ICE_EVERY = 24 * 3600.0
 IDLE = 120.0
 
-SEA = (0, 0, 0)
-LAND = (22, 24, 36)
-COAST = (52, 60, 92)
-ICE_LO, ICE_HI = (22, 52, 92), (92, 142, 186)      # 15 % ice ... 100 % ice: deep blue to pale blue
-TEXT = (112, 122, 172)
-LABEL = (110, 118, 160)
+# palette: deep colours, every lit channel well above the LEDs' dark floor
+SEA_TOP, SEA_BOT = (7, 18, 30), (2, 5, 12)               # polar-night sea, a teal-violet glow high up
+LAND_LO, LAND_HI = (15, 20, 33), (27, 35, 54)            # coastal lowland ... inland relief
+COAST, COAST_OUT = (46, 70, 112), (7, 12, 24)          # the hairline and its glow offshore
+ICE_LO, ICE_MID, ICE_HI = (18, 44, 86), (58, 108, 164), (170, 206, 234)   # 15 % ... 100 % ice
+ICE_RIM = (22, 34, 38)                                   # the lit edge / glints
+MIN_FLOE = 400                                           # LEDs: smaller ice patches are 25 km cell noise
+AUR_ROWS, AUR_AMP = 96, 0.55
+AUR_G, AUR_V = (8, 44, 36), (30, 16, 52)
+MONTH_COL, DIM_COL, FAINT_COL, RULE_COL = (168, 186, 232), (96, 110, 162), (62, 72, 110), (54, 62, 100)
+TL_FUT, TL_PAST, TL_TICK, TL_INI, TL_NOW = (30, 36, 62), (120, 146, 206), (54, 62, 100), (58, 66, 104), (168, 186, 232)
 
 _E = 0.0818191908426           # WGS84 eccentricity
 
@@ -222,6 +227,39 @@ def _hsv(h, s, v):
     return tuple(int(round(255 * x)) for x in colorsys.hsv_to_rgb((h % 360) / 360.0, s, v))
 
 
+def _smooth(x, a, b):
+    t = np.clip((x - a) / (b - a), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+_BAYER = np.array([[0, 32, 8, 40, 2, 34, 10, 42], [48, 16, 56, 24, 50, 18, 58, 26], [12, 44, 4, 36, 14, 46, 6, 38],
+                   [60, 28, 52, 20, 62, 30, 54, 22], [3, 35, 11, 43, 1, 33, 9, 41], [51, 19, 59, 27, 49, 17, 57, 25],
+                   [15, 47, 7, 39, 13, 45, 5, 37], [63, 31, 55, 23, 61, 29, 53, 21]], np.float32)
+_BAYER = np.tile((_BAYER + 0.5) / 64.0, (H // 8 + 1, W // 8 + 1))[:H, :W, None]
+
+# the soft halo around a head: whole LEDs at graded levels (centre 1, the four neighbours about half, ...)
+_HALO = np.array([[0.00, 0.06, 0.10, 0.06, 0.00],
+                  [0.06, 0.22, 0.36, 0.22, 0.06],
+                  [0.10, 0.36, 1.00, 0.36, 0.10],
+                  [0.06, 0.22, 0.36, 0.22, 0.06],
+                  [0.00, 0.06, 0.10, 0.06, 0.00]], np.float32)
+
+# where a label may sit relative to its bear: (dx, dy of the label's top-left, leader start, leader end)
+_SLOTS = (("R", 6, -2), ("L", -6, -2), ("UR", 5, -10), ("DR", 5, 6), ("UL", -5, -10), ("DL", -5, 6))
+
+FADE_IN = 2.5                  # seconds of fade up at the start of every loop (and of the piece)
+FADE_OUT = 3.0                 # seconds of fade down at the end of the rest
+N_LABELS = 6                   # only the bears nearest the middle of the picture wear their number
+TAIL_DAYS = 27.0               # a comet tail's reach, tapering smoothly to nothing
+
+
+def _noise(seed, sigma):
+    rng = np.random.RandomState(seed)
+    import cv2
+    n = cv2.GaussianBlur(rng.randn(H, W).astype(np.float32), (0, 0), sigma)
+    return n / (np.abs(n).max() + 1e-6)
+
+
 class Bears:
     def __init__(self, fetch=True):
         import cv2
@@ -245,14 +283,24 @@ class Bears:
         self.cycle = self.days * SEC_PER_DAY + HOLD
         n = len(self.bears)
         order = sorted(range(n), key=lambda i: self.bears[i]["id"])
-        for rank, i in enumerate(order):                           # warm hues only, so bears stand out from the blue ice
-            hue = -40 + 150.0 * ((rank * 0.618034) % 1.0)
-            self.bears[i]["col"] = np.array(_hsv(hue, 0.80, 1.0), np.float32)
+        for rank, i in enumerate(order):
+            # one family of hues, rose through coral and amber to gold: warm against the cool ice, never a rainbow
+            hue = -22 + 84.0 * ((rank * 0.618034) % 1.0)
+            c = np.array(_hsv(hue, 0.74, 1.0), np.float32)
+            self.bears[i]["col"] = c
+            self.bears[i]["core"] = c + (255.0 - c) * 0.50
         self.land = self._land_mask()
         self.ice_rec = None
         self.ice_t = 0.0
         self.base = None
         self.last_frame = time.time()
+        self.first_t = None
+        self.lab_alpha, self.lab_slot = {}, {}
+        self.lab_t = None
+        yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+        self.xx, self.yy = xx, yy
+        self.ph = (_noise(5, 6.0) * 1.6 + xx * 0.045 + yy * 0.035).astype(np.float32)
+        self.ph2 = (_noise(9, 4.0) * 2.5 + xx * 0.06 - yy * 0.045).astype(np.float32)
         rec = _read_cache()
         if _ice_ok(rec):
             self.ice_rec, self.ice_t = rec, float(rec.get("t", 0.0))
@@ -275,27 +323,71 @@ class Bears:
         return m.astype(bool)
 
     def rebuild_base(self):
+        """Everything that does not move: night sea, land relief, the coast's hairline glow, the ice field.
+        Built as float RGB; the ice is kept as a separate additive layer so it can shimmer."""
         cv2 = self.cv2
-        img = np.zeros((H, W, 3), np.float32)
-        img[:] = SEA
+        land = self.land
+        v = (self.yy / (H - 1)).astype(np.float32)
+        top, bot = np.array(SEA_TOP, np.float32), np.array(SEA_BOT, np.float32)
+        t = _smooth(v, 0.0, 0.85)[..., None]
+        sea = top * (1 - t) + bot * t                               # polar night: a faint teal-violet glow high up
+
+        # land: a soft relief. Distance from the coast lifts the inland, smooth noise adds ridges, and a light
+        # from the north-west shades them. Always a quiet, dark slate so the bears stay the brightest thing.
+        din = cv2.distanceTransform(land.astype(np.uint8), cv2.DIST_L2, 3)
+        h = 0.9 * (1 - np.exp(-din / 7.0)) + 0.5 * _noise(3, 3.5) + 0.25 * _noise(4, 1.8)
+        h = cv2.GaussianBlur(h.astype(np.float32), (0, 0), 0.8)
+        gy, gx = np.gradient(h)
+        shade = np.clip(-(gx + gy) * 4.0, -1, 1)
+        lo, hi = np.array(LAND_LO, np.float32), np.array(LAND_HI, np.float32)
+        f = np.clip(0.35 + 0.65 * (1 - np.exp(-din / 9.0)), 0, 1)[..., None]
+        ld = lo + (hi - lo) * f
+        ld = ld * (1.0 + 0.28 * shade[..., None]) + np.array((2, 3, 6), np.float32) * shade[..., None]
+        img = np.where(land[..., None], ld, sea).astype(np.float32)
+
+        # the ice: only ice that is part of a real field (no stray 25 km cells), softly feathered
+        self.ice_add = None
+        self.ice_idx = None
         if self.ice_rec is not None:
             c = ice_concentration(self.ice_rec)
-            # the 25 km cells cannot see fjords (their passive microwave reading bleeds off the land): 
-            # ice within ~10 km of the coast
-            dist = self.cv2.distanceTransform((~self.land).astype(np.uint8), self.cv2.DIST_L2, 3)
-            lit = (c >= 0.15) & (dist > 9.0)
-            f = np.clip((c - 0.15) / 0.85, 0, 1)[..., None]
-            col = np.array(ICE_LO, np.float32) + (np.array(ICE_HI, np.float32) - np.array(ICE_LO, np.float32)) * f
-            img = np.where(lit[..., None], col, img)
+            dist = cv2.distanceTransform((~land).astype(np.uint8), cv2.DIST_L2, 3)
+            c = c * _smooth(dist, 5.0, 10.0)                        # the 25 km cells bleed off the land: keep off the coast
+            n, lab, stats, _ = cv2.connectedComponentsWithStats((c >= 0.15).astype(np.uint8), connectivity=8)
+            keep = np.zeros(n, bool)
+            keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= MIN_FLOE
+            c = np.where(keep[lab], c, 0.0).astype(np.float32)
+            c = cv2.GaussianBlur(c, (0, 0), 1.3)
+            a = _smooth(c, 0.10, 0.34)
+            a[land] = 0.0
+            # colour by concentration: deep blue, then pale blue, then near white
+            cc = np.clip((c - 0.15) / 0.85, 0, 1)[..., None]
+            c0, c1, c2 = (np.array(x, np.float32) for x in (ICE_LO, ICE_MID, ICE_HI))
+            col = np.where(cc < 0.5, c0 + (c1 - c0) * (cc / 0.5), c1 + (c2 - c1) * ((cc - 0.5) / 0.5))
+            rim = np.exp(-((c - 0.22) / 0.07) ** 2)[..., None] * a[..., None]       # the lit edge of the field
+            col = col + rim * np.array(ICE_RIM, np.float32)
+            add = (col - img) * a[..., None]
+            idx = np.nonzero(a > 0.01)
+            self.ice_idx = idx
+            self.ice_add = add[idx].astype(np.float32)
+            self.ice_a = a[idx].astype(np.float32)
             d = self.ice_rec["date"]
             self.ice_label = f"ICE {int(d[6:8])} {_MONTHS[int(d[4:6]) - 1]}"
         else:
             self.ice_label = "ICE NONE"
-        img[self.land] = LAND
-        u8 = img.astype(np.uint8)
-        for pts in self.coast:
-            cv2.polylines(u8, [pts], True, COAST, 1, cv2.LINE_8)
-        self.base = u8.astype(np.float32)
+        # the coast: a hair-thin lit line on the land's rim and the faintest glow just offshore
+        u = land.astype(np.uint8)
+        er = cv2.erode(u, np.ones((3, 3), np.uint8)).astype(bool)
+        dl = cv2.dilate(u, np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], np.uint8)).astype(bool)
+        rim_in = land & ~er
+        rim_out = dl & ~land
+        img[rim_out] = img[rim_out] + np.array(COAST_OUT, np.float32)
+        img[rim_in] = np.maximum(img[rim_in], COAST)
+        self.base = img.astype(np.float32)
+        self.sea_w = (~land).astype(np.float32)[..., None]
+        self.ice_cover = None
+        # aurora: curtains confined to the upper part, precomputed envelope
+        ay = np.exp(-self.yy / 52.0).astype(np.float32)
+        self.aur_env = (ay * _smooth(self.yy, 0, 6)).astype(np.float32)[:AUR_ROWS]
 
     # ---- the ice, fetched once a day
     def _fetch_loop(self):
@@ -322,17 +414,36 @@ class Bears:
 
     # ---- one frame
     def __call__(self, t):
+        cv2 = self.cv2
         self.last_frame = time.time()
+        if self.first_t is None:
+            self.first_t = t
+        base, ice_add, idx = self.base, self.ice_add, self.ice_idx
         cyc = t % self.cycle
         day = min(cyc / SEC_PER_DAY, self.days)
         T = self.t0 + day * 86400.0
-        img = self.base.copy()
-        ages = np.arange(0.0, TRAIL_DAYS, STEP)
-        lvl = np.exp(-ages / TAU)
-        keep = lvl >= 0.16
-        ages, lvl = ages[keep], lvl[keep]
-        # a quiet breath on every head
-        breathe = 0.9 + 0.1 * math.sin(t * 2.2)
+        img = base.copy()
+        # the ice breathes: a slow swell with a few pale glints drifting across it
+        if ice_add is not None:
+            ph, ph2 = self.ph[idx], self.ph2[idx]
+            sh = 1.0 + 0.09 * np.sin(ph + t * 0.35) + 0.05 * np.sin(ph2 - t * 0.6)
+            gl = np.maximum(0.0, np.sin(ph2 * 0.8 + t * 0.4 + 1.3)) ** 6
+            img[idx] = img[idx] + ice_add * sh[:, None] + (gl * 0.30 * self.ice_a)[:, None] * np.array(ICE_RIM, np.float32)
+        # the aurora: slow green-violet curtains high in the night, over the sea only
+        ar = AUR_ROWS
+        x = self.xx[:ar]
+        y = self.yy[:ar]
+        wv = 0.5 + 0.5 * np.sin(x * 0.038 + 1.7 * np.sin(y * 0.045 + t * 0.05) + t * 0.09)
+        wv = wv * (0.55 + 0.45 * np.sin(x * 0.011 - t * 0.04 + 1.0))
+        a = (wv * self.aur_env * AUR_AMP)[..., None]
+        mix = np.clip(0.5 + 0.5 * np.sin(x * 0.02 + t * 0.03), 0, 1)[..., None]
+        acol = np.array(AUR_G, np.float32) * (1 - mix) + np.array(AUR_V, np.float32) * mix
+        img[:ar] += a * acol * self.sea_w[:ar]
+
+        # ---- the comet trails: one smooth brightness taper per bear, screened together
+        ages = np.arange(0.0, TAIL_DAYS, STEP)
+        lvl = (1.0 - ages / TAIL_DAYS) ** 2.0 * (0.80 + 0.20 * np.exp(-ages / 2.5))
+        trail = np.zeros((H, W, 3), np.float32)
         heads = []
         for b in self.bears:
             ts = T - ages * 86400.0
@@ -344,57 +455,180 @@ class Bears:
             j = np.clip(np.searchsorted(b["t"], ts), 1, len(b["t"]) - 1)
             near = np.minimum(np.abs(ts - b["t"][j - 1]), np.abs(b["t"][j] - ts)) <= GAP * 86400.0
             xs, ys = np.interp(ts, b["t"], b["x"]), np.interp(ts, b["t"], b["y"])
-            ix, iy, lv = np.rint(xs).astype(int), np.rint(ys).astype(int), lvl[inside]
+            ix, iy = np.rint(xs).astype(int), np.rint(ys).astype(int)
+            lv, ag = lvl[inside], ages[inside]
             ok = near & (ix >= 0) & (ix < W) & (iy >= 0) & (iy < H)
             if not ok.any():
                 continue
-            ix, iy, lv = ix[ok], iy[ok], lv[ok]
-            col = b["col"][None, :] * lv[:, None]
-            img[iy, ix] = np.maximum(img[iy, ix], col)
-            if ages[inside][ok][0] < 0.5 and T <= b["t"][-1]:        # the newest sample is the head
-                heads.append((b, int(ix[0]), int(iy[0])))
-        for b, x, y in heads:
-            img[y, x] = np.maximum(img[y, x], b["col"] * breathe)
+            ix, iy, lv, ag = ix[ok], iy[ok], lv[ok], ag[ok]
+            ri, rj = iy[::-1], ix[::-1]                              # oldest first, so the newest LED wins
+            trail[ri, rj] = np.maximum(trail[ri, rj], b["col"][None, :] * lv[::-1, None])
+            age0 = float(ag[0])
+            if age0 < 2.0:                                           # the newest sample is the head
+                al = _smooth(2.0 - age0, 0.0, 1.0) * _smooth((T - b["t"][0]) / 86400.0, 0.0, 1.5)
+                if al > 0.02:
+                    heads.append((b, int(ix[0]), int(iy[0]), al))
+        glow = cv2.GaussianBlur(trail, (0, 0), 1.1)
+        img += trail
+        img += glow * 0.75
+
+        # ---- the heads: a bright core with a soft halo of graded LEDs
+        breathe = 0.93 + 0.07 * math.sin(t * 1.9)
+        if heads:
+            hl = np.zeros((H, W, 3), np.float32)
+            for b, x, y, al in heads:
+                hl[y, x] = np.maximum(hl[y, x], b["col"] * al)
+            halo = cv2.filter2D(hl, -1, _HALO, borderType=cv2.BORDER_CONSTANT) * 0.8
+            img += halo
+            for b, x, y, al in heads:
+                img[y, x] = np.maximum(img[y, x] * (1 - al), b["core"] * (al * breathe)) if al < 1 else b["core"] * breathe
+        # ---- labels, interface
+        ov = np.zeros((H, W, 3), np.float32)
+        self._labels(ov, heads, t)
+        img = np.maximum(img, ov)
+        self._corners(img, day, T, cyc, len(heads))
+        # ---- fades: up at the start of the piece and of every loop, down before it starts over
+        fade = min(_smooth(cyc, 0.0, FADE_IN), _smooth(self.cycle - cyc, 0.0, FADE_OUT), _smooth(t - self.first_t, 0.0, FADE_IN))
+        img *= fade
+        # ordered dither for the gradients, whole LEDs at the panel's 6 bits
+        out = np.clip(np.floor(img / 4.0 + _BAYER) * 4.0, 0, 255).astype(np.uint8)
+        return Image.fromarray(out, "RGB")
+
+    # ---- the numbers: only the bears nearest the middle, quiet, fading in and out
+    def _labels(self, ov, heads, t):
+        dt = 0.04 if self.lab_t is None else min(max(t - self.lab_t, 0.0), 0.5)
+        self.lab_t = t
+        step = dt / 0.9
+        cx, cy = W / 2.0, H / 2.0 - 8
+        ranked = sorted(heads, key=lambda h: (h[1] - cx) ** 2 + (h[2] - cy) ** 2)
+        want = set()
+        for r, (b, x, y, al) in enumerate(ranked):
+            if r < N_LABELS or (self.lab_alpha.get(b["id"], 0.0) > 0.05 and r < N_LABELS + 2):   # a little hysteresis
+                want.add(b["id"])
+        occupied = [(x - 3, y - 3, x + 3, y + 3) for b, x, y, al in heads]
         taken = []
-        for b, x, y in heads:
-            self._label(img, b, x, y, taken)
-        self._corners(img, day, T, cyc)
-        return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
+        cv2 = self.cv2
+        by_id = {h[0]["id"]: h for h in heads}
+        for r, (b, x, y, al) in enumerate(ranked):
+            bid = b["id"]
+            s = b["id"]
+            w = pixelfont.width(s)
+            slot = None
+            if bid in want:
+                prefer = self.lab_slot.get(bid)
+                order = [prefer] if prefer is not None else []
+                order += [k for k in range(len(_SLOTS)) if k != prefer]
+                for k in order:
+                    name, dx, dy = _SLOTS[k]
+                    lx = x + dx if dx > 0 else x + dx - w
+                    ly = y + dy
+                    if lx < 2 or ly < 18 or lx + w > W - 2 or ly + 5 > H - 40:
+                        continue
+                    box = (lx - 1, ly - 1, lx + w + 1, ly + 6)
+                    if any(box[0] < o[2] and box[2] > o[0] and box[1] < o[3] and box[3] > o[1] for o in occupied + taken):
+                        continue
+                    slot = (k, lx, ly, box)
+                    break
+            a = self.lab_alpha.get(bid, 0.0)
+            a = min(1.0, a + step) if slot is not None else max(0.0, a - step * 1.4)
+            self.lab_alpha[bid] = a
+            if slot is None:
+                if a <= 0.0:
+                    continue
+                k = self.lab_slot.get(bid)                          # fading out where it was
+                if k is None:
+                    continue
+                name, dx, dy = _SLOTS[k]
+                lx = x + dx if dx > 0 else x + dx - w
+                ly = y + dy
+                box = (lx - 1, ly - 1, lx + w + 1, ly + 6)
+            else:
+                k, lx, ly, box = slot
+                self.lab_slot[bid] = k
+            taken.append(box)
+            e = a * a * (3 - 2 * a)
+            self._leader(ov, x, y, k, w, lx, ly, b["col"] * (0.45 * e))
+            pixelfont.draw(ov, s, lx, ly, b["core"] * (0.66 * e))
+        # forget bears that are gone
+        for bid in [k for k, v in self.lab_alpha.items() if v <= 0.0 and k not in by_id]:
+            del self.lab_alpha[bid]
 
-    def _label(self, img, b, x, y, taken):
-        """The bear's number beside its spot, where it overlaps no other label."""
-        s = b["id"]
-        w, h = pixelfont.width(s), 5
-        for dx, dy in ((3, -2), (-3 - w, -2), (3, -8), (-3 - w, -8), (3, 4), (-3 - w, 4), (-w // 2, -8), (-w // 2, 4),
-                       (3, -12), (-3 - w, 6), (3, 8)):
-            lx, ly = x + dx, y + dy
-            if lx < 1 or ly < 9 or lx + w > W - 1 or ly + h > H - 9:
-                continue
-            if any(lx < r[2] + 3 and lx + w + 3 > r[0] and ly < r[3] + 2 and ly + h + 2 > r[1] for r in taken):
-                continue
-            taken.append((lx, ly, lx + w, ly + h))
-            pixelfont.draw(img, s, lx, ly, b["col"] * 0.72)
-            return
-        # no free place: leave this bear unlabelled for the moment
+    def _leader(self, ov, x, y, k, w, lx, ly, col):
+        name = _SLOTS[k][0]
+        cy = ly + 2
+        if name == "R":
+            pts = ((x + 3, y), (x + 4, y))
+        elif name == "L":
+            pts = ((x - 3, y), (x - 4, y))
+        elif name == "UR":
+            pts = ((x + 2, y - 2), (x + 3, y - 3))
+        elif name == "DR":
+            pts = ((x + 2, y + 2), (x + 3, y + 3))
+        elif name == "UL":
+            pts = ((x - 2, y - 2), (x - 3, y - 3))
+        else:
+            pts = ((x - 2, y + 2), (x - 3, y + 3))
+        for px, py in pts:
+            if 0 <= px < W and 0 <= py < H:
+                ov[py, px] = np.maximum(ov[py, px], col)
 
-    def _corners(self, img, day, T, cyc):
+    # ---- the frame of the picture: month, place, ice date, bears on the record, and the season's timeline
+    def _big(self, img, text, x, y, colour):
+        col = np.asarray(colour, np.float32)
+        for ch in text.upper():
+            g = pixelfont.GLYPHS.get(ch)
+            if g is not None:
+                m = np.kron(g, np.ones((2, 2), np.float32))
+                img[y:y + 10, x:x + 6] = np.maximum(img[y:y + 10, x:x + 6], m[..., None] * col)
+            x += 8
+
+    def _corners(self, img, day, T, cyc, nheads):
         tm = time.gmtime(T)
-        pixelfont.draw(img, _MONTHS[tm.tm_mon - 1], 3, 3, TEXT)
-        pixelfont.draw(img, "SVALBARD", W - 3 - pixelfont.width("SVALBARD"), 3, TEXT)
-        pixelfont.draw(img, self.ice_label, W - 3 - pixelfont.width(self.ice_label), H - 9 - 6, TEXT)
-        # a thin timeline along the foot: the replay's 237 days, a tick at each month and a mark for now
-        y = H - 4
-        x0, x1 = 3, W - 4
-        img[y, x0:x1 + 1] = np.maximum(img[y, x0:x1 + 1], (34, 38, 64))
-        t = self.t0
+        mon = _MONTHS[tm.tm_mon - 1]
+        my = H - 36
+        self._big(img, mon, 4, my, MONTH_COL)
+        pixelfont.draw(img, str(tm.tm_mday), 4 + 22 + 4, my + 5, DIM_COL)
+        img[my + 12, 4:4 + 22] = np.maximum(img[my + 12, 4:4 + 22], RULE_COL)
+        pixelfont.draw(img, "SVALBARD", W - 4 - pixelfont.width("SVALBARD"), 4, DIM_COL)
+        pixelfont.draw(img, "POLAR BEARS", W - 4 - pixelfont.width("POLAR BEARS"), 10, FAINT_COL)
+        pixelfont.draw(img, self.ice_label, W - 4 - pixelfont.width(self.ice_label), H - 21, (84, 124, 178))
+        pixelfont.draw(img, f"{nheads} ON RECORD", 4, my + 15, FAINT_COL)
+        # the timeline: the season's 237 days along the foot, month initials beneath their stretch, now lit
+        y = H - 5
+        x0, x1 = 4, W - 5
+        span = self.t1 - self.t0
+        img[y, x0:x1 + 1] = np.maximum(img[y, x0:x1 + 1], TL_FUT)
+        xn = x0 + min(1.0, (T - self.t0) / span) * (x1 - x0)
+        n = int(xn) - x0 + 1
+        if n > 0:
+            ramp = (0.35 + 0.65 * np.linspace(0, 1, n, dtype=np.float32))[:, None]
+            img[y, x0:x0 + n] = np.maximum(img[y, x0:x0 + n], np.array(TL_PAST, np.float32) * ramp)
+        starts = [self.t0]
+        t = self.t0 + 86400.0
         while t <= self.t1:
-            tm2 = time.gmtime(t)
-            if tm2.tm_mday == 1 or t == self.t0:
-                x = x0 + int((t - self.t0) / (self.t1 - self.t0) * (x1 - x0))
-                img[y - 1:y + 2, x] = np.maximum(img[y - 1:y + 2, x], (50, 56, 90))
+            if time.gmtime(t).tm_mday == 1:
+                starts.append(t)
             t += 86400.0
-        x = x0 + int(min(1.0, (T - self.t0) / (self.t1 - self.t0)) * (x1 - x0))
-        img[y - 1:y + 2, x] = (150, 160, 215)
+        starts.append(self.t1)
+        cur = -1
+        for i in range(len(starts) - 1):
+            if starts[i] <= T < starts[i + 1] or (i == len(starts) - 2 and T >= starts[i]):
+                cur = i
+        for i, s in enumerate(starts):
+            xs = int(round(x0 + (s - self.t0) / span * (x1 - x0)))
+            img[y - 1:y + 2, xs] = np.maximum(img[y - 1:y + 2, xs], TL_TICK)
+        for i in range(len(starts) - 1):
+            a = x0 + (starts[i] - self.t0) / span * (x1 - x0)
+            b = x0 + (starts[i + 1] - self.t0) / span * (x1 - x0)
+            m = time.gmtime((starts[i] + starts[i + 1]) / 2)
+            ini = _MONTHS[m.tm_mon - 1][0]
+            pixelfont.draw(img, ini, int(round((a + b) / 2)) - 1, y - 9, TL_NOW if i == cur else TL_INI)
+        # now: a bright LED with a short halo
+        xi = int(round(xn))
+        img[y - 1:y + 2, xi] = np.maximum(img[y - 1:y + 2, xi], (235, 240, 255))
+        for dx, v in ((-2, 0.25), (-1, 0.55), (1, 0.55), (2, 0.25)):
+            if 0 <= xi + dx < W:
+                img[y, xi + dx] = np.maximum(img[y, xi + dx], np.array((235, 240, 255), np.float32) * v)
 
 
 _MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
@@ -414,4 +648,5 @@ def thumb():
     b = Bears(fetch=False)
     b.ice_rec = b.meta.get("ice") or b.ice_rec
     b.rebuild_base()
-    return b(b.cycle * 0.0 + (74 / 1.0) * SEC_PER_DAY)
+    b.first_t = -1e9
+    return b(74 * SEC_PER_DAY)

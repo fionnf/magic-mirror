@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 2
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": 15
   }
  ],
  "listening": "The bass breath slowly widens and lifts the veil, tension draws its folds tighter, the key leans its tint between teal and aqua, treble adds a fine suspended haze, and each hour's energy is left as a faint sediment band along the floor of the water.",
@@ -48,10 +60,35 @@
   "verdict": "A single soft aqua veil on a true petrol ground follows the direction closely, reads clearly on a coarse grid, and grows gently from a thin sliver to a fuller glowing form across the day, nothing like the recent warm-on-black pieces. The arc is quiet but real, though the shadow-twin barely registers and the bright patch at the bottom edge in the later stills slightly distracts from the one form."
  },
  "direction": "Petrol depth",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.086,
+  0.894,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
  "post": {
-  "caption": "The wall was offline today, so the lantern hung without a day to listen to, a single narrow veil of aqua resting in deep petrol water. With no breath to widen it and no hours to leave sediment along the floor, it stayed slender and close to the middle, its folds faintly drawn like light that has sunk a long way and decided to wait. A quiet still, more pause than record.",
-  "alt": "A tall, narrow, softly blurred crescent of pale aqua light glows just right of centre against a flat, deep teal-green background, fading at its top and bottom edges."
+  "caption": "Today began with a quiet pulse barely stirring, then the afternoon unfolded with a rich lift of sound that brightened the veil of aqua light. The layers gently swelled and shimmered like sunlight sinking through deep water, leaving soft traces of the day's energy along the surface and floor.",
+  "alt": "A deep petrol-colored vertical gradient with a soft, vertical aqua light shape widening upwards in the center, surrounded by a faint shadowy twin shape."
  },
- "final": true,
- "closed_by": "cloud"
+ "final": true
 }

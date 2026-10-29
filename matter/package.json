@@ -1,0 +1,9 @@
+{
+  "name": "fortuna-wall-matter",
+  "private": true,
+  "type": "module",
+  "description": "The wall as a Matter on/off plug (Smart Life, Google Home, Apple Home)",
+  "dependencies": {
+    "@matter/main": "0.17.9"
+  }
+}

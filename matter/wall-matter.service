@@ -1,0 +1,15 @@
+[Unit]
+Description=Fortuna wall as a Matter on/off plug (Smart Life, Google Home)
+After=network-online.target wall-control.service
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/magic-mirror/matter
+ExecStartPre=/bin/sh -c 'test -d node_modules/@matter/main || npm install --no-audit --no-fund'
+ExecStart=/usr/bin/node wall.mjs
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

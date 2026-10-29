@@ -13,8 +13,8 @@ eastwards to 25 W (the Pacific and the Americas), from 58 N to 58 S, a degree an
 LED. Read it like two lines of text: a track that leaves the right edge of the upper strip carries on
 from the left edge of the lower one, and one that leaves the lower strip's right edge returns to the
 upper strip's left. Only the coastlines are drawn, one LED wide: green-teal where the sun is up, blue
-where it is night, from assets/maps/land_mask.png (Natural Earth 1:50m, public domain, built by
-tools/build_land.py). Where the sun is setting or rising the terminator is a dotted band across each
+in the twilight (the sun between the horizon and 12 degrees below it) and dark navy at night, from
+assets/maps/land_mask.png (Natural Earth 1:50m, public domain, built by tools/build_land.py). Where the sun is setting or rising the terminator is a dotted band across each
 strip (dense from the sun on the horizon to 3 degrees below, sparser to 7): the sun is the real sun of
 the moment. The station itself is warm white while the sun lights it and a cool lilac in the Earth's
 shadow, which it enters and leaves every 45 minutes or so.
@@ -253,6 +253,7 @@ class ISSDay:
         self.sky, self.sky_t = None, -1e9                  # the map under the track (coasts, terminator)
         self.track = None                                  # (times, x, y, last time) of the last day's orbit
         self.fetched = 0.0
+        self._cfg, self._cfg_seen = None, None
         self._use(self._best(time.time()))
         if fetch:
             threading.Thread(target=self._fetch_loop, daemon=True).start()
@@ -285,13 +286,34 @@ class ISSDay:
         for tle, name in cands:
             try:
                 e = sat.tle_epoch(tle[1])
-                if e < now + 2 * 86400.0:                  # a future epoch is a damaged file
-                    sat.propagator([tle])
+                if e < now + 2 * 86400.0 and self._sane(tle, e):   # a future epoch is a damaged file
                     ok.append((e, tle, name))
             except Exception:
                 continue
+        if not ok:
+            return BUNDLED, "bundled"
         e, tle, name = max(ok, key=lambda c: c[0])
         return tle, name
+
+    @staticmethod
+    def _sane(tle, e):
+        """True when the elements propagate to an ISS-like orbit: finite, 340-460 km up, about 7.66 km/s.
+        A damaged cache line that still parses must not be taken just because its epoch is newest."""
+        try:
+            n = float(tle[2][52:63])
+            if not 15.0 < n < 16.2:
+                return False
+            prop = sat.propagator([tle])
+            t = e + np.array([0.0, 10.0, 1500.0, 3000.0, 4500.0])
+            _, _, alt, _, ok, r = positions(prop, t)
+            if not (np.all(np.isfinite(r)) and np.all(np.isfinite(alt)) and np.all(ok)):
+                return False
+            if np.any(alt < 340.0) or np.any(alt > 460.0):
+                return False
+            v = float(np.linalg.norm(r[1] - r[0])) / 10.0
+            return 7.4 < v < 7.9
+        except Exception:
+            return False
 
     def _use(self, pick):
         tle, source = pick
@@ -299,10 +321,10 @@ class ISSDay:
             self.source = source
             return
         prop = sat.propagator([tle])
-        self.tle, self.source = tle, source
-        self.period = 86400.0 / float(tle[2][52:63])        # seconds an orbit takes
-        self.track, self.sky = None, None
-        self.prop = prop                                   # swapped last: the frame thread picks it up
+        period = 86400.0 / float(tle[2][52:63])             # seconds an orbit takes
+        self.source = source
+        self.tle, self.period, self.prop = tle, period, prop
+        self._cfg = (tle, prop, period)                    # ONE reference: the frame thread reads only this
 
     def _fetch_loop(self):
         import requests
@@ -325,6 +347,8 @@ class ISSDay:
                 tle = got[0]
                 if abs(time.time() - sat.tle_epoch(tle[1])) > 30 * 86400:
                     raise ValueError("elements too old")
+                if not self._sane(tle, sat.tle_epoch(tle[1])):
+                    raise ValueError("elements implausible")
                 self.fetched = time.time()
                 tmp = CACHE + ".tmp"
                 with open(tmp, "w") as fh:
@@ -358,7 +382,7 @@ class ISSDay:
         img[self.cy, self.cx] = col.astype(np.uint8)
         return img
 
-    def _track(self, unix):
+    def _track(self, unix, prop):
         """The orbit of the last day as LEDs, one sample every 12 s on a fixed grid of times: (times, x, y,
         last time), oldest first. Built whole the first time (a few ms), then each new sample is added as its
         time comes and the ones older than a day dropped, so a frame costs next to nothing."""
@@ -372,34 +396,40 @@ class ISSDay:
         else:
             t = tr[3] + STEP * np.arange(1, int(round((grid - tr[3]) / STEP)) + 1)
             tt, tx, ty = tr[:3]
-        lat, lon, _, _, ok, _ = positions(self.prop, t)
+        lat, lon, _, _, ok, _ = positions(prop, t)
         x, y, inside = to_led(lat, lon)
         keep = ok & inside
         tt, tx, ty = np.concatenate([tt, t[keep]]), np.concatenate([tx, x[keep]]), np.concatenate([ty, y[keep]])
         fresh = tt >= grid - HISTORY
         return tt[fresh], tx[fresh], ty[fresh], grid
 
-    def _factor(self, unix):
+    def _factor(self, unix, tle):
         """How bright the elements' age lets the track be: 1 until 2.5 days old, half at 10, a third after."""
-        d = tle_age_days(self.tle, unix)
+        d = tle_age_days(tle, unix)
         return float(np.interp(abs(d), [STALE_FROM, STALE_HALF, 30.0], [1.0, 0.5, 0.33]))
 
     # ---------------------------------------------------------- frames
     def __call__(self, t, now=None):
         unix = time.time() if now is None else now
-        if self.sky is None or abs(unix - self.sky_t) > REBUILD:
-            self.sky, self.sky_t = self._sky(unix), unix
-        self.track = self._track(unix)
-        img = self.sky.copy()
-        f = self._factor(unix)
-        tt, tx, ty = self.track[:3]                        # oldest first, so a crossing LED takes the newest colour
+        cfg = self._cfg                                    # one snapshot of the elements for the whole frame
+        tle, prop, period = cfg
+        if cfg is not self._cfg_seen:                      # new elements: restart the caches (frame thread only)
+            self.sky, self.sky_t, self.track, self._cfg_seen = None, -1e9, None, cfg
+        sky = self.sky
+        if sky is None or abs(unix - self.sky_t) > REBUILD:
+            sky = self.sky = self._sky(unix)
+            self.sky_t = unix
+        track = self.track = self._track(unix, prop)
+        img = sky.copy()
+        f = self._factor(unix, tle)
+        tt, tx, ty = track[:3]                        # oldest first, so a crossing LED takes the newest colour
         if len(tt):
-            age = (unix - tt) / self.period
+            age = (unix - tt) / period
             col = np.stack([np.interp(age, AGE_ORBITS, AGE_COLS[:, k]) for k in range(3)], 1)
             keep = (age < OLD_FROM) | (np.round(tt / STEP).astype(np.int64) % OLD_EVERY == 0)     # old orbits: dotted
             img[ty[keep], tx[keep]] = np.clip(shade(col[keep], f), 0, 255).astype(np.uint8)
         # the station
-        lat, lon, alt, lit, ok, r = positions(self.prop, np.array([unix]))
+        lat, lon, alt, lit, ok, r = positions(prop, np.array([unix]))
         lat, lon, alt, lit, ok = float(lat[0]), float(lon[0]), float(alt[0]), bool(lit[0]), bool(ok[0])
         if ok:
             fp_lat, fp_lon = footprint(lat, lon, alt)
@@ -412,8 +442,8 @@ class ISSDay:
             if hin[0]:
                 col = (HEAD_SUN if lit else HEAD_SHADOW) * (0.86 + 0.14 * math.sin(unix * 3.0))
                 img[hy[0], hx[0]] = np.clip(shade(col, max(f, 0.6)), 0, 255).astype(np.uint8)
-        if tle_age_days(self.tle, unix) > STALE_FROM:
-            self.font.draw(img, "TLE " + tle_note(self.tle), 2, Y0[1] + ROWS - 6, NOTE)
+        if tle_age_days(tle, unix) > STALE_FROM:
+            self.font.draw(img, "TLE " + tle_note(tle), 2, Y0[1] + ROWS - 6, NOTE)
         return Image.fromarray(img, "RGB")
 
     def _home(self, img, unix, lat, lon, r, ok):

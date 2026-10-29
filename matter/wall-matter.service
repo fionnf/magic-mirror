@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 WorkingDirectory=/home/pi/magic-mirror/matter
+Environment=MATTER_LOG_LEVEL=info
 ExecStartPre=/bin/sh -c 'test -d node_modules/@matter/main || npm install --no-audit --no-fund'
 ExecStart=/usr/bin/node wall.mjs
 Restart=always

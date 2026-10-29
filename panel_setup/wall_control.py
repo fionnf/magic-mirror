@@ -1156,6 +1156,29 @@ const j=await r.json().catch(()=>({}));m.textContent=r.ok?'✨ Sent! Look at the
         dedications.qr_image(dedications.guest_url(request.host.split(":")[0]), 360).save(buf, "PNG")
         return app.response_class(buf.getvalue(), mimetype="image/png")
 
+    @app.get("/api/matter")
+    def matter_info():
+        """The wall as a Matter plug (matter/wall.mjs): its pairing code and whether a home has it."""
+        try:
+            with open(os.path.join(HERE, "matter_pairing.json")) as fh:
+                d = json.load(fh)
+            return jsonify({"manual": d.get("manual"), "paired": bool(d.get("paired")), "ok": True})
+        except (OSError, ValueError):
+            return jsonify({"ok": False})
+
+    @app.get("/matter/qr.png")
+    def matter_qr():
+        import io
+        from display import dedications
+        try:
+            with open(os.path.join(HERE, "matter_pairing.json")) as fh:
+                code = json.load(fh)["qr"]
+        except (OSError, ValueError, KeyError):
+            return jsonify({"error": "not running"}), 404
+        buf = io.BytesIO()
+        dedications.qr_image(code, 360).save(buf, "PNG")
+        return app.response_class(buf.getvalue(), mimetype="image/png", headers={"Cache-Control": "no-store"})
+
     @app.get("/api/dedications")
     def dedications_get():
         from display import dedications

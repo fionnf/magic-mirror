@@ -65,7 +65,16 @@ plug.events.onOff.onOff$Changed.on(async on => {
     }
 });
 
+let shown = "";
+function show() {              // the pairing code and whether a home already has the wall, for the web app
+    const c = server.state.commissioning;
+    const out = JSON.stringify({ qr: c.pairingCodes.qrPairingCode, manual: c.pairingCodes.manualPairingCode,
+                                 paired: c.commissioned, fabrics: c.fabrics ? Object.keys(c.fabrics).length : 0 });
+    if (out !== shown) { writeFileSync(SHOWN, out); shown = out; }
+}
+
 async function follow() {
+    try { show(); } catch (e) { /* the web app shows nothing new: harmless */ }
     try {
         const s = await wall("/api/status");
         const on = s.current !== "off" && s.current !== null;
@@ -79,8 +88,6 @@ async function follow() {
 
 await server.start();
 const codes = server.state.commissioning.pairingCodes;
-writeFileSync(SHOWN, JSON.stringify({ qr: codes.qrPairingCode, manual: codes.manualPairingCode,
-                                      paired: server.state.commissioning.commissioned }));
 console.log(`[matter] Fortuna Wall ready. Pairing code ${codes.manualPairingCode}  QR ${codes.qrPairingCode}`);
 await follow();
 setInterval(follow, 3000);

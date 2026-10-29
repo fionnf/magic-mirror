@@ -230,7 +230,7 @@ def short(name):
 
 # stop name -> (label shown on the wall)
 LABELS = {
-    "Bahnhofplatz/HB": "HB", "Central": "CENTRAL", "Bellevue": "BELLEVUE", "Paradeplatz": "PARADEPL",
+    "Bahnhofplatz/HB": "HB", "Central": "CENTRAL", "Bellevue": "BELLEVUE", "Paradeplatz": "PARADE",
     "Stadelhofen, Bahnhof": "STADELH", "Stauffacher": "STAUFF", "Hardbrücke, Bahnhof": "HARDBR",
     "Oerlikon, Bahnhof": "OERLIKON", "Triemli": "TRIEMLI", "Zoo": "ZOO", "Flughafen, Fracht": "AIRPORT",
 }
@@ -242,8 +242,8 @@ POS = {
     "Flughafen, Fracht": (150, 8), "Glattpark, Glattpark": (136, 34), "Auzelg": (160, 44),
     "Stettbach, Bahnhof": (176, 84), "Hirzenbach": (172, 58), "Seebach": (106, 16),
     "Oerlikon, Bahnhof Ost": (108, 44), "Leutschenbach": (124, 44), "Sternen Oerlikon": (98, 54),
-    "Oerlikon, Bahnhof": (84, 54), "Bucheggplatz": (80, 70), "Milchbuck": (108, 68),
-    "Schwamendingerplatz": (150, 70), "Schaffhauserplatz": (94, 82), "Escher-Wyss-Platz": (54, 84),
+    "Oerlikon, Bahnhof": (84, 54), "Bucheggplatz": (88, 68), "Milchbuck": (108, 68),
+    "Schwamendingerplatz": (150, 68), "Schaffhauserplatz": (94, 82), "Escher-Wyss-Platz": (54, 84),
     "Frankental": (14, 40), "Hardturm": (20, 70), "Werdhölzli": (6, 56), "Schiffbau": (40, 100),
     "Altstetten, Bahnhof N": (8, 90), "Bahnhofplatz/HB": (84, 112), "Bahnhofstrasse/HB": (84, 126),
     "Central": (108, 112), "Haldenegg": (112, 102), "ETH/Universitätsspital": (132, 102),
@@ -262,7 +262,7 @@ VIA = {}
 GAP_UP_TO = 3
 MIN_SHARE = 0.15                          # a line has a lane on a link if it runs there at least this often
 ALL_TICKS = 16                            # interchange ticks drawn (busiest first)
-LABEL_MAX_COST = 60
+LABEL_MAX_COST = 26                       # about one stray LED under a word is the most we accept
 Z_ORDER = ["7", "50", "51", "5", "13", "14", "12", "6", "8", "3", "11", "2", "15", "17", "10", "9", "4"]
 
 
@@ -763,6 +763,7 @@ def _place_labels(stops, busy_px):
     """Each LABELS word beside its stop, on whichever side crosses the fewest lines and other words and stays
     on the wall."""
     glyph_w = lambda t: max(0, 4 * len(t) - 1)
+    HOME_XY = next((s[0], s[1]) for s in stops if s[2] == HOME)
     dots = {(s[0], s[1]) for s in stops}
     placed, out = [], []
     wanted = [(i, LABELS[s[2]]) for i, s in enumerate(stops) if s[2] in LABELS]
@@ -770,18 +771,21 @@ def _place_labels(stops, busy_px):
     for i, text in wanted:
         x, y = stops[i][0], stops[i][1]
         w = glyph_w(text)
-        cands = [(x + 5, y - 2), (x - 4 - w, y - 2), (x - w // 2, y - 9), (x - w // 2, y + 6),
-                 (x + 5, y - 8), (x + 5, y + 4), (x - 4 - w, y - 8), (x - 4 - w, y + 4),
-                 (x + 8, y - 2), (x - 7 - w, y - 2), (x - w // 2, y - 13), (x - w // 2, y + 10),
-                 (x + 10, y - 6), (x - 9 - w, y + 2), (x + 12, y + 3), (x + 12, y - 8), (x - 11 - w, y - 8), (x - 11 - w, y + 4)]
+        # every spot within reach, nearest first: right of the stop, left, above, below, then further out
+        cands = sorted(((x + dx, y + dy) for dx in range(-w - 22, 23) for dy in range(-22, 19)),
+                       key=lambda c: abs(c[0] + w / 2 - x) * 0.5 + abs(c[1] + 2 - y))
         best, best_cost = None, None
         for k, (tx, ty) in enumerate(cands):
             if tx < 1 or ty < 1 or tx + w > W - 1 or ty + 5 > H - 9:
                 continue
-            cost = k * 0.5
+            gx, gy = max(tx - x, x - (tx + w), 0), max(ty - y, y - (ty + 4), 0)       # gap to the stop
+            if gx + gy < 3 or gx + gy > 13:
+                continue                                          # never on its own stop, never so far it names another
+            cost = 0.7 * max(0, gx + gy - 3)
             for xx in range(tx - 1, tx + w + 1):
                 for yy in range(ty - 1, ty + 6):
-                    cost += 1.5 * ((xx, yy) in busy_px) + (4 if (xx, yy) in dots else 0)
+                    cost += 12 * ((xx, yy) in busy_px) + (8 if (xx, yy) in dots else 0)
+                    cost += 12 * (abs(xx - HOME_XY[0]) + abs(yy - HOME_XY[1]) <= 4)
             for (ox, oy, ow) in placed:
                 if tx - 2 < ox + ow and ox - 2 < tx + w and ty - 2 < oy + 5 and oy - 2 < ty + 5:
                     cost += 200

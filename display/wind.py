@@ -58,6 +58,25 @@ BORDER = (36, 64, 116)         # the quiet map: just over the LEDs' floor, a dee
 LAKE = (36, 64, 116)
 HOME_LED = (128, 120, 112)
 
+# ---- Europe (key "eu") is drawn differently: not thousands of fast sparks but ~90 long, slow streamers with
+# tapering tails, over a black sea with the land as a faint dither, a dotted graticule and the coast as a hairline.
+EU_M = 130                     # streamers
+EU_L = 34                      # tail points (1 LED apart: a tail is ~34 LEDs long)
+EU_K = 0.65                    # LEDs per second per m/s
+EU_LIFE = (9.0, 18.0)
+EU_FLOOR = 96                  # a lit LED keeps a channel at least this high; fainter light is dithered out
+EU_SPEEDS = np.array([0.0, 3.0, 6.0, 10.0, 14.0, 19.0, 25.0, 32.0], np.float32)
+EU_COLS = np.array([(36, 112, 150), (48, 136, 196), (96, 168, 224), (170, 212, 236),
+                    (238, 230, 200), (255, 190, 120), (255, 140, 120), (240, 104, 150)], np.float32)
+EU_LAND = (30, 50, 104)
+EU_COAST = (58, 98, 168)
+EU_GRID = (34, 54, 108)
+EU_HALO = (236, 216, 186)
+_BAYER8 = (np.array([[0, 32, 8, 40, 2, 34, 10, 42], [48, 16, 56, 24, 50, 18, 58, 26],
+                     [12, 44, 4, 36, 14, 46, 6, 38], [60, 28, 52, 20, 62, 30, 54, 22],
+                     [3, 35, 11, 43, 1, 33, 9, 41], [51, 19, 59, 27, 49, 17, 57, 25],
+                     [15, 47, 7, 39, 13, 45, 5, 37], [63, 31, 55, 23, 61, 29, 53, 21]], np.float32) + 0.5) / 64.0
+
 _cache_lock = threading.Lock()
 
 
@@ -89,7 +108,10 @@ class Wind:
         self.lat0, self.lon0 = centre
         self.area = [self.lat0, self.lon0, self.km]
         self.coslat = math.cos(math.radians(self.lat0))
-        self.base = self._base_map(os.path.join(ROOT, "assets", "maps", mapname), home).astype(np.float32)
+        if key == "eu":
+            self.base = self._base_eu(os.path.join(ROOT, "assets", "maps", mapname), home).astype(np.float32)
+        else:
+            self.base = self._base_map(os.path.join(ROOT, "assets", "maps", mapname), home).astype(np.float32)
         # the grid: the centres of a 6 x 8 tiling of the picture, as lat/lon for the API
         self.gx = (np.arange(NX) + 0.5) * W / NX
         self.gy = (np.arange(NY) + 0.5) * H / NY
@@ -105,6 +127,8 @@ class Wind:
         self.age = rng.uniform(0, 1, N) * self.life
         self.phase = self._phase(self.x, self.y)
         self.last, self.last_frame, self.ok = None, time.time(), False
+        if key == "eu":
+            self._init_eu(home)
         rec = _read_cache().get(key)
         if not (rec and rec.get("grid") == [NX, NY] and rec.get("area") == self.area):
             rec = None                                        # fetched for another grid or another view
@@ -219,11 +243,182 @@ class Wind:
         self.prev = self.field if (ease and self.field is not None) else None
         self.field, self.t_new = field, time.time()
 
+
+    # ------------------------------------------------------------- europe ---
+    def _base_eu(self, path, home):
+        """Europe's still layer: black sea, the land as a faint ordered dither, a dotted graticule, the coast as
+        a hairline, Switzerland's border as a fainter one."""
+        import cv2
+        try:
+            with open(path) as fh:
+                m = json.load(fh)
+        except Exception:
+            m = {}
+        pts = lambda line: np.array([[int(round(v)) for v in self.to_px(*p)] for p in line], np.int32)
+        land = np.zeros((H, W), np.uint8)
+        coast = m.get("coast", [])
+        for c in coast:                                           # islands: closed rings
+            if len(c) > 3 and c[0] == c[-1]:
+                cv2.fillPoly(land, [pts(c)], 1)
+        # the mainland coast comes as open lines cut at the map's edge: join them off the picture and fill
+        open_ = [c for c in coast if len(c) > 100 and c[0] != c[-1]]
+        if len(open_) >= 2:
+            open_.sort(key=lambda c: -c[0][0])                    # north to south
+            ring = []
+            for c in open_:
+                ring += pts(c).tolist()
+            far = [self.to_px(30.0, -60.0), self.to_px(30.0, 40.0), self.to_px(80.0, 40.0)]
+            ring += [[int(v) for v in p] for p in far]
+            cv2.fillPoly(land, [np.array(ring, np.int32)], 1)
+        img = np.zeros((H, W, 3), np.uint8)
+        yy, xx = np.mgrid[0:H, 0:W]
+        dens = _BAYER8[yy % 8, xx % 8] < 0.14                     # about one LED in seven: a soft landmass tone
+        img[(land > 0) & dens] = EU_LAND
+        # graticule: dotted lines every 5 degrees of latitude and 10 of longitude
+        for lat in range(40, 75, 5):
+            y = int(round(self.to_px(lat, 0)[1]))
+            if 0 <= y < H:
+                img[y, ::6] = EU_GRID
+        for lon in range(-40, 30, 10):
+            x = int(round(self.to_px(56, lon)[0]))
+            if 0 <= x < W:
+                img[::6, x] = EU_GRID
+        for c in coast:
+            if len(c) >= 4:
+                cv2.polylines(img, [pts(c)], False, EU_COAST, 1, cv2.LINE_8)
+        for b in m.get("border", []):
+            cv2.polylines(img, [pts(b)], True, (46, 78, 140), 1, cv2.LINE_8)
+        return img
+
+    def _init_eu(self, home):
+        rng = self.rng
+        self.ex = np.zeros((EU_M, 2), np.float32)
+        self.eh = np.zeros((EU_M, EU_L, 2), np.float32)
+        self.elife = rng.uniform(*EU_LIFE, EU_M)
+        self.eage = rng.uniform(0, 1, EU_M) * self.elife
+        self.ephase = rng.uniform(0, 6.3, EU_M)
+        for i in range(EU_M):
+            self.ex[i] = self._best_spot(self.ex[:i])
+        self.eh[:] = self.ex[:, None, :]
+        self.efeel = np.zeros(EU_M, np.float32)
+        hx, hy = (int(round(v)) for v in self.to_px(*home))
+        self.home_px = (hx, hy)
+        r = 9
+        yy, xx = np.mgrid[-r:r + 1, -r:r + 1]
+        d = np.hypot(xx, yy)
+        self.halo = np.clip(1 - d / r, 0, 1) ** 1.1                # soft falloff, dithered by the floor pass
+        self.halo[r, r] = 0.0
+        self.eyy, self.exx = np.mgrid[0:H, 0:W]
+        self.ethr = _BAYER8[self.eyy % 8, self.exx % 8]
+
+    def _best_spot(self, others):
+        """Best-candidate sampling: of a few random spots take the one farthest from the other streamers."""
+        c = np.stack([self.rng.uniform(0, W, 7), self.rng.uniform(0, H, 7)], 1).astype(np.float32)
+        if len(others) == 0:
+            return c[0]
+        d = np.hypot(c[:, None, 0] - others[None, :, 0], c[:, None, 1] - others[None, :, 1]).min(1)
+        return c[int(np.argmax(d))]
+
+    def _uvg(self, ix, iy):
+        f = self.field
+        u, v, g = f[0][iy, ix], f[1][iy, ix], f[2][iy, ix]
+        p = self.prev
+        if p is not None:
+            a = (time.time() - self.t_new) / EASE
+            if a >= 1:
+                self.prev = None
+            else:
+                a = a * a * (3 - 2 * a)
+                u = p[0][iy, ix] + (u - p[0][iy, ix]) * a
+                v = p[1][iy, ix] + (v - p[1][iy, ix]) * a
+                g = p[2][iy, ix] + (g - p[2][iy, ix]) * a
+        return u, v, g
+
+    def _call_eu(self, t, dt):
+        img = self.base.copy()
+        if self.field is not None:
+            if self.arrived is None:
+                self.arrived = t
+            self._step_eu(t, dt, img)
+        # the home halo: Switzerland breathes gently
+        hx, hy = self.home_px
+        r = self.halo.shape[0] // 2
+        breath = 0.80 + 0.20 * math.sin(t * 0.9)
+        x0, x1, y0, y1 = max(hx - r, 0), min(hx + r + 1, W), max(hy - r, 0), min(hy + r + 1, H)
+        if x1 > x0 and y1 > y0:
+            patch = self.halo[y0 - hy + r:y1 - hy + r, x0 - hx + r:x1 - hx + r, None] * breath * np.array(EU_HALO, np.float32)
+            img[y0:y1, x0:x1] = np.maximum(img[y0:y1, x0:x1], patch)
+        if 0 <= hx < W and 0 <= hy < H:
+            img[hy, hx] = np.maximum(img[hy, hx], (255, 240, 214))
+        # the floor: light too faint for the LEDs is dithered out (kept with probability = its brightness)
+        m = img.max(2)
+        faint = (m > 0) & (m < EU_FLOOR)
+        keep = faint & (m / EU_FLOOR > self.ethr)
+        lit = img[keep] * (EU_FLOOR / m[keep])[:, None]
+        img[faint] = 0
+        img[keep] = lit
+        return Image.fromarray(img.astype(np.uint8), "RGB")
+
+    def _step_eu(self, t, dt, img):
+        pos = self.ex
+        ix = np.clip(pos[:, 0].astype(np.int32), 0, W - 1)
+        iy = np.clip(pos[:, 1].astype(np.int32), 0, H - 1)
+        u, v, g = self._uvg(ix, iy)
+        s = np.hypot(u, v)
+        pulse = np.clip(np.sin(t * (2 * math.pi / 8.0) + self.ephase), 0, None) ** 3
+        boost = 1 + (g / np.maximum(s, 0.3) - 1) * pulse * 0.45
+        pos[:, 0] += u * boost * (EU_K * dt)
+        pos[:, 1] += v * boost * (EU_K * dt)
+        self.eage += dt
+        self.efeel += (s * boost - self.efeel) * min(1.0, dt * 1.5)
+        out = (pos[:, 0] < 0) | (pos[:, 0] >= W) | (pos[:, 1] < 0) | (pos[:, 1] >= H)
+        # a head that leaves the picture lets its tail fade, then is born again somewhere sparse
+        self.eage[out] = np.maximum(self.eage[out], self.elife[out] - RAMP)
+        dead = self.eage > self.elife
+        if dead.any():
+            for i in np.nonzero(dead)[0]:
+                others = np.delete(pos, i, axis=0)
+                pos[i] = self._best_spot(others)
+                self.eh[i] = pos[i]
+            n = int(dead.sum())
+            self.eage[dead], self.elife[dead] = 0.0, self.rng.uniform(*EU_LIFE, n)
+            self.efeel[dead] = s[dead]
+        # a new tail point whenever the head has moved a whole LED
+        step = np.hypot(pos[:, 0] - self.eh[:, 0, 0], pos[:, 1] - self.eh[:, 0, 1]) >= 1.0
+        if step.any():
+            self.eh[step, 1:] = self.eh[step, :-1]
+            self.eh[step, 0] = pos[step]
+        # draw: head, then tail points and the midpoints between them, brightest last
+        pts = np.concatenate([pos[:, None, :], self.eh], 1)               # (M, L+1, 2)
+        mid = (pts[:, :-1] + pts[:, 1:]) * 0.5
+        allp = np.empty((EU_M, 2 * EU_L + 1, 2), np.float32)
+        allp[:, 0::2], allp[:, 1::2] = pts, mid
+        k = np.arange(2 * EU_L + 1, dtype=np.float32)
+        taper = (1 - k / (2 * EU_L + 1)) ** 1.7
+        lvl = np.minimum(1.0, np.minimum(self.eage, self.elife - self.eage) / RAMP).clip(0, 1)
+        lvl = lvl * min(1.0, (t - self.arrived) / 3.0)
+        feel = self.efeel
+        base = np.stack([np.interp(feel, EU_SPEEDS, EU_COLS[:, c]) for c in range(3)], 1)       # (M, 3)
+        col = base[:, None, :] * (taper[None, :, None] * lvl[:, None, None])
+        col[:, 0] = np.minimum(255, base * 0.78 + 70) * lvl[:, None]                             # the head glints
+        xs = np.rint(allp[:, :, 0]).astype(np.int32)
+        ys = np.rint(allp[:, :, 1]).astype(np.int32)
+        ok = (xs >= 0) & (xs < W) & (ys >= 0) & (ys < H)
+        order = slice(None, None, -1)                                    # oldest first
+        xs, ys, ok, col = xs[:, order], ys[:, order], ok[:, order], col[:, order]
+        xs, ys, ok = xs.T.ravel(), ys.T.ravel(), ok.T.ravel()
+        col = col.transpose(1, 0, 2).reshape(-1, 3)
+        xs, ys, col = xs[ok], ys[ok], col[ok]
+        cur = img[ys, xs]
+        img[ys, xs] = np.maximum(cur, col)
+
     # -------------------------------------------------------------- frame ---
     def __call__(self, t):
         self.last_frame = time.time()
         dt = 1 / 30 if self.last is None else max(0.0, min(0.2, t - self.last))
         self.last = t
+        if self.key == "eu":
+            return self._call_eu(t, dt)
         self.trail *= math.exp(-dt / TAU)
         f = self.field
         if f is not None:
@@ -329,4 +524,24 @@ def thumb_ie():
 
 
 def thumb_eu():
-    return _thumb("eu", 250.0, (9, 14, 19, 12, 16))
+    """A still for the app: a made-up Atlantic depression (counter-clockwise, west of Scotland) with a high
+    over Iberia and a westerly stream between - an illustration, not today's wind."""
+    w = Wind("eu", fetch=False)
+    sp, di = [], []
+    for lat, lon in zip(w.lats, w.lons):
+        ue, vn = 9.0, 2.0                                         # a steady westerly
+        for (cl, co, rad, vmax, sign) in ((58.0, -17.0, 650.0, 22.0, 1), (44.0, -9.0, 800.0, 9.0, -1),
+                                          (63.0, 4.0, 500.0, 12.0, 1)):
+            dx = (lon - co) * 111.32 * w.coslat
+            dy = (lat - cl) * 111.32
+            r = math.hypot(dx, dy) + 1e-6
+            vt = sign * vmax * (r / rad) * math.exp(0.5 * (1 - (r / rad) ** 2))   # Rankine-ish vortex
+            ue += -vt * dy / r                                    # counter-clockwise for sign=+1
+            vn += vt * dx / r
+        sp.append(math.hypot(ue, vn))
+        di.append(math.degrees(math.atan2(-ue, -vn)) % 360)
+    w._use({"speed": sp, "dir": di, "gust": [v * 1.4 for v in sp]}, ease=False)
+    img = None
+    for i in range(300):
+        img = w(i / 15.0)
+    return img

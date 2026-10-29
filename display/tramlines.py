@@ -37,16 +37,20 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(HERE, "assets", "trams", "zurich_trams.json.gz")
 LAYOUT = os.path.join(HERE, "assets", "trams", "layout.json")
 
-TRAIL = (0.62, 0.45, 0.32, 0.22, 0.15, 0.10, 0.06)       # LEDs behind the head, as a share of its brightness
-STRIPE = 0.6                                       # a line's stripe on the map, as a share of its head's brightness
-TICK, BAR = (200, 200, 215), (225, 225, 235)       # an interchange; the end of a line
-LABEL = (58, 58, 76)
-LAKE, RIVER = (4, 11, 24), (8, 18, 36)             # the water, far below the lines
-HOME_MARK = (255, 200, 90)
+TRAIL = (0.84, 0.68, 0.55, 0.45, 0.36, 0.29, 0.22, 0.16, 0.11, 0.07)   # LEDs behind the head, as a share of its brightness
+STRIPE = 0.5                                       # a line's stripe on the map, as a share of its head's brightness
+SILVER = 0.54                                      # ...for the grey lines (7, 50, 51): quieter than the colours
+TICK, BAR = (176, 180, 200), (210, 214, 230)       # an interchange; the end of a line
+LABEL = (104, 112, 146)                            # a word: clearly above the water, clearly below the lines
+LAKE, SHORE, RIVER = (18, 40, 88), (30, 62, 122), (26, 52, 104)     # the water: quiet blue, dithered, over the black
+HOME_MARK = (255, 208, 110)
+FLOOR = 96                                         # a lit LED keeps a channel at least this high; fainter light is dithered
+_B4 = (np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]], np.float32) + 0.5) / 16.0
 # The line colours stretched to full brightness, except where that makes two lines alike or a black line
 # invisible: 5 brown -> orange, 7 black -> pale grey, 10 pink and 17 plum apart, the black 50/51 near white.
-LED = {"5": (235, 112, 38), "7": (190, 192, 200), "10": (255, 95, 175), "17": (190, 25, 100),
-       "50": (235, 235, 235), "51": (235, 235, 235)}
+LED = {"5": (235, 112, 38), "7": (176, 182, 196), "10": (255, 95, 175), "17": (190, 25, 100),
+       "50": (190, 196, 210), "51": (190, 196, 210)}
+GREY_LINES = ("7", "50", "51")
 
 
 LIVE_URL = "https://api.opentransportdata.swiss/la/gtfs-rt"      # the whole country, ~9 MB, GTFS-RT trip updates
@@ -55,7 +59,7 @@ LIVE_IDLE = 120.0                                                  # no frame dr
 LIVE_STALE = 600.0                                                 # delays older than this are not trusted
 SLACK = 1800                                                       # a late tram may still be on the road this long after its timetable
 LIVE_MARK = (40, 150, 70)
-OFF_MARK = (70, 70, 80)
+OFF_MARK = (98, 100, 116)
 
 
 class Live:
@@ -202,35 +206,63 @@ class TramMap:
 
     # ---- the still map -------------------------------------------------------------------------------
     def _base(self):
-        img = np.zeros((H, W, 3), np.uint8)
         lay = self.lay
         wat = lay.get("water", {})
         from PIL import ImageDraw
-        im = Image.fromarray(img)
-        dr = ImageDraw.Draw(im)
-        for lake in wat.get("lakes", []):
-            if len(lake) >= 3:
-                dr.polygon([tuple(p) for p in lake], fill=LAKE)
+        from display import pixelfont
+        yy, xx = np.mgrid[0:H, 0:W]
+        thr = _B4[yy % 4, xx % 4]
+        # the water: a dithered lake (one LED in four) inside a hairline shore, and the rivers as dotted lines
+        lake = Image.new("L", (W, H), 0)
+        dl = ImageDraw.Draw(lake)
+        shore = Image.new("L", (W, H), 0)
+        ds = ImageDraw.Draw(shore)
+        for lk in wat.get("lakes", []):
+            if len(lk) >= 3:
+                dl.polygon([tuple(p) for p in lk], fill=255)
+                ds.line([tuple(p) for p in lk] + [tuple(lk[0])], fill=255, width=1)
+        riv = Image.new("L", (W, H), 0)
+        dr = ImageDraw.Draw(riv)
         for r in wat.get("rivers", []):
-            dr.line([tuple(p) for p in r], fill=RIVER, width=1)
-        img = np.array(im)
+            dr.line([tuple(p) for p in r], fill=255, width=1)
+        lake, shore, riv = (np.array(a) > 0 for a in (lake, shore, riv))
+        img = np.zeros((H, W, 3), np.uint8)
+        img[lake & (thr < 0.20)] = LAKE
+        img[riv & (((xx + yy) % 2) == 0)] = RIVER
+        img[shore & lake & (((xx + yy) % 3) != 1)] = SHORE
         water = img.copy()
+        self.solid = np.zeros((H, W), bool)                    # LEDs of the lines, ticks and words
+        # words go down first on a black card (clearing the water), so a line is never dimmed by one
+        for x, y, text in lay["labels"]:
+            w = pixelfont.width(text)
+            img[max(y - 1, 0):y + 6, max(x - 1, 0):x + w + 1] = 0
+        for x, y, text in lay["labels"]:
+            pixelfont.draw(img, text, x, y, LABEL)
+        words = img.copy()
+        wordpx = (words != water).any(2)
         for lane in lay["lanes"]:                          # in z-order: a later link crosses over an earlier one
             for x, y in lane["c"]:
                 if 0 <= x < W and 0 <= y < H:
                     img[y, x] = water[y, x]
-            col = (self.colour.get(lane["l"], np.array((200, 200, 200), np.float32)) * STRIPE).astype(np.uint8)
+                    self.solid[y, x] = False
+            k = STRIPE if lane["l"] not in GREY_LINES else SILVER
+            col = (self.colour.get(lane["l"], np.array((200, 200, 200), np.float32)) * k).astype(np.uint8)
             for x, y in _pixels(lane["v"]):
                 if 0 <= x < W and 0 <= y < H:
                     img[y, x] = col
+                    self.solid[y, x] = True
         for x, y, kind in lay["marks"]:
             if 0 <= x < W and 0 <= y < H:
                 img[y, x] = BAR if kind else TICK
-        from display import pixelfont
-        for x, y, text in lay["labels"]:
-            pixelfont.draw(img, text, x, y, LABEL)
+                self.solid[y, x] = True
+        self.solid |= wordpx & ~self.solid
         hx, hy = lay["stops"][lay["home"]][:2]
         img[hy, hx] = HOME_MARK
+        self.thr = thr
+        # Rennweg's wings: two short gold dashes either side of the lanes that pass the stop, one dark LED away
+        row = [x for x in range(max(hx - 7, 0), min(hx + 8, W)) if self.solid[hy, x]]
+        xl, xr = (min(row), max(row)) if row else (hx, hx)
+        self.wings = [(x, hy) for x in (xl - 2, xl - 3, xr + 2, xr + 3)]
         return img
 
     # ---- a profile, a pattern's route --------------------------------------------------------------------
@@ -315,6 +347,21 @@ class TramMap:
                     out.append((self.patterns[p][0], p, pos))
         return out
 
+    def _glow(self, img, x, y, col, f):
+        """One LED of soft light at (x, y), only on dark ground (never over a line): its brightness c is kept
+        whole when above the LEDs' floor, otherwise shown on some LEDs only (ordered dither)."""
+        if not (0 <= x < W and 0 <= y < H) or self.solid[y, x]:
+            return
+        c = col * f
+        m = float(c.max())
+        if m >= FLOOR:
+            lit = c
+        elif m / FLOOR > self.thr[y, x]:
+            lit = c * (FLOOR / m)
+        else:
+            return
+        img[y, x] = np.maximum(img[y, x], lit.astype(np.uint8))
+
     def render(self, now):
         img = self.base.copy()
         heads = []
@@ -326,24 +373,32 @@ class TramMap:
             for k, f in enumerate(TRAIL, 1):
                 j = h - k
                 if j >= 0:
-                    trail.append((leds[j], col * f))
+                    trail.append((leds[j], col, f))
             heads.append((leds[min(h, len(leds) - 1)], col))
-        for (x, y), c in trail:
+        for (x, y), c, f in trail:                             # a comet's tail: dissolves into the dark by dither
             if 0 <= x < W and 0 <= y < H:
-                img[y, x] = np.maximum(img[y, x], c.astype(np.uint8))
+                v = c * f
+                m = float(v.max())
+                if m < FLOOR:
+                    if m / FLOOR <= self.thr[y, x]:
+                        continue
+                    v = v * (FLOOR / m)
+                img[y, x] = np.maximum(img[y, x], v.astype(np.uint8))
+        for (x, y), c in heads:                                # a head glows: its four neighbours, on dark ground
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                self._glow(img, x + dx, y + dy, c, 0.42)
         for (x, y), c in heads:
             if 0 <= x < W and 0 <= y < H:
-                img[y, x] = c.astype(np.uint8)
+                img[y, x] = np.minimum(255, c * 0.8 + 52).astype(np.uint8)       # a touch whiter than its line
         self.live.last_frame = time.time()
         from display import pixelfont
         pixelfont.draw(img, "LIVE" if self.live.fresh() else "TIMETABLE", 2, H - 7, LIVE_MARK if self.live.fresh() else OFF_MARK)
-        hx, hy = self.home
-        pulse = 0.5 + 0.5 * math.sin(now.timestamp() * 2.0) ** 2
-        mark = np.array(HOME_MARK, np.float32) * pulse
-        for dx, dy in ((-2, -2), (2, -2), (-2, 2), (2, 2), (0, -3), (0, 3), (-3, 0), (3, 0)):
-            x, y = hx + dx, hy + dy
+        # Rennweg: the gold bead on its lane (under any tram) and a slow-breathing gold dash either side
+        br = 0.62 + 0.38 * (0.5 + 0.5 * math.sin(now.timestamp() * 1.3))
+        wing = (np.array(HOME_MARK, np.float32) * br).astype(np.uint8)
+        for k, (x, y) in enumerate(self.wings):
             if 0 <= x < W and 0 <= y < H:
-                img[y, x] = np.maximum(img[y, x], mark.astype(np.uint8))
+                img[y, x] = wing if k in (0, 2) else (wing * 0.7).astype(np.uint8)
         return img, len(heads)
 
 

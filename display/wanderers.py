@@ -12,12 +12,14 @@ WHAT THE WALL SHOWS IS DEPENDABLE ONLY BECAUSE EACH ANIMAL SAYS WHICH IT IS:
   * SOLID thread, label "RECORDED 2007-08" (a year): a real recorded track, replayed. The year is the year
     it was recorded; all animals share one calendar, so the seasons line up (terns leave in August, humpbacks
     go south in the northern winter). The track is the tag's own, thinned and lightly smoothed (the tern's
-    light-level geolocator fixes are only good to a couple of hundred km, so five fixes are averaged).
+    light-level geolocator fixes are only good to a couple of hundred km, so seven fixes are averaged).
     Where a tag went quiet for longer than five weeks (the tern geolocators cannot fix a latitude in the Antarctic
     midsummer sun) the light goes out: nothing is drawn across the gap. Shorter gaps (the two equinoxes) are drawn straight.
   * SOLID thread, label "OCEARCH TRACK TO 27 OCT": the last 12 months of an animal on the OCEARCH tracker,
-    replayed so that its light reaches its newest real ping exactly when the wall's clock reaches today's
-    date on the timeline ("LIVE" while that ping is under a week old).
+    replayed so that its light reaches its newest real ping exactly when the wall's clock reaches the date of
+    that ping on the timeline. There is no "live" claim: it is a replay of a recent track, and the label gives the date
+    of its last ping (with the year, "TO 27 OCT 2026", once that ping is more than 30 days old). A cache older than 14
+    days is ignored, so a wall that has been offline for months falls back to the bundled tracks and typical routes.
   * DOTTED thread, label "TYPICAL ROUTE": NOT a tracked animal. A hand-drawn typical flyway of the
     species, from general knowledge of where its seasonal grounds are, only drawn for a kind of animal for
     which there is no real track to show (the sharks while OCEARCH is out of reach; the humpback whales
@@ -29,11 +31,21 @@ DATA (assets/migrations/wanderers.json, built by tools/build_wanderers.py, open 
   * Arctic terns Sterna paradisaea, nine birds tagged in 2007 with light-level geolocators on Greenland and Iceland
     colonies and recovered in 2008: the dataset "Tracking of Arctic tern migrations 2007-2008" (Egevang, C. 2012,
     Greenland Institute of Natural Resources), published by OBIS-SEAMAP (doi 10.82144/f1e7b55e, mirrored by GBIF
-    dataset 767f57dd-bdb8-44cb-bf20-f9aafafa4137), licence CC BY-NC 4.0. It is the tracking behind Egevang et al. (2010),
+    dataset 767f57dd-bdb8-44cb-bf20-f9aafafa4137). It is the tracking behind Egevang et al. (2010),
     "Tracking of Arctic terns Sterna paradisaea reveals longest animal migration", PNAS.
-  * Loggerhead and leatherback turtles: OBIS-SEAMAP datasets (Duke North Atlantic Turtle Tracking; Georgia
-    Aquarium / DomSeTCO Leatherbacks of Dominica; Gabon leatherback tracking), CC BY-NC 4.0, whose positions are
-    given to a one degree cell (about 110 km), so their paths are coarse. Exact citations in the file.
+  * Loggerhead and leatherback turtles, four OBIS-SEAMAP datasets (positions are given to a one degree cell, about
+    110 km, so their paths are coarse):
+      - "Duke North Atlantic Turtle Tracking", McClellan C. 2024, doi 10.82144/a9801db3
+      - "Georgia Aquarium/DomSeTCO Leatherback's of Dominica", Levenson J. 2025, doi 10.82144/d8dc714b
+      - "Gabon 2009-10: Pongara, Leatherback Turtles", Witt M. 2024, doi 10.82144/75fd1c22
+      - "Gabon 2012: Pongara, Leatherback Turtles", Witt M. 2024, doi 10.82144/66af5bd9
+    all "Dataset published in OBIS-SEAMAP", from the Satellite Tracking and Analysis Tool (seaturtle.org), accessed via GBIF.org.
+  * LICENCE, PLAINLY: ALL FIVE of those datasets (the terns and every turtle) are licensed CC BY-NC 4.0 (Creative Commons
+    Attribution-NonCommercial 4.0, https://creativecommons.org/licenses/by-nc/4.0/): they may be used with attribution
+    for NON-COMMERCIAL purposes only. This code is not under that licence, but the data file built from them is, so the
+    bundled tracks may not be used in anything commercial (a paid installation, a product, advertising) without the
+    data owners' permission; for commercial use remove them (the piece then falls back to typical routes) or ask
+    them. The full citations and licence of each are in the "sources" of assets/migrations/wanderers.json.
   * The coastline: Natural Earth 1:50m land (public domain), assets/maps/atlantic.json, tools/build_wanderers.py.
 OCEARCH (live, runtime only, never committed): the Global Shark Tracker's public map feed
 (www.mapotic.com/api/v1/maps/3413, the same JSON the tracker's own page loads) is read on a side thread every
@@ -47,8 +59,8 @@ The view is the Atlantic, 88 W to 27 E and 76 N to 77 S: a tern that wanders on 
 the Gulf of Mexico or the Pacific, simply leaves the picture and comes back (or does not).
 
 Everything is drawn on whole LEDs (no anti-aliasing), single lit LEDs on black, a one-LED-wide thread.
-Without a network the piece never breaks: it uses the bundled data, whatever the cache last held, and the typical
-flyways, in that order.
+Without a network the piece never breaks: it uses the bundled data, whatever the cache last held (if under 14 days
+old), and the typical flyways, in that order.
 """
 import json
 import math
@@ -76,7 +88,9 @@ PX = 1.67                        # LEDs per degree (about 66 km an LED at the eq
 HOME = (51.55, -9.50)            # West Cork
 
 YEAR_SEC = 3600.0                # a year of the animals' lives plays in an hour
-YEAR_DAYS = 365.25
+YEAR_DAYS = 365.25               # days of an animal's recording that one turn of the calendar phase plays
+CACHE_MAX_AGE = 14 * 86400.0     # an OCEARCH cache older than this is ignored
+OLD_PING = 30 * 86400.0          # a last ping older than this is labelled with its year
 FOCUS_SEC = 45.0                 # one animal in focus for this long
 FADE_SEC = 2.5                   # the label fades in and out over this
 IDLE = 120.0                     # no frame drawn for this long: the piece is not showing, stop fetching
@@ -97,16 +111,21 @@ TEXT_COL = (112, 122, 172)
 LEGEND_COL = (96, 108, 156)
 
 _MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-_MDAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+_MDAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]       # the 366-day template of year_phase()
 
 
 # ------------------------------------------------------------------ calendar and projection ---
 def year_phase(t):
-    """Unix time -> how far through its calendar year it is (0 at 1 January 00:00 UTC, up to 1)."""
+    """Unix time -> how far through its calendar year it is (0 at 1 January 00:00 UTC, up to 1). Every year is laid on
+    the same 366-day template (a 29 February slot that a common year skips), so a date has the same phase in every year
+    and phase_date() is its exact inverse, leap year or not."""
+    import calendar
     tm = time.gmtime(t)
-    y0 = _timegm(tm.tm_year, 1, 1)
-    y1 = _timegm(tm.tm_year + 1, 1, 1)
-    return (t - y0) / float(y1 - y0)
+    idx = tm.tm_yday - 1
+    if tm.tm_mon >= 3 and not calendar.isleap(tm.tm_year):
+        idx += 1                                             # skip the 29 February slot
+    frac = (tm.tm_hour * 3600 + tm.tm_min * 60 + tm.tm_sec + (t - math.floor(t))) / 86400.0
+    return (idx + frac) / 366.0
 
 
 def _timegm(y, m, d):
@@ -115,13 +134,24 @@ def _timegm(y, m, d):
 
 
 def phase_date(phase):
-    """Year phase -> (month index 0-11, day 1-31) of an ordinary year."""
-    d = int(max(0.0, min(0.9999, phase)) * 365.0)
+    """Year phase -> (month index 0-11, day 1-31), on the 366-day template of year_phase()."""
+    d = int(max(0.0, min(0.99999, phase)) * 366.0)
     for m, n in enumerate(_MDAYS):
         if d < n:
             return m, d + 1
         d -= n
     return 11, 31
+
+
+def wrap_lon(lon, centre=-30.5):
+    """Longitude wrapped into [centre-180, centre+180): the Atlantic view stays in one piece, the antimeridian is far off it."""
+    return (np.asarray(lon, np.float64) - centre + 180.0) % 360.0 - 180.0 + centre
+
+
+def unwrap_lon(lon):
+    """Longitudes in degrees made continuous (176, 178, 179, -179 -> 176, 178, 179, 181) so that averaging and
+    interpolating go the short way round the antimeridian."""
+    return np.degrees(np.unwrap(np.radians(np.asarray(lon, np.float64))))
 
 
 def to_px(lat, lon):
@@ -340,10 +370,10 @@ def typical_fixes(wps, step_days=2.0):
 def smooth(fixes, k, gap):
     """A centred moving average of the positions over k fixes, never across a gap longer than `gap` days."""
     if k <= 1 or len(fixes) < 3:
-        return list(fixes)
+        return [tuple(f) for f in fixes]
     d = np.array([f[0] for f in fixes])
     lat = np.array([f[1] for f in fixes])
-    lon = np.array([f[2] for f in fixes])
+    lon = unwrap_lon([f[2] for f in fixes])                  # 179 -> -179 is 2 degrees, not 358
     cut = np.where(np.diff(d) > gap)[0] + 1
     bounds = [0] + list(cut) + [len(d)]
     olat, olon = lat.copy(), lon.copy()
@@ -354,6 +384,7 @@ def smooth(fixes, k, gap):
             r = min(i - lo, hi - 1 - i)                      # symmetric window, narrower at the ends
             lo, hi = i - r, i + r + 1
             olat[i], olon[i] = lat[lo:hi].mean(), lon[lo:hi].mean()
+    olon = wrap_lon(olon, 0.0)
     return [(float(a), float(b), float(c)) for a, b, c in zip(d, olat, olon)]
 
 
@@ -377,7 +408,7 @@ class Animal:
         fixes = [tuple(f) for f in rec["fixes"]]
         fixes = smooth(fixes, k if not self.typical else 1, self.gap)
         self.d = np.array([f[0] for f in fixes], np.float64)
-        x, y = to_px([f[1] for f in fixes], [f[2] for f in fixes])
+        x, y = to_px([f[1] for f in fixes], unwrap_lon([f[2] for f in fixes]))   # interpolate on unwrapped longitude
         self.fx, self.fy = x, y
         self.span = float(self.d[-1])
         self.phase0 = year_phase(rec["t0"])
@@ -400,7 +431,14 @@ class Animal:
                 ps.append(self.s[i] + (self.s[i + 1] - self.s[i]) * f)
                 sg.append(seg_id)
         self.px, self.py, self.ps, self.sg = (np.array(a) for a in (px, py, ps, sg))
+        self.px = self._wrap_x(self.px)                         # ... and wrap back for drawing
         self.ix, self.iy = np.rint(self.px).astype(np.int32), np.rint(self.py).astype(np.int32)
+
+    @staticmethod
+    def _wrap_x(x):
+        w = 360.0 * PX
+        mid = (-30.5 - LON0) * PX
+        return (np.asarray(x, np.float64) - mid + w / 2) % w - w / 2 + mid
 
     def day_at(self, phase):
         """Days into this animal's recording at a given moment of the calendar year."""
@@ -420,7 +458,7 @@ class Animal:
         y = self.fy[k] + (self.fy[k + 1] - self.fy[k]) * f
         s = self.s[k] + (self.s[k + 1] - self.s[k]) * f
         i = min(int(np.searchsorted(self.ps, s, "right")) - 1, len(self.ps) - 1)
-        return x, y, max(i, 0)
+        return float(self._wrap_x(x)), y, max(i, 0)
 
     def label_lines(self):
         """(name or species, species or id, honesty line)."""
@@ -431,6 +469,8 @@ class Animal:
             if self.last:
                 m, d = phase_date(year_phase(self.last))
                 third += f" TO {d} {_MONTHS[m]}"
+                if time.time() - self.last > OLD_PING:         # an old track says which year it is from
+                    third += " " + str(time.gmtime(self.last).tm_year)
         else:
             third = "RECORDED " + self.period if self.period else "RECORDED TRACK"
         if self.name:
@@ -503,11 +543,14 @@ def ocearch_animals(now=None, get=_http_json, pause=1.5, log=True):
 
 
 def read_cache():
+    """The cached OCEARCH animals, or {} when there is none, it is unreadable, or it is older than CACHE_MAX_AGE."""
     try:
         with open(CACHE) as fh:
             rec = json.load(fh)
         if isinstance(rec, dict) and isinstance(rec.get("animals"), list):
-            return rec
+            age = time.time() - float(rec.get("t", 0.0) or 0.0)
+            if -3600.0 <= age <= CACHE_MAX_AGE:                # a stale (or undated) cache is not shown as current
+                return rec
     except Exception:
         pass
     return {}
@@ -560,6 +603,7 @@ class Wanderers:
         recs = self._bundled()
         cache = read_cache() if use_cache and os.environ.get("WANDERERS_OCEARCH", "1") != "0" else {}
         self.fetched = float(cache.get("t", 0.0) or 0.0)
+        self.bundled = recs
         self._assemble(recs, cache.get("animals", []))
         if fetch and os.environ.get("WANDERERS_OCEARCH", "1") != "0":
             threading.Thread(target=self._fetch_loop, args=(recs,), daemon=True).start()
@@ -584,6 +628,7 @@ class Wanderers:
             animals.append(Animal({"id": tr["id"], "kind": tr["kind"], "species": tr["species"], "src": "typical",
                                    "t0": t0, "fixes": fixes}))
         self.animals = animals
+        self.has_live = bool(live)
 
     # ---- live data, on a side thread
     def _fetch_loop(self, bundled):
@@ -734,7 +779,7 @@ class Wanderers:
         img[y, x0:x1 + 1] = np.maximum(img[y, x0:x1 + 1], (30, 42, 100))
         day = 0
         for n in _MDAYS:
-            x = x0 + int(day / 365.0 * (x1 - x0))
+            x = x0 + int(day / 366.0 * (x1 - x0))
             img[y - 1:y + 2, x] = np.maximum(img[y - 1:y + 2, x], (60, 74, 140))
             day += n
         xt = x0 + int(year_phase(time.time()) * (x1 - x0))
@@ -744,6 +789,8 @@ class Wanderers:
 
     def __call__(self, t, phase0=None):
         self.last_frame = time.time()
+        if self.has_live and self.last_frame - self.fetched > CACHE_MAX_AGE:   # offline for weeks: stop showing it as current
+            self._assemble(self.bundled, [])
         p0 = year_phase(time.time()) if phase0 is None else phase0
         return self.draw((p0 + t / YEAR_SEC) % 1.0, t)
 

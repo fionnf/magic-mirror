@@ -851,7 +851,7 @@ async function loadArt() {
 }
 // pieces whose shader plays out a whole story once every hour (their first comment says so)
 const HOUR_IDS = ['shader-aurora', 'shader-bloom', 'shader-crystal', 'shader-inkcloud', 'shader-metamorphosis', 'shader-orbit', 'shader-totality'];
-const LIVE_IDS = ['trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'windeu', 'polarbears', 'livecam', 'skylines', 'nighttrains', 'issday', 'snow', 'tides', 'limmat', 'westcork', 'quakes'];
+const LIVE_IDS = ['trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'windeu', 'polarbears', 'livecam', 'skylines', 'wanderers', 'nighttrains', 'issday', 'snow', 'tides', 'limmat', 'westcork', 'quakes'];
 function liveBoards() {                    // modes fed by real-time data, shown as a gallery chip
   const q = ($('artFind').value || '').trim().toLowerCase();
   return MODES.filter(m => LIVE_IDS.includes(m.id) && (!q || (m.title + ' ' + m.desc).toLowerCase().includes(q)));

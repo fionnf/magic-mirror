@@ -58,6 +58,7 @@ MODES = [
     ("windie", "Art", "Wind over Ireland", "The Atlantic wind over Ireland right now, flowing in light"),
     ("nighttrains", "Art", "Night trains", "Every European night train on its timetable, with sleeping cities and the real night side of the Earth"),
     ("issday", "Art", "The ISS's day", "The space station's ground track drawing itself across a world map, with the real night side and a pulse when it passes Zürich"),
+    ("wanderers", "Art", "Ocean wanderers", "Recorded tracks of Arctic terns and turtles (plus OCEARCH sharks when online) drifting across the Atlantic as slow lights, a year in an hour"),
     ("skylines", "Art", "Skylines", "A new city skyline every hour under its real live sky: the real sun and moon, stars, lit windows and live weather"),
     ("livecam", "Live", "Live cam", "A public webcam from your own livecams.json, tuned for the LEDs (a NO SIGNAL card if none is set up)"),
     ("polarbears", "Art", "Polar bears of Svalbard", "Recorded 2012 collar tracks of Svalbard polar bears, each with its number, over today's sea ice (a replay, not live)"),
@@ -70,7 +71,7 @@ MODES = [
 ]
 MODE_IDS = {m[0] for m in MODES}
 LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "westcork.thumb",   # mode -> module.thumb
-               "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
+               "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "wanderers": "wanderers.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
                "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb",
                "quakes": "quakes.thumb"}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,

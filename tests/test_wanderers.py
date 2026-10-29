@@ -123,7 +123,32 @@ class Tracks(unittest.TestCase):
         self.assertAlmostEqual(wd.year_phase(calendar.timegm((2026, 1, 1, 0, 0, 0))), 0.0)
         self.assertAlmostEqual(wd.year_phase(calendar.timegm((2026, 7, 2, 12, 0, 0))), 0.5, 2)
         self.assertEqual(wd.phase_date(0.0), (0, 1))
-        self.assertEqual(wd.phase_date(300 / 365.0), (9, 28))
+        self.assertEqual(wd.phase_date(300 / 366.0), (9, 27))
+
+    def test_phase_date_roundtrips_in_leap_and_common_years(self):
+        for y in (2026, 2027, 2028, 2100):
+            for m in range(1, 13):
+                for d in (1, 15, 28):
+                    got = wd.phase_date(wd.year_phase(calendar.timegm((y, m, d, 12, 0, 0))))
+                    self.assertEqual(got, (m - 1, d), (y, m, d))
+        self.assertEqual(wd.phase_date(wd.year_phase(calendar.timegm((2028, 3, 1, 12, 0, 0)))), (2, 1))
+        self.assertEqual(wd.phase_date(wd.year_phase(calendar.timegm((2028, 2, 29, 12, 0, 0)))), (1, 29))
+        self.assertEqual(wd.phase_date(wd.year_phase(calendar.timegm((2028, 12, 31, 23, 59, 0)))), (11, 31))
+
+    def test_smooth_across_the_antimeridian(self):
+        f = [(i, 0.0, lon) for i, lon in enumerate([176.0, 178.0, 179.0, -179.0, -178.0])]
+        s = wd.smooth(f, 3, gap=10)
+        self.assertAlmostEqual(abs(((s[2][2] - 179.0) + 180) % 360 - 180), 0.33, 1)       # raw averaging would give 59
+        for a, b in zip(s, s[1:]):
+            self.assertLess(abs(((b[2] - a[2]) + 180) % 360 - 180), 3.5)
+
+    def test_animal_crosses_the_antimeridian_the_short_way(self):
+        a = wd.Animal(rec(kind="shark", fixes=[[0, 10, 178.0], [5, 10, 179.5], [10, 10, -179.0], [15, 10, -177.0]]))
+        self.assertLess(np.abs(np.diff(a.fx)).max(), 20.0 * wd.PX)                        # no leap through the Atlantic
+        self.assertLess(np.abs(np.diff(a.px)).max(), 2.0)                                 # the dense path is one smooth line
+        # a track that comes into view from the east across 180 is continuous at the view's edge
+        b = wd.Animal(rec(kind="shark", fixes=[[0, 10, 170.0], [15, 10, -170.0], [30, 10, -150.0]]))
+        self.assertLess(np.abs(np.diff(b.px)).max(), 2.0)
 
 
 def rec(**kw):
@@ -153,10 +178,27 @@ class Piece(unittest.TestCase):
     def test_labels_say_what_each_thing_is(self):
         self.assertEqual(wd.Animal(rec()).label_lines(), ("ARCTIC TERN", "", "RECORDED 2008"))
         oc = wd.Animal(rec(src="ocearch", name="Mary Lee", species="WHITE SHARK", last=NOW, kind="shark"))
-        self.assertEqual(oc.label_lines(), ("MARY LEE", "WHITE SHARK", "OCEARCH TRACK TO 28 OCT"))
+        old = wd.Animal(rec(src="ocearch", name="Mary Lee", species="WHITE SHARK", last=time.time() - 100 * 86400.0, kind="shark"))
+        self.assertRegex(old.label_lines()[2], r"^OCEARCH TRACK TO \d+ [A-Z]{3} 20\d\d$")                # an old track names its year
+        fresh = wd.Animal(rec(src="ocearch", name="Mary Lee", species="WHITE SHARK", last=time.time() - 86400.0, kind="shark"))
+        self.assertNotRegex(fresh.label_lines()[2], r"20\d\d")
+        self.assertNotIn("LIVE", fresh.label_lines()[2])
         fixes, t0 = wd.typical_fixes(wd.TYPICAL[1]["wps"])
         ty = wd.Animal({"id": "T", "kind": "shark", "species": "WHITE SHARK", "src": "typical", "t0": t0, "fixes": fixes})
         self.assertEqual(ty.label_lines()[2], "TYPICAL ROUTE")
+
+    def test_stale_cache_is_ignored(self):
+        import json
+        import tempfile
+        d = tempfile.mkdtemp()
+        wd.CACHE = os.path.join(d, "c.json")
+        for age, expect in ((2 * 86400.0, True), (30 * 86400.0, False), (200 * 86400.0, False)):
+            with open(wd.CACHE, "w") as fh:
+                json.dump({"t": time.time() - age, "animals": [rec()]}, fh)
+            self.assertEqual(bool(wd.read_cache()), expect, age)
+        with open(wd.CACHE, "w") as fh:
+            json.dump({"animals": [rec()]}, fh)                                               # undated: not trusted
+        self.assertEqual(wd.read_cache(), {})
 
     def test_without_any_data_it_shows_typical_routes(self):
         wd.DATA = "/nonexistent/wanderers.json"

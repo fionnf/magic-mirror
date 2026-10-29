@@ -110,81 +110,141 @@ def load_cams():
 # ---------------------------------------------------------------- synthetic test cam
 
 class TestScene:
-    """A made-up scramble crossing seen from above at dusk: crosswalks, lit shopfronts, a dense crowd of dots
-    streaming in four directions, and cars that go while the people wait. Pure numpy/cv2, no network."""
-    SW, SH = 960, 540
+    """A made-up scramble crossing seen from above at dusk, drawn portrait-native: indigo asphalt, warm pools
+    under four street lamps, shopfronts with glowing windows (a few flicker on and off), a soft-white zebra,
+    small people streaming across in muted colours (they wait at the kerbs while the cars go) and cars with
+    glowing head and tail lights. Pure numpy/cv2, no network. Colours are BGR."""
+    SW, SH = 288, 384                                        # drawn at 2x (576 x 768) once, moving parts at 1x
 
     def __init__(self):
         rng = np.random.default_rng(11)
-        w, h = self.SW, self.SH
-        bg = np.full((h, w, 3), (20, 19, 24), np.uint8)
-        bg[:] += (rng.integers(0, 6, (h, w, 1))).astype(np.uint8)
-        cx0, cx1, cy0, cy1 = 250, 710, 130, 410          # the crossing square
-        cv2.rectangle(bg, (cx0, 0), (cx1, h), (27, 26, 32), -1)
-        cv2.rectangle(bg, (0, cy0), (w, cy1), (27, 26, 32), -1)
-        for k in range(0, 460, 28):                      # zebra stripes on all four sides and the diagonals
-            cv2.rectangle(bg, (cx0 + k, cy0 - 38), (cx0 + k + 14, cy0 - 6), (150, 150, 150), -1)
-            cv2.rectangle(bg, (cx0 + k, cy1 + 6), (cx0 + k + 14, cy1 + 38), (150, 150, 150), -1)
-        for k in range(0, 280, 28):
-            cv2.rectangle(bg, (cx0 - 38, cy0 + k), (cx0 - 6, cy0 + k + 14), (150, 150, 150), -1)
-            cv2.rectangle(bg, (cx1 + 6, cy0 + k), (cx1 + 38, cy0 + k + 14), (150, 150, 150), -1)
-        cv2.line(bg, (cx0, cy0), (cx1, cy1), (70, 70, 76), 4)
-        cv2.line(bg, (cx1, cy0), (cx0, cy1), (70, 70, 76), 4)
-        for (x, y, ww, hh) in [(0, 0, cx0 - 40, cy0 - 40), (cx1 + 40, 0, w - cx1 - 40, cy0 - 40),
-                               (0, cy1 + 40, cx0 - 40, h - cy1 - 40), (cx1 + 40, cy1 + 40, w - cx1 - 40, h - cy1 - 40)]:
-            cv2.rectangle(bg, (x, y), (x + ww, y + hh), (28, 26, 34), -1)    # building blocks seen from above
-            for i in range(int(rng.integers(5, 8))):                         # neon signs along their edges
-                col = [(40, 60, 240), (240, 120, 40), (60, 220, 240), (200, 60, 220), (60, 230, 120)][int(rng.integers(0, 5))]
-                sx = int(rng.integers(x + 4, x + max(6, ww - 70))); sy = int(rng.integers(y + 4, y + max(6, hh - 40)))
-                cv2.rectangle(bg, (sx, sy), (sx + int(rng.integers(30, 70)), sy + int(rng.integers(10, 26))), col, -1)
-        glow = cv2.GaussianBlur(bg, (0, 0), 14)
-        self.bg = cv2.addWeighted(bg, 1.0, glow, 0.7, 0)
-        n = 760
-        lane = rng.integers(0, 6, n)                      # 0 E, 1 W, 2 S, 3 N, 4 diag, 5 anti-diag
-        self.lane = lane
-        self.p0 = np.stack([rng.uniform(0, 1, n), rng.uniform(0, 1, n)], 1)
-        self.speed = rng.uniform(0.018, 0.04, n)
-        self.size = rng.uniform(3.0, 4.6, n)
-        pal = np.array([(235, 235, 235), (60, 70, 220), (230, 150, 60), (60, 190, 235), (190, 80, 200), (90, 220, 120),
-                        (40, 40, 45), (150, 150, 160), (60, 60, 200)], np.uint8)
+        w, h = 2 * self.SW, 2 * self.SH
+        self.rx0, self.rx1, self.ry0, self.ry1 = 196, 380, 292, 476        # the two roads' edges (2x units)
+        rx0, rx1, ry0, ry1 = self.rx0, self.rx1, self.ry0, self.ry1
+        yy = np.linspace(0, 1, h, dtype=np.float32)[:, None, None]
+        bg = np.zeros((h, w, 3), np.float32)
+        bg[:] = np.array((82, 42, 30), np.float32) * (0.8 + 0.35 * yy)         # a deep indigo dusk
+        bg += rng.normal(0, 1.6, (h, w, 1)).astype(np.float32)                 # asphalt grain
+        road = np.zeros((h, w), np.uint8)
+        road[:, rx0:rx1] = 1
+        road[ry0:ry1, :] = 1
+        bg[road > 0] = bg[road > 0] * 0.5 + np.array((46, 26, 18), np.float32) * 0.7
+        light = np.zeros((h, w, 3), np.float32)                                # everything that glows
+        # pavements and the four blocks
+        blocks = [(0, 0, rx0 - 36, ry0 - 36), (rx1 + 36, 0, w, ry0 - 36), (0, ry1 + 36, rx0 - 36, h), (rx1 + 36, ry1 + 36, w, h)]
+        self.windows = []
+        for (x0, y0, x1, y1) in blocks:
+            cv2.rectangle(bg, (x0, y0), (x1, y1), (58, 42, 44), -1)
+            cv2.rectangle(bg, (x0, y0), (x1, y1), (86, 62, 60), 2)
+            for wy in range(y0 + 16, y1 - 22, 30):
+                for wx in range(x0 + 14, x1 - 20, 26):
+                    if wx + 14 > w or wy + 18 > h:
+                        continue
+                    lit = rng.random() < 0.46
+                    col = (110, 190, 255) if rng.random() < 0.78 else (255, 215, 150)
+                    col = tuple(int(v * rng.uniform(0.65, 1.0)) for v in col)
+                    if lit:
+                        cv2.rectangle(bg, (wx, wy), (wx + 14, wy + 18), col, -1)
+                        cv2.rectangle(light, (wx, wy), (wx + 14, wy + 18), col, -1)
+                    else:
+                        cv2.rectangle(bg, (wx, wy), (wx + 14, wy + 18), (62, 44, 40), -1)
+                    self.windows.append((wx, wy, col, lit, float(rng.uniform(5, 14))))
+            sx = int(rng.integers(x0 + 20, max(x0 + 24, x1 - 70)))
+            sy = y1 - 10 if y0 > ry1 else y0 + 5                                    # a muted neon on the road side
+            ncol = [(170, 190, 60), (190, 90, 210), (80, 150, 255), (200, 170, 60)][int(rng.integers(0, 4))]
+            cv2.rectangle(bg, (sx, sy), (sx + 54, sy + 4), ncol, -1)
+            cv2.rectangle(light, (sx, sy), (sx + 54, sy + 4), ncol, -1)
+        # soft-white zebra on all four arms, thin diagonals for the scramble
+        zc = (225, 215, 200)
+        for k in range(rx0 + 6, rx1 - 10, 24):
+            cv2.rectangle(bg, (k, ry0 - 30), (k + 12, ry0 - 6), zc, -1)
+            cv2.rectangle(bg, (k, ry1 + 6), (k + 12, ry1 + 30), zc, -1)
+        for k in range(ry0 + 6, ry1 - 10, 24):
+            cv2.rectangle(bg, (rx0 - 30, k), (rx0 - 6, k + 12), zc, -1)
+            cv2.rectangle(bg, (rx1 + 6, k), (rx1 + 30, k + 12), zc, -1)
+        cv2.line(bg, (rx0, ry0), (rx1, ry1), (120, 96, 90), 3)
+        cv2.line(bg, (rx1, ry0), (rx0, ry1), (120, 96, 90), 3)
+        for (lx, ly) in [(rx0 - 20, ry0 - 20), (rx1 + 20, ry0 - 20), (rx0 - 20, ry1 + 20), (rx1 + 20, ry1 + 20)]:
+            cv2.circle(light, (lx, ly), 9, (150, 210, 255), -1)                    # a lamp: its warm pool on the ground
+            pool = np.zeros((h, w), np.float32)
+            cv2.circle(pool, (lx, ly), 120, 1.0, -1)
+            pool = cv2.GaussianBlur(pool, (0, 0), 55)
+            bg += pool[:, :, None] * np.array((38, 78, 120), np.float32) * 0.55
+        glow = cv2.GaussianBlur(light, (0, 0), 9)
+        bg += glow * 0.7 + light * 0.2
+        self.bg = cv2.resize(np.clip(bg, 0, 255).astype(np.uint8), (self.SW, self.SH), interpolation=cv2.INTER_AREA)
+        self.win = [(wx // 2, wy // 2, col, lit, per) for (wx, wy, col, lit, per) in self.windows]
+        n = 280
+        self.lane = rng.integers(0, 6, n)                  # 0 E, 1 W, 2 S, 3 N, 4 diagonal, 5 anti-diagonal
+        self.p0 = rng.uniform(0, 1, n)
+        self.speed = rng.uniform(0.016, 0.034, n)
+        self.size = rng.uniform(2.6, 3.8, n)
+        pal = np.array([(226, 222, 218), (226, 222, 218), (226, 222, 218), (110, 180, 238), (170, 150, 220),
+                        (214, 196, 150), (190, 140, 176)], np.uint8)
         self.col = pal[rng.integers(0, len(pal), n)]
         self.off = rng.uniform(-1, 1, n)
-        self.cross = (cx0, cx1, cy0, cy1)
+        self.flip = rng.integers(0, 2, n)
+        self.flicker = rng.choice(len(self.windows), size=min(14, len(self.windows)), replace=False)
 
     def render(self, t):
         w, h = self.SW, self.SH
-        cx0, cx1, cy0, cy1 = self.cross
+        rx0, rx1, ry0, ry1 = (v // 2 for v in (self.rx0, self.rx1, self.ry0, self.ry1))
         img = self.bg.copy()
-        phase = (t % 40.0)
-        cars_go = phase < 12.0
-        if cars_go:                                       # cars along the two roads while people wait at the kerbs
-            for i in range(7):
-                x = int(((t * 150 + i * 190) % (w + 120)) - 60)
-                cv2.rectangle(img, (x, cy0 + 56 + (i % 2) * 90), (x + 44, cy0 + 78 + (i % 2) * 90), (200, 200, 205) if i % 3 else (60, 60, 210), -1)
-                cv2.circle(img, (x + 44, cy0 + 62 + (i % 2) * 90), 7, (170, 240, 255), -1)
-            for i in range(5):
-                y = int(((t * 130 + i * 140) % (h + 100)) - 50)
-                cv2.rectangle(img, (cx0 + 50 + (i % 2) * 160, y), (cx0 + 72 + (i % 2) * 160, y + 40), (190, 200, 200), -1)
-                cv2.circle(img, (cx0 + 61 + (i % 2) * 160, y + 40), 7, (60, 60, 240), -1)
-        walk = 0.0 if cars_go else min(1.0, (phase - 12.0) / 3.0)
+        light = np.zeros((h, w, 3), np.uint8)
+        for j in self.flicker:                                   # a few windows switch on and off
+            wx, wy, col, lit, per = self.win[j]
+            on = lit ^ (int(t / per + j) % 2 == 1)
+            c = col if on else (62, 44, 40)
+            cv2.rectangle(img, (wx, wy), (wx + 6, wy + 8), c, -1)
+            if on:
+                cv2.rectangle(light, (wx - 1, wy - 1), (wx + 7, wy + 9), tuple(int(v * 0.30) for v in col), -1)
+        phase = t % 40.0
+        cars_go = phase < 14.0
+        if cars_go:                                              # cars along both roads while people wait
+            for i in range(6):
+                body = [(120, 70, 60), (150, 150, 160), (70, 60, 150), (110, 100, 90), (90, 120, 150), (60, 90, 130)][i]
+                if i < 3:
+                    east = i % 2 == 0
+                    x = (t * 60 + i * 115) % (w + 70) - 35
+                    x = int(x if east else w - x)
+                    y = (ry0 + 23) if east else (ry1 - 23)
+                    cv2.rectangle(img, (x - 10, y - 4), (x + 10, y + 4), body, -1)
+                    d = 1 if east else -1
+                    for dy in (-3, 3):
+                        cv2.circle(light, (x + 11 * d, y + dy), 2, (175, 225, 255), -1)
+                        cv2.circle(light, (x - 11 * d, y + dy), 1, (60, 60, 235), -1)
+                else:
+                    south = i % 2 == 1
+                    y = (t * 52 + i * 95) % (h + 70) - 35
+                    y = int(y if south else h - y)
+                    x = (rx0 + 23) if south else (rx1 - 23)
+                    cv2.rectangle(img, (x - 4, y - 10), (x + 4, y + 10), body, -1)
+                    d = 1 if south else -1
+                    for dx in (-3, 3):
+                        cv2.circle(light, (x + dx, y + 11 * d), 2, (175, 225, 255), -1)
+                        cv2.circle(light, (x + dx, y - 11 * d), 1, (60, 60, 235), -1)
+        tw = (t // 40.0) * 26.0 + max(0.0, phase - 14.0)            # time the lights have been green for people
         for i in range(len(self.lane)):
             L = self.lane[i]
-            u = (self.p0[i, 0] + t * self.speed[i]) % 1.0
-            o = self.off[i]
-            if cars_go and L > 3:
+            u = (self.p0[i] + tw * self.speed[i]) % 1.0
+            o = self.off[i] * 7.0
+            near = self.flip[i]
+            if L == 0:   x, y = rx0 - 40 + u * (rx1 - rx0 + 80), (ry0 - 11 if near else ry1 + 11) + o
+            elif L == 1: x, y = rx1 + 40 - u * (rx1 - rx0 + 80), (ry1 + 11 if near else ry0 - 11) + o
+            elif L == 2: x, y = (rx0 - 11 if near else rx1 + 11) + o, ry0 - 40 + u * (ry1 - ry0 + 80)
+            elif L == 3: x, y = (rx1 + 11 if near else rx0 - 11) + o, ry1 + 40 - u * (ry1 - ry0 + 80)
+            elif cars_go:
                 continue
-            if L == 0:   x, y = -40 + u * (w + 80), (cy0 - 22) + o * 30 if i % 2 else (cy1 + 22) + o * 30
-            elif L == 1: x, y = w + 40 - u * (w + 80), (cy1 + 22 + o * 30) if i % 2 else (cy0 - 22) + o * 30
-            elif L == 2: x, y = ((cx0 - 22) + o * 30) if i % 2 else (cx1 + 22 + o * 30), -40 + u * (h + 80)
-            elif L == 3: x, y = ((cx1 + 22) + o * 30) if i % 2 else (cx0 - 22 + o * 30), h + 40 - u * (h + 80)
-            elif L == 4: x, y = cx0 + u * (cx1 - cx0) + o * 20, cy0 + u * (cy1 - cy0) + o * 20
-            else:        x, y = cx1 - u * (cx1 - cx0) + o * 20, cy0 + u * (cy1 - cy0) - o * 20
-            r = float(self.size[i])
+            elif L == 4: x, y = rx0 + u * (rx1 - rx0) + o * .6, ry0 + u * (ry1 - ry0) + o * .6
+            else:        x, y = rx1 - u * (rx1 - rx0) + o * .6, ry0 + u * (ry1 - ry0) - o * .6
+            if cars_go and ((L < 2 and rx0 < x < rx1) or (2 <= L < 4 and ry0 < y < ry1)):
+                continue                                         # nobody steps into the cars' way
             c = tuple(int(v) for v in self.col[i])
-            cv2.circle(img, (int(x) + 2, int(y) + 2), int(r + 1), (12, 12, 14), -1)
-            cv2.circle(img, (int(x), int(y)), int(r), c, -1)
-            if i % 5 == 0:                                # an umbrella now and then
-                cv2.circle(img, (int(x), int(y)), int(r * 2.1), tuple(int(v) for v in self.col[(i * 7) % len(self.col)]), -1)
+            r = 1 if self.size[i] < 3.2 else 2
+            cv2.circle(img, (int(x), int(y)), r, c, -1)
+            cv2.circle(light, (int(x), int(y)), r + 1, tuple(int(v * 0.16) for v in c), -1)
+        glow = cv2.GaussianBlur(light, (0, 0), 3)
+        img = cv2.add(img, cv2.addWeighted(glow, 1.4, light, 0.6, 0))
         return img
 
 
@@ -385,20 +445,55 @@ def led_look(f, cam, t=0.0, led=False):
 
 # ---------------------------------------------------------------- cards and label
 
+_NS_YY, _NS_XX = np.mgrid[0:H, 0:W]
+_NS_R = np.hypot((_NS_XX - W / 2) / (W / 2), (_NS_YY - H / 2) / (H / 2)).astype(np.float32)
+_NS_THR = _BAYER[:, :, 0]
+_NS_HASH = ((_NS_XX * 73856093) ^ (_NS_YY * 19349663)) & 0xFFFF
+
+
+_NS_BASE = None
+
+
+def _ns_base():
+    """The still part of the card, made once: a faint dithered pool of deep blue, fine scanlines, a thin ring."""
+    lit = lambda inten, col: np.where(np.clip(inten, 0, 1) > _NS_THR, 1.0, 0.0)[:, :, None] * np.array(col, np.float32)
+    centre = np.clip(1.0 - _NS_R, 0, 1)
+    img = lit(centre ** 1.6 * 0.26, (32, 52, 108))
+    lines = ((_NS_YY % 4) == 0).astype(np.float32) * (0.07 + 0.16 * centre)         # scanlines, strongest mid-card
+    img = np.maximum(img, lit(lines, (30, 50, 104)))
+    ring = (np.abs(_NS_R * (W / 2) - 40.0) < 0.7) & (((_NS_XX + _NS_YY) % 4) == 0)  # a dotted ring round the words
+    img[ring] = np.maximum(img[ring], (40, 66, 128))
+    return img
+
+
 def no_signal(t, name=""):
-    """A calm held card: deep blue-grey, NO SIGNAL, one slow scanline."""
-    img = np.zeros((H, W, 3), np.float32)
-    yy = np.linspace(0, 1, H, dtype=np.float32)[:, None, None]
-    img[:] = np.array((16, 22, 34), np.float32) * (1.0 - 0.3 * yy)
-    y = int((t % 14.0) / 14.0 * (H + 24)) - 12
-    for d in range(-9, 10):                                 # a soft band, brightest at its centre line
-        if 0 <= y + d < H:
-            img[y + d] += np.array((26, 40, 62), np.float32) * (1.0 - abs(d) / 10.0) ** 2
+    """A calm held card, designed for LEDs: black with a faint dithered pool of deep blue, fine scanlines, a
+    slow band, a thin dotted ring, a whisper of static, a breathing standby LED and small type. Every lit LED
+    keeps a channel above the dark floor; the gradients are ordered dither."""
+    global _NS_BASE
+    if _NS_BASE is None:
+        _NS_BASE = _ns_base()
+    img = _NS_BASE.copy()
+    y = (t % 18.0) / 18.0 * (H + 30) - 15                                      # the slow band
+    band = np.clip(1.0 - np.abs(_NS_YY[:, :1] - y) / 7.0, 0, 1) ** 2 * 0.7
+    img = np.maximum(img, np.where(band > _NS_THR, 1.0, 0.0)[:, :, None] * np.array((44, 74, 142), np.float32))
+    snow = ((_NS_HASH + int(t * 8) * 40503) % 2003) < 4                         # static, a few LEDs at a time
+    img[snow] = np.maximum(img[snow], (56, 86, 154))
     s = "NO SIGNAL"
-    pixelfont.draw(img, s, (W - pixelfont.width(s)) // 2, H // 2 - 3, (120, 150, 190))
+    wd = pixelfont.width(s)
+    x0, y0 = (W - wd) // 2, H // 2 - 3
+    img[y0 - 3:y0 + 11, x0 - 4:x0 + wd + 4] = 0.0                               # a clear patch under the words
+    pixelfont.draw(img, s, x0, y0, (150, 182, 230))
+    img[y0 + 7, x0:x0 + wd] = (44, 72, 136)                                     # a hairline under the title
     if name:
         n = name[:44]
-        pixelfont.draw(img, n, (W - pixelfont.width(n)) // 2, H // 2 + 9, (60, 80, 110))
+        nw = pixelfont.width(n)
+        if nw > wd:
+            img[y0 + 9:y0 + 17, (W - nw) // 2 - 3:(W + nw) // 2 + 3] = 0.0
+        pixelfont.draw(img, n, (W - nw) // 2, y0 + 11, (92, 118, 164))
+    br = 0.5 + 0.5 * np.sin(t * 1.6)                                           # the standby LED, breathing
+    if br > 0.3:
+        img[y0 - 8, W // 2] = np.array((255, 150, 96), np.float32) * (0.5 + 0.5 * br)
     return np.clip(img, 0, 255).astype(np.uint8)
 
 

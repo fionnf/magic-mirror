@@ -1,7 +1,7 @@
 {
  "name": "Veils Under the Lake",
  "description": "A few soft curtains of aqua light hang in deep petrol water, swaying almost imperceptibly, gathering and drifting across the wall as the day sinks from morning clarity into a dense, luminous night.",
- "image": "2026-10-29.png",
+ "image": "2026-10-29.final.png",
  "animation_source": "2026-10-29.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 5
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 1
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": 16
   }
  ],
  "listening": "The bass breath slowly widens the veils like a tide, tension draws them together, the key leans their tint within the teal family, treble softens or sharpens their edges, each song reseeds their spacing, and the day's hourly energy settles as faint sediment layers along the lake floor.",
@@ -47,5 +59,36 @@
   "score": 5,
   "verdict": "The petrol ground and muted aqua veils follow the direction and break cleanly from the recent warm-on-black days, but by evening the veils swell into bright, bulbous lobes that read as blobs rather than hanging light. The hard horizontal band that appears at the bottom from 3 pm on is a second, unexplained element that cuts the calm space."
  },
- "direction": "Petrol depth"
+ "direction": "Petrol depth",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.475,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "The day was quietly musical with less than half an hour of soft, unseen songs gently playing through the afternoon. \"Veils Under the Lake\" captured this subtle flow, its aqua curtains barely moving as evening deepened, reflecting a calm that settled like sediment beneath quiet water. The image holds a tranquil pause, a delicate moment where light and sound merge beneath the surface.",
+  "alt": "A soft aqua vertical light shape glowing gently against a dark teal background, resembling translucent curtains hanging and swaying very slightly."
+ },
+ "final": true
 }

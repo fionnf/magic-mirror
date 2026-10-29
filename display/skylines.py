@@ -16,7 +16,10 @@ What is NOT: the skylines. They are stylised, not survey-accurate: a few hand-au
 (Eiffel, Skytree, Burj Khalifa, the Opera House sails ...) over seeded, deterministic fields of generic
 buildings shaped per city (dense for Hong Kong, low for Paris). Recognisable, not a plan.
 
-Everything is whole LEDs (no anti-aliasing); the sky gradient is ordered-dithered so it does not band.
+Everything is whole LEDs (no anti-aliasing); the sky is a per-city palette (three-stop gradient, horizon glow, cloud
+edges lit by it), three haze layers deep, with window bloom, water reflections, graded sun/moon orbs, shooting
+stars, birds and aircraft; an ordered dither keeps gradients from banding and a channel floor keeps the darkest
+LED alight on small panels. The city dissolves sky first, silhouettes second; the label fades after 14 s.
 The still layers of a city are drawn once; per frame only sky, weather, lights and the label are composed.
 """
 import json
@@ -38,7 +41,7 @@ W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, "panel_setup", "skylines_cache.json")
 URL = "https://api.open-meteo.com/v1/forecast"
-FADE = 20.0                    # seconds of cross-fade at xx:00
+FADE = 24.0                    # seconds of dissolve at xx:00 (sky first, then the silhouettes)
 STALE = 45 * 60.0              # refetch a city's weather when older than this
 USABLE = 6 * 3600.0            # offline: weather older than this is ignored (clear sky)
 IDLE = 120.0                   # no frame drawn for this long: the piece is not showing, stop fetching
@@ -831,6 +834,112 @@ def dome_rotunda(c, x, s=1.0):
     c.Dm(x, 14 * s, 9 * s, 11 * s)
 
 
+@lm
+def pines(c, x, s=1.0):
+    """Umbrella pines, the Roman skyline's other landmark."""
+    for dx, hh in ((-12, 34), (0, 42), (11, 30)):
+        tx = x + dx * s
+        c.R(tx, tx + 1, hh * s, 0)
+        c.E(tx, (hh + 2) * s, 8 * s, 3.2 * s)
+        c.E(tx - 4 * s, (hh - 1) * s, 5 * s, 2.4 * s)
+
+
+@lm
+def pantheon(c, x, s=1.0):
+    c.R(x - 14 * s, x + 14 * s, 16 * s, 0, win=True)
+    c.P([(x - 15 * s, 16 * s), (x, 24 * s), (x + 15 * s, 16 * s)])
+    c.Dm(x, 16 * s, 10 * s, 12 * s)
+    for dx in range(-12, 13, 4):
+        c.R(x + dx * s, x + dx * s, 14 * s, 0, v=0)
+
+
+@lm
+def quadriga(c, x, s=1.0):
+    """Brandenburg Gate: six columns, the attic and the chariot with its four horses on top."""
+    c.R(x - 18 * s, x + 18 * s, 26 * s, 0, win=True)
+    for dx in range(-14, 15, 6):
+        c.R(x + dx * s - 1, x + dx * s + 1, 20 * s, 0, v=0)
+    c.R(x - 20 * s, x + 20 * s, 31 * s, 26 * s)
+    c.R(x - 8 * s, x + 8 * s, 35 * s, 31 * s)
+    c.R(x - 7 * s, x + 7 * s, 38 * s, 35 * s)
+    for dx in (-6, -3, 0, 3, 6):
+        c.R(x + dx * s, x + dx * s, 41 * s, 38 * s)
+    c.R(x + 8 * s, x + 9 * s, 44 * s, 35 * s)
+    c.R(x + 7 * s, x + 10 * s, 49 * s, 44 * s)
+    c.R(x + 8 * s, x + 9 * s, 53 * s, 49 * s)
+
+
+@lm
+def fernsehturm(c, x, s=1.0):
+    c.P([(x - 4 * s, 0), (x - 1, 70 * s), (x + 1, 70 * s), (x + 4 * s, 0)])
+    c.E(x, 78 * s, 8 * s, 8 * s)
+    c.R(x - 3 * s, x + 3 * s, 72 * s, 68 * s)
+    c.R(x - 1, x + 1, 96 * s, 86 * s)
+    c.R(x, x, 118 * s, 96 * s)
+    c.beacon(x, 118 * s)
+
+
+@lm
+def cairotower(c, x, s=1.0):
+    """The lattice lotus of Cairo: a waisted shaft, a round cap, a spire."""
+    h = 70 * s
+    f = lambda y: (2.5 + 3.5 * (1 - y / h) ** 1.2 + 2.0 * math.sin(math.pi * min(1.0, y / h)) ** 3) * s
+    _prof(c, x, int(h), f, step=2)
+    c.E(x, h + 4 * s, 6 * s, 4 * s)
+    c.R(x, x, h + 18 * s, h + 7 * s)
+    for yy in range(8, int(h) - 4, 6):
+        c.R(x - 1, x, yy + 1, yy, v=0)
+    c.beacon(x, h + 18 * s)
+
+
+@lm
+def citadel(c, x, s=1.0):
+    """Muhammad Ali mosque: a big dome with half-domes and two slender pencil minarets."""
+    c.R(x - 18 * s, x + 18 * s, 18 * s, 0, win=True)
+    c.Dm(x, 18 * s, 13 * s, 15 * s)
+    c.Dm(x - 12 * s, 18 * s, 6 * s, 7 * s)
+    c.Dm(x + 12 * s, 18 * s, 6 * s, 7 * s)
+    c.R(x, x, 40 * s, 33 * s)
+    for dx in (-22, 22):
+        _minaret(c, x + dx * s, s, 74)
+
+
+@lm
+def sevensisters(c, x, s=1.0):
+    """A Stalinist tower: a stepped, buttressed body under a spire with a star."""
+    c.R(x - 9 * s, x + 9 * s, 40 * s, 0, win=True)
+    c.R(x - 6 * s, x + 6 * s, 62 * s, 40 * s, win=True)
+    c.R(x - 4 * s, x + 4 * s, 78 * s, 62 * s, win=True)
+    c.R(x - 14 * s, x - 9 * s, 26 * s, 0)
+    c.R(x + 9 * s, x + 14 * s, 26 * s, 0)
+    c.P([(x - 3 * s, 78 * s), (x, 104 * s), (x + 3 * s, 78 * s)])
+    c.R(x, x, 112 * s, 104 * s)
+    c.beacon(x, 112 * s)
+
+
+@lm
+def ostankino2(c, x, s=1.0):
+    h = 120 * s
+    f = lambda y: (4.6 - 2.6 * (y / (0.62 * h))) * s if y < 0.62 * h else 1.2 * s
+    _prof(c, x, int(0.62 * h), f, step=3)
+    c.R(x - 7 * s, x + 7 * s, 0.50 * h, 0.44 * h)
+    c.R(x - 1, x + 1, 0.9 * h, 0.5 * h)
+    c.R(x, x, h, 0.9 * h)
+    c.beacon(x, h)
+
+
+@lm
+def kremlintowers(c, x, s=1.0):
+    c.R(x - 40 * s, x + 40 * s, 14 * s, 0, win=True)
+    for i in range(-39, 40, 3):
+        c.R(x + i * s, x + i * s, 17 * s, 14 * s)
+    for dx, hh in ((-30, 34), (-8, 30), (24, 38)):
+        tx = x + dx * s
+        c.R(tx - 3 * s, tx + 3 * s, hh * s, 14 * s, win=True)
+        c.P([(tx - 4 * s, hh * s), (tx, (hh + 16) * s), (tx + 4 * s, hh * s)])
+        c.R(tx, tx, (hh + 22) * s, (hh + 16) * s)
+
+
 # =========================================================================== cities ===
 # bg: the generic buildings, seeded: heights (LED rows), widths, how low-biased (pw), roofs, cluster centres.
 def bg(hmin, hmax, wmin, wmax, gap=0, pw=1.6, roof="flat", cl=((96, 70),), floor=0.35, tank=0.0, ant=0.1):
@@ -839,7 +948,7 @@ def bg(hmin, hmax, wmin, wmax, gap=0, pw=1.6, roof="flat", cl=((96, 70),), floor
 
 
 CITIES = [
-    dict(name="RIO", lat=-22.91, lon=-43.17, tz="America/Sao_Paulo", az0=0, water=10, seed=3,
+    dict(name="RIO", lat=-22.91, lon=-43.17, tz="America/Sao_Paulo", az0=250, water=10, seed=3,
          bg=bg(10, 40, 5, 11, 0, 1.8, "flat", ((150, 50),)), far=bg(12, 34, 8, 14, 0, 1.4),
          land=[("corcovado", 46, 1.0), ("sugarloaf", 150, 1.0)]),
     dict(name="TORONTO", lat=43.65, lon=-79.38, tz="America/Toronto", az0=180, water=12, seed=4,
@@ -891,16 +1000,16 @@ CITIES = [
          land=[("emirates", 30, 1.0), ("burj", 104, 1.0), ("burjalarab", 168, 1.0)]),
     dict(name="MOSCOW", lat=55.75, lon=37.62, tz="Europe/Moscow", az0=180, water=0, seed=20,
          bg=bg(10, 44, 6, 12, 0, 1.8, "flat", ((150, 50),), 0.4), far=bg(10, 30, 8, 14, 0, 1.4),
-         land=[("ostankino", 30, 0.9), ("kremlinwall", 106, 1.2), ("spasskaya", 124, 1.2), ("stbasil", 74, 1.6)]),
+         land=[("ostankino2", 24, 0.95), ("stbasil", 70, 1.6), ("kremlintowers", 130, 1.0), ("sevensisters", 176, 1.0)]),
     dict(name="ISTANBUL", lat=41.01, lon=28.98, tz="Europe/Istanbul", az0=180, water=10, seed=21,
          bg=bg(8, 30, 6, 12, 0, 2.0, "gable", ((100, 80),), 0.5), far=bg(8, 22, 8, 14, 0, 1.4),
          land=[("hagiasophia", 52, 1.0), ("bluemosque", 118, 1.0), ("galata", 170, 1.0)]),
     dict(name="CAIRO", lat=30.04, lon=31.24, tz="Africa/Cairo", az0=180, water=0, seed=22,
          bg=bg(8, 34, 6, 12, 0, 2.0, "flat", ((150, 40),), 0.4), far=bg(8, 24, 8, 14, 0, 1.4),
-         land=[("pyramids", 52, 1.3), ("minaret", 126, 1.0), ("minaret", 140, 0.8), ("minaret", 170, 0.9)]),
+         land=[("pyramids", 44, 1.3), ("citadel", 118, 1.0), ("cairotower", 158, 1.0), ("minaret", 184, 0.8)]),
     dict(name="ROME", lat=41.90, lon=12.50, tz="Europe/Rome", az0=180, water=0, seed=23,
          bg=bg(8, 26, 6, 12, 0, 2.2, "gable", ((100, 80),), 0.5), far=bg(8, 20, 8, 14, 0, 1.4),
-         farland=[("ridge", 96, 0.7)], land=[("colosseum", 52, 1.4), ("stpeters_dome", 138, 1.3)]),
+         farland=[("ridge", 96, 0.7)], land=[("colosseum", 44, 1.4), ("pines", 92, 1.0), ("pantheon", 118, 1.0), ("stpeters_dome", 160, 1.3)]),
     dict(name="BARCELONA", lat=41.39, lon=2.17, tz="Europe/Madrid", az0=180, water=0, seed=24,
          bg=bg(10, 30, 6, 11, 0, 2.0, "flat", ((100, 80),), 0.5, 0.2), far=bg(10, 24, 8, 14, 0, 1.4),
          farland=[("ridge", 96, 0.8)], land=[("sagrada", 62, 1.0), ("torreglories", 150, 1.0)]),
@@ -913,7 +1022,7 @@ CITIES = [
          land=[("notredame", 26, 1.0), ("sacrecoeur", 62, 1.0), ("eiffel", 108, 1.0), ("montparnasse", 160, 1.0)]),
     dict(name="BERLIN", lat=52.52, lon=13.40, tz="Europe/Berlin", az0=180, water=0, seed=27,
          bg=bg(8, 30, 6, 12, 0, 2.0, "flat", ((100, 80),), 0.5), far=bg(8, 22, 8, 14, 0, 1.4),
-         land=[("brandenburg", 44, 1.5), ("tvtower_berlin", 112, 1.0), ("dome_rotunda", 166, 1.5)]),
+         land=[("quadriga", 40, 1.3), ("fernsehturm", 112, 1.0), ("dome_rotunda", 166, 1.5)]),
 ]
 # slot = the Zürich wall-clock hour. Each city comes up near its own evening where the globe allows.
 _ORDER = ["RIO", "TORONTO", "NEW YORK", "CHICAGO", "SEATTLE", "SAN FRANCISCO", "LONDON", "CORK", "SYDNEY",
@@ -923,23 +1032,106 @@ _BY = {c["name"]: c for c in CITIES}
 SLOTS = [_BY[n] for n in _ORDER]
 assert len(SLOTS) == 24 and len(_BY) == 24
 
+# Hills and mountains sit in the farthest, haziest layer; other far landmarks stay in the middle one.
+MOUNT = {"ridge", "rainier", "fuji", "hkhills", "uetliberg", "uetliberg_tv"}
+
+
+# =========================================================================== palettes ===
+# One restrained palette per city. glow: the horizon band after sunset / before sunrise; hot: the core of it
+# next to the sun; mid: the colour a third of the way up the dusk sky; tz: dusk zenith; dz, dh: day zenith and
+# horizon; nz, nh: night zenith and horizon; cg: the city's own glow under a night sky.
+def _c(*v):
+    return np.array(v, np.float32)
+
+
+PAL0 = dict(glow=_c(255, 112, 62), hot=_c(255, 192, 104), mid=_c(128, 62, 124), tz=_c(30, 38, 104),
+            dz=_c(46, 108, 198), dh=_c(152, 198, 238), nz=_c(14, 18, 50), nh=_c(40, 34, 78), cg=_c(74, 48, 52))
+PAL = {
+    "TOKYO": dict(glow=_c(255, 62, 146), hot=_c(255, 150, 176), mid=_c(152, 44, 168), tz=_c(42, 22, 112),
+                  nz=_c(20, 12, 54), nh=_c(58, 26, 96), cg=_c(104, 46, 108)),
+    "DUBAI": dict(glow=_c(255, 150, 40), hot=_c(255, 208, 112), mid=_c(206, 104, 80), tz=_c(66, 48, 100),
+                  dz=_c(70, 122, 192), dh=_c(232, 208, 160), nz=_c(16, 18, 46), nh=_c(66, 46, 58), cg=_c(124, 78, 40)),
+    "RIO": dict(glow=_c(255, 116, 36), hot=_c(255, 204, 88), mid=_c(24, 120, 136), tz=_c(10, 56, 96),
+                dz=_c(26, 118, 186), dh=_c(160, 216, 228), nz=_c(8, 30, 58), nh=_c(18, 66, 88), cg=_c(86, 62, 38)),
+    "NEW YORK": dict(glow=_c(255, 104, 74), mid=_c(142, 70, 134), cg=_c(84, 54, 46)),
+    "CHICAGO": dict(glow=_c(255, 128, 58), mid=_c(112, 70, 132)),
+    "TORONTO": dict(glow=_c(255, 118, 82), mid=_c(112, 70, 142)),
+    "SEATTLE": dict(glow=_c(255, 142, 112), mid=_c(98, 80, 134), dz=_c(60, 102, 164), dh=_c(170, 202, 226),
+                    nh=_c(32, 36, 68)),
+    "SAN FRANCISCO": dict(glow=_c(255, 132, 92), mid=_c(152, 86, 122), dh=_c(192, 208, 232)),
+    "LONDON": dict(glow=_c(255, 142, 122), mid=_c(132, 88, 132), dz=_c(66, 100, 164), dh=_c(184, 204, 230)),
+    "CORK": dict(glow=_c(255, 152, 102), mid=_c(102, 86, 132), dz=_c(62, 104, 168)),
+    "SYDNEY": dict(glow=_c(255, 88, 92), hot=_c(255, 182, 104), mid=_c(172, 58, 132), tz=_c(36, 30, 108)),
+    "SHANGHAI": dict(glow=_c(255, 94, 122), mid=_c(128, 58, 140), nh=_c(46, 30, 84), cg=_c(94, 52, 84)),
+    "HONG KONG": dict(glow=_c(255, 80, 112), mid=_c(82, 50, 144), tz=_c(20, 40, 114), nh=_c(30, 38, 88),
+                      cg=_c(74, 52, 104)),
+    "SINGAPORE": dict(glow=_c(255, 120, 58), mid=_c(84, 50, 134), tz=_c(18, 32, 100), nz=_c(10, 18, 54)),
+    "KUALA LUMPUR": dict(glow=_c(255, 110, 82), mid=_c(112, 56, 134)),
+    "MUMBAI": dict(glow=_c(255, 128, 38), hot=_c(255, 204, 92), mid=_c(194, 70, 112)),
+    "MOSCOW": dict(glow=_c(255, 112, 104), mid=_c(98, 82, 154), tz=_c(24, 40, 112), dh=_c(178, 208, 236),
+                   nh=_c(36, 40, 84), cg=_c(72, 62, 76)),
+    "ISTANBUL": dict(glow=_c(255, 100, 58), mid=_c(164, 60, 112), tz=_c(38, 30, 98)),
+    "CAIRO": dict(glow=_c(255, 150, 62), mid=_c(178, 94, 98), tz=_c(52, 46, 102), dz=_c(76, 120, 186),
+                  dh=_c(216, 208, 182), cg=_c(112, 74, 44)),
+    "ROME": dict(glow=_c(255, 122, 58), mid=_c(172, 76, 92), cg=_c(104, 66, 42)),
+    "BARCELONA": dict(glow=_c(255, 132, 72), mid=_c(152, 70, 112)),
+    "ZURICH": dict(glow=_c(255, 142, 112), mid=_c(122, 90, 152), tz=_c(30, 44, 112)),
+    "PARIS": dict(glow=_c(255, 152, 122), mid=_c(142, 98, 152), cg=_c(92, 64, 56)),
+    "BERLIN": dict(glow=_c(255, 120, 112), mid=_c(112, 70, 142)),
+}
+
+
+def city_pal(city):
+    p = city.get("_pal")
+    if p is None:
+        p = dict(PAL0)
+        p.update(PAL.get(city["name"], {}))
+        city["_pal"] = p
+    return p
+
 
 # ============================================================================ build ===
+class Wins:
+    """Window LEDs of one layer, as parallel arrays: row, column, rank (lit when below the lit share),
+    tint draw, brightness."""
+
+    def __init__(self, ys, xs, rk, tn, br):
+        a = lambda v, d: np.array(v, d)
+        self.y, self.x, self.r, self.t, self.b = a(ys, int), a(xs, int), a(rk, np.float32), a(tn, np.float32), a(br, np.float32)
+
+    def __len__(self):
+        return len(self.y)
+
+
+def _edges(m):
+    """Pixels of a mask whose left / right / upper neighbour is empty (the lit rims of a silhouette)."""
+    l = m & ~np.pad(m, ((0, 0), (1, 0)))[:, :-1]
+    r = m & ~np.pad(m, ((0, 0), (0, 1)))[:, 1:]
+    u = m & ~np.pad(m, ((1, 0), (0, 0)))[:-1, :]
+    return [np.nonzero(e) for e in (l, r, u)]
+
+
 class Layers:
-    """The still parts of one city, drawn once."""
+    """The still parts of one city, drawn once: three silhouette layers (haze-far, middle, near), window
+    LEDs, rims, reflections and the gradients that depend only on the geometry."""
 
     def __init__(self, city):
         self.city = city
         self.name = city["name"]
         rng = np.random.default_rng(city["seed"] * 7919)
+        self.trng = np.random.default_rng(city["seed"] * 104729 + 5)       # building tones
         wh = city["water"]
         self.yb = H - wh
         self.water = wh
         self.lim = H - int(SKYLINE_MAX * H)                       # nothing above this row
-        far, near = Canvas(self.yb), Canvas(self.yb)
+        far3, far, near = Canvas(self.yb), Canvas(self.yb), Canvas(self.yb)
         self._bg(far, rng, city["far"], far=True)
         for name, x, s in city.get("farland", []):
-            LM[name](far, x, s)
+            LM[name](far3 if name in MOUNT else far, x, s)
+        p = city["far"]                                           # the farthest haze: low, fine, dense
+        p3 = dict(p, hmin=max(5, int(p["hmin"] * 0.5)), hmax=max(10, int(p["hmax"] * 0.62)), wmin=3, wmax=7,
+                  roof="flat", tank=0.0, ant=0.06)
+        self._bg(far3, np.random.default_rng(city["seed"] * 31337 + 1), p3, far=True)
         lim = self.lim
         self._bg(near, rng, city["bg"], far=False, clear=[x for n, x, _ in city["land"] if n not in ("ridge", "rainier")])
         k = LS
@@ -956,16 +1148,29 @@ class Layers:
         near.blocks += lmk.blocks
         near.beacons += lmk.beacons
         self.k = k
-        self.near_m, self.far_m = near.mask(), far.mask()
+        tone = np.asarray(near.im).astype(np.float32) / 255.0
+        self.near_m, self.mid_m, self.far_m = near.mask(), far.mask(), far3.mask()
         self.top = int(np.nonzero(self.near_m.any(1))[0].min())
-        self.far_m &= ~self.near_m
-        self.far_m[self.yb:] = False
-        self.near_m[self.yb:] = False
+        self.mid_m &= ~self.near_m
+        self.far_m &= ~(self.near_m | self.mid_m)
+        for m in (self.near_m, self.mid_m, self.far_m):
+            m[self.yb:] = False
         self.ny, self.nx = np.nonzero(self.near_m)
+        self.my, self.mx = np.nonzero(self.mid_m)
         self.fy, self.fx = np.nonzero(self.far_m)
+        ys_ = np.arange(H, dtype=np.float32)
+        # per-pixel look of the near layer: landmarks (tone 1) stay the darkest, generic blocks vary and pick up
+        # a little haze towards the ground, so the skyline has depth instead of one flat black.
+        hgt = (self.yb - self.ny).astype(np.float32)
+        t_ = tone[self.ny, self.nx]
+        self.nlift = np.clip((1.0 - t_) / 0.37 * 0.42 + np.clip(1.0 - hgt / 70.0, 0, 1) ** 1.5 * 0.22, 0, 0.8)[:, None]
         self.beacons = [(x, self.yb - h) for x, h in near.beacons if 0 <= x < W and lim <= self.yb - h < H]
-        self._windows(rng, near.blocks, self.near_m, far=False)
-        self._windows(rng, far.blocks, self.far_m, far=True)
+        self.rims = _edges(self.near_m)
+        self.win_n = self._windows(rng, near.blocks, self.near_m, 2)
+        self.win_m = self._windows(rng, far.blocks, self.mid_m, 3)
+        self.win_f = self._windows(rng, far3.blocks, self.far_m, 4)
+        self.cmask = self.near_m | self.mid_m | self.far_m         # everything that is "city" for the dissolve
+        self.cmask[self.yb:] = True
         if wh:                                                    # reflections in the water
             ys, xs = [], []
             for dy in range(wh):
@@ -977,12 +1182,24 @@ class Layers:
                 xs.append(row)
             self.ry = np.concatenate(ys)
             self.rx = np.concatenate(xs)
+            ry = self.yb + (self.yb - self.win_n.y) // 2
+            ok = ry < H
+            self.wr_y, self.wr_x, self.wr_r, self.wr_t, self.wr_b = ry[ok], self.win_n.x[ok], self.win_n.r[ok], self.win_n.t[ok], self.win_n.b[ok]
         else:
             self.ry = self.rx = np.zeros(0, int)
-        ys_ = np.arange(H, dtype=np.float32)
-        self.trow = (np.clip((self.yb - ys_) / self.yb, 0, 1) ** 0.62)[:, None, None]
-        self.hz = np.exp(-np.clip(self.yb - ys_, 0, None) / 55.0).astype(np.float32)
+            self.wr_y = self.wr_x = np.zeros(0, int)
+            self.wr_r = self.wr_t = self.wr_b = np.zeros(0, np.float32)
+        tr = np.clip((self.yb - ys_) / self.yb, 0, 1) ** 0.62
+        self.trow = tr
+        sm = lambda a, b, x: (lambda u: u * u * (3 - 2 * u))(np.clip((x - a) / (b - a), 0, 1))
+        self.s1 = sm(0.0, 0.45, tr)[:, None, None].astype(np.float32)
+        self.s2 = sm(0.30, 1.0, tr)[:, None, None].astype(np.float32)
+        d = np.clip(self.yb - ys_, 0, None)
+        self.hz = (np.exp(-d / 42.0) + 0.45 * np.exp(-d / 130.0)).astype(np.float32)      # horizon glow profile
+        self.hz2 = np.exp(-d / 20.0).astype(np.float32)                                    # the hot core
+        self.hzc = np.exp(-d / 70.0).astype(np.float32)                                    # city glow dome
         self.fogw = np.clip(1 - (self.yb - ys_) / (0.6 * self.yb), 0, 1).astype(np.float32)[:, None, None]
+        self.cloud_low = np.exp(-d / 95.0).astype(np.float32)[:, None]                     # low cloud catches more glow
 
     def _bg(self, cv, rng, p, far, clear=()):
         x = -2
@@ -994,32 +1211,34 @@ class Layers:
             x0, x1 = x, x + w - 1
             if any(abs(x + w / 2 - cx) < 15 for cx in clear):      # keep the landmarks' own air
                 h = min(h, int(HS * p["hmin"] * 1.7))
-            cv.R(x0, x1, h, 0, win=True)
+            v = int(self.trng.integers(150, 256)) if not far else 255
+            cv.R(x0, x1, h, 0, win=True, v=v)
             roof = p["roof"]
             if roof == "gable" and w >= 6 and rng.random() < 0.7:
-                cv.P([(x0 - 1, h), ((x0 + x1) / 2, h + w * 0.45), (x1 + 1, h)])
+                cv.P([(x0 - 1, h), ((x0 + x1) / 2, h + w * 0.45), (x1 + 1, h)], v=v)
             elif roof == "mansard" and rng.random() < 0.85:
-                cv.P([(x0 - 1, h), (x0 + 1, h + 3), (x1 - 1, h + 3), (x1 + 1, h)])
+                cv.P([(x0 - 1, h), (x0 + 1, h + 3), (x1 - 1, h + 3), (x1 + 1, h)], v=v)
                 for k in range(x0 + 2, x1 - 1, 4):
-                    cv.R(k, k + 1, h + 5, h + 3)                  # chimneys
+                    cv.R(k, k + 1, h + 5, h + 3, v=v)             # chimneys
             elif roof == "tank" and rng.random() < p["tank"]:
                 tx = int((x0 + x1) / 2)
-                cv.R(tx - 2, tx + 2, h + 5, h + 3)
-                cv.R(tx - 2, tx - 2, h + 3, h)
-                cv.R(tx + 2, tx + 2, h + 3, h)
-                cv.P([(tx - 3, h + 5), (tx, h + 7), (tx + 3, h + 5)])
+                cv.R(tx - 2, tx + 2, h + 5, h + 3, v=v)
+                cv.R(tx - 2, tx - 2, h + 3, h, v=v)
+                cv.R(tx + 2, tx + 2, h + 3, h, v=v)
+                cv.P([(tx - 3, h + 5), (tx, h + 7), (tx + 3, h + 5)], v=v)
             elif h > p["hmax"] * 0.6 and rng.random() < 0.45:
-                cv.R(x0 + w // 4, x1 - w // 4, h + max(2, h // 8), h)           # a setback
+                cv.R(x0 + w // 4, x1 - w // 4, h + max(2, h // 8), h, v=v)           # a setback
             if rng.random() < p["ant"] and h > p["hmin"] * 1.2:
                 ax = int((x0 + x1) / 2)
-                cv.R(ax, ax, h + int(rng.integers(4, 11)), h)
+                cv.R(ax, ax, h + int(rng.integers(4, 11)), h, v=v)
                 if not far and rng.random() < 0.3:
                     cv.beacon(ax, h + 6)
             x += w + p["gap"]
 
-    def _windows(self, rng, blocks, mask, far):
-        """Single LEDs on a loose grid inside every window-bearing block."""
+    def _windows(self, rng, blocks, mask, vp0):
+        """Single LEDs on a loose grid inside every window-bearing block (vp0: finer rows for near layers)."""
         ys, xs, rk, tn, br = [], [], [], [], []
+        far = vp0 > 2
         for x0, x1, h0, h1 in blocks:
             hp = int(rng.integers(2, 4))
             vp = int(rng.integers(2, 4)) if not far else 3
@@ -1033,18 +1252,7 @@ class Layers:
                         rk.append(rng.random())
                         tn.append(rng.random())
                         br.append(0.55 + 0.45 * rng.random())
-        a = lambda v, d: np.array(v, d)
-        if far:
-            self.fwy, self.fwx, self.fwr, self.fwt, self.fwb = a(ys, int), a(xs, int), a(rk, np.float32), a(tn, np.float32), a(br, np.float32)
-        else:
-            self.wy, self.wx, self.wr, self.wt, self.wb = a(ys, int), a(xs, int), a(rk, np.float32), a(tn, np.float32), a(br, np.float32)
-            if self.water:                                        # their reflections
-                ry = self.yb + (self.yb - self.wy) // 2
-                ok = ry < H
-                self.wry, self.wrx, self.wrr, self.wrt, self.wrb = ry[ok], self.wx[ok], self.wr[ok], self.wt[ok], self.wb[ok]
-            else:
-                self.wry = self.wrx = np.zeros(0, int)
-                self.wrr = self.wrt = self.wrb = np.zeros(0, np.float32)
+        return Wins(ys, xs, rk, tn, br)
 
 
 # ============================================================================ astronomy ===
@@ -1091,18 +1299,9 @@ def _wrap(a):
     return (a + 180) % 360 - 180
 
 
-# =========================================================================== palette ===
-_ALT = np.array([-18, -12, -6, -2, 0.5, 4, 10, 25, 90], np.float32)
-_ZEN = np.array([(3, 5, 17), (6, 9, 30), (16, 22, 62), (30, 40, 98), (36, 58, 122), (44, 84, 152), (50, 104, 182),
-                 (52, 114, 198), (50, 112, 196)], np.float32)
-_HOR = np.array([(8, 12, 32), (22, 26, 62), (96, 56, 92), (200, 96, 82), (244, 134, 76), (240, 178, 120),
-                 (168, 202, 232), (150, 196, 236), (146, 192, 234)], np.float32)
-
-
-def sky_colours(alt):
-    z = np.array([np.interp(alt, _ALT, _ZEN[:, i]) for i in range(3)], np.float32)
-    h = np.array([np.interp(alt, _ALT, _HOR[:, i]) for i in range(3)], np.float32)
-    return z, h
+def _smooth(x):
+    x = min(1.0, max(0.0, x))
+    return x * x * (3 - 2 * x)
 
 
 def _bayer(n):
@@ -1113,6 +1312,15 @@ def _bayer(n):
 
 
 BAYER = np.tile(_bayer(8), (H // 8, W // 8))[:, :, None].astype(np.float32)
+# Small LED panels drop very dark colours to black: lift every channel so the darkest pixel stays alight and
+# the sky keeps a hue (a touch more in blue).
+FLOOR = np.array([7.0, 7.0, 15.0], np.float32)
+
+
+def _finish(img):
+    """Float RGB (0..255, may overshoot) to whole-LED uint8: the floor lift, then ordered dithering."""
+    img = FLOOR + np.clip(img, 0, 255) * ((255.0 - FLOOR) / 255.0)
+    return Image.fromarray(np.floor(img + BAYER).clip(0, 255).astype(np.uint8), "RGB")
 
 
 def _noise_tex():
@@ -1123,27 +1331,35 @@ def _noise_tex():
     rng = np.random.default_rng(99)
     acc = np.zeros((H, P), np.float32)
     amp, tot = 1.0, 0.0
-    for gy, gx in ((5, 4), (9, 9), (17, 18), (33, 36)):
+    for gy, gx in ((4, 6), (8, 14), (15, 30), (28, 60), (50, 110)):
         g = rng.random((gy, gx)).astype(np.float32)
         big = cv2.resize(np.tile(g, (1, 3)), (P * 3, H), interpolation=cv2.INTER_CUBIC)[:, P:2 * P]
         acc += amp * big
         tot += amp
-        amp *= 0.55
+        amp *= 0.62
     acc /= tot
     y = np.arange(H, dtype=np.float32) / H
-    prof = np.exp(-((y - 0.34) / 0.2) ** 2)[:, None]
-    return (acc * (0.35 + 0.65 * prof) + 0.10 * prof).astype(np.float32)
+    prof = np.exp(-((y - 0.30) / 0.24) ** 2)[:, None]
+    return (acc * (0.30 + 0.70 * prof) + 0.12 * prof).astype(np.float32)
 
 
 _TEX = None
+_THR = None
 
 
 def _tex():
-    global _TEX
+    global _TEX, _THR
     if _TEX is None:
         t = _noise_tex()
         _TEX = np.concatenate([t, t], axis=1)
+        # threshold per cover share, so "30% cloud" really paints about a third of the sky
+        _THR = np.quantile(t[:int(0.62 * H)], 1 - np.linspace(0.0, 1.0, 101)).astype(np.float32)
     return _TEX
+
+
+def _thr(cover):
+    _tex()
+    return float(np.interp(cover * 100.0, np.arange(101), _THR))
 
 
 # ============================================================================ weather ===
@@ -1291,12 +1507,13 @@ def lit_fraction(local_hour):
 class Stars:
     def __init__(self):
         rng = np.random.default_rng(31)
-        n = 230
-        self.y = (rng.random(n) ** 1.3 * 0.62 * H).astype(int)
+        n = 260
+        self.y = (rng.random(n) ** 1.25 * 0.62 * H).astype(int)
         self.x = rng.integers(0, W, n)
-        self.b = (0.25 + 0.75 * rng.random(n) ** 2.5).astype(np.float32)
+        self.b = (0.22 + 0.78 * rng.random(n) ** 2.2).astype(np.float32)
         self.ph = rng.uniform(0, 6.28, n).astype(np.float32)
-        self.col = np.array([(190, 205, 255), (255, 244, 220), (255, 255, 255)], np.float32)[rng.integers(0, 3, n)]
+        self.col = np.array([(184, 204, 255), (255, 242, 214), (255, 255, 255), (255, 214, 190)], np.float32)[rng.integers(0, 4, n)]
+        self.big = np.argsort(-self.b)[:9]                           # the few bright ones get a small cross
 
 
 _stars = Stars()
@@ -1304,26 +1521,30 @@ _stars = Stars()
 
 def _moon_sprite(illum, ang, r=6):
     """RGB (float) and inside-mask of the moon disc for an illuminated fraction and bright-limb screen angle."""
-    n = 2 * r + 1
     yy, xx = np.mgrid[-r:r + 1, -r:r + 1].astype(np.float32)
     rr = np.hypot(xx, yy)
-    inside = rr <= r + 0.15
+    inside = np.clip(r + 0.6 - rr, 0, 1)                           # a one-LED soft limb, not a hard edge
     nx, ny = xx / (r + 0.5), -yy / (r + 0.5)
     nz = np.sqrt(np.clip(1 - nx * nx - ny * ny, 0, 1))
     i = math.acos(max(-1.0, min(1.0, 2 * illum - 1)))              # phase angle: 0 = full
     lit = nx * math.cos(ang) * math.sin(i) + ny * math.sin(ang) * math.sin(i) + nz * math.cos(i)
     shade = np.clip(lit * 3.0, 0, 1)
-    bright = np.array([232, 230, 214], np.float32)
-    dark = np.array([18, 22, 38], np.float32)                      # earthshine
+    bright = np.array([240, 236, 214], np.float32)
+    dark = np.array([30, 36, 62], np.float32)                      # earthshine, above the LED dark floor
     col = dark + (bright - dark) * shade[..., None]
     mar = (np.sin(xx * 1.1 + 1) * np.cos(yy * 0.9) > 0.55) & (rr < r - 1.2)
-    col[mar] *= 0.86
-    return col.astype(np.float32), inside * np.clip(shade + 0.3, 0, 1)
+    col[mar] *= 0.88
+    return col.astype(np.float32), inside * np.clip(shade + 0.35, 0, 1)
 
 
-def _smooth(x):
-    x = min(1.0, max(0.0, x))
-    return x * x * (3 - 2 * x)
+def _grad(hor, mid, zen, L):
+    """Three-stop vertical gradient (H, 1, 3) from the horizon colour up to the zenith."""
+    return hor + (mid - hor) * L.s1 + (zen - mid) * L.s2
+
+
+def _hash(a):
+    """Cheap deterministic 0..1 noise from a float array."""
+    return np.modf(np.abs(np.sin(a * 12.9898 + 78.233) * 43758.5453))[0].astype(np.float32)
 
 
 class Skylines:
@@ -1333,6 +1554,7 @@ class Skylines:
         self.weather = Weather(fetch=fetch)
         self.fetch = fetch
         self.last_t = None
+        self.t0 = None                                             # when this showing of the piece began
         self._sky_cache = {}
         self.pref = None
 
@@ -1351,7 +1573,7 @@ class Skylines:
         prev = SLOTS[datetime.fromtimestamp(ts - into - 1.0, timezone.utc).astimezone(ZURICH).hour]
         if prev is cur:
             return cur, cur, 1.0
-        return cur, prev, _smooth(into / FADE)
+        return cur, prev, min(1.0, into / FADE)
 
     def get_layers(self, city):
         L = self.layers.get(city["name"])
@@ -1363,9 +1585,7 @@ class Skylines:
                     self.layers[city["name"]] = L
         return L
 
-    def render(self, city, ts, t, dt=1 / 30):
-        """One city's full frame as float RGB (H, W, 3), 0..255, before dithering."""
-        L = self.get_layers(city)
+    def state(self, city, ts):
         key = (city["name"], int(ts))
         st = self._sky_cache.get(key)
         if st is None:
@@ -1373,51 +1593,80 @@ class Skylines:
             self._sky_cache[key] = st
             if len(self._sky_cache) > 8:
                 self._sky_cache.pop(next(iter(self._sky_cache)))
-        alt, saz, malt, maz, illum, mang, elong = st
+        return st
+
+    # ------------------------------------------------------------------------ one city
+    def render(self, city, ts, t, dt=1 / 30, label=0.0):
+        """One city's full frame as float RGB (H, W, 3), 0..255, before the floor lift and dithering.
+        label: 0..1 strength of the name / time label."""
+        L = self.get_layers(city)
+        alt, saz, malt, maz, illum, mang, elong = self.state(city, ts)
+        pal = city_pal(city)
         ease, rec = self.weather.ease(city["name"], dt)
         cover, fog, rain, snow = ease["cloud"], ease["fog"], ease["rain"], ease["snow"]
         local = datetime.fromtimestamp(ts, timezone.utc).astimezone(ZoneInfo(city["tz"]))
         yb = L.yb
-        zen, hor = sky_colours(alt)
-        grey_amt = min(0.75, 0.55 * cover + 0.5 * fog)             # overcast and fog take colour out of the sky
-        for v in (zen, hor):
-            g = float(v @ np.array([0.3, 0.55, 0.15], np.float32))
-            v += (np.array([g, g, g * 1.05], np.float32) * (1 - 0.3 * cover) - v) * grey_amt
-        img = np.empty((H, W, 3), np.float32)
-        img[:] = hor + (zen - hor) * L.trow
         xs = np.arange(W, dtype=np.float32)
         sx = W / 2 + _wrap(saz - city["az0"]) * (W / FOV)
-        gamt = _smooth((alt + 10) / 8) * (1 - _smooth((alt - 4) / 16)) * (1 - 0.6 * cover)
-        if gamt > 0.01:                                            # the twilight glow toward the sun
-            wcol = np.array([255, 110 + 7 * max(0, alt), 50 + 9 * max(0, alt)], np.float32) * 0.55 * gamt
-            gx = np.exp(-((xs - sx) / 52.0) ** 2)
-            img += (L.hz[:, None] * gx[None, :])[..., None] * wcol
-        elif alt > 4:                                              # the sun's own broad glow by day
-            gx = np.exp(-((xs - sx) / 70.0) ** 2)
-            img += (L.hz[:, None] * gx[None, :])[..., None] * (np.array([255, 235, 190], np.float32) * 0.10 * (1 - cover))
+        mx = W / 2 + _wrap(maz - city["az0"]) * (W / FOV)
+        sy = yb - ((max(alt, 0.0) / 90.0) ** 0.8) * (yb - 8) - (3 * alt if alt < 0 else 0)
+        my = yb - ((max(malt, 0.0) / 90.0) ** 0.8) * (yb - 8)
+
+        # --- the sky: day / dusk / night palettes blended by the sun's altitude, then a three-stop gradient
+        wd = _smooth((alt - 2.0) / 20.0)
+        wn = 1.0 - _smooth((alt + 17.0) / 13.0)
+        wt = max(0.0, 1.0 - wd - wn)
+        s = wd + wt + wn
+        wd, wt, wn = wd / s, wt / s, wn / s
+        hor = wd * pal["dh"] + wt * (pal["mid"] * 0.72 + pal["tz"] * 0.28) + wn * pal["nh"]
+        zen = wd * pal["dz"] + wt * pal["tz"] + wn * pal["nz"]
+        mid = wd * (pal["dh"] * 0.40 + pal["dz"] * 0.60) + wt * (pal["mid"] * 0.50 + pal["tz"] * 0.50) + wn * (pal["nh"] * 0.38 + pal["nz"] * 0.62)
+        grey_amt = min(0.75, 0.55 * cover + 0.5 * fog)             # overcast and fog take colour out of the sky
+        gv = np.array([0.3, 0.55, 0.15], np.float32)
+        gk = (1 - 0.3 * cover)
+        hor, mid, zen = (v + (np.array([float(v @ gv)] * 2 + [float(v @ gv) * 1.05], np.float32) * gk - v) * grey_amt for v in (hor, mid, zen))
+        img = np.empty((H, W, 3), np.float32)
+        img[:] = _grad(hor, mid, zen, L)
+        g = _smooth((alt + 13.0) / 11.0) * (1.0 - _smooth((alt - 3.0) / 17.0)) * (1 - 0.6 * cover)
+        if g > 0.01:                                               # the horizon glow, strongest toward the sun
+            fl = 0.28 if abs(_wrap(saz - city["az0"])) < FOV / 2 + 15 else 0.50
+            gx = fl + (1 - fl) * np.exp(-((xs - sx) / 58.0) ** 2)
+            img += (L.hz[:, None] * gx[None, :])[..., None] * (pal["glow"] * (0.72 * g))
+            if alt < 7:
+                gx2 = np.exp(-((xs - sx) / 24.0) ** 2) * (1 - 0.6 * cover)
+                img += (L.hz2[:, None] * gx2[None, :])[..., None] * (pal["hot"] * (0.50 * g))
         ng = float(np.clip((-alt - 2.0) / 10.0, 0, 1)) * (1 - 0.5 * cover)       # the city's own glow under a dark sky
         if ng > 0.01:
-            img += L.hz[:, None, None] * (np.array([46, 34, 44], np.float32) * ng)
-        # stars
+            img += L.hzc[:, None, None] * (pal["cg"] * ng)
+
+        # --- stars: varied, thinning toward the horizon, a few with a cross, and the odd shooting star
         sa = float(np.clip((-alt - 4.0) / 10.0, 0, 1)) * (1 - min(1.0, cover * 1.1)) * (1 - 0.8 * fog)
-        mx = W / 2 + _wrap(maz - city["az0"]) * (W / FOV)
-        my = yb - ((max(malt, 0.0) / 90.0) ** 0.8) * (yb - 8)
         if sa > 0.01:
-            tw = 0.75 + 0.25 * np.sin(t * (0.7 + _stars.b * 2.2) + _stars.ph)
-            a = (sa * _stars.b * tw)[:, None]
+            tw = 0.72 + 0.28 * np.sin(t * (0.7 + _stars.b * 2.2) + _stars.ph)
+            ext = np.clip((yb - 6 - _stars.y) / (0.28 * yb), 0.0, 1.0)
+            a = (sa * _stars.b * tw * ext)[:, None]
             if malt > 0:
                 dm = np.hypot(_stars.x - mx, _stars.y - my)
-                a = a * (np.clip(dm / 26.0, 0.1, 1.0) ** (0.6 + illum))[:, None]
-            img[_stars.y, _stars.x] = np.maximum(img[_stars.y, _stars.x], _stars.col * a * 0.95)
-        # sun and moon (before the clouds, so thin cloud passes over them)
+                a = a * (np.clip(dm / 30.0, 0.1, 1.0) ** (0.6 + illum))[:, None]
+            c = _stars.col * a * 0.95
+            img[_stars.y, _stars.x] = np.maximum(img[_stars.y, _stars.x], c)
+            bi = _stars.big
+            for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                yy = np.clip(_stars.y[bi] + dy, 0, H - 1)
+                xx = np.clip(_stars.x[bi] + dx, 0, W - 1)
+                img[yy, xx] = np.maximum(img[yy, xx], c[bi] * 0.32)
+            self._meteor(img, t, sa)
+
+        # --- sun and moon: soft, graded orbs with halos (before the clouds, so thin cloud passes over them)
         dim = 1 - 0.85 * cover
-        if alt > -2.5 and abs(_wrap(saz - city["az0"])) < FOV / 2:
-            sy = yb - ((max(alt, 0.0) / 90.0) ** 0.8) * (yb - 8) - (3 * alt if alt < 0 else 0)
-            col = np.array([255, 244, 214], np.float32) if alt > 6 else np.array([255, 170, 90], np.float32)
-            self._disc(img, sx, sy, 4.2, col, dim)
-        if malt > -1.5 and abs(_wrap(maz - city["az0"])) < FOV / 2:
-            a = float(np.clip((6.0 - alt) / 14.0, 0.0, 1.0)) * (0.35 + 0.65 * (1 - cover)) * (1 - 0.5 * fog)
+        if alt > -3.0:
+            k = float(np.clip(alt / 14.0, 0, 1))
+            col = np.array([255, 120 + 120 * k, 56 + 130 * k], np.float32)
+            self._orb(img, sx, sy, 3.4 + 0.9 * (1 - k), col, dim, 7.0 + 14.0 * k, 0.55 * (1 - 0.55 * k))
+        if malt > -1.5:
+            a = float(np.clip((7.0 - alt) / 15.0, 0.0, 1.0)) * (0.35 + 0.65 * (1 - cover)) * (1 - 0.5 * fog)
             if a > 0.02:
+                self._orb(img, mx, my, 0.0, np.array([186, 206, 255], np.float32), a, 20.0, 0.30 * (0.35 + 0.65 * illum))
                 spr, ins = _moon_sprite(illum, mang)
                 r = 6
                 x0, y0 = int(round(mx)) - r, int(round(my)) - r
@@ -1425,74 +1674,248 @@ class Skylines:
                 if ys0 < ys1 and xs0 < xs1:
                     sub = img[ys0:ys1, xs0:xs1]
                     sp = spr[ys0 - y0:ys1 - y0, xs0 - x0:xs1 - x0]
-                    m = (ins[ys0 - y0:ys1 - y0, xs0 - x0:xs1 - x0].astype(np.float32) * a)[..., None]
+                    m = (ins[ys0 - y0:ys1 - y0, xs0 - x0:xs1 - x0] * a)[..., None]
                     img[ys0:ys1, xs0:xs1] = sub + (sp - sub) * m
-        # clouds: slow soft bands
+
+        # --- clouds with soft lit edges: warm and low at dusk, white and shaded by day
         wind = float(rec.get("wind", 8.0)) if rec else 6.0
         if cover > 0.04:
-            off = int(t * (0.5 + wind * 0.05)) % 384
+            off = (int(t * (0.5 + wind * 0.05)) + city["seed"] * 137) % 384
             tex = _tex()[:, off:off + W]
-            a = np.clip((tex - (1.02 - 0.95 * cover)) * 5.0, 0, 0.88 if cover < 0.9 else 0.97)
+            if city["seed"] % 2:
+                tex = tex[:, ::-1]
+            tex = np.roll(tex, (city["seed"] % 5 - 2) * 9, axis=0)
+            a = np.clip((tex - _thr(cover)) * 9.0, 0, 0.9 if cover < 0.9 else 0.97)
             d = float(np.clip((alt + 3) / 16, 0, 1))
-            ccol = (1 - d) * (hor * 0.9 + np.array([16, 16, 26], np.float32)) + d * np.array([238, 241, 247], np.float32)
-            if d > 0.5:
-                ccol = ccol * (1 - 0.22 * cover)
+            dusk = (pal["mid"] * 0.55 + np.array([26, 24, 44], np.float32)) * (1 - d) + np.array([232, 238, 248], np.float32) * d
+            night = zen * 1.5 + np.array([16, 16, 26], np.float32)
+            base = (dusk * (1 - wn) + night * wn) * (1 - 0.22 * cover * d)
+            ccol = np.broadcast_to(base, (H, W, 3)).copy()
+            if g > 0.02:
+                lowx = 0.35 + 0.65 * np.exp(-((xs - sx) / 80.0) ** 2)
+                warm = (L.cloud_low * lowx[None, :])[..., None] * (g * 0.95)
+                ccol += (np.minimum(pal["glow"] * 0.95 + 20, 255) - ccol) * np.clip(warm, 0, 1)
+                bot = np.clip(a - np.roll(a, -2, axis=0), 0, 1)[..., None]            # the underside catches the glow
+                ccol += (pal["hot"] - ccol) * np.clip(bot * g * 0.9, 0, 1)
+            if d > 0.2:
+                top = np.clip(a - np.roll(a, 2, axis=0), 0, 1)[..., None]
+                ccol += (np.array([255, 255, 255], np.float32) - ccol) * (top * 0.45 * d)
+                ccol *= (1 - 0.14 * d * a * (1 - top[..., 0]))[..., None]
             img += (ccol - img) * a[..., None]
         if fog > 0.02:                                             # haze
             img += ((hor * 0.9 + 12) - img) * (L.fogw * (0.55 * fog))
-        d = float(np.clip((alt + 6) / 22, 0, 1))
-        near_col = np.array([5, 6, 11], np.float32) * (1 - d) + np.array([20, 24, 36], np.float32) * d
-        if len(L.fy):                                              # the paler far layer
-            a = 0.50 - 0.15 * fog
-            img[L.fy, L.fx] = img[L.fy, L.fx] * (1 - a) + near_col * a
-            self._lights(img, L.fwy, L.fwx, L.fwr, L.fwt, L.fwb, alt, local, 0.5 * (1 - 0.7 * fog))
+
+        # --- things that cross the sky
+        self._flyers(img, t, alt, cover, rain + snow, yb)
+
+        # --- water: the sky mirrored and rippled, then the skyline's reflection
+        near_base = wd * _c(24, 31, 52) + wt * (_c(15, 11, 30) + pal["mid"] * 0.05) + wn * (_c(11, 10, 26) + pal["nz"] * 0.12)
+        amb = img[max(0, yb - 5):yb - 1].mean((0, 1))              # the horizon colour as it is right now
         if L.water:
-            col = hor * 0.66 + near_col * 0.25
-            ys = np.arange(yb, H, dtype=np.float32)[:, None, None]
-            wcol = col + (near_col - col) * ((ys - yb) / L.water) * 0.6
-            xx = xs[None, :, None]
-            img[yb:] = wcol * (1 + 0.10 * np.sin(xx * 0.7 + ys * 1.9 + t * 0.9) * np.sin(xx * 0.17 - t * 0.3))
+            wh = L.water
+            dyv = np.arange(wh)
+            src = np.clip(yb - 1 - dyv * 3, 0, H - 1)
+            sh = np.round(1.6 * np.sin(xs[None, :] * 0.33 + dyv[:, None] * 1.7 + t * 1.2) + 0.9 * np.sin(xs[None, :] * 0.11 - dyv[:, None] * 0.8 - t * 0.7)).astype(int)
+            cols = np.clip(xs.astype(int)[None, :] + sh, 0, W - 1)
+            wat = img[src[:, None], cols]
+            deep = (np.array([12, 20, 40], np.float32) + pal["nz"] * 0.4 + near_base * 0.3) * (0.45 + 0.55 * (wd + 0.4 * wt))
+            fade = (0.42 + 0.40 * (dyv / wh))[:, None, None]
+            # long horizontal glints: where two slow waves agree, the sky colour shows brighter
+            n1 = np.sin(xs[None, :] * 0.42 + 2.6 * np.sin(dyv[:, None] * 0.9 + t * 0.5) + dyv[:, None] * 1.7 + t * 1.0)
+            n2 = np.sin(xs[None, :] * 0.11 - dyv[:, None] * 0.6 + t * 0.35)
+            gl = np.clip((n1 * n2 - 0.45) * 2.2, 0, 1)[..., None]
+            img[yb:] = wat * (1 - fade) + deep * fade + wat * gl * 0.55 * (1 - fade * 0.4)
             if len(L.rx):
-                img[L.ry, L.rx] = img[L.ry, L.rx] * 0.3 + near_col * 0.7
-            self._lights(img, L.wry, L.wrx, L.wrr, L.wrt, L.wrb, alt, local, 0.4)
-        img[L.ny, L.nx] = near_col * (1 - 0.30 * fog) + (hor * 0.9 + 12) * (0.30 * fog)
-        self._lights(img, L.wy, L.wx, L.wr, L.wt, L.wb, alt, local, 1.0 - 0.6 * fog)
+                rcols = np.clip(L.rx + sh[L.ry - yb, L.rx], 0, W - 1)
+                fr = (0.60 - 0.30 * (L.ry - yb) / wh)[:, None]
+                img[L.ry, rcols] = img[L.ry, rcols] * (1 - fr) + (near_base * 0.9) * fr
+            if alt > -3.0:                                         # sun glitter
+                self._glitter(img, L, sx, np.array([255, 190 + 40 * np.clip(alt / 10, 0, 1), 110 + 100 * np.clip(alt / 10, 0, 1)], np.float32),
+                              (1 - 0.7 * cover) * float(np.clip((alt + 3) / 6, 0, 1)), t)
+            if malt > 1.0 and alt < 6.0:
+                self._glitter(img, L, mx, np.array([190, 208, 255], np.float32), 0.55 * (1 - cover) * float(np.clip((6 - alt) / 12, 0, 1)), t + 7)
+
+        # --- the layers, far to near: farther is paler and bluer, tinted by the sky at the horizon
+        cool = np.array([-6.0, 0.0, 12.0], np.float32)
+        if len(L.fy):
+            c3 = amb * 0.80 + near_base * 0.20 + cool
+            a = 0.58 - 0.18 * fog
+            img[L.fy, L.fx] = img[L.fy, L.fx] * (1 - a) + c3 * a
+            self._lights(img, L.win_f, t, alt, local, 0.32 * (1 - 0.7 * fog), 0.0)
+        if len(L.my):
+            c2 = amb * 0.50 + near_base * 0.50 + cool * 0.4
+            a = 0.74 - 0.15 * fog
+            img[L.my, L.mx] = img[L.my, L.mx] * (1 - a) + c2 * a
+            self._lights(img, L.win_m, t, alt, local, 0.55 * (1 - 0.7 * fog), 0.0)
+        nc = near_base + (amb * 0.50 + near_base * 0.50 - near_base) * (L.nlift * (0.30 + 0.70 * wd))                 # per-pixel: blocks vary, ground hazes
+        nc = nc * (1 - 0.30 * fog) + (hor * 0.9 + 12) * (0.30 * fog)
+        img[L.ny, L.nx] = nc
+        # rim light on the edges that face the sun (golden hour) or the sky (day), cool under a moon
+        rim_k = g * 0.85 + 0.30 * wd * (1 - cover)
+        if rim_k > 0.02:
+            rc = (pal["hot"] * 0.62 + pal["glow"] * 0.38) * wt + np.array([200, 215, 240], np.float32) * (1 - wt)
+            ry_, rx_ = L.rims[0]
+            sel = rx_ > sx                                         # left edges lit when the sun is to their left
+            img[ry_[sel], rx_[sel]] = np.maximum(img[ry_[sel], rx_[sel]], rc * (rim_k * 0.62))
+            ry_, rx_ = L.rims[1]
+            sel = rx_ < sx
+            img[ry_[sel], rx_[sel]] = np.maximum(img[ry_[sel], rx_[sel]], rc * (rim_k * 0.62))
+            ry_, rx_ = L.rims[2]
+            img[ry_, rx_] = np.maximum(img[ry_, rx_], rc * (rim_k * 0.34))
+        elif malt > 2.0 and wn > 0.4:
+            ry_, rx_ = L.rims[2]
+            img[ry_, rx_] = np.maximum(img[ry_, rx_], np.array([120, 138, 190], np.float32) * (0.16 * wn * illum))
+        if L.water:
+            self._lights(img, Wins(L.wr_y, L.wr_x, L.wr_r, L.wr_t, L.wr_b), t, alt, local, 0.40, 0.0, shimmer=(t, L, yb))
+        self._lights(img, L.win_n, t, alt, local, 1.0 - 0.6 * fog, 0.22)
         for i, (bx, by) in enumerate(L.beacons):
             if math.sin(t * 1.6 + i * 1.3) > 0.0:
-                img[by, bx] = (255, 38, 28) if alt < 8 else (150, 40, 34)
+                img[by, bx] = (255, 44, 34) if alt < 8 else (170, 48, 40)
         if rain > 0.02 or snow > 0.02:
             self._precip(img, t, rain, snow, wind)
-        self._label(img, city, local, rec, alt)
+        if label > 0.01:
+            self._label(img, city, local, rec, alt, label)
         return img
 
+    # ------------------------------------------------------------------------ pieces
     @staticmethod
-    def _disc(img, cx, cy, r, col, dim):
-        ri = int(math.ceil(r)) + 1
-        x0, y0 = int(round(cx)) - ri, int(round(cy)) - ri
-        ys0, ys1, xs0, xs1 = max(0, y0), min(H, y0 + 2 * ri + 1), max(0, x0), min(W, x0 + 2 * ri + 1)
+    def _orb(img, cx, cy, r, col, dim, halo, hamt):
+        """A sun or moon as graded concentric LED levels: a bright core with a one-LED soft limb, an inner
+        glow and a wide faint halo, all additive. r=0 draws only the halo."""
+        R = int(math.ceil(max(r * 3.0, halo))) + 2
+        x0, y0 = int(round(cx)) - R, int(round(cy)) - R
+        ys0, ys1, xs0, xs1 = max(0, y0), min(H, y0 + 2 * R + 1), max(0, x0), min(W, x0 + 2 * R + 1)
         if ys0 >= ys1 or xs0 >= xs1:
             return
         yy, xx = np.mgrid[ys0:ys1, xs0:xs1].astype(np.float32)
         rr = np.hypot(xx - round(cx), yy - round(cy))
-        core = (rr <= r)[..., None].astype(np.float32)
-        glow = np.exp(-(rr / (r * 2.2)) ** 2)[..., None] * 0.35
         sub = img[ys0:ys1, xs0:xs1]
-        img[ys0:ys1, xs0:xs1] = sub + (col * (0.75 + 0.25 * core) - sub) * (np.maximum(core, glow) * dim)
+        edge = np.clip(1.0 - rr / (R - 1.0), 0, 1) ** 1.5                   # reach zero at the patch edge
+        glow = hamt * edge * (0.62 * np.exp(-(rr / (halo * 0.30)) ** 2) + 0.38 * np.exp(-(rr / halo) ** 1.4))
+        sub += (col * 0.85)[None, None, :] * (glow * dim)[..., None]
+        if r > 0:
+            core = np.clip(r + 0.9 - rr, 0, 1.0) ** 0.8
+            ring = np.clip(1.0 - (rr - r) / 2.4, 0, 1) * (rr > r) * 0.45                # a bright inner ring
+            m = np.maximum(core, ring)
+            hotc = col * 0.25 + 191
+            sub += ((np.minimum(hotc, 255) - sub) * (m * dim)[..., None]) * 0.92
 
     @staticmethod
-    def _lights(img, wy, wx, wr, wt, wb, alt, local, gain):
-        if len(wy) == 0:
+    def _meteor(img, t, sa):
+        P = 41.0
+        k = math.floor(t / P)
+        r = np.random.default_rng(int(k) * 7 + 11)
+        if r.random() > 0.62:
+            return
+        st, dur = k * P + r.uniform(2, P - 4), 1.0 + 0.5 * r.random()
+        if not (st <= t < st + dur):
+            return
+        u = (t - st) / dur
+        x0, y0 = r.uniform(30, W - 30), r.uniform(10, 70)
+        vx, vy = r.choice([-1, 1]) * r.uniform(40, 70), r.uniform(18, 34)
+        for i in range(9):
+            uu = u - i * 0.025
+            if uu < 0:
+                break
+            x, y = int(round(x0 + vx * uu)), int(round(y0 + vy * uu))
+            if 0 <= x < W and 0 <= y < H:
+                f = (1 - i / 9.0) ** 1.4 * math.sin(math.pi * min(1.0, u * 1.0)) * sa
+                img[y, x] = np.maximum(img[y, x], np.array([255, 246, 226], np.float32) * f)
+
+    @staticmethod
+    def _flyers(img, t, alt, cover, wet, yb):
+        """Birds at day and golden hour; an aircraft with a strobe at night, with a thin trail by day."""
+        if wet > 0.1:
+            return
+        # birds: a small flock every ~100 s, wings flapping
+        if -2.0 < alt < 45.0 and cover < 0.9:
+            P = 100.0
+            k = math.floor(t / P)
+            r = np.random.default_rng(int(k) * 13 + 3)
+            st, dur = k * P + r.uniform(0, P - 55), 48.0
+            if r.random() < 0.7 and st <= t < st + dur:
+                u = (t - st) / dur
+                d = 1 if r.random() < 0.5 else -1
+                bx0 = (-12 if d > 0 else W + 12)
+                by0 = r.uniform(0.22, 0.42) * H
+                col = np.array([40, 28, 44], np.float32) if alt < 8 else np.array([48, 62, 88], np.float32)
+                for i in range(5):
+                    x = bx0 + d * (W + 24) * u + (i % 3) * -d * 7 + i * 1.5
+                    y = by0 + (i - 2) * 3.2 * (1 if i % 2 else -1) * 0.8 + 2.2 * math.sin(t * 0.5 + i)
+                    up = math.sin(t * 5.5 + i * 1.9) > 0
+                    xi, yi = int(round(x)), int(round(y))
+                    pts = [(-1, -1), (0, 0), (1, -1)] if up else [(-1, 0), (0, -1), (1, 0)]
+                    for dx, dy in pts:
+                        px, py = xi + dx, yi + dy
+                        if 0 <= px < W and 0 <= py < yb:
+                            img[py, px] = img[py, px] * 0.25 + col * 0.75
+        # aircraft
+        P = 160.0
+        k = math.floor(t / P)
+        r = np.random.default_rng(int(k) * 17 + 5)
+        st, dur = k * P + r.uniform(0, 40), 85.0
+        if r.random() < 0.8 and st <= t < st + dur:
+            u = (t - st) / dur
+            d = 1 if r.random() < 0.5 else -1
+            y = int(r.uniform(0.10, 0.32) * H)
+            x = int(-4 + (W + 8) * u) if d > 0 else int(W + 3 - (W + 8) * u)
+            if alt < -3.0:
+                if 0 <= x < W:
+                    if int(t * 1.3) % 2 == 0 or (t * 1.3) % 1 < 0.12:
+                        img[y, x] = np.maximum(img[y, x], (255, 255, 255))
+                    xb = x - d * 2
+                    if 0 <= xb < W:
+                        img[y, xb] = np.maximum(img[y, xb], (190, 26, 26) if d > 0 else (24, 170, 52))
+            elif alt > 4.0 and cover < 0.7:
+                for i in range(14):
+                    xx = x - d * i
+                    if 0 <= xx < W:
+                        f = (1 - i / 14.0) * 0.55 * (1 - cover)
+                        img[y, xx] = img[y, xx] + (np.array([255, 252, 246], np.float32) - img[y, xx]) * (f if i else 0.9)
+
+    @staticmethod
+    def _glitter(img, L, cx, col, amt, t):
+        """Sparkles on the water under the sun or moon: scattered LEDs that renew about twice a second."""
+        if amt < 0.02 or not (-30 < cx < W + 30):
+            return
+        wh = L.water
+        n = 7
+        dy = np.arange(wh, dtype=np.float32)[:, None]
+        i = np.arange(n, dtype=np.float32)[None, :]
+        ph = np.floor(t * 2.2 + i * 0.37 + dy * 0.21)
+        u = _hash(i * 7.31 + dy * 3.17 + ph * 1.91) - 0.5
+        v = _hash(i * 2.11 + dy * 5.03 + ph * 0.77)
+        x = np.round(cx + u * (6 + 3.2 * dy)).astype(int)
+        y = (L.yb + np.broadcast_to(dy, x.shape)).astype(int)
+        ok = (x >= 0) & (x < W) & (v > 0.35) & (y < H)
+        f = (v[ok] * (1 - 0.35 * (dy[:, 0][np.nonzero(ok)[0]] / wh)) * amt)[:, None]
+        img[y[ok], x[ok]] = img[y[ok], x[ok]] + col * f * 0.55
+
+    @staticmethod
+    def _lights(img, ws, t, alt, local, gain, bloom, shimmer=None):
+        """Lit windows (tint by draw), with a faint bloom on the facade LEDs beside them."""
+        if len(ws) == 0:
             return
         dark = float(np.clip((6.0 - alt) / 10.0, 0.0, 1.0))        # lit windows read at dusk and after
         if dark <= 0.02:
             return
-        sel = wr < lit_fraction(local.hour + local.minute / 60.0)
+        frac = lit_fraction(local.hour + local.minute / 60.0)
+        sel = ws.r < frac + 0.03 * np.sin(t * 0.05 + ws.t * 40.0)
         if not sel.any():
             return
-        b = (wb[sel] * dark * gain)[:, None]
-        tint = np.where((wt[sel] < 0.22)[:, None], np.array([186, 218, 255], np.float32), np.array([255, 196, 108], np.float32))
-        y, x = wy[sel], wx[sel]
-        img[y, x] = np.maximum(img[y, x], tint * b)
+        b = (ws.b[sel] * dark * gain)[:, None]
+        tint = np.where((ws.t[sel] < 0.22)[:, None], np.array([190, 222, 255], np.float32), np.array([255, 190, 100], np.float32))
+        y, x = ws.y[sel], ws.x[sel]
+        c = tint * b
+        if shimmer is not None:                                    # reflections wobble and twinkle
+            t_, L, yb = shimmer
+            x = np.clip(x + np.round(1.4 * np.sin(y * 1.3 + t_ * 1.1 + ws.t[sel] * 6.0)).astype(int), 0, W - 1)
+            c = c * (0.55 + 0.45 * np.sin(t_ * 2.1 + ws.t[sel][:, None] * 30.0))
+        if bloom > 0:
+            for dy, dx in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+                yy, xx = np.clip(y + dy, 0, H - 1), np.clip(x + dx, 0, W - 1)
+                img[yy, xx] = np.maximum(img[yy, xx], c * bloom)
+        img[y, x] = np.maximum(img[y, x], c)
 
     @staticmethod
     def _precip(img, t, rain, snow, wind):
@@ -1513,24 +1936,50 @@ class Skylines:
             img[yy, xx] = np.maximum(img[yy, xx], col)
 
     @staticmethod
-    def _label(img, city, local, rec, alt):
-        col = np.array([150, 162, 196] if alt < 0 else [238, 242, 250], np.float32)
-        x, y = 3, 3
+    def _label(img, city, local, rec, alt, amt):
+        """A small quiet caption at the top: name and local time, the weather word beneath, tinted toward the
+        sky it sits on rather than stamped white."""
+        strip = np.zeros((14, W, 3), np.float32)
+        x, y = 4, 4
         name = city["name"]
-        pixelfont.draw(img, name, x, y, col)
+        pixelfont.draw(strip, name, x, y, (1.0, 1.0, 1.0))
         x += pixelfont.width(name) + 3
-        pixelfont.draw(img, f"{local.hour:02d}", x, y, col)
+        pixelfont.draw(strip, f"{local.hour:02d}", x, y, (1.0, 1.0, 1.0))
         x += 8
         for dy in (1, 3):                                          # the colon: the font has none
-            img[y + dy, x] = np.maximum(img[y + dy, x], col)
-        pixelfont.draw(img, f"{local.minute:02d}", x + 2, y, col)
+            strip[y + dy, x] = 1.0
+        pixelfont.draw(strip, f"{local.minute:02d}", x + 2, y, (1.0, 1.0, 1.0))
+        m1 = strip[..., 0].copy()
+        m1[9:] = 0
         word = weather_word(rec.get("code")) if rec else ""
+        m2 = np.zeros_like(m1)
         if word:
             t_ = rec.get("temp")
-            pixelfont.draw(img, word + (f" {int(round(t_))}C" if t_ is not None else ""), 3, y + 7, col * 0.78)
+            s2 = np.zeros((14, W, 3), np.float32)
+            pixelfont.draw(s2, word + (f" {int(round(t_))}C" if t_ is not None else ""), 4, 10, (1.0, 1.0, 1.0))
+            m2 = s2[..., 0]
+        col = np.array([226, 232, 248], np.float32) if alt > -6 else np.array([176, 192, 232], np.float32)
+        sub = img[:14]
+        sub += (col - sub) * ((m1 * 0.46 + m2 * 0.30) * amt)[..., None]
 
-    def __call__(self, t, ts=None):
+    # ------------------------------------------------------------------------ frames
+    def label_alpha(self, ts, t, which):
+        """How visible a label is: always for the first 14 s of a showing, then near the change of hour (the
+        outgoing city's name until the cut, the new one as the sky settles), quiet in between."""
+        z = datetime.fromtimestamp(ts, timezone.utc).astimezone(ZURICH)
+        into = z.minute * 60 + z.second + z.microsecond / 1e6
+        a_show = 1.0 - _smooth((t - (self.t0 or t) - 11.0) / 3.0)
+        if which == "cur":
+            a = _smooth((into - 7.0) / 4.0) * (1.0 - _smooth((into - 24.0) / 4.0))         # the new name, as the dissolve settles
+            a = max(a, _smooth((into - 3556.0) / 4.0))                                      # and again just before the next change
+        else:
+            a = 1.0 - _smooth(into / 2.0)                                                   # the old name goes as the dissolve starts
+        return max(a, a_show) if which == "cur" else a
+
+    def __call__(self, t, ts=None, label=None):
         ts = _now() if ts is None else ts
+        if self.last_t is None or t - self.last_t > 5.0 or t < self.last_t:
+            self.t0 = t
         dt = 1 / 30 if self.last_t is None else max(0.0, min(0.5, t - self.last_t))
         self.last_t = t
         cur, prev, f = self.pick(ts)
@@ -1539,11 +1988,17 @@ class Skylines:
         if self.fetch and self.pref != nxt["name"]:                # draw the next city's layers ahead of its hour
             self.pref = nxt["name"]
             threading.Thread(target=self.get_layers, args=(nxt,), daemon=True).start()
-        img = self.render(cur, ts, t, dt)
+        a_cur = self.label_alpha(ts, t, "cur") if label is None else label
+        img = self.render(cur, ts, t, dt, label=a_cur)
         if f < 1.0:
-            old = self.render(prev, ts, t, 0.0)
-            img = old + (img - old) * f
-        return Image.fromarray(np.floor(np.clip(img, 0, 255) + BAYER).clip(0, 255).astype(np.uint8), "RGB")
+            a_old = self.label_alpha(ts, t, "old") if label is None else 0.0
+            old = self.render(prev, ts, t, 0.0, label=a_old)
+            # the sky dissolves first, the silhouettes follow: each pixel takes the weight of its layer
+            fs, fc = _smooth(f / 0.7), _smooth((f - 0.3) / 0.7)
+            cm = self.get_layers(cur).cmask | self.get_layers(prev).cmask
+            w = np.where(cm, fc, fs).astype(np.float32)[..., None]
+            img = old + (img - old) * w
+        return _finish(img)
 
 
 _sk = None
@@ -1568,5 +2023,4 @@ def thumb():
         if loc.hour >= 12 and alt < 0 and abs(alt + 5.0) < bestd:
             best, bestd = ts, abs(alt + 5.0)
     sk.weather.eased[city["name"]] = {"cloud": 0.3, "fog": 0.0, "rain": 0.0, "snow": 0.0}
-    img = sk.render(city, best, 20.0)
-    return Image.fromarray(np.floor(np.clip(img, 0, 255) + BAYER).clip(0, 255).astype(np.uint8), "RGB")
+    return _finish(sk.render(city, best, 20.0, label=1.0))

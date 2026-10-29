@@ -24,7 +24,7 @@ _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NOW = os.path.join(_HERE, "panel_setup", "exposure_now.npz")
 ARCHIVE = os.path.join(_HERE, "panel_setup", "exposures")
 DAY_STARTS = 5                    # the exposure belongs to the evening before, until 05:00
-GAIN = 0.035                      # light added per second of movement on a pixel
+RATE = 0.4                        # exposure added per second of movement: one walk past ~0.6, a busy path saturates
 KNEE = 6.0                        # exposure at which a pixel is ~63 % of full brightness
 FALLBACK = ("#120a18", "#8a3a6a", "#ffd2a0")
 
@@ -67,7 +67,7 @@ class Exposure:
             self.error = str(e)[:80]
             print(f"[exposure] no camera: {self.error}", flush=True)
             return
-        prev, last = None, time.monotonic()
+        prev, before, last = None, None, time.monotonic()
         while True:
             try:
                 frame = cam.capture_frame()
@@ -75,14 +75,21 @@ class Exposure:
                 g = cv2.resize(g, (W, H), interpolation=cv2.INTER_AREA).astype(np.float32)
                 if getattr(config, "SILHOUETTE_MIRROR", True):
                     g = g[:, ::-1]
+                g -= float(np.median(g))                   # the camera re-adjusting its exposure is not movement
                 now = time.monotonic()
                 dt, last = min(1.0, now - last), now
                 if prev is not None:
-                    # movement: a clear change between frames, softened so it paints, not speckles
-                    m = np.clip((np.abs(g - prev) - 10.0) / 25.0, 0.0, 1.0)
-                    m = cv2.GaussianBlur(m, (0, 0), 1.5)
-                    self.acc += m * (GAIN * 60.0 * dt)
-                    self.live = np.maximum(self.live * 0.8, m)
+                    d = np.abs(g - prev)
+                    noise = float(np.median(d))
+                    if noise < 6.0:                        # a light switched or the camera settling: skip
+                        thr = max(14.0, 4.0 * noise)       # above the sensor's own noise, whatever the light
+                        m = np.clip((d - thr) / 30.0, 0.0, 1.0)
+                        both = m if before is None else np.minimum(m, before)   # in two frames running: real
+                        before = m
+                        m = cv2.GaussianBlur(both, (0, 0), 1.5)
+                        m[m < 0.04] = 0.0
+                        self.acc += m * (RATE * dt)
+                        self.live += (m - self.live) * 0.15   # the faint 'now' glow, eased (no speckle)
                 prev = g
             except Exception as e:
                 print(f"[exposure] {str(e)[:100]}", flush=True)

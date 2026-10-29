@@ -1,7 +1,7 @@
 """Build the data for display/wanderers.py (Ocean wanderers). Run on the laptop; the results are committed
 (both small), so the wall needs no internet for them.
 
-    python3 tools/build_wanderers.py            -> assets/migrations/wanderers.json  (real recorded tracks, open data)
+    python3 tools/build_wanderers.py            -> assets/migrations/wanderers.json  (real recorded tracks; CC BY-NC 4.0, non-commercial)
     python3 tools/build_wanderers.py --coast    -> assets/maps/atlantic.json         (Natural Earth 1:50m coastline)
     python3 tools/build_wanderers.py --movebank STUDY_ID KIND "SPECIES NAME"
                                                  add every individual of a PUBLIC Movebank study (KIND tern|shark|turtle|whale)
@@ -92,7 +92,9 @@ def from_gbif(key, min_fixes, max_n, gap):
     for r in recs:
         by_species.setdefault(" ".join((r.get("scientificName") or "").split()[:2]), []).append(r)
     src = {"title": html.unescape(meta["title"]), "licence": meta.get("license"), "doi": meta.get("doi"),
-           "citation": html.unescape((meta.get("citation") or {}).get("text") or ""), "url": "https://www.gbif.org/dataset/" + key}
+           "citation": html.unescape((meta.get("citation") or {}).get("text") or ""), "url": "https://www.gbif.org/dataset/" + key,
+           "licence_short": "CC BY-NC 4.0 (non-commercial only)" if "by-nc" in str(meta.get("license")) else str(meta.get("license")),
+           "publisher": "OBIS-SEAMAP (Ocean Biodiversity Information System, Spatial Ecological Analysis of Megavertebrate Populations), via GBIF.org"}
     animals = []
     for sci, rs in by_species.items():
         sp = next((v for k, v in SPECIES.items() if sci.startswith(k)), None)
@@ -132,6 +134,12 @@ def from_movebank(study_id, kind, species, gap=20.0, min_fixes=60):
     return src, animals
 
 
+LICENCE_NOTE = ("LICENCE: every dataset in 'sources' (the Arctic tern dataset and the four turtle datasets, all published in OBIS-SEAMAP) is "
+                "licensed CC BY-NC 4.0 (Creative Commons Attribution-NonCommercial 4.0, https://creativecommons.org/licenses/by-nc/4.0/legalcode): "
+                "use with attribution, NON-COMMERCIAL purposes only. The tracks in 'animals' are derived from them and carry the same "
+                "restriction; commercial use needs the data owners' permission or removal of these records. Cite the sources below.")
+
+
 def build():
     sources, animals = [], []
     for key, mn, mx, gap in DATASETS:
@@ -159,7 +167,8 @@ def build():
         animals += got
     doc = {"format": 1, "built": time.strftime("%Y-%m-%d", time.gmtime()),
            "about": "Real recorded animal tracks, one calendar year each (t0 = unix time of the first fix; fixes = [days since t0, lat, lon]). "
-                    "Open data only; see sources. Built by tools/build_wanderers.py for display/wanderers.py.",
+                    "Open data, but NON-COMMERCIAL: see licence_note and sources. Built by tools/build_wanderers.py for display/wanderers.py.",
+           "licence_note": LICENCE_NOTE,
            "sources": sources, "animals": animals}
     text = json.dumps(doc, separators=(",", ":"))
     with open(OUT, "w") as fh:

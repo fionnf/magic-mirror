@@ -90,6 +90,17 @@ def load_state():
         return dict(DEFAULT_STATE)
 
 
+WALLSWITCH_FILE = os.path.join(HERE, "wall_switch.json")
+
+
+def load_wallswitch():
+    try:
+        with open(WALLSWITCH_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
 def save_state(s):
     tmp = STATE_FILE + ".tmp"
     with open(tmp, "w") as f:
@@ -1156,6 +1167,42 @@ const j=await r.json().catch(()=>({}));m.textContent=r.ok?'✨ Sent! Look at the
         dedications.qr_image(dedications.guest_url(request.host.split(":")[0]), 360).save(buf, "PNG")
         return app.response_class(buf.getvalue(), mimetype="image/png")
 
+    @app.get("/api/wallswitch")
+    def wallswitch_get():
+        import lights
+        names = [d["name"] for d in lights.devices() if d["kind"] == "outlet"] if lights.installed() else []
+        return jsonify({"device": load_wallswitch().get("device", ""), "devices": names})
+
+    @app.post("/api/wallswitch")
+    def wallswitch_set():
+        name = str((request.get_json(force=True, silent=True) or {}).get("device", ""))[:60]
+        with open(WALLSWITCH_FILE, "w") as f:
+            json.dump({"device": name}, f)
+        return wallswitch_get()
+
+    @app.get("/api/matter")
+    def matter_info():
+        """The wall as a Matter plug (matter/wall.mjs): its pairing code and whether a home has it."""
+        try:
+            with open(os.path.join(HERE, "matter_pairing.json")) as fh:
+                d = json.load(fh)
+            return jsonify({"manual": d.get("manual"), "paired": bool(d.get("paired")), "ok": True})
+        except (OSError, ValueError):
+            return jsonify({"ok": False})
+
+    @app.get("/matter/qr.png")
+    def matter_qr():
+        import io
+        from display import dedications
+        try:
+            with open(os.path.join(HERE, "matter_pairing.json")) as fh:
+                code = json.load(fh)["qr"]
+        except (OSError, ValueError, KeyError):
+            return jsonify({"error": "not running"}), 404
+        buf = io.BytesIO()
+        dedications.qr_image(code, 360).save(buf, "PNG")
+        return app.response_class(buf.getvalue(), mimetype="image/png", headers={"Cache-Control": "no-store"})
+
     @app.get("/api/dedications")
     def dedications_get():
         from display import dedications
@@ -1469,6 +1516,35 @@ def main():
             except Exception as e:
                 print(f"[LIGHTS] {e}", flush=True)
     threading.Thread(target=lights_watch, daemon=True).start()
+
+    def wallswitch_watch():                  # the wall follows a Smart Life device (scenes can switch that)
+        import lights
+        last_dev, was, back = None, None, "daily"
+        while True:
+            time.sleep(2)
+            if runner.current not in (None, "off"):
+                back = runner.current                    # what to bring back when switched on
+            try:
+                name = (load_wallswitch().get("device") or "")
+                if name != last_dev:
+                    last_dev, was = name, None           # a newly chosen device: learn its state first
+                if not name or not lights.installed():
+                    continue
+                d = next((x for x in lights.devices() if x["name"] == name), None)
+                if d is None:
+                    continue
+                st = lights._connect(d).status()
+                on = lights._is_on(st) if st and not st.get("Error") else None
+                if on is None:
+                    continue
+                if was is not None and on != was:        # only a change switches the wall: the app,
+                    print(f"[wallswitch] {name} {'on' if on else 'off'}: wall {'on' if on else 'off'}", flush=True)
+                    runner.play(back if on else "off")   # Matter and this never fight over a level
+                was = on
+            except Exception as e:
+                print(f"[wallswitch] {str(e)[:100]}", flush=True)
+                time.sleep(10)
+    threading.Thread(target=wallswitch_watch, daemon=True).start()
 
     def bye(*_):
         runner.shutdown()

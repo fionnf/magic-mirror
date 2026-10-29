@@ -425,6 +425,16 @@
       </div>
       <div id="dList" style="margin-top:10px"></div>
     </section>
+    <section id="matterBox" hidden>
+      <h2>Smart Life &amp; Google Home</h2>
+      <div id="matterPair">
+        <p class="hint" style="margin:0 0 8px">The wall is a Matter plug. In Smart Life tap +, Add device, then scan this code (or type the number). Google Home and Apple Home take the same code.</p>
+        <div class="row"><img id="matterQr" alt="Matter pairing code" style="width:120px;height:120px;border-radius:10px;background:#fff;image-rendering:pixelated"><b id="matterCode" style="font-size:1.1rem;letter-spacing:.06em"></b></div>
+      </div>
+      <p class="hint" id="matterPaired" hidden style="margin:0">Added to a home: switch the wall on and off from Smart Life. To add it to another app, share it from there.</p>
+      <p class="hint" style="margin:12px 0 6px">For Tap-to-Run and automations: let the wall follow a Smart Life plug. When the plug switches on or off, so does the wall; use the plug in your scenes.</p>
+      <select id="wallSwitch" aria-label="Smart Life device the wall follows"></select>
+    </section>
     <section>
       <h2>Power</h2>
       <button class="btn" onclick="updSheet.showModal()">Update &amp; restart</button>
@@ -969,6 +979,26 @@ async function updateWall(reboot) {
   };
   poll();
 }
+async function loadMatter() {
+  try {
+    const m = await api('/api/matter'); if (!m.ok) return;
+    $('matterBox').hidden = false;
+    $('matterPair').hidden = m.paired; $('matterPaired').hidden = !m.paired;
+    if (!m.paired) { $('matterCode').textContent = m.manual.replace(/(\d{4})(\d{3})(\d{4})/, '$1-$2-$3'); $('matterQr').src = u('/matter/qr.png'); }
+  } catch (e) {}
+}
+async function loadWallSwitch() {
+  try {
+    const w = await api('/api/wallswitch');
+    $('wallSwitch').innerHTML = '<option value="">Follow no device</option>' +
+      w.devices.map(n => `<option ${n === w.device ? 'selected' : ''}>${n}</option>`).join('');
+  } catch (e) {}
+}
+$('wallSwitch').addEventListener('change', async e => {
+  try { await api('/api/wallswitch', {device: e.target.value});
+        toast(e.target.value ? 'The wall follows ' + e.target.value : 'The wall follows no device'); }
+  catch (err) { toast(err.message); }
+});
 async function resetWall() {
   try { await api('/api/reset', {}); resetSheet.close(); toast('Settings reset.'); setTimeout(() => location.reload(), 1500); }
   catch (e) { toast(e.message); }
@@ -1119,7 +1149,7 @@ async function start() {
   started = true;
   if (welcome.piece && window.Fortuna) { window.Fortuna.remove(welcome.piece); welcome.piece = null; }   // the door piece stops once inside
   $('qrImg').src = $('qrLink').href = u('/d/qr.png');
-  shaderLib(); loadScenes(); loadDaily(); loadMusic(); refreshNow(); loadArt(); loadVersion(); loadLook();
+  shaderLib(); loadScenes(); loadDaily(); loadMusic(); refreshNow(); loadArt(); loadVersion(); loadMatter(); loadWallSwitch(); loadLook();
   try { const t = localStorage.getItem('tab'); if (t) document.querySelector(`nav [data-tab="${t}"]`).click(); } catch (e) {}
   setInterval(refresh, 3000); setInterval(loadMusic, 5000); setInterval(loadDaily, 60000); setInterval(refreshNow, 1500); setInterval(loadScenes, 30000); setInterval(loadLook, 15000);
   const rows = Math.round((STATUS.wall_h || 192) / 64), cols = Math.round((STATUS.wall_w || 192) / 64);

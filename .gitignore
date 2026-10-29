@@ -61,3 +61,6 @@ panel_setup/*_cache.json
 
 # live cam sources: the user's own stream URLs (may hold credentials)
 panel_setup/livecams.json
+matter/node_modules/
+panel_setup/matter_pairing.json
+panel_setup/wall_switch.json

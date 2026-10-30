@@ -145,6 +145,16 @@ class LedMatrix:
         MATRIX_PWM_BITS. So it never hops back and forth."""
         if not config.DEPTH_STEPS or os.environ.get("WALL_FIXED_DEPTH") == "1":
             return                       # points of light on black (the live maps): the fastest refresh, always
+        if getattr(config, "FORCE_FAST_REFRESH", False):
+            # set while the album cover is on the wall (a dim picture that would otherwise drop to 7-8 bits and a
+            # slower, flickery refresh): back to the fast setting now, and stay there
+            if self._bits != config.MATRIX_PWM_BITS:
+                self._bits, self._bits_t = config.MATRIX_PWM_BITS, time.monotonic()
+                LedMatrix._bits_now = self._bits
+                with self._lock:
+                    self.matrix.pwmBits = self._bits
+                    self.matrix.brightness = self._hw_brightness(self._brightness)
+            return
         eff = max(mean, 0.7 * bright_frac) * self._brightness / 100.0     # small bright areas count too
         now = time.monotonic()
         self._lvl += (eff - self._lvl) * min(1.0, (now - self._lvl_t) / 8.0)

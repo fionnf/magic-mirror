@@ -1585,6 +1585,7 @@ class MusicShow:
         self.covers.update()
         comp = self.covers.frame() if self.settings.get("cover_show") else None
         self.cover_mix = _ema(self.cover_mix, 1.0 if comp is not None else 0.0, dt, 1.2)   # ~3 s fade
+        config.FORCE_FAST_REFRESH = self.cover_mix > 0.05       # a dim cover must not drop the panels to the slower refresh
         if comp is not None:
             self._cover_last = comp
         if self.cover_mix > 0.995 and comp is not None:   # the cover alone: nothing else to draw
@@ -1626,7 +1627,7 @@ class MusicShow:
         """The playing song as one tiny, very faint line along the bottom - while it plays."""
         sg = self.rec.current(600.0)
         if not (sg and self.settings.get("song_on_wall", True)):
-            self._song_fade = max(0.0, getattr(self, "_song_fade", 0.0) - 0.05)
+            self._song_fade = max(0.0, getattr(self, "_song_fade", 0.0) - 0.02)    # as slow out as in: a blip in the song info is a dip, not a blink
             if self._song_fade <= 0:
                 return out
         else:

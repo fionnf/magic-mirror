@@ -127,7 +127,7 @@ class Rods:
                 self.cur[i] += (self.target[i] - self.cur[i]) * (1 - np.exp(-dt / EASE))
 
     def _choice(self, img):
-        """Warm orange, except while the daily art is on the wall (self.follow): then they take its colours.
+        """Auto is always warm orange (only "follow" takes the wall's colours).
         panel_setup/rods.json (re-read every 2 s) can still switch them off: {"mode": "off"}"""
         now = time.monotonic()
         if now - getattr(self, "_cfg_t", -9) > 2.0:
@@ -152,7 +152,7 @@ class Rods:
             if mode == "breathe":
                 c = c * (0.55 + 0.45 * np.sin(time.monotonic() * 2 * np.pi / 8.0))
             return c, c
-        if img is not None and (mode == "follow" or (mode == "auto" and self.follow)):
+        if img is not None and mode == "follow":
             return colours(img)
         return ORANGE, ORANGE
 

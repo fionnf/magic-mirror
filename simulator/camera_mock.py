@@ -42,6 +42,7 @@ class CameraMock:
                     raise RuntimeError(f"cannot open camera stream {source}")
                 time.sleep(1.0)
             self._latest = None
+            self._seq = 0
             self._lock = threading.Lock()
             self._running = True
             threading.Thread(target=self._reader, daemon=True, name="stream-reader").start()
@@ -76,9 +77,23 @@ class CameraMock:
             ok, frame = self.cap.read()
             if ok:
                 with self._lock:
-                    self._latest = frame
+                    self._latest, self._seq = frame, self._seq + 1
             else:
                 time.sleep(0.05)
+
+    def wait_frame(self, last_seq: int, timeout: float = 0.5):
+        """Newest frame once it is newer than last_seq: (seq, portrait crop), or (last_seq, None) on timeout.
+        Cameras without a reader thread (webcam, static) just return a fresh read."""
+        if self.mode != "stream":
+            time.sleep(0.03)
+            return last_seq + 1, self.capture_frame()
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            with self._lock:
+                if self._seq != last_seq and self._latest is not None:
+                    return self._seq, vision.crop_to_aspect(self._latest, config.CAMERA_ASPECT)
+            time.sleep(0.004)
+        return last_seq, None
 
     def capture_frame(self, raw: bool = False) -> np.ndarray:
         frame = self._raw_frame()

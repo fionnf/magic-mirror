@@ -19,6 +19,8 @@ import urllib.request
 import numpy as np
 from PIL import Image, ImageFilter
 
+HOLD_SEC = 45.0                                              # a cover outlives a gap in the song info this long
+
 
 def palette_from(img, n=5):
     """Calm colours from a cover: its main colours, darkest first, held to one family of hues."""
@@ -58,6 +60,7 @@ class Covers:
         self.W, self.H = W, H
         self.url, self.img, self.pal, self.comp = None, None, None, None
         self.checked, self.busy = 0.0, False
+        self.lost = None                                    # since when the speaker has not reported a song
 
     def update(self):
         now = time.time()
@@ -73,8 +76,15 @@ class Covers:
         if url and not url.startswith(("http://", "https://")):
             url = None
         if url is None:
-            self.url, self.img, self.pal, self.comp = None, None, None, None
+            # Speakers and Spotify drop out for a second at pauses, buffering and ads. Wiping the cover then made
+            # the wall fade to art, fetch the cover again and fade back in: a flicker. Hold it through short gaps.
+            if self.comp is not None:
+                self.lost = self.lost or now
+                if now - self.lost < HOLD_SEC:
+                    return
+            self.url, self.img, self.pal, self.comp, self.lost = None, None, None, None, None
             return
+        self.lost = None
         if url != self.url and not self.busy:
             self.busy = True
             threading.Thread(target=self._load, args=(url,), daemon=True).start()

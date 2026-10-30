@@ -166,6 +166,26 @@
   .photos img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .empty { color: var(--muted); padding: 22px 0; text-align: center; }
 
+
+  /* calmer rhythm: serif headings, room to breathe */
+  section { margin-top: 30px; }
+  h2 { font: italic 400 21px/1.1 var(--serif); color: var(--ink); margin: 0 0 12px; letter-spacing: 0; }
+  .mirrorcard { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px; }
+  .mirrorcard h3 { font: italic 400 26px/1.1 var(--serif); margin: 0 0 6px; }
+  .btn.big { padding: 12px 22px; font-size: 16px; margin-top: 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+  .tile { border: 1px solid var(--line); background: var(--room); border-radius: 16px; padding: 14px 10px; text-align: left; display: grid; gap: 4px; align-content: start; }
+  .tile:active { background: var(--ink); color: var(--room); }
+  .tile b { font-weight: 600; font-size: 15px; }
+  .tile small { color: var(--muted); font-size: 12px; line-height: 1.3; }
+  .tile:active small { color: var(--room); }
+  .list.actions button { grid-template-columns: 1fr; padding: 12px 0; }
+  .list.actions button > span:first-child { display: none; }
+  .list.actions .danger b { color: #ff8f8f; }
+  .more { margin-top: 28px; }
+  .more > section:first-of-type { margin-top: 8px; }
+  @media (max-width: 380px) { .tiles { grid-template-columns: 1fr; } }
+
   dialog { border: 0; padding: 0; background: var(--surface); color: var(--ink); border-radius: 18px; width: min(460px, 92vw); }
   dialog::backdrop { background: rgba(10, 8, 12, .8); }
   dialog img { width: 100%; display: block; }
@@ -241,29 +261,37 @@
   <!-- ART -->
   <div class="view on" id="v-art">
     <section>
-      <h2>Scenes</h2>
+      <h2>Moods</h2>
       <div class="scenes" id="scenes"></div>
-      <p class="hint" id="sceneHint">One tap sets the piece, the light and the pace. Hold a scene you made to remove it.</p>
+      <p class="hint" id="sceneHint">One tap sets the piece, the light and the pace. Hold one you made to remove it.</p>
     </section>
     <section>
-      <h2>Today</h2>
+      <h2>Today's piece</h2>
       <div class="today" id="today"><div class="empty">Today's piece is being made.</div></div>
       <div class="strip" id="archive" style="margin-top:14px"></div>
     </section>
-    <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/" target="_blank">The public gallery</a> shows every day's piece.</p>
     <section>
       <h2 id="galleryHead">Gallery</h2>
-      <div class="find"><input type="search" id="artFind" placeholder="Search the gallery" aria-label="Search the gallery" autocomplete="off"><button class="btn" onclick="surprise()">Surprise me</button></div>
+      <div class="find"><input type="search" id="artFind" placeholder="Search the gallery" aria-label="Search the gallery" autocomplete="off"></div>
       <div class="chips" id="artChips"></div>
       <div class="gallery" id="artGrid"></div>
       <p class="hint">Tap a piece to hang it. It stays until you choose something else.</p>
     </section>
+    <details class="more"><summary>More ways to play</summary>
     <section>
       <h2>Pace</h2>
       <input type="range" id="pace" min="0" max="100" step="1" aria-label="Art pace">
       <div class="ends"><span>barely moving</span><span>lively</span></div>
     </section>
-    <details class="more"><summary>Slideshows, shows and tours</summary>
+    <section>
+      <h2>Tour</h2>
+      <p class="hint" style="margin:0 0 10px">The wall changes piece by itself.</p>
+      <div class="row">
+        <button class="btn primary" onclick="tour('art')">Tour the art</button>
+        <button class="btn" onclick="tour('all')">Art and music</button>
+        <select id="tourMins" aria-label="Minutes per piece"><option value="10">10 min each</option><option value="20" selected>20 min each</option><option value="45">45 min each</option></select>
+      </div>
+    </section>
     <section>
       <h2>Slideshows</h2>
       <div class="list" id="collections"></div>
@@ -273,17 +301,9 @@
       <div class="list" id="shows"></div>
     </section>
     <section>
-      <h2>Tour</h2>
-      <div class="row">
-        <button class="btn primary" onclick="tour('art')">Tour the art</button>
-        <button class="btn" onclick="tour('all')">Art and music</button>
-        <select id="tourMins" aria-label="Minutes per piece"><option value="10">10 min each</option><option value="20" selected>20 min each</option><option value="45">45 min each</option></select>
-      </div>
-    </section>
-    <section>
-      <h2>People</h2>
       <div class="switch"><span>Show people on the art</span><input type="checkbox" id="tPresence"></div>
       <p class="hint">The camera sees who is in the room, and the art's colours shift slightly where they are. Nothing is recorded.</p>
+      <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/" target="_blank" rel="noopener">The public gallery</a> shows every day's piece.</p>
     </section>
     </details>
   </div>
@@ -377,26 +397,30 @@
     </section>
   </div>
 
-  <!-- PHOTOS -->
+  <!-- MIRROR -->
   <div class="view" id="v-photos">
-    <section>
-      <h2>Mirror</h2>
-      <div class="row">
-        <button class="btn primary" onclick="startMirror()">Start the mirror</button>
-        <button class="btn mirror-only" onclick="mirrorDo('photo')">Take a photo</button>
-        <button class="btn mirror-only" onclick="mirrorDo('aura')">Read an aura</button>
-        <button class="btn mirror-only" onclick="mirrorDo('pixel')">Pixel portrait</button>
+    <section class="mirrorcard">
+      <div id="mirrorOff">
+        <h3>Be the art</h3>
+        <p class="hint">The wall becomes a mirror: you appear in light, in your own colours, and the wall can speak to you.</p>
+        <button class="btn primary big" onclick="startMirror()">Start the mirror</button>
+      </div>
+      <div id="mirrorOn" hidden>
+        <h3>The mirror is on</h3>
+        <p class="hint">Step in front of the wall, then choose what happens.</p>
+        <div class="tiles">
+          <button class="tile" onclick="mirrorDo('photo')"><b>Photo</b><small>3, 2, 1, and a line about you</small></button>
+          <button class="tile" onclick="mirrorDo('aura')"><b>Aura</b><small>The wall reads your colour</small></button>
+          <button class="tile" onclick="mirrorDo('pixel')"><b>Pixel portrait</b><small>You, in LEDs</small></button>
+        </div>
       </div>
     </section>
     <section>
-      <div class="row between"><h2 id="photoCount">Photos</h2></div>
+      <h2 id="photoCount">Photos</h2>
       <div class="photos" id="photos"></div>
       <button class="btn" id="morePhotos" style="margin-top:12px" hidden onclick="loadPhotos(true)">Show older photos</button>
     </section>
-  </div>
-
-  <!-- MORE -->
-  <div class="view" id="v-more">
+    <details class="more"><summary>Voice, faces and quiet hours</summary>
     <section>
       <h2>The mirror's voice</h2>
       <input type="range" id="tone" min="0" max="100" aria-label="Tone">
@@ -404,7 +428,7 @@
       <div class="row" style="margin-top:12px"><span class="hint" style="margin:0">Speaks</span><select id="lang" aria-label="Language"></select></div>
     </section>
     <section>
-      <h2>People</h2>
+      <h2>Faces</h2>
       <div id="people" class="row"></div>
       <div class="row" style="margin-top:10px">
         <input type="text" id="newName" placeholder="Name" style="flex:1;min-width:140px" aria-label="Name">
@@ -416,6 +440,17 @@
       <div class="switch"><span>Learn frequent faces</span><input type="checkbox" id="tLearn" data-ms="learn_faces"></div>
       <p class="hint">Faces stay on the wall's computer as numbers. Nobody is learned unless you name them.</p>
     </section>
+    <section>
+      <h2>Quiet hours</h2>
+      <div class="row"><span class="hint" style="margin:0">When nobody is around, show art after</span>
+        <select id="idleArt" aria-label="Idle minutes"><option value="0">never</option><option value="5">5 min</option><option value="10">10 min</option><option value="30">30 min</option></select></div>
+      <div class="switch"><span>Wake the mirror when someone moves</span><input type="checkbox" id="tWake" data-ms="wake_on_motion"></div>
+    </section>
+    </details>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="view" id="v-more">
     <section>
       <h2>Guests</h2>
       <div class="switch"><span>Messages from guests on the wall</span><input type="checkbox" id="dOn"></div>
@@ -436,34 +471,27 @@
       <select id="wallSwitch" aria-label="Smart Life device the wall follows"></select>
     </section>
     <section>
-      <h2>Power</h2>
-      <button class="btn" onclick="updSheet.showModal()">Update &amp; restart</button>
-      <p class="hint">Fetches the newest version from GitHub and restarts everything. Back in about a minute.</p>
-      <p class="hint" id="version" style="margin-top:0"></p>
-      <button class="btn" onclick="resetSheet.showModal()">Reset settings</button>
-      <p class="hint">Brightness, pace, music and rod settings back to their defaults, with the art of the day on the wall.</p>
-      <button class="btn" onclick="shutSheet.showModal()">Shut down the wall</button>
-      <p class="hint">Turns the wall's computer off completely. To start it again, unplug it and plug it back in.</p>
-    </section>
-    <section>
       <h2>Receipt printer</h2>
       <p class="hint" id="printer" style="margin:0">Checking the printer…</p>
     </section>
     <section>
-      <h2>Quiet hours</h2>
-      <div class="row"><span class="hint" style="margin:0">When nobody is around, show art after</span>
-        <select id="idleArt" aria-label="Idle minutes"><option value="0">never</option><option value="5">5 min</option><option value="10">10 min</option><option value="30">30 min</option></select></div>
-      <div class="switch"><span>Wake the mirror when someone moves</span><input type="checkbox" id="tWake" data-ms="wake_on_motion"></div>
+      <h2>The wall's computer</h2>
+      <p class="hint" id="version" style="margin:0 0 10px"></p>
+      <div class="list actions">
+        <button onclick="updSheet.showModal()"><span></span><span><b>Update &amp; restart</b><small>Fetches the newest version and restarts. Back in about a minute.</small></span></button>
+        <button onclick="resetSheet.showModal()"><span></span><span><b>Reset settings</b><small>Brightness, pace, music and rods back to their defaults.</small></span></button>
+        <button class="danger" onclick="shutSheet.showModal()"><span></span><span><b>Shut down</b><small>Powers the computer off. Unplug and replug to start it again.</small></span></button>
+      </div>
     </section>
   </div>
 </main>
 
 <nav aria-label="Sections"><div class="wrap">
-  <button data-tab="art" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="11" r="3.5"/></svg>Art</button>
+  <button data-tab="art" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="11" r="3.5"/></svg>Wall</button>
   <button data-tab="music"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 14v-4M8 17V7M12 20V4M16 16V8M20 13v-2"/></svg>Music</button>
   <button data-tab="room"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Room</button>
-  <button data-tab="photos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>Photos</button>
-  <button data-tab="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>More</button>
+  <button data-tab="photos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>Mirror</button>
+  <button data-tab="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>Settings</button>
 </div></nav>
 
 <dialog id="viewer"><img id="vImg" alt=""><div class="body"><p class="quote" id="vText"></p><p class="hint" id="vTime"></p>
@@ -569,7 +597,7 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + b.dataset.tab));
   if (b.dataset.tab === 'photos') loadPhotos();
   if (b.dataset.tab === 'room') loadRoom();
-  if (b.dataset.tab === 'more') loadMore();
+  if (b.dataset.tab === 'more' || b.dataset.tab === 'photos') loadMore();
   try { localStorage.setItem('tab', b.dataset.tab); } catch (e) {}
 });
 
@@ -711,7 +739,7 @@ function render() {
   if (document.activeElement !== $('bright')) $('bright').value = s.brightness || 40;
   if (document.activeElement !== $('pace') && s.art_speed != null) $('pace').value = Math.round(speedToPace(s.art_speed));
   document.querySelectorAll('.list button').forEach(b => { const d = b.querySelector('.now'); if (d) d.hidden = b.dataset.id !== cur; });
-  document.querySelectorAll('.mirror-only').forEach(b => b.disabled = cur !== 'mirror');
+  $('mirrorOn').hidden = cur !== 'mirror'; $('mirrorOff').hidden = cur === 'mirror';
   $('musicBtn').textContent = cur === 'music' ? 'Listening now' : 'Let the wall listen';
 }
 async function refresh() { try { STATUS = await api('/api/status'); render(); } catch (e) {} }
@@ -887,7 +915,7 @@ async function musicArt(id) {
 }
 
 /* ---------- the room: colour rods ---------- */
-const RODS = {auto: 'Warm orange, and the colours of the wall while the art of the day is showing.', follow: 'Always the colours of the wall.',
+const RODS = {auto: 'Always warm orange.', follow: 'Always the colours of the wall.',
   solid: 'One steady colour.', breathe: 'One colour, slowly breathing.', off: 'Dark.'};
 const SWATCHES = ['#ff6a00', '#ff2d2d', '#ff4fd6', '#8a5cff', '#1f67ff', '#00d4ff', '#00ff7a', '#ffd400', '#ffffff'];
 let ROD = {};

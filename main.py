@@ -128,14 +128,23 @@ class MagicMirror:
     # ---- continuous silhouette capture ----
 
     def _capture_loop(self):
-        interval = 1.0 / max(1, config.LIVE_SILHOUETTE_FPS)
+        """Newest camera frame in, silhouette out, as fast as the CPU allows (capped at LIVE_SILHOUETTE_FPS).
+        It waits for a new frame instead of sleeping a fixed interval, so the picture is never older than one
+        frame; the slow face check for smiles runs in its own thread so it can't stall this one."""
+        min_dt = 1.0 / max(1, config.LIVE_SILHOUETTE_FPS)
+        wait = getattr(self.camera, "wait_frame", None)
+        seq = 0
         while not self._stop.is_set():
             t0 = time.monotonic()
             try:
-                frame = self.camera.capture_frame()
+                if wait:
+                    seq, frame = wait(seq)
+                    if frame is None:
+                        continue
+                else:
+                    frame = self.camera.capture_frame()
                 self._latest_frame = frame
                 self._note_motion(frame)
-                self._look_for_smile(frame)
                 mask = self.camera.extract_silhouette(
                     frame, getattr(self.camera, "_background", None))
                 img = silhouette_render.render_silhouette(mask)
@@ -156,8 +165,14 @@ class MagicMirror:
                 print(f"[CAPTURE] {e}")
                 time.sleep(0.5)
                 continue
-            dt = time.monotonic() - t0
-            time.sleep(max(0.0, interval - dt))
+            time.sleep(max(0.0, min_dt - (time.monotonic() - t0)))
+
+    def _smile_loop(self):
+        """Face detection is slow (about a tenth of a second on the Pi): keep it off the picture's thread."""
+        while not self._stop.wait(0.1):
+            frame = self._latest_frame
+            if frame is not None:
+                self._look_for_smile(frame)
 
     def _note_motion(self, frame):
         """Presence = the picture is changing (someone moves) - cheap 40x30 frame difference."""
@@ -329,7 +344,7 @@ class MagicMirror:
                 if shown is None or shown.shape != target.shape:
                     shown = target.copy()
                 else:
-                    shown += (target - shown) * 0.35          # ~0.1 s to settle at 24 fps
+                    shown += (target - shown) * 0.5           # settles in ~0.1 s, so the wall keeps up with a 24 fps camera
                 self._shown = shown
                 self.matrix.draw(Image.fromarray(np.clip(shown + 0.5, 0, 255).astype(np.uint8), "RGB"))
             time.sleep(interval)
@@ -805,6 +820,7 @@ class MagicMirror:
         self._capture_thread = threading.Thread(
             target=self._capture_loop, daemon=True, name="silhouette-capture")
         self._capture_thread.start()
+        threading.Thread(target=self._smile_loop, daemon=True, name="smile-watch").start()
 
         self._set_state(State.IDLE)
         self.strip.set_mode("idle")

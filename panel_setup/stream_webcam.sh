@@ -13,9 +13,9 @@ PORT="${PORT:-8090}"
 IP="$(ipconfig getifaddr en0 2>/dev/null || echo '<mac-ip>')"
 echo "==> streaming \"$CAMERA\" at http://$IP:$PORT/cam.mjpg  (Ctrl-C to stop)"
 while true; do
-    ffmpeg -hide_banner -loglevel error \
+    ffmpeg -hide_banner -loglevel error -fflags nobuffer -flags low_delay \
         -f avfoundation -pixel_format nv12 -framerate 30 -video_size 1280x720 -i "$CAMERA" \
-        -vf "fps=15,scale=960:540" -q:v 7 \
+        -vf "fps=30,scale=640:360" -q:v 6 \
         -f mpjpeg -listen 1 "http://0.0.0.0:$PORT/cam.mjpg" || true
     sleep 0.5
 done

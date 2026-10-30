@@ -15,14 +15,17 @@ _clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(4, 6))
 last = {"alpha": None, "detail": None, "colour": None}      # the latest silhouette at wall size: soft edge 0..1 and shading 0..1
 
 
+_tone = {"rgb": None}                             # the last picture: new frames are blended into it
+
+
 def _detail(frame, alpha):
     """The camera's own light inside the silhouette at wall resolution. Returns (shade, colour): shade is 0..1
     luminance with local contrast (CLAHE, then two scales of unsharp mask: fine for eyes and hair strands, coarse for
     the shape of a face and clothing folds), stretched over the person only; colour is that shade in the camera's own
     hues (a little more saturated, since LEDs wash colour out), an HxWx3 float RGB 0..1."""
     W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
-    src = cv2.bilateralFilter(frame, 5, 28, 5)                          # quiet sensor noise, keep edges
-    small = cv2.resize(src, (W, H), interpolation=cv2.INTER_AREA)
+    small = cv2.resize(frame, (W, H), interpolation=cv2.INTER_AREA)     # the shrink itself averages the noise away
+    small = cv2.bilateralFilter(small, 5, 28, 5)                        # at wall size: 12x fewer pixels than the full frame
     lab = cv2.cvtColor(small, cv2.COLOR_BGR2LAB)
     L = _clahe.apply(lab[:, :, 0]).astype(np.float32) / 255.0
     inside = alpha > 0.6
@@ -37,6 +40,10 @@ def _detail(frame, alpha):
     b = (lab[:, :, 2].astype(np.float32) - 128.0) * 1.35
     lab2 = np.dstack([np.clip(shade * 255.0, 0, 255), np.clip(a + 128.0, 0, 255), np.clip(b + 128.0, 0, 255)]).astype(np.uint8)
     rgb = cv2.cvtColor(cv2.cvtColor(lab2, cv2.COLOR_LAB2BGR), cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    prev = _tone["rgb"]
+    if prev is not None and prev.shape == rgb.shape:                    # blend with the last picture: evens out the camera's
+        rgb = prev * 0.4 + rgb * 0.6                                    # exposure pumping and mains-light flicker
+    _tone["rgb"] = rgb
     return shade, rgb
 
 

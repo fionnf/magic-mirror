@@ -58,6 +58,7 @@ DEPTH_STEPS = [(0.02, 8), (0.04, 7)]   # (picture level below, PWM bits): darker
 PWM_BITS_HZ = {5: 110, 6: 100, 7: 92, 8: 80}  # refresh the panels reach with that many bits under real art (sets the brightness scale)
 MATRIX_REFRESH_LIMIT_HZ = 100   # lock refresh. Blind test 2026-10-26 at full brightness on coral: flicker fell steadily with refresh (60 awful, 72 flicker, 84 less, 100/6-bit very good, 110/5-bit best). 6 bits at 100 Hz (lsb 60) is the fallback if 5-bit banding shows.
                                # frames hold a whole number of refreshes: 42 fps (2) or 28 fps (3)
+FORCE_FAST_REFRESH = False      # set at run time (music mode, while the album cover shows): no deeper-colour, slower-refresh steps
 BRIGHTNESS_REF_HZ = 58         # the refresh the brightness settings were tuned at: a faster refresh is brighter, so it is scaled back
 MATRIX_MULTIPLEXING = 0        # change if the image looks striped/scrambled
 MATRIX_ROW_ADDRESS_TYPE = 0    # 64x64 panels with ABCDE addressing: usually 0
@@ -90,6 +91,7 @@ FRAME_HEIGHT = 480
 # Every captured frame is centre-cropped to this width/height ratio, so the AI,
 # the receipt and the silhouette all see the same portrait picture.
 CAMERA_ASPECT = 3 / 4
+CAMERA_MAINS_HZ = 50              # 50 in Europe, 60 in the US: the camera times its exposure to the room lights' flicker
 # Photos (AI / receipt / booth) are cut to portrait around the people (face detector, then motion,
 # then centre). Set False to always centre-crop.
 SMART_CROP = os.environ.get("WALL_SMART_CROP", "1") != "0"   # the web app sets WALL_SMART_CROP
@@ -100,7 +102,7 @@ BG_THRESHOLD = 50
 SILHOUETTE_COLOUR = (0, 210, 110)   # green (was blue (0, 100, 255))
 # Live silhouette is continuously rendered as the always-on background of the
 # mirror. Refresh rate (Hz) for the capture/extract loop:
-LIVE_SILHOUETTE_FPS = 10
+LIVE_SILHOUETTE_FPS = 24            # the loop waits for each new camera frame, so this is only a ceiling (was 10, on a fixed timer)
 # Absdiff threshold (0-255) used when a static background frame is available.
 SILHOUETTE_DIFF_THRESHOLD = 30
 # Silhouette maths runs on this small size (w, h), not the full frame.

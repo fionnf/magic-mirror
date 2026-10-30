@@ -1,0 +1,51 @@
+{
+ "name": "Light Far Down",
+ "description": "A single veil of muted aqua hangs in deep petrol water, swaying like the last daylight reaching the bottom of a lake, widening and rising through the day until by night it fills the depth with a soft drowned glow.",
+ "image": "2026-10-30.png",
+ "animation_source": "2026-10-30.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-30"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#0a2a30 #1f5f66 #8fc9c4"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "The bass breathes the veil wider, tension draws its folds together, the key leans its tint between teal and aqua, treble softens or sharpens its edges, each song reseeds the fold pattern, and the day's music settles as faint tide marks along the floor.",
+ "palette": [
+  "#0a2a30",
+  "#1f5f66",
+  "#8fc9c4"
+ ],
+ "source_sha256": "ef149dd0226f75ca0176da7614d810896f5add442e192d6014b76867553e25ef",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 1,
+ "created": 1793350646.594535,
+ "curator": {
+  "score": 7,
+  "verdict": "A genuinely different picture for the wall: a soft aqua veil in a true petrol ground, one form with a clear arc from a thin sliver to a broad drowned glow, and it reads well on a coarse grid. By 11 pm it fills much of the wall and splits into two or three parallel bands, which edges toward stripes and eats the calm space around the form."
+ },
+ "direction": "Petrol depth"
+}

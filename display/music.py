@@ -1589,8 +1589,7 @@ class MusicShow:
         if comp is not None:
             self._cover_last = comp
         if self.cover_mix > 0.995 and comp is not None:   # the cover alone: nothing else to draw
-            self.glow = _ema(getattr(self, "glow", 0.0), f["energy"], dt, 2.5)
-            img = comp * (0.95 + 0.06 * P["breath"] * self.glow)
+            img = comp                                       # the cover is still: no swell with the music, nothing moves
             return self._song_overlay(Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB"))
         slow = getattr(self, "cost", 0.0) > 26.0
         lop = 0.0 if slow else self.layer_op                  # too slow: drop the second layer

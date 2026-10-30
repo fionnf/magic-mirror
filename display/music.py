@@ -439,6 +439,7 @@ class Listener:
     def __init__(self, spec=None):
         self.error = ""
         self.react = 1.0
+        self.quiet = False                                # True while the still album cover is up: analyse ~4x a second, not continuously
         if spec is None:
             spec = os.environ.get("WALL_AUDIO")
         if spec is None:
@@ -548,6 +549,10 @@ class Listener:
         last = time.time()
         while True:
             time.sleep(HOP / SR)
+            if self.quiet:                                # nothing on the wall follows the music: leave the CPU to the panels
+                time.sleep(0.25)
+                last = time.time()
+                continue
             now = time.time()
             dt, last = now - last, now
             x = self.recent(WIN / SR)
@@ -1405,6 +1410,10 @@ class MusicShow:
         return img
 
     def __call__(self, t):
+        still = getattr(self, "_still", None)
+        if still is not None and time.monotonic() - still[1] < 0.5:
+            time.sleep(0.2)                               # the cover does not change: no rendering, no CPU competing with the panels
+            return still[0]
         t_in = time.perf_counter()
         out = self._frame(t)
         # cost guard: if frames take too long for the 29 fps budget, the VJ simplifies itself
@@ -1590,7 +1599,12 @@ class MusicShow:
             self._cover_last = comp
         if self.cover_mix > 0.995 and comp is not None:   # the cover alone: nothing else to draw
             img = comp                                       # the cover is still: no swell with the music, nothing moves
-            return self._song_overlay(Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB"))
+            out = self._song_overlay(Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB"))
+            steady = getattr(self, "_song_fade", 0.0) in (0.0, 1.0)      # not mid-fade of the song title
+            self.l.quiet = steady
+            self._still = (out, time.monotonic()) if steady else None
+            return out
+        self.l.quiet, self._still = False, None
         slow = getattr(self, "cost", 0.0) > 26.0
         lop = 0.0 if slow else self.layer_op                  # too slow: drop the second layer
         if slow and self.xfade > 2.5:

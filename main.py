@@ -74,7 +74,8 @@ def start_auto_trigger(mirror, every_sec: float, booth_every: int = 0,
 
 class MagicMirror:
     def __init__(self, matrix, camera, button_factory, strip, printer,
-                 sim_mode: bool, no_api: bool):
+                 sim_mode: bool, no_api: bool, booth_mode: bool = False):
+        self.booth_mode = booth_mode              # photobooth mode: a tap (or the app) takes a whole strip
         self.matrix = matrix
         self.camera = camera
         self.strip = strip
@@ -106,7 +107,7 @@ class MagicMirror:
 
     def _on_button(self):
         if self.state == State.IDLE:
-            self._trigger_event.set()
+            (self._booth_event if self.booth_mode else self._trigger_event).set()
         else:
             print(f"[STATE] touch ignored in state {self.state.name}")
 
@@ -316,7 +317,8 @@ class MagicMirror:
             sp = self._sparkle
             sparkling = sp is not None and time.monotonic() < sp[2]
             key = (self._silhouette_version, id(self._overlay_image),
-                   self._overlay_text, int(time.monotonic() * 8) if sparkling else None)
+                   self._overlay_text, int(time.monotonic() * 8) if sparkling else None,
+                   int(time.monotonic() * 4) if self.booth_mode else None)
             if key != last_key:
                 last_key = key
                 canvas = self._silhouette()
@@ -330,6 +332,8 @@ class MagicMirror:
                         text_renderer.render_static_text(canvas, self._overlay_text)
                     except Exception:
                         pass
+                if self.booth_mode and self._overlay_image is None and self._overlay_text is None:
+                    self._booth_hint(canvas)
                 if sparkling:
                     try:
                         from display import sparkle
@@ -533,6 +537,55 @@ class MagicMirror:
             self.matrix.draw(canvas)
             time.sleep(0.08)
 
+    def _booth_hint(self, canvas):
+        """Photobooth mode, waiting: the title in gold and a pulsing 'tap' underneath."""
+        d = ImageDraw.Draw(canvas)
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        f1, f2 = text_renderer._load_font(15), text_renderer._load_font(10)
+        pulse = 0.55 + 0.45 * math.sin(time.monotonic() * 3.0)
+        t1, t2 = "PHOTOBOOTH", "tap to start"
+        for txt, f, y, col in ((t1, f1, 6, (255, 200, 80)), (t2, f2, H - 20, tuple(int(c * pulse) for c in (255, 235, 190)))):
+            w = d.textlength(txt, font=f)
+            d.text(((W - w) / 2, y), txt, font=f, fill=col, stroke_width=1, stroke_fill=(0, 0, 0))
+
+    def _booth_display_frames(self, frames, seconds: float = 9.0):
+        """Photobooth mode: the shots themselves, in colour, stacked in a gold-framed strip on the wall.
+        Each photo flashes in one after the other."""
+        import cv2
+        from PIL import ImageEnhance
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        n, gap, margin, label_h = len(frames), 4, 6, 16
+        tw = W - 2 * margin
+        th = (H - 2 * margin - gap * (n - 1) - label_h) // n
+        tiles = []
+        for f in frames:
+            img = Image.fromarray(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
+            t = ImageOps.fit(img, (tw, th), Image.LANCZOS, centering=(0.5, 0.35))
+            t = ImageEnhance.Color(ImageEnhance.Contrast(t).enhance(1.15)).enhance(1.2)
+            tiles.append(t)
+        font = text_renderer._load_font(11)
+        t0 = time.monotonic()
+        while not self._stop.is_set():
+            e = time.monotonic() - t0
+            if e > seconds:
+                break
+            canvas = Image.new("RGB", (W, H), (6, 4, 10))
+            d = ImageDraw.Draw(canvas)
+            for i, t in enumerate(tiles):
+                k = min(1.0, max(0.0, (e - i * 0.9) / 0.45))
+                if k <= 0:
+                    continue
+                y = margin + i * (th + gap)
+                shown = Image.blend(Image.new("RGB", t.size, (255, 255, 255)), t, k)
+                canvas.paste(shown, (margin, y))
+                d.rectangle([margin - 1, y - 1, margin + tw, y + th], outline=(255, 200, 80))
+            if e > n * 0.9:
+                lab = "PHOTOBOOTH"
+                w = d.textlength(lab, font=font)
+                d.text(((W - w) / 2, H - label_h - 1), lab, font=font, fill=(255, 200, 80), stroke_width=1, stroke_fill=(0, 0, 0))
+            self.matrix.draw(canvas)
+            time.sleep(0.05)
+
     def _show_booth_prompt(self, text: str, seconds: float):
         """Display a pose direction big on the matrix for `seconds`."""
         import textwrap
@@ -647,7 +700,10 @@ class MagicMirror:
                 print(f"[BOOTH] drive upload skip: {e}")
 
             self.strip.set_mode("displaying")
-            self._booth_display_strip(strip_image)
+            if self.booth_mode:
+                self._booth_display_frames(frames)
+            else:
+                self._booth_display_strip(strip_image)
 
             self._set_state(State.FADE_OUT)
             self.strip.set_mode("fading")
@@ -830,7 +886,7 @@ class MagicMirror:
                 break
             self._last_presence = time.monotonic()
             self._art_on = False
-            if kind == "long":
+            if kind == "long" or (self.booth_mode and kind == "short"):
                 self.run_booth_cycle()
             elif kind == "aura":
                 self.run_aura_cycle()
@@ -874,6 +930,8 @@ def build_args():
                    help="With --auto, stop after N cycles (0 = keep going)")
     p.add_argument("--auto-booth-every", type=int, default=0, metavar="N",
                    help="With --auto, every Nth trigger is a photobooth run")
+    p.add_argument("--booth", action="store_true",
+                   help="Photobooth mode: a tap (or the app) takes a whole strip, shown in colour on the wall")
     p.add_argument("--no-mqtt", action="store_true", help="Disable MQTT bridge")
     return p
 
@@ -893,7 +951,7 @@ def main(argv=None):
         mirror = MagicMirror(matrix, camera,
                              lambda short, long_: ButtonMock(short, long_),
                              strip=strip, printer=printer,
-                             sim_mode=True, no_api=args.no_api)
+                             sim_mode=True, no_api=args.no_api, booth_mode=args.booth)
 
         api = MirrorAPI(mirror, port=5000)
         api.start()
@@ -955,7 +1013,7 @@ def main(argv=None):
     printer = printer_mod.create_printer()
     mirror = MagicMirror(matrix, camera, button_factory,
                          strip=strip, printer=printer,
-                         sim_mode=False, no_api=args.no_api)
+                         sim_mode=False, no_api=args.no_api, booth_mode=args.booth)
     if args.auto > 0:
         start_auto_trigger(mirror, args.auto, args.auto_booth_every, args.auto_count)
 

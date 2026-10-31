@@ -79,7 +79,7 @@ LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "
                "quakes": "quakes.thumb"}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",
-                 "mirror_auto": 0, "smart_crop": True, "art_speed": 0.12}
+                 "mirror_auto": 0, "mirror_booth": False, "smart_crop": True, "art_speed": 0.12}
 
 
 # ------------------------------------------------------------------ state ---
@@ -164,6 +164,8 @@ class Runner:
                 cmd += ["--mock-camera", "static"]
             if int(self.state.get("mirror_auto") or 0) > 0:
                 cmd += ["--auto", str(int(self.state["mirror_auto"]))]
+            if self.state.get("mirror_booth"):
+                cmd += ["--booth"]                       # photobooth mode: a tap takes a whole strip
             return cmd
         if what == "wheel":
             return [PY, "-u", "panel_setup/wheel.py", "--spins", "1"] + \
@@ -366,7 +368,7 @@ class Runner:
                     "brightness": self.state.get("brightness"), "playlist": pl,
                     "playlist_next": self.playlist_next if pl else None,
                     "camera": self.state.get("camera"), "camera_url": self.state.get("camera_url"),
-                    "mirror_auto": self.state.get("mirror_auto", 0),
+                    "mirror_auto": self.state.get("mirror_auto", 0), "mirror_booth": bool(self.state.get("mirror_booth")),
                     "wheel_print": self.state.get("wheel_print", True),
                     "smart_crop": self.state.get("smart_crop", True),
                     "art_speed": self.state.get("art_speed", 0.12), "piece": self.state.get("piece", ""),
@@ -883,6 +885,7 @@ def make_app(runner):
             if k in d:
                 runner.state[k] = d[k]
         runner.state["mirror_auto"] = int(d.get("auto", 0) or 0)
+        runner.state["mirror_booth"] = bool(d.get("booth", False))      # photobooth mode on/off
         if "smart_crop" in d:
             runner.state["smart_crop"] = bool(d["smart_crop"])
         runner.play("mirror")
@@ -1291,6 +1294,11 @@ const j=await r.json().catch(()=>({}));m.textContent=r.ok?'✨ Sent! Look at the
     @app.post("/api/mirror/photo")
     def photo():
         return _mirror_trigger("short")
+
+    @app.post("/api/mirror/booth")
+    def booth():
+        """Take a photobooth strip now: prompt, 3-2-1, flash, three times, then print and show it."""
+        return _mirror_trigger("long")
 
     @app.post("/api/mirror/pixel")
     def pixel():

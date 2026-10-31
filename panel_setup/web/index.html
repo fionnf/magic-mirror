@@ -404,11 +404,14 @@
         <h3>Be the art</h3>
         <p class="hint">The wall becomes a mirror: you appear in light, in your own colours, and the wall can speak to you.</p>
         <button class="btn primary big" onclick="startMirror()">Start the mirror</button>
+        <button class="btn big" style="margin-top:10px" onclick="startBooth()">Start the photobooth</button>
       </div>
       <div id="mirrorOn" hidden>
-        <h3>The mirror is on</h3>
-        <p class="hint">Step in front of the wall, then choose what happens.</p>
+        <h3 id="mirrorTitle">The mirror is on</h3>
+        <p class="hint" id="mirrorHint">Step in front of the wall, then choose what happens.</p>
         <div class="tiles">
+          <button class="tile" onclick="mirrorDo('booth')"><b>Photobooth strip</b><small>Three poses, a prompt each, printed</small></button>
+          <button class="tile" id="boothToggle" onclick="toggleBooth()"><b>Photobooth mode</b><small>A tap on the wall takes a strip</small></button>
           <button class="tile" onclick="mirrorDo('photo')"><b>Photo</b><small>3, 2, 1, and a line about you</small></button>
           <button class="tile" onclick="mirrorDo('aura')"><b>Aura</b><small>The wall reads your colour</small></button>
           <button class="tile" onclick="mirrorDo('pixel')"><b>Pixel portrait</b><small>You, in LEDs</small></button>
@@ -740,6 +743,10 @@ function render() {
   if (document.activeElement !== $('pace') && s.art_speed != null) $('pace').value = Math.round(speedToPace(s.art_speed));
   document.querySelectorAll('.list button').forEach(b => { const d = b.querySelector('.now'); if (d) d.hidden = b.dataset.id !== cur; });
   $('mirrorOn').hidden = cur !== 'mirror'; $('mirrorOff').hidden = cur === 'mirror';
+  const bm = !!s.mirror_booth;
+  $('mirrorTitle').textContent = bm ? 'The photobooth is on' : 'The mirror is on';
+  $('mirrorHint').textContent = bm ? 'Tap the wall, or press Photobooth strip: three poses, three countdowns, one printed strip.' : 'Step in front of the wall, then choose what happens.';
+  $('boothToggle').querySelector('b').textContent = bm ? 'Photobooth mode: ON' : 'Photobooth mode';
   $('musicBtn').textContent = cur === 'music' ? 'Listening now' : 'Let the wall listen';
 }
 async function refresh() { try { STATUS = await api('/api/status'); render(); } catch (e) {} }
@@ -1123,6 +1130,8 @@ async function deletePhoto() {
   await api('/api/photos/delete', {name: viewing.name}); $('viewer').close(); toast('Photo deleted'); loadPhotos();
 }
 function startMirror() { api('/api/mirror', {camera: 'pi'}).then(s => { STATUS = s; render(); toast('Mirror started'); }).catch(e => toast(e.message)); }
+function startBooth() { api('/api/mirror', {camera: 'pi', booth: true}).then(s => { STATUS = s; render(); toast('Photobooth on: tap the wall'); }).catch(e => toast(e.message)); }
+function toggleBooth() { const on = !(STATUS && STATUS.mirror_booth); api('/api/mirror', {camera: 'pi', booth: on}).then(s => { STATUS = s; render(); toast(on ? 'Photobooth mode on' : 'Photobooth mode off'); }).catch(e => toast(e.message)); }
 function mirrorDo(what) { api('/api/mirror/' + what, {}).then(() => { toast('Look at the wall'); setTimeout(loadPhotos, 15000); }).catch(e => toast(e.message)); }
 
 /* ---------- more ---------- */

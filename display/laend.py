@@ -153,83 +153,115 @@ class Map:
             ly = max(1, min(H - 7, ly))
             h2 = np.zeros((H, W), np.float32)
             pixelfont.draw(h2[..., None], word, lx, ly, (1.0,))
-            h2 = h2[..., 0]
             halo = np.maximum(halo, self.cv2.dilate(h2, np.ones((3, 3), np.uint8)))
             col = (255, 236, 190) if hero else (130, 140, 190)
             pixelfont.draw(lay, word, lx, ly, col)
         self.halo = halo
         return lay
 
-    def frame(self, t, since):
-        """since = seconds the map has been on the wall."""
+    def _prep(self):
+        """Everything a frame needs that does not change, so a frame is a few cheap sparse updates (the Pi has ~10 ms to spare)."""
         cv2 = self.cv2
-        img = self.base.copy()
-        k = min(1.0, since / REVEAL)
-        # the map inks itself in from Korb outwards
+        # rails and the brooks never move: bake them into the picture
+        b = self.base
+        bk = self.brook[..., None]
+        b = b * (1 - bk * 0.35) + np.array((30, 80, 150), np.float32) * 0.5 * bk
+        b[self.rail] = b[self.rail] * 0.35 + np.array((150, 156, 178), np.float32) * 0.65
+        b += self.contour[..., None] * np.array((150, 170, 255), np.float32) * 0.8
+        self.base = np.ascontiguousarray(np.clip(b, 0, 255), np.float32)
+        # sparse sets: the river, the lit windows
+        self.wy, self.wx = np.nonzero(self.water > 0.03)
+        self.wa = self.water[self.wy, self.wx][:, None]
+        self.winy, self.winx = np.nonzero(self.win > 0)
+        self.winph = self.win_ph[self.winy, self.winx]
+        # fog at half resolution (smooth anyway), shifted with sub-LED steps
+        self.fogl = [_noise(H // 2, W // 2, s, c) for s, c in ((1, (8, 6)), (2, (14, 10)))]
+        self.lowf = (self.low[..., None] * 0.55).astype(np.float32)
         cx, cy = self.hero_xy[1] if len(self.hero_xy) > 1 else (W / 2, H / 2)
         yy, xx = np.mgrid[0:H, 0:W]
-        d = np.hypot((xx - cx) * 1.0, (yy - cy) * 0.8)
-        edge = 12 + k * 260
-        rev = np.clip((edge - d) / 22.0, 0, 1)[..., None] if k < 1 else 1.0
-        # contour glints
-        img += self.contour[..., None] * np.array((150, 170, 255), np.float32) * (0.55 + 0.45 * math.sin(t * 0.5))
-        # the water runs
-        wa = self.water
-        run = 0.55 + 0.45 * np.sin(xx * 0.8 - t * 3.2 + yy * 0.5) * np.sin(yy * 0.9 + t * 1.7)
-        wcol = np.array((24, 96, 210), np.float32) * (0.5 + 0.7 * run[..., None]) + np.array((120, 200, 255), np.float32) * (np.clip(run - 0.82, 0, 1) * 4)[..., None]
-        img = img * (1 - wa[..., None] * 0.9) + wcol * wa[..., None] * 0.9
-        bk = self.brook[..., None]
-        img = img * (1 - bk * 0.35) + np.array((30, 80, 150), np.float32) * (0.5 + 0.5 * run[..., None]) * bk * 0.55
-        # rails: a thin silver thread
-        img[self.rail] = img[self.rail] * 0.35 + np.array((150, 156, 178), np.float32) * 0.65
-        # windows twinkle
-        tw = 0.45 + 0.55 * np.sin(t * 0.9 + self.win_ph)
-        img += (self.win * tw)[..., None] * np.array((255, 190, 90), np.float32) * 0.95
+        self.reveal_d = np.hypot(xx - cx, (yy - cy) * 0.8).astype(np.float32)
+        self.halo3 = (1 - self.halo[..., None] * 0.7).astype(np.float32)
+        self.label_idx = np.nonzero(self.halo > 0)
+        self.fig_state = (-1.0, None)
+        self.title_cache = None
+
+    def _fog(self, t):
+        cv2 = self.cv2
+        h, w = H // 2, W // 2
+        out = []
+        for f, sp in ((self.fogl[0], 1.1), (self.fogl[1], -1.75)):
+            M = np.float32([[1, 0, t * sp], [0, 1, 0]])
+            out.append(cv2.warpAffine(f, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP))
+        fog = np.clip((out[0] * 0.7 + out[1] * 0.5 - 0.42) * 1.6, 0, 1)
+        return cv2.resize(fog, (W, H), interpolation=cv2.INTER_LINEAR)
+
+    def frame(self, t, since):
+        """since = seconds the map has been on the wall."""
+        if not hasattr(self, "wy"):
+            self._prep()
+        img = self.base.copy()
+        # the river runs: slow, soft light moving along it (fast per-LED shimmer is what reads as flicker on the panels)
+        wy, wx = self.wy, self.wx
+        run = 0.62 + 0.38 * np.sin(wx * 0.35 - t * 1.1 + wy * 0.2) * np.sin(wy * 0.45 + t * 0.6)
+        wcol = np.array((22, 92, 200), np.float32) * (0.55 + 0.6 * run[:, None]) + np.array((110, 190, 255), np.float32) * (np.clip(run - 0.88, 0, 1) * 2.5)[:, None]
+        img[wy, wx] = img[wy, wx] * (1 - self.wa * 0.9) + wcol * self.wa * 0.9
+        # windows glow and breathe a little (only some of them move at all)
+        tw = 0.78 + 0.22 * np.sin(t * 0.35 + self.winph)
+        img[self.winy, self.winx] += tw[:, None] * np.array((255, 190, 90), np.float32) * 0.9
         # evening fog in the valley, drifting
-        sx = int(t * 2.2)
-        f1 = np.roll(self.fog[0], sx, axis=1)
-        f2 = np.roll(self.fog[1], -int(t * 3.5), axis=1)
-        fog = np.clip((f1 * 0.7 + f2 * 0.5 - 0.42) * 1.6, 0, 1) * self.low
-        img = img * (1 - fog[..., None] * 0.55) + np.array((78, 92, 150), np.float32) * fog[..., None] * 0.55
-        img = img * rev
-        out = np.clip(img, 0, 255)
+        fog = self._fog(t)[..., None] * self.lowf
+        img = img * (1 - fog) + np.array((78, 92, 150), np.float32) * fog
+        if since < REVEAL:                                           # the map inks itself in from Korb outwards
+            k = since / REVEAL
+            img *= np.clip((12 + k * 260 - self.reveal_d) / 22.0, 0, 1)[..., None]
+        out = img
+        k = min(1.0, since / REVEAL)
         # fireflies over the vineyards and orchards
-        for i, (a, b, c, e) in enumerate(self.flies):
-            fx = (a * W + math.sin(t * (0.2 + c * 0.3) + e * 9) * 7) % W
-            fy = (b * H + math.cos(t * (0.17 + e * 0.3) + c * 9) * 7) % H
-            ix, iy = int(fx), int(fy)
-            if self.base[iy, ix, 0] > 0 and k >= 1:
-                v = max(0.0, math.sin(t * (0.9 + c) + e * 20)) ** 3
-                out[iy, ix] = np.maximum(out[iy, ix], np.array((255, 244, 140), np.float32) * v)
+        if k >= 1:
+            for i, (a, b, c, e) in enumerate(self.flies):
+                fx = (a * W + math.sin(t * (0.2 + c * 0.3) + e * 9) * 7) % W
+                fy = (b * H + math.cos(t * (0.17 + e * 0.3) + c * 9) * 7) % H
+                ix, iy = int(fx), int(fy)
+                if self.base[iy, ix, 0] > 0:
+                    v = max(0.0, math.sin(t * (0.5 + c * 0.5) + e * 20)) ** 3
+                    out[iy, ix] = np.maximum(out[iy, ix], np.array((255, 244, 140), np.float32) * v)
         # drifting leaves and the odd apple
         for i, (a, b, c, e) in enumerate(self.leaves):
             lx = (a * W + t * (2.5 + c * 4) + math.sin(t * 0.8 + e * 9) * 5) % W
             ly = (b * H + t * (3 + e * 3.5)) % H
             ix, iy = int(lx), int(ly)
             col = np.array(((235, 120, 40), (210, 60, 40), (230, 190, 60), (200, 40, 50))[i % 4], np.float32)
-            out[iy, ix] = np.maximum(out[iy, ix], col * (0.55 + 0.4 * math.sin(t * 2 + i)))
-        # Wanderfeige creeping along the valley: green speckle with the odd purple fig
+            out[iy, ix] = np.maximum(out[iy, ix], col * 0.8)
+        # Wanderfeige creeping along the valley (the set is recomputed every few seconds: it grows very slowly)
         grow = since * 0.11
-        fm = (self.fig_birth < grow) & (self.fig_dot < 0.55) & (self.water < 0.3) & (self.urban < 0.5)
-        if fm.any():
-            out[fm] = out[fm] * 0.4 + np.array((52, 150, 66), np.float32) * (0.55 + 0.45 * np.sin(t * 0.7 + self.win_ph[fm]))[:, None]
-            fg = fm & (self.fig_dot < 0.06)
-            out[fg] = np.array((150, 70, 170), np.float32)
-        # live trains (phase 2)
+        if abs(grow - self.fig_state[0]) > 0.4:
+            fm = (self.fig_birth < grow) & (self.fig_dot < 0.55) & (self.water < 0.3) & (self.urban < 0.5)
+            ys, xs = np.nonzero(fm)
+            self.fig_state = (grow, (ys, xs, self.fig_dot[ys, xs] < 0.06, self.win_ph[ys, xs]))
+        ys, xs, purple, ph = self.fig_state[1]
+        if len(ys):
+            g = np.array((52, 150, 66), np.float32) * (0.75 + 0.25 * np.sin(t * 0.3 + ph))[:, None]
+            g[purple] = (150, 70, 170)
+            out[ys, xs] = out[ys, xs] * 0.4 + g * 0.6
+        # live trains
         if self.trains is not None:
             self.trains(out, t)
         # labels, with a dark halo so the words read over the busiest vineyards
-        la = np.clip(since / 3.0 - 1.5, 0, 1) if since < 7 else 1.0
-        out = out * (1 - self.halo[..., None] * 0.7 * la) + self.static_labels * la
-        # the three places pulse
+        la = float(np.clip(since / 3.0 - 1.5, 0, 1)) if since < 7 else 1.0
+        ly, lx = self.label_idx
+        out[ly, lx] = out[ly, lx] * (1 - (1 - self.halo3[ly, lx]) * la) + self.static_labels[ly, lx] * la
+        # the three places pulse (small patches only)
         for i, (x, y) in enumerate(self.hero_xy):
             ph = (t * 0.42 + i * 0.33) % 1.0
             r = 2 + ph * 15
-            ring = np.abs(np.hypot(xx - x, yy - y) - r) < 0.75
-            out[ring] = np.maximum(out[ring], np.array((255, 215, 120), np.float32) * (1 - ph) ** 1.5 * la)
+            y0, y1, x0, x1 = max(0, int(y - r - 2)), min(H, int(y + r + 3)), max(0, int(x - r - 2)), min(W, int(x + r + 3))
+            gy, gx = np.mgrid[y0:y1, x0:x1]
+            ring = np.abs(np.hypot(gx - x, gy - y) - r) < 0.75
+            patch = out[y0:y1, x0:x1]
+            patch[ring] = np.maximum(patch[ring], np.array((255, 215, 120), np.float32) * (1 - ph) ** 1.5 * la)
             ix, iy = int(round(x)), int(round(y))
-            out[max(0, iy - 1):iy + 2, max(0, ix - 1):ix + 2] = np.array((255, 244, 200), np.float32) * la + out[max(0, iy - 1):iy + 2, max(0, ix - 1):ix + 2] * (1 - la)
-        # title
+            blk = out[max(0, iy - 1):iy + 2, max(0, ix - 1):ix + 2]
+            blk[:] = np.array((255, 244, 200), np.float32) * la + blk * (1 - la)
         self._title(out, since)
         return np.clip(out, 0, 255).astype(np.uint8)
 

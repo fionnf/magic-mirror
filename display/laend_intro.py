@@ -30,6 +30,7 @@ CAPTIONS = {
                (12.0, "Becky trägt natürlich Salomon. Zum Äpfelpflücken."),
                (16.5, "Streuobstwiese: Herbstgold für alle!")],
     "vines": [(0.6, "Weiter geht's durch die Weinberge..."),
+              (4.2, "Lennart trägt natürlich nur TAGOS: Funktionsjacke, Rucksack, Wanderstock."),
               (8.0, "...vorbei an Trauben, Trauben, Trauben."),
               (12.0, "Becky in Salomon: Gipfelsturm auf 300 Höhenmeter."),
               (15.5, "Nächste Station: Korb.")],
@@ -42,7 +43,7 @@ CAPTIONS = {
     "feige": [(0.5, "Doch dann kam die Wanderfeige..."), (5.5, "...und eroberte das ganze Ländle."), (10.5, "Feigen für alle!")],
 }
 FADE = 0.5
-HAIR = [(60, 36, 28), (236, 196, 96), (112, 66, 34)]
+HAIR = [(40, 26, 22), (138, 90, 50), (82, 50, 28)]       # Katha dark, Becky chestnut brown, Lennart brown
 SKIN = [(240, 196, 166), (250, 214, 186), (214, 164, 132)]
 TOP = [(214, 52, 56), (70, 130, 220), (66, 150, 84)]
 LEGS = [(44, 48, 90), (60, 70, 110), (74, 60, 46)]
@@ -175,11 +176,18 @@ def person(d, x, y, s, t, who, pose="stand", phase=0.0, item=None):
         else:
             d.rectangle([*P(-5 - 3 * walk, -1), *P(-1 - 3 * walk, 1)], fill=(36, 30, 34))
             d.rectangle([*P(1 + 3 * walk, -1), *P(5 + 3 * walk, 1)], fill=(36, 30, 34))
+    if who == 2:                                                              # Lennart's TAGOS hiking gear: rucksack and pole
+        d.rectangle([*P(-9, -23 - bob), *P(-4, -10 - bob)], fill=(236, 120, 30))
+        d.rectangle([*P(-8, -21 - bob), *P(-5, -19 - bob)], fill=(180, 80, 20))
+        d.line([P(8 - 2 * walk, -10 - bob), P(11 - 3 * walk, 2)], fill=(200, 200, 205), width=1)
     # body
     if who == 1:
         d.polygon([P(-4, -19 - bob), P(4, -19 - bob), P(7, -9 - bob), P(-7, -9 - bob)], fill=top)       # dress
     else:
         d.rectangle([*P(-4, -19 - bob), *P(4, -9 - bob)], fill=top)
+    if who == 2:
+        d.rectangle([*P(-4, -19 - bob), *P(4, -17.5 - bob)], fill=(236, 120, 30))                     # TAGOS: orange yoke and chest patch
+        d.polygon([P(-1, -16 - bob), P(2, -16 - bob), P(0.5, -13 - bob)], fill=(250, 250, 250))
     # arms
     a = math.sin(t * 7 + phase)
     if pose == "reach":

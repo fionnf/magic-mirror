@@ -3,7 +3,7 @@ piece starts. frame(t) is a pure function of t (seconds since the start).
 
    0-  8   the sticker on a wall: "Nett hier. Fortunagasse 24. Aber warst du schon mal in Baden-Württemberg?"
    8- 19   dawn over the Remstal
-  19- 40   Bittenfeld: Lena, Mia and Jonas pick apples on the Streuobstwiese
+  19- 40   Bittenfeld: Katha, Becky and Lennart pick apples on the Streuobstwiese
   40- 62   through the vineyards towards Korb
   62- 80   Korb: the Korber Kopf at sunset
   80-100   Schorndorf: half-timbered houses, fairy lights, Federweisser and onion tart
@@ -26,10 +26,12 @@ CAPTIONS = {
     "sticker": [],
     "dawn": [(0.8, "Das Ländle."), (5.0, "Ein goldener Herbsttag im Remstal.")],
     "apples": [(0.6, "In Bittenfeld hängen die Äpfel voll."),
-               (7.0, "Lena pflückt, Mia fängt, Jonas schleppt die Kisten."),
-               (14.5, "Streuobstwiese: Herbstgold für alle!")],
+               (7.0, "Katha pflückt, Becky fängt, Lennart schleppt die Kisten."),
+               (12.0, "Becky trägt natürlich Salomon. Zum Äpfelpflücken."),
+               (16.5, "Streuobstwiese: Herbstgold für alle!")],
     "vines": [(0.6, "Weiter geht's durch die Weinberge..."),
               (8.0, "...vorbei an Trauben, Trauben, Trauben."),
+              (12.0, "Becky in Salomon: Gipfelsturm auf 300 Höhenmeter."),
               (15.5, "Nächste Station: Korb.")],
     "korb": [(0.6, "Auf dem Korber Kopf wird es golden."),
              (8.5, "Das ganze Remstal liegt uns zu Füßen.")],
@@ -141,8 +143,8 @@ def _caption(img, scene, u):
 # ------------------------------------------------------------------ people ---
 
 def person(d, x, y, s, t, who, pose="stand", phase=0.0, item=None):
-    """One of the three friends, feet at (x, y). who: 0 Lena (dark hair, red jacket), 1 Mia (blond ponytail,
-    blue), 2 Jonas (cap, green). s = scale (1 ~ 30 px tall)."""
+    """One of the three friends, feet at (x, y). who: 0 Katha (dark hair, red jacket), 1 Becky (blond ponytail,
+    blue), 2 Lennart (cap, green). s = scale (1 ~ 30 px tall)."""
     def P(px, py):
         return (x + px * s, y + py * s)
 
@@ -164,8 +166,14 @@ def person(d, x, y, s, t, who, pose="stand", phase=0.0, item=None):
     else:
         line((-2, -10 - bob), (-2 - 3 * walk, 0), leg, 3)
         line((2, -10 - bob), (2 + 3 * walk, 0), leg, 3)
-        d.rectangle([*P(-5 - 3 * walk, -1), *P(-1 - 3 * walk, 1)], fill=(36, 30, 34))
-        d.rectangle([*P(1 + 3 * walk, -1), *P(5 + 3 * walk, 1)], fill=(36, 30, 34))
+        if who == 1:                                                              # Becky: chunky Salomon trail shoes
+            for sx in (-3 - 3 * walk, 3 + 3 * walk):
+                d.rectangle([*P(sx - 4, -4), *P(sx + 4, 1.5)], fill=(34, 36, 44))
+                d.rectangle([*P(sx - 4, -1.5), *P(sx + 4, 0.5)], fill=(250, 120, 30))
+                d.line([P(sx - 1, -4), P(sx + 2, -1.5)], fill=(236, 236, 240))
+        else:
+            d.rectangle([*P(-5 - 3 * walk, -1), *P(-1 - 3 * walk, 1)], fill=(36, 30, 34))
+            d.rectangle([*P(1 + 3 * walk, -1), *P(5 + 3 * walk, 1)], fill=(36, 30, 34))
     # body
     if who == 1:
         d.polygon([P(-4, -19 - bob), P(4, -19 - bob), P(7, -9 - bob), P(-7, -9 - bob)], fill=top)       # dress
@@ -394,11 +402,13 @@ def _apples(u, t):
     _text(d, (21, base + 40), "BITTENFELD", 6, (60, 40, 20), stroke=0)
     # the three
     gy = 206
+    for nx, nm in ((62, "Katha"), (100, "Becky"), (138, "Lennart")):
+        _text(d, (nx, gy - 74), nm, 8, (255, 244, 200), stroke=1)
     person(d, 62, gy - 6, 1.9, t, 0, "reach" if (u % 3.0) < 2.2 else "stand", 0.0)
     person(d, 100, gy + 4, 2.0, t, 1, "catch", 1.7, item="basket")
     carry = u < 11 or u > 13
     person(d, 138, gy - 2, 1.9, t, 2, "carry" if carry else "walk", 2.9)
-    # falling apples from the tree into Mia's basket
+    # falling apples from the tree into Becky's basket
     n = 0
     for i in range(14):
         t0 = 1.0 + i * 1.35

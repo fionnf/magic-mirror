@@ -104,6 +104,7 @@ def _anims():
         "tides":   (_lazy("tides", "frame"), 3600.0 * 24),
         "tramlines": (_lazy("tramlines", "frame"), 3600.0 * 24),
         "quakes":  (_lazy("quakes", "frame"), 3600.0 * 24),
+        "laend":   (_lazy("laend", "frame"), 3600.0 * 24),
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),
         "maeva":   (maeva_story.frame, maeva_story.LOOP_SEC),

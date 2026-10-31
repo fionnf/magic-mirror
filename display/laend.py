@@ -267,6 +267,9 @@ def frame(t):
     from display import laend_intro
     global _start
     m = _get_map()
+    if m.trains is None and t >= laend_intro.LENGTH - 5:
+        from display import laend_trains
+        m.trains = laend_trains.Trains(m.meta)
     if t < laend_intro.LENGTH:
         return laend_intro.frame(t)
     return Image.fromarray(m.frame(t, t - laend_intro.LENGTH), "RGB")

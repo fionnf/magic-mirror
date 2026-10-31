@@ -29,6 +29,7 @@ HEROES = ("Bittenfeld", "Korb", "Schorndorf")
 MINOR = ("Waiblingen", "Winnenden", "Backnang", "Weinstadt", "Fellbach", "Esslingen am Neckar", "Rudersberg", "Remshalden")
 GOLD, PLUM = np.array((255, 196, 70), np.float32), np.array((158, 38, 120), np.float32)
 _B4 = (np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]], np.float32) + 0.5) / 16.0
+DIM = 0.66                                          # overall brightness of the map (trains, labels and the title stay bright)
 REVEAL = 7.0                                        # seconds the map takes to ink itself in
 
 
@@ -168,7 +169,7 @@ class Map:
         b = b * (1 - bk * 0.35) + np.array((30, 80, 150), np.float32) * 0.5 * bk
         b[self.rail] = b[self.rail] * 0.35 + np.array((150, 156, 178), np.float32) * 0.65
         b += self.contour[..., None] * np.array((150, 170, 255), np.float32) * 0.8
-        self.base = np.ascontiguousarray(np.clip(b, 0, 255), np.float32)
+        self.base = np.ascontiguousarray(np.clip(b * DIM, 0, 255), np.float32)       # a calmer picture: the wall is bright in a dark room
         # sparse sets: the river, the lit windows
         self.wy, self.wx = np.nonzero(self.water > 0.03)
         self.wa = self.water[self.wy, self.wx][:, None]
@@ -204,10 +205,10 @@ class Map:
         wy, wx = self.wy, self.wx
         run = 0.62 + 0.38 * np.sin(wx * 0.35 - t * 1.1 + wy * 0.2) * np.sin(wy * 0.45 + t * 0.6)
         wcol = np.array((22, 92, 200), np.float32) * (0.55 + 0.6 * run[:, None]) + np.array((110, 190, 255), np.float32) * (np.clip(run - 0.88, 0, 1) * 2.5)[:, None]
-        img[wy, wx] = img[wy, wx] * (1 - self.wa * 0.9) + wcol * self.wa * 0.9
+        img[wy, wx] = img[wy, wx] * (1 - self.wa * 0.9) + wcol * (DIM + 0.1) * self.wa * 0.9
         # windows glow and breathe a little (only some of them move at all)
         tw = 0.78 + 0.22 * np.sin(t * 0.35 + self.winph)
-        img[self.winy, self.winx] += tw[:, None] * np.array((255, 190, 90), np.float32) * 0.9
+        img[self.winy, self.winx] += tw[:, None] * np.array((255, 190, 90), np.float32) * 0.62
         # evening fog in the valley, drifting
         fog = self._fog(t)[..., None] * self.lowf
         img = img * (1 - fog) + np.array((78, 92, 150), np.float32) * fog
@@ -240,7 +241,7 @@ class Map:
             self.fig_state = (grow, (ys, xs, self.fig_dot[ys, xs] < 0.06, self.win_ph[ys, xs]))
         ys, xs, purple, ph = self.fig_state[1]
         if len(ys):
-            g = np.array((52, 150, 66), np.float32) * (0.75 + 0.25 * np.sin(t * 0.3 + ph))[:, None]
+            g = DIM * np.array((52, 150, 66), np.float32) * (0.75 + 0.25 * np.sin(t * 0.3 + ph))[:, None]
             g[purple] = (150, 70, 170)
             out[ys, xs] = out[ys, xs] * 0.4 + g * 0.6
         # live trains

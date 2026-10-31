@@ -47,6 +47,7 @@ MODES = [
     ("dewa", "Shows", "Dewa's Story", "Edelweiss flight attendant, a date at every layover"),
     ("maeva", "Shows", "Maeva in Zürich", "Tram at 8:00:00, the Limmat, Sprüngli, sledging"),
     ("welcome", "Shows", "Welcome", "Welcome to HOUSE FORTUNA, wheel of fortune"),
+    ("lennart", "Shows", "Lennart zeigt Fionn das Ländle", "Fionn steals apples and grapes, loves Fachwerk, hunts for the sea, meets the vineyard mafia; Karlstein, a kiss, and home in Bittenfeld (German, ~2 min)"),
     ("cow", "Shows", "Dewa is a cow", "A message card"),
     ("music", "Live", "Music", "Art that breathes with the music in the room"),
     ("ambient", "Live", "Art + trams", "Lava & Coral with a small Rennweg tram strip"),
@@ -74,7 +75,7 @@ MODES = [
 MODE_IDS = {m[0] for m in MODES}
 LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "westcork.thumb",   # mode -> module.thumb
                "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "wanderers": "wanderers.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
-               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb",
+               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb", "lennart": "lennart_film.thumb",
                "quakes": "quakes.thumb"}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",
@@ -149,7 +150,7 @@ class Runner:
     # -- commands
     def _cmd(self, what):
         if what in MODE_IDS:
-            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva", "flow", "exposure", "laend")
+            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva", "flow", "exposure", "laend", "lennart")
             return [PY, "panel_setup/play.py", what, "--fps", "29" if heavy else "58"]   # art: 58 fps when it can
         if what == "mirror":
             cmd = [PY, "-u", "main.py", "--no-touch", "--no-mqtt"]

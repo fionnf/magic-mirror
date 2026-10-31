@@ -20,6 +20,7 @@ import config
 
 W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
 LENGTH = 120.0
+PLASTER_T = 62 + 11.5                              # Katha's plaster goes on in the Korb scene; Becky's blister is quiet after that
 SCENES = [("sticker", 0, 8.5), ("dawn", 8.5, 19), ("apples", 19, 40), ("vines", 40, 62),
           ("korb", 62, 80), ("schorndorf", 80, 100), ("night", 100, 106), ("feige", 106, 120)]
 CAPTIONS = {
@@ -35,7 +36,9 @@ CAPTIONS = {
               (12.0, "Becky in Salomon: Gipfelsturm auf 300 Höhenmeter."),
               (15.5, "Nächste Station: Korb.")],
     "korb": [(0.6, "Auf dem Korber Kopf wird es golden."),
-             (8.5, "Das ganze Remstal liegt uns zu Füßen.")],
+             (5.0, "Das ganze Remstal liegt uns zu Füßen."),
+             (9.0, "Katha hat zum Glück ein Pflaster dabei..."),
+             (13.5, "Becky: \"Endlich Ruhe für meine Ferse!\"")],
     "schorndorf": [(0.6, "Abends in Schorndorf: Fachwerk und Lichterketten."),
                    (8.0, "Federweißer und Zwiebelkuchen..."),
                    (14.0, "Prost aufs Ländle!")],
@@ -172,7 +175,7 @@ def person(d, x, y, s, t, who, pose="stand", phase=0.0, item=None):
                 d.rectangle([*P(sx - 4, -4), *P(sx + 4, 1.5)], fill=(34, 36, 44))
                 d.rectangle([*P(sx - 4, -1.5), *P(sx + 4, 0.5)], fill=(250, 120, 30))
                 d.line([P(sx - 1, -4), P(sx + 2, -1.5)], fill=(236, 236, 240))
-            d.ellipse([*P(-8.2 - 3 * walk, -4), *P(-5.8 - 3 * walk, -1.6)], fill=(230, 40, 60))      # the blister
+            d.ellipse([*P(-8.2 - 3 * walk, -4), *P(-5.8 - 3 * walk, -1.6)], fill=(236, 200, 160) if t >= PLASTER_T else (230, 40, 60))      # the blister, then the plaster
         else:
             d.rectangle([*P(-5 - 3 * walk, -1), *P(-1 - 3 * walk, 1)], fill=(36, 30, 34))
             d.rectangle([*P(1 + 3 * walk, -1), *P(5 + 3 * walk, 1)], fill=(36, 30, 34))
@@ -239,12 +242,17 @@ def person(d, x, y, s, t, who, pose="stand", phase=0.0, item=None):
 COMPLAINTS = ["Aua, meine Ferse!", "Diese Blase...", "Ich hab 'ne Blase!", "Meine Ferse brennt!", "Hat wer ein Pflaster?!", "Au au au, die Ferse!"]
 
 
+THANKS = ["Danke, Katha!", "Ferse: gerettet!", "Viel besser!", "Katha, du bist die Beste!"]
+
+
 def _complain(d, x, y, t):
     """Becky's blister, constantly: a speech bubble over her head, a new moan every ~3 s."""
-    k = (t / 3.1) % 1.0
-    if k > 0.86:
+    calm = t >= PLASTER_T
+    per = 5.5 if calm else 3.1
+    k = (t / per) % 1.0
+    if k > 0.86 or (not calm and False):
         return
-    txt = COMPLAINTS[int(t / 3.1) % len(COMPLAINTS)]
+    txt = (THANKS if calm else COMPLAINTS)[int(t / per) % (len(THANKS) if calm else len(COMPLAINTS))]
     f = font(8)
     w = f.getlength(txt) + 8
     pop = min(1.0, k / 0.08)
@@ -253,7 +261,13 @@ def _complain(d, x, y, t):
     d.rounded_rectangle([bx - w / 2, top, bx + w / 2, top + 13 * pop], 4, fill=(255, 255, 255), outline=(30, 30, 40))
     d.polygon([(x - 2, top + 13 * pop - 1), (x + 3, top + 13 * pop - 1), (x - 1, top + 13 * pop + 5)], fill=(255, 255, 255))
     if pop > 0.9:
-        d.text((bx, top + 6.5), txt, font=f, fill=(190, 30, 40), anchor="mm")
+        d.text((bx, top + 6.5), txt, font=f, fill=(30, 130, 60) if calm else (190, 30, 40), anchor="mm")
+
+
+def _heart(d, cx, cy, r, col):
+    d.ellipse([cx - r, cy - r, cx, cy], fill=col)
+    d.ellipse([cx, cy - r, cx + r, cy], fill=col)
+    d.polygon([(cx - r, cy - r / 2), (cx + r, cy - r / 2), (cx, cy + r)], fill=col)
 
 
 def _apple(d, x, y, r=1.6, col=(214, 40, 44)):
@@ -545,6 +559,14 @@ def _korb(u, t):
     d.rectangle([20, H * 0.78 - 26, 30, H * 0.78 - 6], fill=(60, 44, 36))
     d.rectangle([14, H * 0.78 - 32, 36, H * 0.78 - 26], fill=(236, 214, 160), outline=(90, 62, 36))
     _text(d, (25, H * 0.78 - 29), "KORB", 6, (60, 40, 20), stroke=0)
+    if 9.0 <= u < 13.0:                                      # Katha hands Becky a plaster, which flies to her heel
+        k = _ease((u - 9.5) / 2.0)
+        px, py = 92 - 4 * k, by - 28 + 30 * k - 8 * math.sin(k * math.pi)
+        d.rectangle([px - 4, py - 2, px + 4, py + 1.5], fill=(236, 200, 160), outline=(190, 150, 110))
+        d.rectangle([px - 1.5, py - 1, px + 1.5, py + 0.5], fill=(250, 232, 210))
+    if u >= 12.0:
+        for j, hx in enumerate((84, 97)):
+            _heart(d, hx + math.sin(t * 2 + j) * 3, by - 44 - ((u - 12) * 7 + j * 6) % 18, 3, (255, 90, 140))
     for i in range(24):                                      # lights come on in the valley
         if u > 6 + i * 0.4:
             x, y = (i * 53) % 180 + 6, vb + 12 + (i * 7) % 30

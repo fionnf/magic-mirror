@@ -42,7 +42,7 @@ CAPTIONS = {
     "feige": [(0.5, "Doch dann kam die Wanderfeige..."), (5.5, "...und eroberte das ganze Ländle."), (10.5, "Feigen für alle!")],
 }
 FADE = 0.5
-HAIR = [(60, 36, 28), (236, 196, 96), (84, 52, 30)]
+HAIR = [(60, 36, 28), (236, 196, 96), (112, 66, 34)]
 SKIN = [(240, 196, 166), (250, 214, 186), (214, 164, 132)]
 TOP = [(214, 52, 56), (70, 130, 220), (66, 150, 84)]
 LEGS = [(44, 48, 90), (60, 70, 110), (74, 60, 46)]
@@ -171,6 +171,7 @@ def person(d, x, y, s, t, who, pose="stand", phase=0.0, item=None):
                 d.rectangle([*P(sx - 4, -4), *P(sx + 4, 1.5)], fill=(34, 36, 44))
                 d.rectangle([*P(sx - 4, -1.5), *P(sx + 4, 0.5)], fill=(250, 120, 30))
                 d.line([P(sx - 1, -4), P(sx + 2, -1.5)], fill=(236, 236, 240))
+            d.ellipse([*P(-8.2 - 3 * walk, -4), *P(-5.8 - 3 * walk, -1.6)], fill=(230, 40, 60))      # the blister
         else:
             d.rectangle([*P(-5 - 3 * walk, -1), *P(-1 - 3 * walk, 1)], fill=(36, 30, 34))
             d.rectangle([*P(1 + 3 * walk, -1), *P(5 + 3 * walk, 1)], fill=(36, 30, 34))
@@ -202,8 +203,10 @@ def person(d, x, y, s, t, who, pose="stand", phase=0.0, item=None):
     # head
     d.ellipse([*P(-5, hy - 5), *P(5, hy + 5)], fill=skin)
     if who == 2:
-        d.chord([*P(-6, hy - 8), *P(6, hy + 2)], 180, 360, fill=(220, 190, 60))                           # cap
-        d.rectangle([*P(0, hy - 2), *P(8, hy)], fill=(220, 190, 60))
+        d.chord([*P(-6.5, hy - 9), *P(6.5, hy + 2)], 180, 360, fill=hair)                                  # brown hair, a bit messy
+        d.rectangle([*P(-6, hy - 4), *P(-4, hy + 1)], fill=hair)
+        d.rectangle([*P(4, hy - 4), *P(6, hy + 1)], fill=hair)
+        d.polygon([P(-3, hy - 8), P(-1, hy - 10.5), P(1, hy - 8.5), P(3, hy - 10), P(4, hy - 7)], fill=hair)
         d.rectangle([*P(-5, hy + 3), *P(5, hy + 5)], fill=(120, 80, 54))                               # stubble
     else:
         d.chord([*P(-6, hy - 7), *P(6, hy + 3)], 180, 360, fill=hair)
@@ -214,6 +217,8 @@ def person(d, x, y, s, t, who, pose="stand", phase=0.0, item=None):
         else:
             d.point(P(ex, hy + 1), fill=(30, 20, 30))
     d.line([P(-1.5, hy + 3.5), P(1.5, hy + 3.5)], fill=(150, 50, 60))
+    if who == 1:
+        _complain(d, x, y - 50 * s, t)
     if item == "basket":
         d.polygon([P(-12, -9), P(-3, -9), P(-4, -3), P(-11, -3)], fill=(150, 98, 48))
         d.line([P(-11, -9), P(-7.5, -14), P(-4, -9)], fill=(120, 76, 36))
@@ -221,6 +226,26 @@ def person(d, x, y, s, t, who, pose="stand", phase=0.0, item=None):
         gx, gy = 11, -24 + a * 2
         d.polygon([P(gx - 2, gy - 4), P(gx + 2, gy - 4), P(gx + 1, gy + 1), P(gx - 1, gy + 1)], fill=(246, 236, 150))
         d.line([P(gx, gy + 1), P(gx, gy + 4)], fill=(236, 236, 240))
+
+
+COMPLAINTS = ["Aua, meine Ferse!", "Diese Blase...", "Ich hab 'ne Blase!", "Meine Ferse brennt!", "Hat wer ein Pflaster?!", "Au au au, die Ferse!"]
+
+
+def _complain(d, x, y, t):
+    """Becky's blister, constantly: a speech bubble over her head, a new moan every ~3 s."""
+    k = (t / 3.1) % 1.0
+    if k > 0.86:
+        return
+    txt = COMPLAINTS[int(t / 3.1) % len(COMPLAINTS)]
+    f = font(8)
+    w = f.getlength(txt) + 8
+    pop = min(1.0, k / 0.08)
+    bx = min(max(x, w / 2 + 2), W - w / 2 - 2)
+    top = y - 12 * pop - 4
+    d.rounded_rectangle([bx - w / 2, top, bx + w / 2, top + 13 * pop], 4, fill=(255, 255, 255), outline=(30, 30, 40))
+    d.polygon([(x - 2, top + 13 * pop - 1), (x + 3, top + 13 * pop - 1), (x - 1, top + 13 * pop + 5)], fill=(255, 255, 255))
+    if pop > 0.9:
+        d.text((bx, top + 6.5), txt, font=f, fill=(190, 30, 40), anchor="mm")
 
 
 def _apple(d, x, y, r=1.6, col=(214, 40, 44)):

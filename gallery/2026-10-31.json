@@ -1,7 +1,7 @@
 {
  "name": "Drift of Dots",
  "description": "A handful of luminous dotted paths cross a dark field like remembered routes, widening, migrating, and multiplying through the day until the wall holds a quiet map of motion.",
- "image": "2026-10-31.png",
+ "image": "2026-10-31.final.png",
  "animation_source": "2026-10-31.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 6
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "It listens as a slow tide: iBreath stretches the paths, iTension adds a second filament, iBright tightens the dot spacing and glow, and iDay leaves the evening with denser traces than the morning.",
@@ -47,5 +59,36 @@
   "score": 6,
   "verdict": "The piece embraces the dot trails concept and uses a fitting cool palette, but the large overlapping dots create a strong blur effect that reduces form clarity and glow impact on the coarse LED grid. The gradual spreading and multiplication over the day add interest, but the key paths lack the crispness and deliberate space the house prefers."
  },
- "direction": "Dot trails"
+ "direction": "Dot trails",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "Today passed in complete silence, and the artwork reflects this stillness with a soft, radiant drift of light that feels like a quiet breath expanding gently. The luminous paths, wide and calm, map a day untouched by sound, drawing a tranquil image that carries the pause of the hours into the night.",
+  "alt": "A luminous white and blue glowing horizontal band stretches across a dark background at the lower half of the image, appearing like a soft, drifting light or mist."
+ },
+ "final": true
 }

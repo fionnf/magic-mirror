@@ -195,9 +195,9 @@ class MagicMirror:
             print(f"[HAND] off: {e}")
             return
         name, since, miss, last_set = None, 0.0, 0, 0.0
-        while not self._stop.wait(0.12):
+        while not self._stop.wait(0.22):                  # ~3 looks a second on the Pi (each takes 0.12-0.19 s): the panels keep their cores
             now = time.monotonic()
-            if self.state != State.IDLE or now < self._gesture_cd or now - self._last_presence > 25 or getattr(self, "_art_on", False):
+            if self.state != State.IDLE or now < self._gesture_cd or not self._person_here() or getattr(self, "_art_on", False):
                 name, self._gesture = None, None
                 time.sleep(0.3)
                 continue
@@ -249,6 +249,16 @@ class MagicMirror:
                     self._booth_event.set()                     # the photobooth strip
                 else:
                     self._trigger_event.set()                   # the photo sequence
+
+    @staticmethod
+    def _person_here() -> bool:
+        """A person-sized silhouette is in front of the mirror (not just camera noise in an empty, dark hall)."""
+        try:
+            import vision
+            a = vision.last["alpha"]
+            return a is not None and float(a.mean()) > 0.04
+        except Exception:
+            return False
 
     def _gesture_ring(self, canvas):
         """The ring that fills while a hand signal is held, drawn around the hand."""
@@ -345,18 +355,19 @@ class MagicMirror:
             return " ".join(words)
         return " ".join(words[:config.AI_MAX_WORDS]).rstrip(",;:-") + "..."
 
-    def _show(self, img, fps: int = 0):
+    def _show(self, img, fps: int = 25):
         """One frame to the wall, paced by the panels' own refresh when it can: each frame is held for exactly N refreshes,
         so motion advances in equal steps (a sleep() timer drifts against the refresh, and that unevenness is flicker).
-        fps=0: as fast as the panels allow (50 fps at 100 Hz); fps=25: for animations that step a fixed amount per frame."""
+        25 fps (each frame held 4 refreshes at 100 Hz) is plenty: the camera delivers 15-20 pictures a second, and drawing
+        faster only costs the CPU the panel driver needs."""
         refresh = float(config.MATRIX_REFRESH_LIMIT_HZ)
-        ff = max(1, round(refresh / fps)) if fps else max(1, math.ceil(refresh / 60.0 - 0.01))
+        ff = max(1, round(refresh / fps))
         try:
             drew = self.matrix.draw(img, frame_fraction=ff)
         except TypeError:                                   # the simulator has no frame_fraction
             drew = self.matrix.draw(img)
         if drew is not True:                                # nothing was sent (unchanged frame) or no vsync: pace by timer
-            time.sleep(1.0 / (fps or 50))
+            time.sleep(1.0 / fps)
 
     def _flash_white(self, ms: int):
         # short white flash on top of the silhouette as touch feedback
@@ -411,7 +422,7 @@ class MagicMirror:
                     print("[IDLE] nobody around - showing art")
                     self._art_on = True
                 from display import art
-                self._show(art.frame_lava_coral(time.monotonic()), 25)
+                self._show(art.frame_lava_coral(time.monotonic()))
                 last_key = None
                 continue
             if getattr(self, "_art_on", False):
@@ -1067,6 +1078,11 @@ def build_args():
 
 def main(argv=None):
     args = build_args().parse_args(argv)
+    try:                                      # OpenCV spreading over every core starves the panel driver's refresh: that is flicker
+        import cv2
+        cv2.setNumThreads(2)
+    except Exception:
+        pass
 
     if args.sim:
         from simulator.led_simulator import LEDSimulator

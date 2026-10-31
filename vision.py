@@ -15,6 +15,7 @@ _clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(4, 6))
 last = {"alpha": None, "detail": None, "colour": None}      # the latest silhouette at wall size: soft edge 0..1 and shading 0..1
 
 
+_range = {"lo": None, "hi": None}            # the contrast stretch, averaged over time
 _tone = {"rgb": None}                             # the last picture: new frames are blended into it
 
 
@@ -31,6 +32,10 @@ def _detail(frame, alpha):
     inside = alpha > 0.6
     if inside.sum() > 200:                                              # stretch to the person, not the room
         lo, hi = np.percentile(L[inside], (3, 97))
+        if _range["lo"] is not None:                                    # the limits move slowly: recomputing them every frame
+            lo = _range["lo"] + (lo - _range["lo"]) * 0.12              # made the whole picture pump brighter and darker
+            hi = _range["hi"] + (hi - _range["hi"]) * 0.12
+        _range["lo"], _range["hi"] = float(lo), float(hi)
         L = np.clip((L - lo) / max(hi - lo, 0.08), 0, 1)
     fine = L - cv2.GaussianBlur(L, (0, 0), 1.0)
     coarse = L - cv2.GaussianBlur(L, (0, 0), 3.0)
@@ -41,8 +46,12 @@ def _detail(frame, alpha):
     lab2 = np.dstack([np.clip(shade * 255.0, 0, 255), np.clip(a + 128.0, 0, 255), np.clip(b + 128.0, 0, 255)]).astype(np.uint8)
     rgb = cv2.cvtColor(cv2.cvtColor(lab2, cv2.COLOR_LAB2BGR), cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
     prev = _tone["rgb"]
-    if prev is not None and prev.shape == rgb.shape:                    # blend with the last picture: evens out the camera's
-        rgb = prev * 0.4 + rgb * 0.6                                    # exposure pumping and mains-light flicker
+    if prev is not None and prev.shape == rgb.shape:
+        # Blend with the last picture, per pixel: where little changed (camera noise, the mains light's flicker, exposure
+        # pumping) most of the old picture stays, where something moved the new frame wins at once, so a person does not smear.
+        d = np.abs(rgb - prev).max(axis=2, keepdims=True)
+        keep = 0.25 + 0.55 * np.exp(-(d / 0.30) ** 2)
+        rgb = prev * keep + rgb * (1.0 - keep)
     _tone["rgb"] = rgb
     return shade, rgb
 

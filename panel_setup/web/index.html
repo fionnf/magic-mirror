@@ -429,6 +429,9 @@
       <input type="range" id="tone" min="0" max="100" aria-label="Tone">
       <div class="ends"><span>sweet</span><span>roast</span></div>
       <div class="row" style="margin-top:12px"><span class="hint" style="margin:0">Speaks</span><select id="lang" aria-label="Language"></select></div>
+      <div class="switch"><span>The mirror comments on every photo (off = just the photo, no comment)</span><input type="checkbox" id="tComment" data-ms="comment"></div>
+      <div class="row" style="margin-top:12px"><span class="hint" style="margin:0">Photobooth: photos per strip</span><select id="boothShots" aria-label="Photos per strip"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></div>
+      <div class="switch"><span>Photobooth keeps going: a new strip every few seconds while you stay</span><input type="checkbox" id="tBoothRepeat" data-ms="booth_repeat"></div>
     </section>
     <section>
       <h2>Faces</h2>
@@ -439,6 +442,7 @@
       </div>
       <div id="suggestions"></div>
       <div class="switch"><span>Sparkles when someone smiles</span><input type="checkbox" id="tSmile" data-ms="smile"></div>
+      <div class="switch"><span>Hand signal: open palm = photo, peace sign = photobooth (hold it a moment)</span><input type="checkbox" id="tGesture" data-ms="gesture"></div>
       <div class="switch"><span>Greet people by name</span><input type="checkbox" id="tRecog" data-ms="recognise"></div>
       <div class="switch"><span>Learn frequent faces</span><input type="checkbox" id="tLearn" data-ms="learn_faces"></div>
       <p class="hint">Faces stay on the wall's computer as numbers. Nobody is learned unless you name them.</p>
@@ -1140,7 +1144,7 @@ async function loadMore() {
   try {
     const m = await api('/api/mirror/settings');
     if (!$('lang').options.length) $('lang').innerHTML = m.languages.map(l => `<option>${l}</option>`).join('');
-    $('tone').value = m.tone; $('lang').value = m.language; $('idleArt').value = String(m.idle_art_minutes);
+    $('tone').value = m.tone; $('lang').value = m.language; $('idleArt').value = String(m.idle_art_minutes); $('boothShots').value = String(m.booth_shots);
     document.querySelectorAll('[data-ms]').forEach(i => i.checked = !!m[i.dataset.ms]);
   } catch (e) {}
   try {
@@ -1167,6 +1171,7 @@ async function loadMore() {
 $('tone').addEventListener('change', e => api('/api/mirror/settings', {tone: +e.target.value}).then(() => toast('Tone: ' + toneLabel(+e.target.value))));
 $('lang').addEventListener('change', e => api('/api/mirror/settings', {language: e.target.value}));
 $('idleArt').addEventListener('change', e => api('/api/mirror/settings', {idle_art_minutes: +e.target.value}));
+$('boothShots').addEventListener('change', e => api('/api/mirror/settings', {booth_shots: +e.target.value}));
 document.querySelectorAll('[data-ms]').forEach(i => i.addEventListener('change', () => api('/api/mirror/settings', {[i.dataset.ms]: i.checked})));
 $('dOn').addEventListener('change', e => api('/api/dedications', {enabled: e.target.checked}));
 async function enrol() {

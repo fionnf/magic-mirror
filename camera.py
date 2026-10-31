@@ -25,14 +25,64 @@ class Camera:
         self.cam.configure(cfg)
         self.cam.start()
         time.sleep(config.CAMERA_WARMUP_SEC)
+        self._lock_light()                      # no more auto-exposure / auto-white-balance hunting: that is the biggest flicker
         self._latest, self._seq = None, 0
         self._cond = threading.Condition()
         self._running = True
         threading.Thread(target=self._reader, daemon=True, name="camera-reader").start()
+        threading.Thread(target=self._watch_light, daemon=True, name="camera-light").start()
         self._background = None
         self._subtractor = cv2.createBackgroundSubtractorMOG2(
             history=config.BG_HISTORY, varThreshold=config.BG_THRESHOLD, detectShadows=False
         )
+
+    def _lock_light(self):
+        """Freeze exposure, gain and white balance at what the camera chose for this room. Left on auto, they keep re-adjusting
+        to every movement (a white shirt, a dark coat), and the whole picture on the wall pumps and shimmers. The exposure is
+        rounded to whole mains-flicker periods so the room lights cannot band either. Re-done slowly if the room changes."""
+        try:
+            md = self.cam.capture_metadata()
+            exp, gain = float(md["ExposureTime"]), float(md["AnalogueGain"])
+            period = 1e6 / (2 * config.CAMERA_MAINS_HZ)                 # 10 000 us at 50 Hz
+            exp2 = max(period, round(exp / period) * period)
+            exp2 = min(exp2, 33000.0)                                   # one frame at 30 fps
+            gain = min(16.0, max(1.0, gain * exp / exp2))               # keep the same brightness at the rounded exposure
+            ctl = {"AeEnable": False, "AwbEnable": False, "ExposureTime": int(exp2), "AnalogueGain": gain}
+            if "ColourGains" in md:
+                ctl["ColourGains"] = tuple(md["ColourGains"])
+            self.cam.set_controls(ctl)
+            self._lock_mean = None
+            self._locked = True
+            print(f"[CAMERA] light locked: {int(exp2)} us, gain {gain:.2f}")
+        except Exception as e:
+            self._locked = False
+            print(f"[CAMERA] could not lock exposure ({e}); staying on auto")
+
+    def _unlock_light(self):
+        try:
+            self.cam.set_controls({"AeEnable": True, "AwbEnable": True})
+        except Exception:
+            pass
+
+    def _watch_light(self):
+        """Every 20 s: if the picture has been much brighter or darker than when the light was locked for a full minute (the sun
+        went down, the lamps came on), let the camera choose again for two seconds and lock the new values."""
+        away = 0
+        while self._running:
+            time.sleep(20)
+            if not getattr(self, "_locked", False) or self._latest is None:
+                continue
+            m = float(self._latest[::8, ::8].mean()) + 1.0
+            if self._lock_mean is None:
+                self._lock_mean = m
+                continue
+            away = away + 1 if abs(m / self._lock_mean - 1.0) > 0.35 else 0
+            if away >= 3:
+                away = 0
+                self._unlock_light()
+                time.sleep(2.5)
+                self._lock_light()
+                self._lock_mean = float(self._latest[::8, ::8].mean()) + 1.0
 
     def _reader(self):
         """Keeps only the newest frame, so a slow consumer never sees an old picture."""

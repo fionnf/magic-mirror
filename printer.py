@@ -115,7 +115,7 @@ def _receipt_image(frame: np.ndarray, text: str) -> Image.Image:
     if config.PRINTER_HEADER:
         header_lines.append(config.PRINTER_HEADER)
     header_lines.append(datetime.datetime.now().strftime("%Y-%m-%d  %H:%M"))
-    msg_lines = _wrap_px(probe, text.upper(), msg_font, W - 2 * margin) or [text.upper()]
+    msg_lines = (_wrap_px(probe, text.upper(), msg_font, W - 2 * margin) or [text.upper()]) if text.strip() else []
 
     def line_h(font):
         l, t, r, b = probe.textbbox((0, 0), "AgÄ", font=font)

@@ -85,6 +85,9 @@ class MagicMirror:
         self.state = State.IDLE
         self._trigger_event = threading.Event()
         self._booth_event = threading.Event()
+        self._gesture = None                     # (name, progress 0..1, x, y, valid_until): an open palm / peace sign being held
+        self._repeat_at = 0.0                    # photobooth repeat: when the next strip starts by itself (0 = not repeating)
+        self._gesture_cd = 0.0                   # no new hand signal before this time
         self._stop = threading.Event()
         self.button = button_factory(self._on_button, self._on_long_press)
         self._latest_frame = None              # last raw camera frame (for AI)
@@ -175,6 +178,91 @@ class MagicMirror:
             if frame is not None:
                 self._look_for_smile(frame)
 
+    HAND_HOLD_SEC = 1.3                          # how long a hand signal must be held
+    HAND_NAMES = {"palm": "open palm", "peace": "peace sign"}
+
+    def _gesture_loop(self):
+        """A few times a second, while the mirror waits and someone is about: an open palm held up for a moment starts the
+        photo sequence (in photobooth mode: the strip); a peace sign starts the photobooth strip. The wall draws a ring
+        around the hand that fills as you hold it. Off with the "hand signal" switch in the app (mirror_settings)."""
+        try:
+            import hands
+            import mirror_settings
+            if not hands.available():
+                print("[HAND] models missing (assets/models/get_models.sh): hand signals are off")
+                return
+        except Exception as e:
+            print(f"[HAND] off: {e}")
+            return
+        name, since, miss, last_set = None, 0.0, 0, 0.0
+        while not self._stop.wait(0.12):
+            now = time.monotonic()
+            if self.state != State.IDLE or now < self._gesture_cd or now - self._last_presence > 25 or getattr(self, "_art_on", False):
+                name, self._gesture = None, None
+                time.sleep(0.3)
+                continue
+            if now - last_set > 5.0:
+                try:
+                    on = mirror_settings.load().get("gesture", True)
+                except Exception:
+                    on = True
+                last_set = now
+            if not on:
+                name, self._gesture = None, None
+                time.sleep(0.5)
+                continue
+            frame = self._latest_frame
+            if frame is None:
+                continue
+            try:
+                hs = hands.find(frame)
+            except Exception as e:
+                print(f"[HAND] {e}")
+                time.sleep(1.0)
+                continue
+            h = hs[0] if hs and hs[0].size > 0.05 else None
+            g = h.gesture if h is not None else None
+            now = time.monotonic()
+            if g is not None and g == name:
+                miss = 0
+            elif g is not None:
+                name, since, miss = g, now, 0                  # a different signal: start counting again
+            else:
+                miss += 1
+                if miss >= 3:                                   # lost for a moment is fine, three samples is not
+                    name, self._gesture = None, None
+                    continue
+            if name is None:
+                continue
+            cx, cy = h.centre if h is not None else (self._gesture[2] if self._gesture else 0.5, self._gesture[3] if self._gesture else 0.5)
+            if config.SILHOUETTE_MIRROR:
+                cx = 1.0 - cx
+            prog = min(1.0, (now - since) / self.HAND_HOLD_SEC)
+            self._gesture = (name, prog, float(cx), float(cy), now + 0.6)
+            if prog >= 1.0:
+                fired = name
+                print(f"[HAND] {self.HAND_NAMES.get(fired, fired)} held: starting")
+                self._gesture, name = None, None
+                self._gesture_cd = time.monotonic() + 6.0
+                self._last_presence = time.monotonic()
+                if fired == "peace" or self.booth_mode:
+                    self._booth_event.set()                     # the photobooth strip
+                else:
+                    self._trigger_event.set()                   # the photo sequence
+
+    def _gesture_ring(self, canvas):
+        """The ring that fills while a hand signal is held, drawn around the hand."""
+        gs = self._gesture
+        if gs is None or time.monotonic() > gs[4]:
+            return
+        name, prog, cx, cy, _ = gs
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        x, y, r = cx * W, cy * H, 15
+        col = (255, 200, 80) if name == "palm" else (255, 110, 190)
+        d = ImageDraw.Draw(canvas)
+        d.ellipse([x - r, y - r, x + r, y + r], outline=tuple(c // 4 for c in col), width=1)
+        d.arc([x - r, y - r, x + r, y + r], -90, -90 + 360 * prog, fill=col, width=3)
+
     def _note_motion(self, frame):
         """Presence = the picture is changing (someone moves) - cheap 40x30 frame difference."""
         try:
@@ -257,6 +345,19 @@ class MagicMirror:
             return " ".join(words)
         return " ".join(words[:config.AI_MAX_WORDS]).rstrip(",;:-") + "..."
 
+    def _show(self, img, fps: int = 0):
+        """One frame to the wall, paced by the panels' own refresh when it can: each frame is held for exactly N refreshes,
+        so motion advances in equal steps (a sleep() timer drifts against the refresh, and that unevenness is flicker).
+        fps=0: as fast as the panels allow (50 fps at 100 Hz); fps=25: for animations that step a fixed amount per frame."""
+        refresh = float(config.MATRIX_REFRESH_LIMIT_HZ)
+        ff = max(1, round(refresh / fps)) if fps else max(1, math.ceil(refresh / 60.0 - 0.01))
+        try:
+            drew = self.matrix.draw(img, frame_fraction=ff)
+        except TypeError:                                   # the simulator has no frame_fraction
+            drew = self.matrix.draw(img)
+        if drew is not True:                                # nothing was sent (unchanged frame) or no vsync: pace by timer
+            time.sleep(1.0 / (fps or 50))
+
     def _flash_white(self, ms: int):
         # short white flash on top of the silhouette as touch feedback
         white = Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT), (255, 255, 255))
@@ -275,8 +376,7 @@ class MagicMirror:
             # composite over current live silhouette so it bleeds through
             live = self._silhouette()
             combined = Image.blend(live, faded, alpha)
-            self.matrix.draw(combined)
-            time.sleep(interval)
+            self._show(combined, 25)
 
     def _run_idle_until_trigger(self) -> str:
         """Block until short or long press. Returns 'short' or 'long'."""
@@ -287,6 +387,14 @@ class MagicMirror:
             if self._booth_event.is_set():
                 self._booth_event.clear()
                 return "long"
+            if self.booth_mode and self._repeat_at:
+                now = time.monotonic()
+                if now - self._last_presence > 30:
+                    self._repeat_at = 0.0                      # everyone left: the booth stops by itself
+                elif now >= self._repeat_at and now - self._last_presence < 10:
+                    self._repeat_at = 0.0
+                    print("[BOOTH] repeat: next strip")
+                    return "long"
             if self._aura_event.is_set():
                 self._aura_event.clear()
                 return "aura"
@@ -303,9 +411,8 @@ class MagicMirror:
                     print("[IDLE] nobody around - showing art")
                     self._art_on = True
                 from display import art
-                self.matrix.draw(art.frame_lava_coral(time.monotonic()))
+                self._show(art.frame_lava_coral(time.monotonic()), 25)
                 last_key = None
-                time.sleep(1.0 / 15)
                 continue
             if getattr(self, "_art_on", False):
                 print("[IDLE] someone is back - silhouette")
@@ -318,7 +425,8 @@ class MagicMirror:
             sparkling = sp is not None and time.monotonic() < sp[2]
             key = (self._silhouette_version, id(self._overlay_image),
                    self._overlay_text, int(time.monotonic() * 8) if sparkling else None,
-                   int(time.monotonic() * 4) if self.booth_mode else None)
+                   int(time.monotonic() * 4) if self.booth_mode else None,
+                   (self._gesture[0], int(self._gesture[1] * 24)) if self._gesture is not None else None)
             if key != last_key:
                 last_key = key
                 canvas = self._silhouette()
@@ -334,6 +442,7 @@ class MagicMirror:
                         pass
                 if self.booth_mode and self._overlay_image is None and self._overlay_text is None:
                     self._booth_hint(canvas)
+                self._gesture_ring(canvas)
                 if sparkling:
                     try:
                         from display import sparkle
@@ -348,10 +457,15 @@ class MagicMirror:
                 if shown is None or shown.shape != target.shape:
                     shown = target.copy()
                 else:
-                    shown += (target - shown) * 0.5           # settles in ~0.1 s, so the wall keeps up with a 24 fps camera
+                    # Ease towards the newest picture, per pixel: where it only wobbles a little (camera noise, the mains light's
+                    # flicker) the wall barely follows, where something really moved it follows fast. That removes the shimmer
+                    # without smearing a moving person.
+                    diff = np.abs(target - shown).max(axis=2, keepdims=True)
+                    shown += (target - shown) * (0.10 + 0.40 * np.clip(diff / 36.0, 0.0, 1.0))
                 self._shown = shown
-                self.matrix.draw(Image.fromarray(np.clip(shown + 0.5, 0, 255).astype(np.uint8), "RGB"))
-            time.sleep(interval)
+                self._show(Image.fromarray(np.clip(shown + 0.5, 0, 255).astype(np.uint8), "RGB"))
+            else:
+                time.sleep(interval)
         return "short"
 
     def _do_countdown(self, seconds: int = 3):
@@ -365,8 +479,7 @@ class MagicMirror:
                 canvas = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
                 text_renderer.render_static_text(canvas, str(n),
                                                  colour=(255, 255, 255))
-                self.matrix.draw(canvas)
-                time.sleep(interval)
+                self._show(canvas)
 
     def _grab_photo(self):
         """A full-width frame cut to portrait around the people (smart crop). Falls back to
@@ -459,10 +572,9 @@ class MagicMirror:
             base = self._silhouette()
             a = np.asarray(base, dtype=np.uint8)
             b = np.asarray(next(dots_gen), dtype=np.uint8)
-            self.matrix.draw(Image.fromarray(np.maximum(a, b), "RGB"))
+            self._show(Image.fromarray(np.maximum(a, b), "RGB"), 25)
             if time.monotonic() > hard_deadline:
                 break
-            time.sleep(interval)
         t.join(timeout=0.5)
         text = result["text"] or config.AI_FALLBACK_MESSAGE
         if self.sim_mode:
@@ -483,10 +595,9 @@ class MagicMirror:
         for text_frame, finished in gen:
             canvas = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
             canvas.paste(text_frame, (0, 0), text_frame)
-            self.matrix.draw(canvas)
+            self._show(canvas, 25)
             if finished:
                 break
-            time.sleep(interval)
         # return the dim live silhouette for the fade-out to consume
         return self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
 
@@ -534,8 +645,7 @@ class MagicMirror:
                     outline=(255, 200, 80))
         end = time.monotonic() + config.BOOTH_DISPLAY_SEC
         while time.monotonic() < end and not self._stop.is_set():
-            self.matrix.draw(canvas)
-            time.sleep(0.08)
+            self._show(canvas)
 
     def _booth_hint(self, canvas):
         """Photobooth mode, waiting: the title in gold and a pulsing 'tap' underneath."""
@@ -544,17 +654,19 @@ class MagicMirror:
         f1, f2 = text_renderer._load_font(15), text_renderer._load_font(10)
         pulse = 0.55 + 0.45 * math.sin(time.monotonic() * 3.0)
         t1, t2 = "PHOTOBOOTH", "tap to start"
+        if self._repeat_at:
+            t2 = f"next strip in {max(0, int(self._repeat_at - time.monotonic()) + 1)}"
         for txt, f, y, col in ((t1, f1, 6, (255, 200, 80)), (t2, f2, H - 20, tuple(int(c * pulse) for c in (255, 235, 190)))):
             w = d.textlength(txt, font=f)
             d.text(((W - w) / 2, y), txt, font=f, fill=col, stroke_width=1, stroke_fill=(0, 0, 0))
 
-    def _booth_display_frames(self, frames, seconds: float = 9.0):
+    def _booth_display_frames(self, frames, seconds: float = 9.0, label="PHOTOBOOTH"):
         """Photobooth mode: the shots themselves, in colour, stacked in a gold-framed strip on the wall.
         Each photo flashes in one after the other."""
         import cv2
         from PIL import ImageEnhance
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
-        n, gap, margin, label_h = len(frames), 4, 6, 16
+        n, gap, margin, label_h = len(frames), 4, 6, (16 if label else 0)
         tw = W - 2 * margin
         th = (H - 2 * margin - gap * (n - 1) - label_h) // n
         tiles = []
@@ -579,12 +691,10 @@ class MagicMirror:
                 shown = Image.blend(Image.new("RGB", t.size, (255, 255, 255)), t, k)
                 canvas.paste(shown, (margin, y))
                 d.rectangle([margin - 1, y - 1, margin + tw, y + th], outline=(255, 200, 80))
-            if e > n * 0.9:
-                lab = "PHOTOBOOTH"
-                w = d.textlength(lab, font=font)
-                d.text(((W - w) / 2, H - label_h - 1), lab, font=font, fill=(255, 200, 80), stroke_width=1, stroke_fill=(0, 0, 0))
-            self.matrix.draw(canvas)
-            time.sleep(0.05)
+            if label and e > n * 0.9:
+                w = d.textlength(label, font=font)
+                d.text(((W - w) / 2, H - label_h - 1), label, font=font, fill=(255, 200, 80), stroke_width=1, stroke_fill=(0, 0, 0))
+            self._show(canvas)
 
     def _show_booth_prompt(self, text: str, seconds: float):
         """Display a pose direction big on the matrix for `seconds`."""
@@ -616,8 +726,7 @@ class MagicMirror:
 
         end = time.monotonic() + seconds
         while time.monotonic() < end and not self._stop.is_set():
-            self.matrix.draw(canvas)
-            time.sleep(0.08)
+            self._show(canvas)
 
     def run_booth_cycle(self):
         self._overlay_text = None
@@ -625,15 +734,20 @@ class MagicMirror:
         from printer import render_booth_pil
         import ai_client
         try:
+            import mirror_settings
+            shots = mirror_settings.load().get("booth_shots", config.BOOTH_PHOTO_COUNT)
+        except Exception:
+            shots = config.BOOTH_PHOTO_COUNT
+        try:
             self._set_state(State.BOOTH)
             self.strip.set_mode("countdown")
             self._flash_white(config.TRIGGER_FLASH_MS)
 
             # ask GPT for direction prompts (with fallback)
-            prompts = ai_client.get_booth_prompts(config.BOOTH_PHOTO_COUNT)
+            prompts = ai_client.get_booth_prompts(shots)
 
             frames = []
-            for i in range(config.BOOTH_PHOTO_COUNT):
+            for i in range(shots):
                 prompt_text = prompts[i] if i < len(prompts) else ""
                 if prompt_text:
                     print(f"[BOOTH] prompt {i + 1}: {prompt_text}")
@@ -644,9 +758,9 @@ class MagicMirror:
                 frame = self._capture_with_flash()
                 if frame is not None:
                     frames.append(frame)
-                print(f"[BOOTH] captured photo {i + 1}/{config.BOOTH_PHOTO_COUNT}")
+                print(f"[BOOTH] captured photo {i + 1}/{shots}")
                 # tiny breath between shots so people can re-pose
-                if i < config.BOOTH_PHOTO_COUNT - 1:
+                if i < shots - 1:
                     self.strip.set_mode("countdown")
                     time.sleep(config.BOOTH_INTER_PHOTO_PAUSE_MS / 1000.0)
 
@@ -716,13 +830,23 @@ class MagicMirror:
         finally:
             self._set_state(State.IDLE)
             self.strip.set_mode("idle")
+            try:
+                import mirror_settings
+                self._repeat_at = time.monotonic() + 7.0 if (self.booth_mode and mirror_settings.load().get("booth_repeat")) else 0.0
+            except Exception:
+                self._repeat_at = 0.0
 
     def run_cycle(self):
         self._overlay_text = None
         self._overlay_image = None
         try:
             frame = self._do_trigger_capture()
-            text = self._do_ai_wait(frame)
+            try:
+                import mirror_settings
+                comment = mirror_settings.load().get("comment", True)
+            except Exception:
+                comment = True
+            text = self._do_ai_wait(frame) if comment else ""      # "no comment": just the photo
             stem = None
             try:
                 import photo_store
@@ -738,7 +862,13 @@ class MagicMirror:
                 self.printer.print_receipt(frame, text)
             except Exception as e:
                 print(f"[PRINTER] skip: {e}")
-            held = self._do_display(text)
+            if comment:
+                held = self._do_display(text)
+            else:
+                self._set_state(State.DISPLAYING)
+                self.strip.set_mode("displaying")
+                self._booth_display_frames([frame], seconds=5.0, label=None)      # the photo itself, in colour
+                held = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
             self._set_state(State.FADE_OUT)
             self.strip.set_mode("fading")
             self._fade_out(held, config.FADE_OUT_SEC)
@@ -768,8 +898,7 @@ class MagicMirror:
             canvas = Image.fromarray(out.astype(np.uint8), "RGB")
             if u > 0.12:
                 text_renderer.render_static_text(canvas, name, colour=(255, 255, 255))
-            self.matrix.draw(canvas)
-            time.sleep(interval)
+            self._show(canvas, 25)
 
     def run_pixel_cycle(self):
         """Pixel selfie: photo -> 48x48 sprite revealed row by row on the wall, sticker printed."""
@@ -832,8 +961,7 @@ class MagicMirror:
                 while (t.is_alive() or time.monotonic() - t0 < 1.5) and time.monotonic() - t0 < config.AI_TIMEOUT_SEC + 3:
                     a = np.asarray(self._silhouette(), np.uint8)
                     b = np.asarray(next(dots), np.uint8)
-                    self.matrix.draw(Image.fromarray(np.maximum(a, b), "RGB"))
-                    time.sleep(1.0 / config.IDLE_ANIMATION_FPS)
+                    self._show(Image.fromarray(np.maximum(a, b), "RGB"), 25)
             hexcol = result.get("hex", "#9B5DE5")
             name = result.get("colour", "Aura")
             reading = self._shorten(result.get("reading", "")) or config.AI_FALLBACK_MESSAGE
@@ -877,6 +1005,7 @@ class MagicMirror:
             target=self._capture_loop, daemon=True, name="silhouette-capture")
         self._capture_thread.start()
         threading.Thread(target=self._smile_loop, daemon=True, name="smile-watch").start()
+        threading.Thread(target=self._gesture_loop, daemon=True, name="hand-signal").start()
 
         self._set_state(State.IDLE)
         self.strip.set_mode("idle")

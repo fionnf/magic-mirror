@@ -7,4 +7,6 @@ base=https://github.com/opencv/opencv_zoo/raw/main/models
 fetch() { [ -s "$2" ] || { echo "downloading $2"; curl -fsSL -o "$2" "$base/$1/$2"; }; }
 fetch face_detection_yunet face_detection_yunet_2023mar.onnx
 fetch face_recognition_sface face_recognition_sface_2021dec_int8.onnx
+fetch palm_detection_mediapipe palm_detection_mediapipe_2023feb.onnx            # hand signals (hands.py): open palm / peace sign
+fetch handpose_estimation_mediapipe handpose_estimation_mediapipe_2023feb.onnx
 ls -la *.onnx

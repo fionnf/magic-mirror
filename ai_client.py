@@ -239,12 +239,30 @@ def _persona() -> str:
         return config.MIRROR_PERSONA
 
 
+_recent_lines = []                     # what the mirror said lately (kept in memory): so it does not repeat itself
+
+
+def _moment() -> str:
+    """When it is, for the mirror: 'It is Saturday late evening.'"""
+    now = datetime.datetime.now()
+    part = ("late at night" if now.hour < 5 else "early morning" if now.hour < 9 else "morning" if now.hour < 12 else
+            "lunchtime" if now.hour < 14 else "afternoon" if now.hour < 18 else "evening" if now.hour < 22 else "late evening")
+    return f"It is {now.strftime('%A')}, {part}, {now.strftime('%B')}."
+
+
 def _call_api(frame: np.ndarray, hint: str = "") -> tuple[str, int, int]:
+    avoid = ("Lines you said recently (do not repeat their jokes or openings): "
+             + " | ".join(_recent_lines[-8:]) + ".") if _recent_lines else ""
     text, tin, tout = ask(_persona(),
-                          [{"type": "text", "text": ("Look at this person and speak. " + hint).strip()},
+                          [{"type": "text", "text": " ".join(x for x in (
+                              "Look at this person and speak.", hint, _moment(), avoid) if x).strip()},
                            _image_block(frame)],
                           max_tokens=1024, effort="low", timeout=config.AI_TIMEOUT_SEC)
-    return text.strip().strip('"\''), tin, tout
+    text = text.strip().strip('"\'')
+    if text:
+        _recent_lines.append(text)
+        del _recent_lines[:-12]
+    return text, tin, tout
 
 
 def get_mirror_message(frame: np.ndarray, hint: str = "") -> str:
@@ -272,10 +290,16 @@ def get_mirror_message_async(frame: np.ndarray) -> "concurrent.futures.Future[st
 
 # ---- photobooth direction prompts ----
 
+_recent_booth = []
+
+
 def _call_booth_prompts(n: int) -> list[str]:
     schema = {"type": "object", "properties": {"prompts": {"type": "array", "items": {"type": "string"}}},
               "required": ["prompts"], "additionalProperties": False}
-    j, _, _ = ask(config.BOOTH_AI_PROMPT_SYSTEM, f"Give me {n} pose directions for this session.",
+    import random
+    j, _, _ = ask(config.BOOTH_AI_PROMPT_SYSTEM.format(n=n),
+                  f"Give me {n} pose directions for this session. Tonight's flavour: {random.choice(config.BOOTH_FLAVOURS)}. "
+                  f"{_moment()} Avoid these (said recently): {'; '.join(_recent_booth[-8:]) or 'nothing yet'}.",
                   max_tokens=1024, effort="low", schema=schema, timeout=config.AI_TIMEOUT_SEC)
     cleaned = []
     for ln in j.get("prompts", []):
@@ -287,6 +311,8 @@ def _call_booth_prompts(n: int) -> list[str]:
         cleaned.append(" ".join(words).rstrip(".!?,;:"))
         if len(cleaned) == n:
             break
+    _recent_booth.extend(cleaned)
+    del _recent_booth[:-12]
     return cleaned
 
 
@@ -334,9 +360,11 @@ def _aura_prompt() -> str:
         tone, lang = "", ""
     return (
         "You are the mirror of House Fortuna, a fun, warm gay flatshare, reading someone's AURA. "
-        "Look at the person's outfit, expression and mood and choose ONE aura colour with a poetic "
-        "name (e.g. 'Rose Gold', 'Midnight Teal'). Give the colour name, a #rrggbb hex that matches it, "
-        f"and a reading of at most 12 words, specific to what you see. {tone} {lang} "
+        "Look at the person's outfit, colours, expression and mood and choose ONE aura colour with a poetic, "
+        "unexpected name ('Rose Gold', 'Midnight Teal', 'Burnt Honey', 'Thundercloud Lilac'): the colour should "
+        "really fit what you see. Give the colour name, a #rrggbb hex that matches it, and a reading of at most 12 "
+        "words that names something specific you see and turns it into a mood or a prophecy, in the voice of a "
+        f"warm, theatrical fortune teller. {tone} {lang} "
         "Never mention body shape, age, ethnicity or identity.")
 
 

@@ -7,6 +7,10 @@ made in the web app apply to the very next photo with no restart.
   language    one of LANGUAGES
   recognise   greet enrolled people by name (opt-in; needs people enrolled in the app)
   smile       sparkles when someone smiles
+  gesture     an open palm held up starts the photo sequence, a peace sign the photobooth strip
+  comment     the mirror says a line about you with every photo; off = just the photo, no comment
+  booth_shots photos in a photobooth strip (2 to 6)
+  booth_repeat  photobooth mode keeps going: another strip a few seconds after the last while someone is still there
   idle_art_minutes  nobody in front of the mirror for this long -> show art; 0 = never
   wake_on_motion  False: once art is showing, only a button/trigger brings the silhouette back;
                   True: motion or a face does too
@@ -26,7 +30,8 @@ LANGUAGES = {
     "Français": "Réponds en français.",
     "Drama queen": "Reply in English as the most dramatic, over-the-top drama queen alive.",
 }
-DEFAULTS = {"tone": 50, "language": "English", "recognise": True, "smile": True,
+DEFAULTS = {"tone": 50, "language": "English", "recognise": True, "smile": True, "gesture": True,
+            "comment": True, "booth_shots": 4, "booth_repeat": False,
             "learn_faces": False, "idle_art_minutes": 10, "wake_on_motion": False}
 
 
@@ -46,7 +51,11 @@ def load():
         s["idle_art_minutes"] = max(0, min(240, int(s["idle_art_minutes"])))
     except (TypeError, ValueError):
         s["idle_art_minutes"] = 10
-    for k in ("recognise", "smile", "learn_faces", "wake_on_motion"):
+    try:
+        s["booth_shots"] = max(2, min(6, int(s["booth_shots"])))
+    except (TypeError, ValueError):
+        s["booth_shots"] = 4
+    for k in ("recognise", "smile", "gesture", "comment", "booth_repeat", "learn_faces", "wake_on_motion"):
         s[k] = bool(s[k])
     return s
 

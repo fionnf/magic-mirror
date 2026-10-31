@@ -1,0 +1,51 @@
+{
+ "name": "Drift of Dots",
+ "description": "A handful of luminous dotted paths cross a dark field like remembered routes, widening, migrating, and multiplying through the day until the wall holds a quiet map of motion.",
+ "image": "2026-10-31.png",
+ "animation_source": "2026-10-31.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-10-31"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#08101a #1f4fe0 #9ff4ff"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 6
+  }
+ ],
+ "listening": "It listens as a slow tide: iBreath stretches the paths, iTension adds a second filament, iBright tightens the dot spacing and glow, and iDay leaves the evening with denser traces than the morning.",
+ "palette": [
+  "#08101a",
+  "#1f4fe0",
+  "#9ff4ff"
+ ],
+ "source_sha256": "773094f56f22634f5554508c06a4988d1af18c38a5628c932ccfe6950d3e3280",
+ "model": "gpt-5.4-mini",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 2,
+ "created": 1793442334.4367225,
+ "curator": {
+  "score": 6,
+  "verdict": "The piece embraces the dot trails concept and uses a fitting cool palette, but the large overlapping dots create a strong blur effect that reduces form clarity and glow impact on the coarse LED grid. The gradual spreading and multiplication over the day add interest, but the key paths lack the crispness and deliberate space the house prefers."
+ },
+ "direction": "Dot trails"
+}

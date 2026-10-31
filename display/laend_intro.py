@@ -19,9 +19,9 @@ from PIL import Image, ImageDraw, ImageFont
 import config
 
 W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
-LENGTH = 106.0
+LENGTH = 120.0
 SCENES = [("sticker", 0, 8.5), ("dawn", 8.5, 19), ("apples", 19, 40), ("vines", 40, 62),
-          ("korb", 62, 80), ("schorndorf", 80, 100), ("night", 100, 106)]
+          ("korb", 62, 80), ("schorndorf", 80, 100), ("night", 100, 106), ("feige", 106, 120)]
 CAPTIONS = {
     "sticker": [],
     "dawn": [(0.8, "Das Ländle."), (5.0, "Ein goldener Herbsttag im Remstal.")],
@@ -37,6 +37,7 @@ CAPTIONS = {
                    (8.0, "Federweißer und Zwiebelkuchen..."),
                    (14.0, "Prost aufs Ländle!")],
     "night": [(0.5, "Auf geht's durchs Ländle!")],
+    "feige": [(0.5, "Doch dann kam die Wanderfeige..."), (5.5, "...und eroberte das ganze Ländle."), (10.5, "Feigen für alle!")],
 }
 FADE = 0.5
 HAIR = [(60, 36, 28), (236, 196, 96), (84, 52, 30)]
@@ -421,7 +422,7 @@ def _apples(u, t):
     return full
 
 
-def _vines(u, t):
+def _vines(u, t, people=True):
     img = _sky((110, 170, 240), (252, 226, 170), int(H * 0.5))
     full = Image.new("RGB", (W, H))
     full.paste(img, (0, 0))
@@ -448,7 +449,7 @@ def _vines(u, t):
     # the path they walk along
     py = int(H * 0.68)
     d.polygon([(0, py + 14), (W, py + 6), (W, py + 28), (0, py + 34)], fill=(206, 176, 132))
-    for i in range(3):
+    for i in range(3 if people else 0):
         person(d, 150 - i * 34 + math.sin(t * 8 + i) * 0.5, py + 30 - i * 2, 1.9, t, i, "walk", i * 1.4)
     # a mile post and birds
     for i in range(6):
@@ -602,8 +603,70 @@ def _night(u, t):
     return img
 
 
+def _fig_leaf(d, x, y, r, ang, col, vein):
+    """A lobed fig leaf: five fingers fanned from the stalk."""
+    for i, a in enumerate((-1.1, -0.55, 0.0, 0.55, 1.1)):
+        L = r * (1.0 if i in (1, 2, 3) else 0.75)
+        ex, ey = x + math.cos(ang + a) * L, y + math.sin(ang + a) * L
+        mx, my = (x + ex) / 2, (y + ey) / 2
+        w = r * 0.36
+        d.ellipse([mx - w, my - w, mx + w, my + w], fill=col)
+        d.ellipse([ex - w * 0.8, ey - w * 0.8, ex + w * 0.8, ey + w * 0.8], fill=col)
+        d.line([(x, y), (ex, ey)], fill=vein)
+
+
+_tendrils = []
+
+
+def _make_tendrils():
+    rs = random.Random(77)
+    starts = [(-6, H * 0.9), (W + 6, H * 0.85), (W * 0.5, H + 6), (-6, H * 0.45), (W + 6, H * 0.4),
+              (W * 0.2, H + 6), (W * 0.8, H + 6), (-6, H * 0.7), (W + 6, H * 0.62), (W * 0.35, H * 0.35), (W * 0.7, H * 0.3)]
+    for sx, sy in starts:
+        pts = [(sx, sy)]
+        ang = math.atan2(H * 0.55 - sy, W / 2 - sx) + rs.uniform(-0.5, 0.5)
+        x, y = sx, sy
+        for i in range(70):
+            ang += rs.uniform(-0.35, 0.35)
+            x, y = x + math.cos(ang) * 4.2, y + math.sin(ang) * 4.2
+            pts.append((x, y))
+        _tendrils.append(pts)
+
+
+def _feige(u, t):
+    img = _vines(11.0, 11.0, people=False)
+    d = ImageDraw.Draw(img)
+    if not _tendrils:
+        _make_tendrils()
+    g = _c(u / 11.0)
+    for ti, pts in enumerate(_tendrils):
+        n = int(len(pts) * _c(g * 1.25 - ti * 0.02))
+        if n < 2:
+            continue
+        d.line(pts[:n], fill=(70, 74, 40), width=2)
+        for i in range(2, n, 3):
+            x, y = pts[i]
+            age = (n - i) / 14.0
+            r = 4 + 9 * _c(age) + 2 * math.sin(t * 1.5 + i)
+            a = i * 1.3 + ti
+            _fig_leaf(d, x, y, r, a + math.sin(t + i) * 0.1, (46 + (i * 7) % 30, 120 + (i * 11) % 40, 52), (28, 80, 40))
+            if i % 9 == 0 and age > 0.6:                                                    # the figs themselves
+                fx, fy = x + math.cos(a + 1.5) * 4, y + math.sin(a + 1.5) * 4 + 4
+                d.ellipse([fx - 2.5, fy - 3, fx + 2.5, fy + 3], fill=(86, 36, 96))
+                d.point((fx - 1, fy - 1), fill=(150, 90, 160))
+    for i, x in enumerate((60, 98, 136)):
+        person(d, x, 205, 1.9, t, i, "cheer" if u > 9 else "stand", i * 0.9)
+        _fig = (86, 36, 96)
+        d.ellipse([x + 9, 190, x + 15, 198], fill=_fig)
+    if u > 8.5:
+        k = _ease((u - 8.5) / 0.7)
+        _text(d, (W / 2, H * 0.22), "WANDER-", int(8 + 14 * k), (240, 220, 255), stroke=3, sc=(40, 12, 56))
+        _text(d, (W / 2, H * 0.22 + 14 + 10 * k), "FEIGE!", int(8 + 20 * k), (176, 110, 200), stroke=3, sc=(30, 10, 40))
+    return img
+
+
 SCENE_FN = {"sticker": _sticker, "dawn": _dawn, "apples": _apples, "vines": _vines, "korb": _korb,
-            "schorndorf": _schorndorf, "night": _night}
+            "schorndorf": _schorndorf, "night": _night, "feige": _feige}
 
 
 def frame(t):
@@ -615,7 +678,7 @@ def frame(t):
             _caption(img, name, u)
             fade = min(_c(u / FADE), _c((b - t) / FADE)) if name != "sticker" else _c((b - t) / FADE)
             if name == "night":
-                fade = min(fade, _c((b - t) / 1.2))
+                fade = min(fade, _c((b - t) / 0.8))
             if fade < 1:
                 img = Image.fromarray((np.asarray(img, np.float32) * fade).astype(np.uint8), "RGB")
             return img

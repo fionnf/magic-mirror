@@ -1,11 +1,11 @@
-"""Kilchberg train board: live S-Bahn departures from Kilchberg ZH, drawn like a station display (amber LED dots on black).
+"""Train boards: live departures from Kilchberg ZH and from Zürich HB, drawn like a station display (amber LED dots on black).
 
 Data: transport.opendata.ch (no key), every 30 s on a side thread. Minutes are computed live from the scheduled time plus
 the reported delay, so the board counts down between fetches. A train more than 2 minutes late shows its minutes in red,
 and one that is pulling in shows a little train-front pictogram. Offline, the board says so (in German, like the real
 ones) instead of showing stale times.
 
-    frame(t) -> PIL image        thumb() -> a still of the board with example departures (no network)
+    frame(t) / frame_hb(t) -> PIL image        thumb() / thumb_hb() -> a still with example departures (no network)
 """
 import datetime
 import json
@@ -44,12 +44,12 @@ def _line(s):
 
 
 def _dest(to):
-    return (to or "").replace("Zürich ", "Zürich ").replace("Bahnhof", "Bf").replace(" HB", " HB")
+    return (to or "").replace("Zürich Flughafen", "Flughafen").replace("Bahnhof", "Bf").replace("Pfäffikon ", "Pfäffik. ").replace("Winterthur", "Winterthur")
 
 
 class TrainBoard(Board):
-    def __init__(self, station=STATION, rows=6, fetch=True):
-        self.station, self.trams_only, self.n_rows = station, False, rows
+    def __init__(self, station=STATION, rows=6, fetch=True, title="Kilchberg"):
+        self.station, self.trams_only, self.n_rows, self.title = station, False, rows, title
         self.deps = []                      # (line, dest, departure_ts, delay_min, platform)
         self.ok = False
         self.last_fetch = 0.0
@@ -61,7 +61,7 @@ class TrainBoard(Board):
 
     # ---- data ----
     def _fetch(self):
-        q = urllib.parse.urlencode({"station": self.station, "limit": 20})
+        q = urllib.parse.urlencode({"station": self.station, "limit": 24, "transportations[]": "train"})
         with urllib.request.urlopen(f"{API}?{q}", timeout=15) as r:
             data = json.load(r)
         out = []
@@ -124,21 +124,21 @@ class TrainBoard(Board):
         img = Image.new("RGB", (W, H), (0, 0, 0))
         d = ImageDraw.Draw(img)
         f_row, f_head, f_small = self.f_row, self.f_head, self.f_small
-        self._led(img, (4, 3), "Kilchberg", f_head)
+        self._led(img, (4, 3), self.title, f_head)
         self._led(img, (W - 4, 3), now.strftime("%H:%M"), f_head, anchor="ra")
         d.line([4, 21, W - 4, 21], fill=self.AMBER_DIM)
         self._led(img, (4, 24), "Linie", f_small, self.AMBER_DIM)
         self._led(img, (36, 24), "Nach", f_small, self.AMBER_DIM)
-        self._led(img, (W - 40, 24), "Gl", f_small, self.AMBER_DIM, anchor="ra")
+        self._led(img, (W - 44, 24), "Gl", f_small, self.AMBER_DIM, anchor="ra")
         self._led(img, (W - 4, 24), "Min", f_small, self.AMBER_DIM, anchor="ra")
         top, rh = 37, (H - 37 - 16) // self.n_rows
-        dest_cells = max(6, (W - 36 - 44) // self.cell)
+        dest_cells = max(6, (W - 36 - 56) // self.cell)
         for r in range(min(self.n_rows, len(rows))):
             y = top + r * rh
             line, dest, mins, delay, plat, dep = rows[r]
             self._led(img, (4, y), line, f_row)
             self._led(img, (36, y), dest[:dest_cells], f_row)
-            self._led(img, (W - 40, y + 2), plat, f_small, self.AMBER_DIM, anchor="ra")
+            self._led(img, (W - 44, y + 2), plat, f_small, self.AMBER_DIM, anchor="ra")
             late = delay > 2
             if mins == 0:
                 if int(t * 2) % 2 == 0 or not self.ok:
@@ -179,4 +179,25 @@ def thumb():
     b.deps = [("S8", "Pfäffikon SZ", now + 60 * 3, 0, "1"), ("S24", "Zürich HB", now + 60 * 6, 0, "2"),
               ("S8", "Zürich HB", now + 60 * 9, 4, "2"), ("S24", "Thalwil", now + 60 * 14, 0, "1"),
               ("SN8", "Lachen SZ", now + 60 * 22, 0, "1"), ("S8", "Pfäffikon SZ", now + 60 * 33, 0, "1")]
+    return b.frame(0.0)
+
+
+_hb = None
+
+
+def frame_hb(t):
+    global _hb
+    if _hb is None:
+        _hb = TrainBoard("Zürich HB", rows=7, title="Zürich HB")
+    return _hb.frame(t)
+
+
+def thumb_hb():
+    b = TrainBoard("Zürich HB", rows=7, fetch=False, title="Zürich HB")
+    now = time.time()
+    b.ok = True
+    b.deps = [("IC8", "Bern", now + 60 * 2, 0, "16"), ("S2", "Flughafen", now + 60 * 4, 0, "31"),
+              ("IR36", "Basel SBB", now + 60 * 6, 3, "15"), ("S8", "Pfäffikon SZ", now + 60 * 8, 0, "34"),
+              ("IC3", "Chur", now + 60 * 11, 0, "9"), ("S24", "Thalwil", now + 60 * 13, 0, "43/44"),
+              ("IC5", "St. Gallen", now + 60 * 16, 7, "7")]
     return b.frame(0.0)

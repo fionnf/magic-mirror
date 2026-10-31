@@ -126,6 +126,15 @@ class Map:
         self.leaves = np.random.RandomState(9).rand(26, 4).astype(np.float32)
         self.hero_xy = [self.px[h] for h in HEROES if h in self.px]
         self.trains = None                                        # phase 2 (display/laend_trains.py) draws here
+        # the Wanderfeige: colonies seeded along the water that creep outwards, very slowly, for as long as the piece runs
+        ys, xs = np.nonzero(wa > 0.5)
+        rs2 = np.random.RandomState(31)
+        pick = rs2.choice(len(ys), 12, replace=False) if len(ys) > 12 else np.arange(len(ys))
+        dist = np.full((H, W), 1e9, np.float32)
+        for i in pick:
+            dist = np.minimum(dist, np.hypot(np.arange(W)[None, :] - xs[i], np.arange(H)[:, None] - ys[i]).astype(np.float32) * (0.7 + 0.6 * rs2.rand()))
+        self.fig_birth = dist + _noise(H, W, 11, (24, 18)) * 9.0
+        self.fig_dot = rs2.rand(H, W)
         self.static_labels = self._labels()
 
     def _labels(self):
@@ -199,6 +208,13 @@ class Map:
             ix, iy = int(lx), int(ly)
             col = np.array(((235, 120, 40), (210, 60, 40), (230, 190, 60), (200, 40, 50))[i % 4], np.float32)
             out[iy, ix] = np.maximum(out[iy, ix], col * (0.55 + 0.4 * math.sin(t * 2 + i)))
+        # Wanderfeige creeping along the valley: green speckle with the odd purple fig
+        grow = since * 0.11
+        fm = (self.fig_birth < grow) & (self.fig_dot < 0.55) & (self.water < 0.3) & (self.urban < 0.5)
+        if fm.any():
+            out[fm] = out[fm] * 0.4 + np.array((52, 150, 66), np.float32) * (0.55 + 0.45 * np.sin(t * 0.7 + self.win_ph[fm]))[:, None]
+            fg = fm & (self.fig_dot < 0.06)
+            out[fg] = np.array((150, 70, 170), np.float32)
         # live trains (phase 2)
         if self.trains is not None:
             self.trains(out, t)

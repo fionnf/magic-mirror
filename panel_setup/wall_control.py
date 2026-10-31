@@ -68,12 +68,13 @@ MODES = [
     ("satellites", "Art", "Satellites", "The sky over Zürich: the ISS and the brightest satellites crossing it now"),
     ("tides", "Art", "Tides", "The sea at Baltimore: the real tide rising and falling, the swell, the moon"),
     ("tramlines", "Art", "Tram map", "Every Zürich tram moving on an Underground-style map of its lines"),
+    ("laend", "Art", "Ländle", "A long German intro (apples in Bittenfeld, vineyards to Korb, Federweißer in Schorndorf), then the Remstal as a living map: vineyards, fog, the Rems, the towns, live trains"),
     ("quakes", "Art", "Earthquakes", "A turning globe, every earthquake of the last day rippling out from where it struck"),
 ]
 MODE_IDS = {m[0] for m in MODES}
 LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "westcork.thumb",   # mode -> module.thumb
                "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "wanderers": "wanderers.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
-               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb",
+               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb",
                "quakes": "quakes.thumb"}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",
@@ -148,7 +149,7 @@ class Runner:
     # -- commands
     def _cmd(self, what):
         if what in MODE_IDS:
-            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva", "flow", "exposure")
+            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva", "flow", "exposure", "laend")
             return [PY, "panel_setup/play.py", what, "--fps", "29" if heavy else "58"]   # art: 58 fps when it can
         if what == "mirror":
             cmd = [PY, "-u", "main.py", "--no-touch", "--no-mqtt"]

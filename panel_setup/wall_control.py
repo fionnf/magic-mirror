@@ -1015,7 +1015,7 @@ def make_app(runner):
 
     @app.get("/api/photos")
     def photos_list():
-        """Every stored photo, newest first: the mirror's portraits, auras and photobooth strips."""
+        """Every stored photo, newest first: the mirror's photos and photobooth strips."""
         try:
             names = [x for x in os.listdir(PHOTOS) if x.endswith(".jpg") and not x.endswith("_frame.jpg")
                      and not x.endswith(".tmp.jpg")]
@@ -1310,14 +1310,6 @@ const j=await r.json().catch(()=>({}));m.textContent=r.ok?'✨ Sent! Look at the
     def booth():
         """Take a photobooth strip now: prompt, 3-2-1, flash, three times, then print and show it."""
         return _mirror_trigger("long")
-
-    @app.post("/api/mirror/pixel")
-    def pixel():
-        return _mirror_trigger("pixel")
-
-    @app.post("/api/mirror/aura")
-    def aura():
-        return _mirror_trigger("aura")
 
     return app
 

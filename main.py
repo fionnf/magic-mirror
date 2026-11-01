@@ -97,8 +97,6 @@ class MagicMirror:
         self._capture_thread: Optional[threading.Thread] = None
         self._overlay_text: Optional[str] = None   # pushed from dashboard
         self._overlay_image: Optional[Image.Image] = None
-        self._aura_event = threading.Event()
-        self._pixel_event = threading.Event()
         self._sparkle = None                       # (cx, cy normalised, until_monotonic)
         self._sparkle_check = 0.0
         self._last_presence = time.monotonic()      # last time someone/something moved in front
@@ -406,12 +404,6 @@ class MagicMirror:
                     self._repeat_at = 0.0
                     print("[BOOTH] repeat: next strip")
                     return "long"
-            if self._aura_event.is_set():
-                self._aura_event.clear()
-                return "aura"
-            if self._pixel_event.is_set():
-                self._pixel_event.clear()
-                return "pixel"
             if self._trigger_event.is_set():
                 self._trigger_event.clear()
                 return "short"
@@ -959,115 +951,6 @@ class MagicMirror:
             self._set_state(State.IDLE)
             self.strip.set_mode("idle")
 
-    def _aura_glow(self, hexcol, name, seconds=7.0):
-        """The wall breathes in the person's aura colour (a soft halo over the silhouette)."""
-        import numpy as np
-        col = np.array([int(hexcol[i:i + 2], 16) for i in (1, 3, 5)], np.float32)
-        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
-        y, x = np.mgrid[0:H, 0:W].astype(np.float32)
-        r = np.sqrt((x - W / 2) ** 2 + (y - H / 2) ** 2) / (W / 2)
-        interval = 1.0 / config.IDLE_ANIMATION_FPS
-        t0 = time.monotonic()
-        while time.monotonic() - t0 < seconds and not self._stop.is_set():
-            u = (time.monotonic() - t0) / seconds
-            grow = min(1.0, u * 3.0)                                   # halo swells in
-            breathe = 0.75 + 0.25 * math.sin((time.monotonic() - t0) * 2.4)
-            halo = np.clip(1.15 - r / (0.35 + 0.75 * grow), 0, 1) ** 1.5 * breathe
-            fade = min(1.0, (1.0 - u) * 4.0)                           # and fades out at the end
-            base = np.asarray(self._silhouette(dim=0.55), np.float32)
-            out = np.clip(base * (1 - halo[..., None] * 0.5) + halo[..., None] * col * fade, 0, 255)
-            canvas = Image.fromarray(out.astype(np.uint8), "RGB")
-            if u > 0.12:
-                text_renderer.render_static_text(canvas, name, colour=(255, 255, 255))
-            self._show(canvas, 25)
-
-    def run_pixel_cycle(self):
-        """Pixel selfie: photo -> 48x48 sprite revealed row by row on the wall, sticker printed."""
-        self._overlay_text = None
-        self._overlay_image = None
-        try:
-            frame = self._do_trigger_capture()
-            self._set_state(State.DISPLAYING)
-            from display import pixel_art
-            small = pixel_art.pixelate(frame)
-            full = pixel_art.to_wall(small, min(config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
-            canvas0 = Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
-            off = ((config.TOTAL_WIDTH - full.width) // 2, (config.TOTAL_HEIGHT - full.height) // 2)
-            cell = full.height // small.height
-            rows = small.height
-            for r in range(rows + 1):                          # reveal like a scanner, row by row
-                c = canvas0.copy()
-                c.paste(full.crop((0, 0, full.width, r * cell)), off)
-                self.matrix.draw(c)
-                time.sleep(0.05)
-            t0 = time.monotonic()
-            while time.monotonic() - t0 < 6.0 and not self._stop.is_set():
-                c = canvas0.copy()
-                c.paste(full, off)
-                self.matrix.draw(c)
-                time.sleep(0.2)
-            try:
-                import numpy as np, cv2
-                stick = np.asarray(pixel_art.to_wall(small, 240).convert("RGB"))[:, :, ::-1]
-                name = self._info["names"][0] if self._info.get("names") else "House Fortuna"
-                self.printer.print_receipt(np.ascontiguousarray(stick), f"Pixel {name}")
-            except Exception as e:
-                print(f"[PRINTER] skip: {e}")
-            self._set_state(State.FADE_OUT)
-            self._fade_out(canvas0.copy(), config.FADE_OUT_SEC)
-        except Exception as e:
-            print(f"[ERROR] pixel cycle failed: {e}")
-        finally:
-            self._set_state(State.IDLE)
-            self.strip.set_mode("idle")
-
-    def run_aura_cycle(self):
-        self._overlay_text = None
-        self._overlay_image = None
-        try:
-            frame = self._do_trigger_capture()
-            self._set_state(State.AI_WAITING)
-            self.strip.set_mode("thinking")
-            result = {}
-            if self.no_api:
-                result.update(colour="Rose Gold", hex="#E8A0A0", reading="Soft heart, fierce timing.")
-            else:
-                import ai_client
-                t = threading.Thread(target=lambda: result.update(ai_client.get_aura(frame, self._hint())),
-                                     daemon=True)
-                t.start()
-                import numpy as np
-                dots = animations.thinking_dots()
-                t0 = time.monotonic()
-                while (t.is_alive() or time.monotonic() - t0 < 1.5) and time.monotonic() - t0 < config.AI_TIMEOUT_SEC + 3:
-                    a = np.asarray(self._silhouette(), np.uint8)
-                    b = np.asarray(next(dots), np.uint8)
-                    self._show(Image.fromarray(np.maximum(a, b), "RGB"), 25)
-            hexcol = result.get("hex", "#9B5DE5")
-            name = result.get("colour", "Aura")
-            reading = self._shorten(result.get("reading", "")) or config.AI_FALLBACK_MESSAGE
-            print(f"[AURA] {name} {hexcol}: {reading}")
-            try:
-                import photo_store
-                photo_store.save_receipt(frame, f"Aura: {name}. {reading}")
-            except Exception as e:
-                print(f"[PHOTOS] skip: {e}")
-            try:
-                self.printer.print_receipt(frame, f"Your aura is {name}. {reading}")
-            except Exception as e:
-                print(f"[PRINTER] skip: {e}")
-            self._set_state(State.DISPLAYING)
-            self._aura_glow(hexcol, name)
-            held = self._do_display(reading)
-            self._set_state(State.FADE_OUT)
-            self.strip.set_mode("fading")
-            self._fade_out(held, config.FADE_OUT_SEC)
-        except Exception as e:
-            print(f"[ERROR] aura cycle failed: {e}")
-        finally:
-            self._set_state(State.IDLE)
-            self.strip.set_mode("idle")
-
     def run(self):
         if not self.no_api:
             try:
@@ -1098,18 +981,12 @@ class MagicMirror:
             self._art_on = False
             if kind == "long" or (self.booth_mode and kind == "short"):
                 self.run_booth_cycle()
-            elif kind == "aura":
-                self.run_aura_cycle()
-            elif kind == "pixel":
-                self.run_pixel_cycle()
             else:
                 self.run_cycle()
 
     def shutdown(self):
         self._stop.set()
         self._trigger_event.set()
-        self._aura_event.set()
-        self._pixel_event.set()
         try:
             self.matrix.clear()
         except Exception:

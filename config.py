@@ -161,7 +161,7 @@ PHOTO_FLASH_POST_MS = 180  # tail so the flash reads as a flash, not a blip
 LONG_PRESS_MS = 2000
 BOOTH_PHOTO_COUNT = 3
 BOOTH_PER_PHOTO_COUNTDOWN = 3      # seconds (3-2-1 per shot)
-BOOTH_PHOTO_HEIGHT = 280           # printed height in dots per photo
+BOOTH_PHOTO_HEIGHT = 512           # (unused now: each booth photo is printed portrait, like a single printout)
 BOOTH_DISPLAY_SEC = 3              # strip on matrix after print
 BOOTH_INTER_PHOTO_PAUSE_MS = 400   # tiny breath between shots
 # Ask GPT for 3 short pose directions to show before each shot. Falls back

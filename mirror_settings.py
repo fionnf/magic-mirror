@@ -31,7 +31,7 @@ LANGUAGES = {
     "Drama queen": "Reply in English as the most dramatic, over-the-top drama queen alive.",
 }
 DEFAULTS = {"tone": 50, "language": "English", "recognise": True, "smile": True, "gesture": True,
-            "comment": True, "booth_shots": 4, "booth_repeat": False,
+            "comment": True, "booth_shots": 3, "booth_repeat": False,
             "learn_faces": False, "idle_art_minutes": 10, "wake_on_motion": False}
 
 
@@ -54,7 +54,7 @@ def load():
     try:
         s["booth_shots"] = max(2, min(6, int(s["booth_shots"])))
     except (TypeError, ValueError):
-        s["booth_shots"] = 4
+        s["booth_shots"] = 3
     for k in ("recognise", "smile", "gesture", "comment", "booth_repeat", "learn_faces", "wake_on_motion"):
         s[k] = bool(s[k])
     return s

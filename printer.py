@@ -188,7 +188,7 @@ def _receipt_image(frame: np.ndarray, text: str) -> Image.Image:
             _sparkle(draw, (W + w) / 2 + 18, y + hh / 2 - 2, 8)
         y += hh
     y += 6
-    _sticker(base, draw, processed, (0, y), 28)              # rounded corners and a frame, same size as before
+    _sticker(base, draw, processed, (0, y), 0)               # square corners and a frame, same size as before
     _heart(draw, W - 30, y + 30, 13, 255)                    # a small heart sticker on the corner
     _heart(draw, W - 30, y + 30, 10, 0)
     y += photo_h + 12
@@ -251,7 +251,7 @@ def render_booth_pil(frames: List[np.ndarray], label: str = "PHOTOBOOTH",
         except Exception:
             pass
         photo = _crop_portrait(_frame_to_pil(frame), pw, ph)
-        _sticker(base, d, _preprocess(photo), (12, y), 30)
+        _sticker(base, d, _preprocess(photo), (12, y), 0)
         bx, by = 12 + 24, y + 24                             # a round number sticker on the corner
         d.ellipse([bx - 19, by - 19, bx + 19, by + 19], fill=255, outline=0, width=3)
         n = str(i + 1)

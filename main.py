@@ -693,6 +693,54 @@ class MagicMirror:
             w = d.textlength(txt, font=f)
             d.text(((W - w) / 2, y), txt, font=f, fill=col, stroke_width=1, stroke_fill=(0, 0, 0))
 
+    def _booth_display_portraits(self, frames, prompts=()):
+        """Photobooth mode, after the shots: each photo full-screen in portrait (as it was printed), flashing in with its
+        pose direction underneath, one after the other; then all of them side by side."""
+        import cv2
+        from PIL import ImageEnhance
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        shots = []
+        for f in frames:
+            img = Image.fromarray(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
+            img = ImageOps.fit(img, (W, H), Image.LANCZOS, centering=(0.5, 0.35))
+            shots.append(ImageEnhance.Color(ImageEnhance.Contrast(img).enhance(1.12)).enhance(1.2))
+        font = text_renderer._load_font(11)
+        gold = (255, 200, 80)
+        for i, shot in enumerate(shots):
+            t0 = time.monotonic()
+            while not self._stop.is_set():
+                e = time.monotonic() - t0
+                if e > 2.4:
+                    break
+                k = min(1.0, e / 0.35)
+                canvas = Image.blend(Image.new("RGB", (W, H), (255, 244, 220)), shot, k)
+                d = ImageDraw.Draw(canvas)
+                d.rectangle([0, 0, W - 1, H - 1], outline=gold, width=2)
+                cap = prompts[i] if i < len(prompts) else ""
+                if cap:
+                    arr = np.asarray(canvas, np.float32)
+                    arr[H - 28:] *= 0.45
+                    canvas = Image.fromarray(arr.astype(np.uint8), "RGB")
+                    d = ImageDraw.Draw(canvas)
+                    tw = d.textlength(cap, font=font)
+                    d.text(((W - tw) / 2, H - 22), cap, font=font, fill=(255, 244, 220), stroke_width=1, stroke_fill=(0, 0, 0))
+                self._show(canvas)
+        tw_, th_ = (W - 2 * 6 - 2 * 4) // 3, 0
+        th_ = int(tw_ / 0.75)
+        t0 = time.monotonic()
+        while not self._stop.is_set() and time.monotonic() - t0 < 3.5:
+            canvas = Image.new("RGB", (W, H), (6, 4, 10))
+            d = ImageDraw.Draw(canvas)
+            y = (H - th_) // 2 - 8
+            for i, shot in enumerate(shots):
+                x = 6 + i * (tw_ + 4)
+                canvas.paste(shot.resize((tw_, th_), Image.LANCZOS), (x, y))
+                d.rectangle([x - 1, y - 1, x + tw_, y + th_], outline=gold)
+            lab = "PHOTOBOOTH"
+            lw = d.textlength(lab, font=font)
+            d.text(((W - lw) / 2, y + th_ + 10), lab, font=font, fill=gold, stroke_width=1, stroke_fill=(0, 0, 0))
+            self._show(canvas)
+
     def _booth_display_frames(self, frames, seconds: float = 9.0, label="PHOTOBOOTH"):
         """Photobooth mode: the shots themselves, in colour, stacked in a gold-framed strip on the wall.
         Each photo flashes in one after the other."""
@@ -848,7 +896,7 @@ class MagicMirror:
 
             self.strip.set_mode("displaying")
             if self.booth_mode:
-                self._booth_display_frames(frames)
+                self._booth_display_portraits(frames, prompts[:len(frames)])
             else:
                 self._booth_display_strip(strip_image)
 

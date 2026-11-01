@@ -163,7 +163,7 @@ def render_booth_pil(frames: List[np.ndarray], label: str = "PHOTOBOOTH",
         prompts = []
 
     W = config.PRINTER_WIDTH_DOTS
-    photo_h = config.BOOTH_PHOTO_HEIGHT
+    photo_h = int(round(W / config.PRINTER_IMAGE_ASPECT))     # portrait, the same shape as a single printout
     caption_h = 18
     header_h = 28
     footer_h = 16

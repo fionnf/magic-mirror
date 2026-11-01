@@ -544,20 +544,11 @@ class MagicMirror:
         return " ".join(parts)
 
     def _do_trigger_capture(self):
-        """Single-shot capture: countdown then grab the latest frame from the
-        live thread — no LED flash. Booth mode has its own _capture_with_flash
-        that does illuminate the subject."""
+        """Single-shot capture: countdown, then the edge flash and the photo."""
         self._set_state(State.TRIGGERED)
         self._do_countdown(3)
         self._set_state(State.CAPTURING)
-        try:
-            frame = self._grab_photo()
-        except Exception as e:
-            print(f"[CAPTURE] direct grab failed, falling back: {e}")
-            frame = self._latest_frame
-        if self.sim_mode:
-            print("[SIM] Camera: captured frame (no flash)")
-        return frame
+        return self._capture_with_flash()
 
     def _do_ai_wait(self, frame):
         self._set_state(State.AI_WAITING)
@@ -612,20 +603,51 @@ class MagicMirror:
         # return the dim live silhouette for the fade-out to consume
         return self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
 
+    FLASH_BORDER = 26                                   # LEDs deep, all round the screen
+    FLASH_WARM = (255, 242, 210)                        # warm white: kind to skin, and the brightest the panels can do
+
+    def _flash_canvas(self, level: float) -> Image.Image:
+        """The flash picture: a bright warm-white frame round the screen edge (it lights the person standing in front), with
+        the live silhouette, dimmed, in the middle so they can still see themselves. level 0..1 fades the frame in and out."""
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        m = getattr(self, "_flash_mask", None)
+        if m is None:
+            yy, xx = np.mgrid[0:H, 0:W]
+            d = np.minimum(np.minimum(xx, W - 1 - xx), np.minimum(yy, H - 1 - yy)).astype(np.float32)
+            m = self._flash_mask = np.clip((self.FLASH_BORDER - d) / 8.0, 0.0, 1.0)[..., None]      # 1 at the edge, soft by 26 px in
+        base = np.asarray(self._silhouette(dim=0.3), np.float32)
+        k = m * float(max(0.0, min(1.0, level)))
+        out = base * (1.0 - k) + np.array(self.FLASH_WARM, np.float32) * k
+        return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
+
     def _capture_with_flash(self):
-        """Run the same illumination flash as a single-shot capture and
-        return the captured frame. Sets strip back to 'thinking' after."""
+        """The photo flash: the screen edge swells to bright warm white, the camera meters for the lit scene, the frame is
+        taken at full brightness, then the light fades. Used for every photo (single shots and each booth shot)."""
         self.strip.set_mode("capture_flash")
-        white = Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT),
-                          (255, 255, 255))
-        self.matrix.draw(white)
-        time.sleep(config.PHOTO_FLASH_PRE_MS / 1000.0)
+        auto = getattr(self.camera, "light_auto", None)
+        if auto:
+            auto()                                       # let the camera meter for the lit scene (it is locked otherwise)
+        t0 = time.monotonic()
+        pre = max(0.3, config.PHOTO_FLASH_PRE_MS / 1000.0 + 0.2)
+        while True:                                      # swell: quick, so it reads as a flash, long enough for the exposure to settle
+            e = time.monotonic() - t0
+            self._show(self._flash_canvas(min(1.0, e / 0.18)))
+            if e >= pre or self._stop.is_set():
+                break
         try:
             frame = self._grab_photo()
-        except Exception as e:
-            print(f"[CAPTURE] direct grab failed: {e}")
+        except Exception as ex:
+            print(f"[CAPTURE] direct grab failed: {ex}")
             frame = self._latest_frame
-        time.sleep(config.PHOTO_FLASH_POST_MS / 1000.0)
+        t1 = time.monotonic()
+        while time.monotonic() - t1 < config.PHOTO_FLASH_POST_MS / 1000.0 + 0.1:
+            self._show(self._flash_canvas(1.0))          # hold, so the frame is lit for the whole exposure
+        restore = getattr(self.camera, "light_restore", None)
+        if restore:
+            restore()                                    # back to the steady, locked light
+        t2 = time.monotonic()
+        while time.monotonic() - t2 < 0.25:              # fade out
+            self._show(self._flash_canvas(1.0 - (time.monotonic() - t2) / 0.25))
         return frame
 
     def _booth_display_strip(self, strip_image):

@@ -51,12 +51,26 @@ class Camera:
             if "ColourGains" in md:
                 ctl["ColourGains"] = tuple(md["ColourGains"])
             self.cam.set_controls(ctl)
+            self._lock_ctl = dict(ctl)
             self._lock_mean = None
             self._locked = True
             print(f"[CAMERA] light locked: {int(exp2)} us, gain {gain:.2f}")
         except Exception as e:
             self._locked = False
             print(f"[CAMERA] could not lock exposure ({e}); staying on auto")
+
+    def light_auto(self):
+        """For the photo flash: let the camera meter freely while the screen edge lights the person."""
+        self._unlock_light()
+
+    def light_restore(self):
+        """After the flash: back to the exposure and white balance locked before it."""
+        ctl = getattr(self, "_lock_ctl", None)
+        try:
+            if ctl:
+                self.cam.set_controls(ctl)
+        except Exception:
+            pass
 
     def _unlock_light(self):
         try:

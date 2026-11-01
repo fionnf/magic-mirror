@@ -203,7 +203,7 @@ class Runner:
         if what == "mirror":
             env["WALL_FIXED_DEPTH"] = "1"        # a mostly dark picture must not drop to the slower, flickery refresh
         if getattr(self, "boot_pending", False) and self.state.get("boot_welcome", True):
-            env["WALL_BOOT"] = "1"               # first start after power-on: play the welcome once
+            env["WALL_BOOT"] = "1"               # power-on only (not an app restart): a short greeting, once
         self.boot_pending = False
         log = open(os.path.join(LOG_DIR, f"{what}.log"), "ab")
         log.write(f"\n==== {time.ctime()} {' '.join(cmd)}\n".encode())
@@ -353,9 +353,18 @@ class Runner:
             self.state["off_at"] = float(when) if when else None
             save_state(self.state)
 
+    @staticmethod
+    def _uptime():
+        """Seconds since the Pi powered on (a huge number when unknown, so unknown never means 'just booted')."""
+        try:
+            with open("/proc/uptime") as fh:
+                return float(fh.read().split()[0])
+        except Exception:
+            return 1e9
+
     def resume_saved(self):
         with self.lock:
-            self.boot_pending = True
+            self.boot_pending = self._uptime() < 300        # the start-up greeting is for a real power-on, not for a restart of the app
             # every start opens on today's art of the day (the user's wish, 2026-10-27)
             self.state.update(mode="daily", playlist=None, daily_date=None)
             save_state(self.state)

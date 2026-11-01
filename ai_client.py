@@ -1,5 +1,4 @@
-"""Claude (Anthropic API) calls for the wall: the mirror one-liner (vision), aura readings (vision +
-structured output), photobooth pose prompts, and a small shared JSON helper used elsewhere.
+"""Claude (Anthropic API) calls for the wall: the mirror one-liner (vision), photobooth pose prompts, and a small shared JSON helper used elsewhere.
 Every call has a timeout and a fallback; usage is logged to config.USAGE_LOG.
 
 Needs ANTHROPIC_API_KEY in .env. Model: config.AI_MODEL (claude-opus-5-5). Thinking is always on
@@ -335,61 +334,3 @@ def get_booth_prompts(n: int = 3) -> list[str]:
     except Exception as e:
         print(f"[AI] booth prompts failed ({e}); using fallback")
         return random.sample(config.BOOTH_FALLBACK_PROMPTS, k=n)
-
-
-# ---------------------------------------------------------------- aura ---
-
-AURA_FALLBACKS = [
-    ("Rose Gold", "#E8A0A0", "Soft heart, fierce timing. Glowing."),
-    ("Electric Violet", "#9B5DE5", "Main-character energy, quietly loading."),
-    ("Sea Glass", "#7FD1B9", "Calm waters hiding a very sharp wit."),
-    ("Sunset Amber", "#FFA94D", "Warm, a little chaotic, entirely magnetic."),
-]
-AURA_SCHEMA = {"type": "object",
-               "properties": {"colour": {"type": "string"}, "hex": {"type": "string"},
-                              "reading": {"type": "string"}},
-               "required": ["colour", "hex", "reading"], "additionalProperties": False}
-
-
-def _aura_prompt() -> str:
-    try:
-        import mirror_settings as ms
-        st = ms.load()
-        tone, lang = ms.tone_line(st["tone"]), ms.language_line(st["language"])
-    except Exception:
-        tone, lang = "", ""
-    return (
-        "You are the mirror of House Fortuna, a fun, warm gay flatshare, reading someone's AURA. "
-        "Look at the person's outfit, colours, expression and mood and choose ONE aura colour with a poetic, "
-        "unexpected name ('Rose Gold', 'Midnight Teal', 'Burnt Honey', 'Thundercloud Lilac'): the colour should "
-        "really fit what you see. Give the colour name, a #rrggbb hex that matches it, and a reading of at most 12 "
-        "words that names something specific you see and turns it into a mood or a prophecy, in the voice of a "
-        f"warm, theatrical fortune teller. {tone} {lang} "
-        "Never mention body shape, age, ethnicity or identity.")
-
-
-def _aura_call(frame: np.ndarray, hint: str):
-    j, tin, tout = ask(_aura_prompt(),
-                       [{"type": "text", "text": ("Read this person's aura. " + hint).strip()},
-                        _image_block(frame)],
-                       max_tokens=1024, effort="low", schema=AURA_SCHEMA, timeout=config.AI_TIMEOUT_SEC)
-    _log_usage(tin, tout)
-    hexv = str(j.get("hex", "")).strip()
-    if not (len(hexv) == 7 and hexv.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in hexv[1:])):
-        raise ValueError("no usable colour")
-    return {"colour": str(j.get("colour", "Aura"))[:24], "hex": hexv,
-            "reading": str(j.get("reading", ""))[:100].strip()}
-
-
-def get_aura(frame: np.ndarray, hint: str = "") -> dict:
-    """{'colour', 'hex', 'reading'}; a built-in aura if the AI is unavailable."""
-    import random
-    future = _executor.submit(_aura_call, frame, hint)
-    try:
-        j = future.result(timeout=config.AI_TIMEOUT_SEC + 2)
-        print(f"[AI] aura {j['colour']} {j['hex']}: {j['reading']}")
-        return j
-    except Exception as e:
-        print(f"[AI] aura fallback ({type(e).__name__}: {str(e)[:60]})")
-        name, hexv, reading = random.choice(AURA_FALLBACKS)
-        return {"colour": name, "hex": hexv, "reading": reading}

@@ -1,7 +1,7 @@
 {
  "name": "Cold Corona, Sunday",
  "description": "A dark rounded body sits in a deep blue night while a cold halo of glacier light spills round its whole edge, widening and paling slowly through the day until by midnight the dark form floats inside a broad field of ice glow.",
- "image": "2026-11-01.png",
+ "image": "2026-11-01.final.png",
  "animation_source": "2026-11-01.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 3
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 3
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": 19
   }
  ],
  "listening": "Bass breath swells the corona's reach a little, tension tightens the rim, treble adds a fine airy haze to the halo's edge, the key leans its tint between ice blue and glacier white, and each hour's music leaves a faint soft lift in the outer glow so the day's sound is kept as the halo's breadth.",
@@ -47,5 +59,36 @@
   "score": 7,
   "verdict": "A faithful, elegant ice-halo eclipse: one dark disc with a crisp glacier-white rim and a cold blue glow that widens through the day, clearly distinct from the recent warm pieces. It hangs, though the arc is modest, since 9 am and 3 pm read almost identically and the morning halo glow sits close to the 80/255 black threshold."
  },
- "direction": "Ice halo"
+ "direction": "Ice halo",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.315,
+  0.603,
+  0.298,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "As the evening unfolded with a gentle surge of music, the cold corona grew wider and more luminous, reflecting the soft breath of bass and the airy whispers of treble. By midnight, the dark form rested calmly within a broad, glowing field of glacier light, carrying the day's subtle soundscapes in its icy embrace.",
+  "alt": "A dark circular shape surrounded by a glowing blue-white halo on a deep blue background, resembling a cold solar corona at night."
+ },
+ "final": true
 }

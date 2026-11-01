@@ -8,7 +8,7 @@ set -euo pipefail
 : "${PRINT_KEY:?set PRINT_KEY}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 sudo apt-get update -qq
-sudo apt-get install -y -qq python3-pil python3-numpy python3-usb avahi-daemon
+sudo apt-get install -y -qq python3-pil python3-numpy python3-usb python3-pip avahi-daemon
 pip3 install --break-system-packages --quiet python-escpos
 # let the service user talk to the USB printer (0416:5011 = the house's POS-58)
 echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="0416", ATTR{idProduct}=="5011", MODE="0666"' |

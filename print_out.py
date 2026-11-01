@@ -127,8 +127,14 @@ def status():
                 return {"where": spec, "ok": r.status == 200, "note": r.read().decode()[:80]}
         if spec == "usb":
             import usb.core
-            import config
-            dev = usb.core.find(idVendor=config.PRINTER_VENDOR_ID, idProduct=config.PRINTER_PRODUCT_ID)
+            vid = int(os.environ.get("PRINTER_VENDOR_ID", "0x0416"), 16)
+            pid = int(os.environ.get("PRINTER_PRODUCT_ID", "0x5011"), 16)
+            try:
+                import config                                   # absent on a print-server Pi that only has this file
+                vid, pid = config.PRINTER_VENDOR_ID, config.PRINTER_PRODUCT_ID
+            except Exception:
+                pass
+            dev = usb.core.find(idVendor=vid, idProduct=pid)
             return {"where": spec, "ok": dev is not None, "note": "" if dev else "not plugged in"}
         return {"where": spec, "ok": True, "note": ""}
     except Exception as e:

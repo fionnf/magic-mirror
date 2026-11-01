@@ -25,10 +25,11 @@ WIDTH = int(os.environ.get("PRINTER_WIDTH_DOTS", 384))
 # 10 us (longer = darker), n3 = pause between heats in 10 us (longer = cleaner). Factory ~ 7, 80, 2.
 HEAT = tuple(int(v) for v in os.environ.get("PRINTER_HEAT", "3,170,40").split(","))
 DENSITY = int(os.environ.get("PRINTER_DENSITY", 15))       # DC2 #: 0-31 print density, 15 = deep
-DITHER = os.environ.get("PRINTER_DITHER", "atkinson")       # atkinson | floyd
+DITHER = os.environ.get("PRINTER_DITHER", "floyd")           # floyd | atkinson | bayer   (floyd chosen by eye on this printer, 2026-11-01)
 # Thermal dots bleed into each other, so a dither made of single dots turns to mush. The picture is dithered at 1/SCALE of the
-# printer's resolution and every pixel is printed as a SCALE x SCALE block of dots: bolder, blacker, much cleaner (1 = off).
-SCALE = max(1, int(os.environ.get("PRINTER_SCALE", 2)))
+# printer's resolution and every pixel is printed as a SCALE x SCALE block of dots: bolder, blacker (1 = off, the default: on
+# this printer single dots with Floyd-Steinberg looked best in a side-by-side test print).
+SCALE = max(1, int(os.environ.get("PRINTER_SCALE", 1)))
 # Some printers do not know the heat/density commands and PRINT their bytes instead (a stray angle, "(" and "#" at the top
 # of every slip). Off unless the printer is known to understand them: PRINTER_QUALITY=1.
 QUALITY = os.environ.get("PRINTER_QUALITY", "0") == "1"

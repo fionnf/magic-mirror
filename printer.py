@@ -171,7 +171,7 @@ def _receipt_image(frame: np.ndarray, text: str) -> Image.Image:
         return (b - t) + 6
 
     hh, mh = line_h(head_font), line_h(msg_font)
-    total_h = 6 + len(header_lines) * hh + 6 + photo_h + 12 + len(msg_lines) * mh + 10
+    total_h = 6 + len(header_lines) * hh + 6 + photo_h + (10 if msg_lines else 0) + len(msg_lines) * mh + 2
 
     base, ink, draw = _layers(W, total_h)
 
@@ -191,7 +191,7 @@ def _receipt_image(frame: np.ndarray, text: str) -> Image.Image:
     _sticker(base, draw, processed, (0, y), 0)               # square corners and a frame, same size as before
     _heart(draw, W - 30, y + 30, 13, 255)                    # a small heart sticker on the corner
     _heart(draw, W - 30, y + 30, 10, 0)
-    y += photo_h + 12
+    y += photo_h + 10
     for line in msg_lines:
         centred(y, line, msg_font)
         y += mh

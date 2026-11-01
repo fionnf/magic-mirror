@@ -2,8 +2,9 @@
 
 A wall of 64 x 64 HUB75 LED panels (the default build is 3 wide x 4 tall: 12 panels, 192 x 256 pixels, portrait)
 driven by a Raspberry Pi 4 and controlled from a phone web app. It shows slow generative art, GPU shaders, a new
-AI-composed piece every day, live pieces drawn from real data (aircraft, satellites, wind, snow, tides, trams) and art that
-responds, gently, to the music in the room. It can also act as a camera mirror with AI one-liners and a receipt printer.
+AI-composed piece every day, live pieces drawn from real data (aircraft, satellites, wind, snow, tides, trams, trains) and art that
+responds, gently, to the music in the room. It can also act as a camera mirror (a plain photo with an AI one-liner, or a photobooth that prints a strip of portraits,
+started by a tap, the app or a hand signal) with a wireless receipt printer.
 Everything runs on your own Pi; every outside service is optional. You can try it on a laptop with no hardware.
 
 This repository is one household's wall (a flat in Zürich), published so that others can build their own. Some things in
@@ -17,10 +18,11 @@ it are personal and need changing: see [Make it yours](#make-it-yours).
 |---|---|---|
 | **Art gallery** | 67 pieces in 7 collections, plus every daily edition (33 shaders, 15 music visuals, plus hand-written pieces: marbling and op-art, lines and dots, long-exposure light, coral, ink and moire). Pace set in the app | Shaders need `moderngl` and an OpenGL context |
 | **Art of the day** | One new shader a day, composed by an AI model after looking at a Pinterest mood board, checked for flicker, scored by a second call, then hung. Also published to a public site | An OpenAI or Anthropic key, or just fetch the author's pieces from his public gallery (default) |
-| **Live boards** | Planes, Satellites, Wind over Switzerland, Ireland and Europe, Snow, Limmat river, West Cork lights, Tides, Earthquakes, Tram map (timetable-driven) and a split-flap Tram board (live departures). The app's *Live boards* chip is the current list | Internet, no keys. Most are tied to Zürich or West Cork: see [Make it yours](#make-it-yours) |
+| **Live boards** | Planes, Satellites, Wind over Switzerland, Ireland and Europe, Snow, Limmat river, West Cork lights, Tides, Earthquakes, Tram map (timetable-driven), a Tram board, **Kilchberg trains** and **Zürich HB trains** (live station displays, [docs/train-boards.md](docs/train-boards.md)) and **Ländle**, a living map of the Remstal with the live S-Bahn on it ([docs/laendle.md](docs/laendle.md)). The app's *Live boards* chip is the current list | Internet, no keys. Most are tied to Zürich, West Cork or the Remstal: see [Make it yours](#make-it-yours) |
 | **Music** | Art that follows the room's sound. A party slider from "art just breathes" to dance floor, a beat tracker, song names (Shazam, Cast speakers, Spotify), album-cover colours | A USB microphone on the Pi |
-| **Mirror** | Camera silhouette, countdown photo, an AI one-liner, aura reading, pixel portrait, printed receipt, opt-in face recognition | A camera, an AI key. Printer optional |
-| **Shows** | Pride show, Welcome, Dewa's Story, Maeva in Zürich, a message card, a Wheel of Fortuna that prints a verdict | Personal to the author: edit or delete them |
+| **Mirror** | Two modes: a **photo** (countdown, a bright warm-white flash round the screen edge, an AI one-liner or none, a printed receipt) and a **photobooth** (2 to 6 posed portraits with AI pose directions, printed as one strip with a QR code to the day's shared folder; can repeat by itself). Start by a tap, the app or a **hand signal** (open palm, peace sign). Opt-in face recognition. [docs/mirror.md](docs/mirror.md) | A camera, an AI key. Printer optional |
+| **Shows** | Pride show, Welcome, Dewa's Story, Maeva in Zürich, Lennart zeigt Fionn das Ländle (a German comedy), a message card, a Wheel of Fortuna that prints a verdict | Personal to the author: edit or delete them |
+| **Printing** | A 58 mm thermal printer on the wall's Pi, on a second Pi over Wi-Fi, on the network or on Bluetooth; pictures dithered and laid out for thermal paper (crisp text, framed portraits), quality chosen by a test slip. [docs/printing.md](docs/printing.md), [docs/printer-pi.md](docs/printer-pi.md) | A printer; python-escpos |
 | **Room** | Smart Life (Tuya) lights: presets, brightness, warmth, colour, per light, lights-off time, import of rooms and scenes from the cloud (untested). Two Bluetooth LED rods that follow the wall | `tinytuya` and your device keys; `bleak` for the rods |
 | **The app** | Phone web app: scenes, sleep timer, tour, gallery with search, live LED-dot preview, guest dedications by QR | Home Wi-Fi |
 | **Public gallery** | Every day's piece on a GitHub Pages site with RSS, a play-with-it page per piece, and the control app online | A GitHub repo; see [docs/gallery.md](docs/gallery.md) |
@@ -43,7 +45,7 @@ Then open <http://localhost:8080> in a browser (`PORT=8099 ./panel_setup/sim.sh`
 What you will see:
 - the terminal prints the Flask server banner; the app is at `localhost:8080`;
 - a pygame window titled "Magic Mirror Simulator - 192x256" (612 x 804 px at the default `SIM_SCALE = 3`; lower `SIM_SCALE` in `config.py` for a small screen)
-  showing the wall: a "HOUSE FORTUNA" start-up screen with a progress bar, then the Art of the day (the default mode);
+  showing the wall: the Art of the day (the default mode). (The short "Welcome to HOUSE FORTUNA" greeting with its progress bar plays only after a real power-on of the Pi, never on an app restart or in the simulator);
 - the app: choose any mode and the window changes. **Lava & Coral**, **Shapes**, **Art Gallery**, **Artsy** and **Light Art** need nothing else.
 
 Notes, honestly:
@@ -171,7 +173,7 @@ Open `http://<pi-ip>/` (or `http://<hostname>.local/`) on your phone. Things to 
   Settings in `.env` and under `panel_setup/` survive.
 - `bootstrap_pi.sh` says in its header that it has not yet been run on a fresh image. It does not install `moderngl` (needed for every shader piece, including Art of the day), `pychromecast`, `bleak`, `sgp4` or `cloudflared`.
   Install what you want by hand: `sudo pip3 install --break-system-packages --root-user-action=ignore moderngl`.
-- Boot with the camera ribbon already attached; the camera port is only probed at power-on. In the app, *Photos, Start the mirror* switches to the Pi camera (a fresh state uses a network stream at the author's address).
+- Boot with the camera ribbon already attached; the camera port is only probed at power-on. In the app, *Mirror, Start the mirror* switches to the Pi camera (a fresh state uses a network stream at the author's address).
 - Onboard audio must be off (the bootstrap sets `dtparam=audio=off`); it conflicts with the panels.
 - Remote access (from outside your Wi-Fi) is optional: [docs/remote-access.md](docs/remote-access.md).
 
@@ -186,8 +188,8 @@ Swipe the preview left or right for the next collection; the enlarge button fill
 | **Art** | **Scenes** (Dinner, Party, Reading, Sleep, and your own with "+ Save this"; hold one to remove it). **Today**: today's piece with a "Hang it" button, an "About this piece" fold-out and the archive of past days. **Gallery**: search, **Surprise me**, and chips for All, **Live boards**, each collection, and **Hour-long** (shaders that play out a story once an hour). Tap a piece to hang it. **Pace** slider. Fold-out "Slideshows, shows and tours": collections as slideshows, the shows and boards list, a Tour that shuffles through the art (10/20/45 min each), and "Show people on the art" (the camera's silhouettes tint the art slightly) |
 | **Music** | "Let the wall listen"; **Party level**; **What the wall shows** (chosen for the music, or a gallery piece moving with it). Fold-outs: *Speakers and album covers* (follow your Cast speakers and Spotify, show the cover, colour from it) and *Microphone and listening* (live level trace, sensitivity, party level from the room, name songs, song title on the wall, let all art move to music) |
 | **Room** | **Living room lights** (Smart Life): All on / All off, presets (Bright, Evening, Dim, Candle, Movie, Party, Ocean), imported Smart Life scenes, **Import living room from Smart Life**, brightness, warmth, colour swatches and picker, each light, "Lights off at". Shown only when `devices.json` or `panel_setup/lights.json` exists. **Colour rods**: Auto, Follow the wall, One colour, Breathe, Off, colour, brightness, connect/disconnect (two Bluetooth rods at fixed addresses) |
-| **Photos** | **Start the mirror**, Take a photo, Read an aura, Pixel portrait; the photo archive with each photo's AI line (save or delete) |
-| **More** | The mirror's voice (sweet to roast, language), People (learn faces, smile sparkles, greet by name, learn frequent faces), **Guests** (dedications by QR, on/off, delete), **Power** (Update and restart, Reset settings, Shut down), Receipt printer status, **Quiet hours** (show art when nobody is around, wake on motion) |
+| **Mirror** (was *Photos*) | **Start the mirror** or **Start the photobooth**; then **Photobooth strip** (take a strip now), **Photobooth mode** (a tap takes a strip) and **Photo**; the photo archive with each photo's AI line (save or delete) |
+| **More** | The mirror's voice (sweet to roast, language), whether the mirror **comments** on photos, **photos per strip** (2 to 6) and **photobooth keeps going**, People (learn faces, smile sparkles, **hand signal**, greet by name, learn frequent faces), **Guests** (dedications by QR, on/off, delete), **Power** (Update and restart, Reset settings, Shut down), Receipt printer status, **Quiet hours** (show art when nobody is around, wake on motion) |
 
 ## Configuration reference
 
@@ -198,7 +200,7 @@ Tools run by hand (`run.sh`, `display_test.py`, `tune.py`) do not read `.env`. "
 
 | Variable | Default | What it does | Secret |
 |---|---|---|---|
-| `OPENAI_API_KEY` | none | Key for the default AI provider: daily art and curator, mirror lines, aura, booth prompts, wheel | yes |
+| `OPENAI_API_KEY` | none | Key for the default AI provider: daily art and curator, mirror lines, booth prompts, wheel | yes |
 | `ANTHROPIC_API_KEY` | none (`.env.example` ships `your_key_here`) | Claude. Used when `WALL_AI_PROVIDER=anthropic`, or automatically when the chosen provider has no key. Delete the placeholder line if you have no key | yes |
 | `GROQ_API_KEY` | none | Only for `WALL_AI_PROVIDER=groq` (text only; vision calls go to OpenAI) | yes |
 | `WALL_AI_PROVIDER` | `openai` (`config.AI_PROVIDER`) | `openai`, `anthropic` or `groq` | no |
@@ -237,7 +239,10 @@ Set by the app for each mode it starts, not meant for `.env`: `WALL_DAILY_DATE`,
 | `PRINT_KEY` | none | Shared secret between the wall and `tools/print_server.py` (secret) |
 | `PRINTER_VENDOR_ID` / `PRINTER_PRODUCT_ID` | `0x0416` / `0x5011` | USB ids (hex); see `lsusb` |
 | `PRINTER_WIDTH_DOTS` | `384` | Printable width; drop to 360 if the right edge wraps |
-| `PRINTER_HEAT` / `PRINTER_DENSITY` / `PRINTER_DITHER` | `3,170,40` / `15` / `atkinson` | Print quality; dither is `atkinson` or `floyd` |
+| `PRINTER_DITHER` | `floyd` | `floyd`, `atkinson` or `bayer`; choose with `tools/print_test_slip.py` ([docs/printing.md](docs/printing.md)) |
+| `PRINTER_SCALE` | `1` | 1 = single dots; 2 = dither at half resolution and print 2 x 2 blocks |
+| `PRINTER_FEED_DOTS` | `90` | Blank paper after a print (8 dots = 1 mm) |
+| `PRINTER_QUALITY` / `PRINTER_HEAT` / `PRINTER_DENSITY` | `0` / `3,170,40` / `15` | `1` sends heat and density commands; leave it off unless your printer knows them (some print the bytes as stray symbols) |
 | `PRINTER_BAUD` | `115200` | Serial printers |
 | `PRINTER_TARGET`, `PRINT_PORT` | `usb`, `8631` | For `tools/print_server.py` on a second Pi |
 
@@ -260,8 +265,8 @@ Set by the app for each mode it starts, not meant for `.env`: `WALL_DAILY_DATE`,
 
 | Variable | Default | What it does |
 |---|---|---|
-| `GOOGLE_DRIVE_FOLDER_ID` | none | Folder for photos. Unset = uploads off |
-| `GOOGLE_DRIVE_RECEIPTS_FOLDER_ID` | the folder above | Folder for booth strips and receipts |
+| `GOOGLE_DRIVE_FOLDER_ID` | none | Parent folder. Each day gets a link-shared "Photobooth YYYY-MM-DD" folder inside it, the target of the printed QR code. Unset = uploads off, no QR code |
+| `GOOGLE_DRIVE_RECEIPTS_FOLDER_ID` | (unused) | Older setting; strips now go into the day folder |
 
 **Reserved**
 
@@ -277,7 +282,7 @@ Set by the app for each mode it starts, not meant for `.env`: `WALL_DAILY_DATE`,
 | `sim.sh` | `PY`, `PORT` | `python3` (or `.venv/bin/python`), `8080` |
 | `stream_webcam.sh` (a Mac's webcam as a stand-in camera) | `CAMERA`, `PORT` | `FaceTime HD Camera`, `8090` |
 | `update.sh` | `GALLERY_DEPLOY_KEY` | `~/.ssh/fortuna_deploy` |
-| `install_print_server.sh` | `PRINT_KEY` (required), `PRINTER_TARGET` | none, `usb` |
+| `install_print_server.sh`, `setup_printer_pi.sh` | `PRINT_KEY` (required for the first; the second makes one), `PRINTER_TARGET`, `PRINTER_PI`, `WALL_HOST` | none, `usb`, `printpi.local`, the live wall |
 | GitHub Actions secrets | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | none |
 | GitHub Actions variables | `WALL_MOODBOARD` | none |
 
@@ -295,17 +300,20 @@ These are the personal or place-specific things in the repository. The wall runs
 | River and lake (Limmat: FOEN station 2099, Mythenquai) | `display/limmat.py` (`FLOW_URL`, `TEMP_URL`) | Your own river data source, or delete the piece |
 | West Cork lights and Baltimore tides (Union Hall station, buoys M3/M5) | `display/westcork.py`, `display/tides.py` | Your coast, or delete |
 | Tram stop for the split-flap board | `display/departures.py` (`"Zürich, Rennweg"`, via transport.opendata.ch, Swiss stops only) | Your stop name, or delete |
+| Train boards | `display/kilchberg.py` (`Kilchberg ZH`, `Zürich HB`) | Your stations ([docs/train-boards.md](docs/train-boards.md)), or delete |
+| The Remstal map and its trains | `tools/build_laend.py` (the framing and `PLACES`), `display/laend_trains.py` (the VVS station lists), `assets/maps/laend.npz` | Your own region ([docs/laendle.md](docs/laendle.md)), or delete |
 | Tram map | `tools/build_trams.py` (`HOME = "Rennweg"`, VBZ line colours, Swiss GTFS feed), `display/tramlines.py` | Zürich-specific. The timetable in `assets/trams/` covers about 8 days from when it was built (`DAYS`), so rebuild it regularly: `python3 tools/build_trams.py` on a laptop (it downloads a ~300 MB feed). No scheduled workflow does this yet |
 | Pinterest mood board | `WALL_MOODBOARD` / `config.MOODBOARD` (`fionnferreira/motion-graphics`) | Your own public board |
 | Pi address, user | `panel_setup/deploy.sh` (`192.168.1.129`), `tools/spotify_login.py` (`WALL_HOST`) | Set `PI_HOST`/`PI_USER`/`WALL_HOST` |
 | Self-update source | `panel_setup/update.sh` (`fionnf/magic-mirror`, branch `master`) | Your fork, or remove the `ExecStartPre` line from the service |
-| Default camera stream | `panel_setup/wall_control.py` `DEFAULT_STATE["camera_url"]` (`http://192.168.1.217:8090/...`) | Use *Photos, Start the mirror* (Pi camera) |
+| Default camera stream | `panel_setup/wall_control.py` `DEFAULT_STATE["camera_url"]` (`http://192.168.1.217:8090/...`) | Use *Mirror, Start the mirror* (Pi camera) |
 | Public gallery and Pages | `GALLERY_REPO`, `GALLERY_RAW`, `GALLERY_URL`; `tools/build_gallery.py` (`TITLE`, `CREDIT`, `TAGLINE`); `.github/workflows/daily.yml` (time zone, cron); `gallery/` (the author's editions) | See [docs/gallery.md](docs/gallery.md) |
 | Online control app | `panel_setup/web/index.html` (`GALLERY`, `findWall()` reads `fionnf/magic-mirror`, login text "Made by Dewa and Fionn"), `WALL_APP_ORIGINS`, `wall/wall.json` (the author's last tunnel address) | See [docs/remote-access.md](docs/remote-access.md) |
 | Smart Life | `lights.py` `import_room("living")` matches a Smart Life room whose name contains "living"; `devices.json` is yours | Name your room accordingly or call the API with your own names |
 | Bluetooth LED rods | `display/rods.py` `ADDRESSES` (two MELK-OA10 MAC addresses) | Your rods' addresses, or `WALL_RODS=0` |
 | Names, house and street | `config.py` (`MIRROR_PERSONA`, `PRINTER_HEADER = "FORTUNAGASSE 24"`, booth prompts), `display/wheel_of_fortuna.py` (`RESIDENTS`, `STREET`, the verdicts), AI briefs in `display/daily.py` and `display/music.py`, `main.py` ("House Fortuna") | Yours |
-| Personal shows | `display/dewa_story.py`, `display/maeva_story.py`, `display/cards.py` ("Dewa is a cow"), `display/welcome.py`, `display/pride_show.py`; their entries in `MODES` in `panel_setup/wall_control.py` | Delete or rewrite them |
+| Personal shows | `display/dewa_story.py`, `display/maeva_story.py`, `display/lennart_film.py` and the Ländle intro `display/laend_intro.py` (real friends, jokes and street names), `display/cards.py` ("Dewa is a cow"), `display/welcome.py`, `display/pride_show.py`; their entries in `MODES` in `panel_setup/wall_control.py` | Delete or rewrite them |
+| Printer host and the address in the slip | `config.PRINTER_HEADER` ("FORTUNAGASSE 24"), `tools/setup_printer_pi.sh` (`printer.local`, the live wall's address) | Yours |
 | Printer USB ids | `config.PRINTER_VENDOR_ID`, `PRINTER_PRODUCT_ID` | See `lsusb` |
 
 By default your wall also **fetches the author's daily piece** from his public gallery (`GALLERY_RAW`): handy, but it is his pipeline, not yours.
@@ -316,16 +324,18 @@ Everything is optional; the wall is useful with none of them.
 
 | Service | Used for | Without it |
 |---|---|---|
-| OpenAI (`OPENAI_API_KEY`), Anthropic (`ANTHROPIC_API_KEY`) or Groq | Daily art, mirror lines, aura, booth prompts, wheel | Mirror shows a canned line; the daily piece is fetched from the gallery or composed offline from older pieces |
+| OpenAI (`OPENAI_API_KEY`), Anthropic (`ANTHROPIC_API_KEY`) or Groq | Daily art, mirror lines, booth prompts, wheel | Mirror shows a canned line; the daily piece is fetched from the gallery or composed offline from older pieces |
 | GitHub Pages + `GALLERY_TOKEN` or a deploy key | Publishing each day's piece, the online control app, the cloud daily artist | Nothing is published; the wall keeps everything locally |
 | Pinterest (a public board's RSS feed) | Mood board for the daily artist | The artist works without it |
-| Google Drive | Photo and receipt archive | No uploads ([docs/google-drive.md](docs/google-drive.md)) |
+| Google Drive | Photo archive and the day's shared folder behind the printed QR code | No uploads, no QR code ([docs/google-drive.md](docs/google-drive.md)) |
 | Tuya / Smart Life cloud | One-time device keys and the import of rooms and scenes; switching is local | The Room tab's lights card stays hidden |
 | Spotify (`python3 tools/spotify_login.py <client id>`, read-only, no secret) | What is playing, for song names and covers | Shazam and Cast speakers still work |
 | Google Cast speakers (`pychromecast`, not installed by the bootstrap) | Follow the speakers, album covers | Feature off |
 | Shazam (`shazamio`) | Song names | No titles |
 | opentransportdata.swiss | Tram map data (build time, `tools/build_trams.py`); a key for live delays is reserved but unused | Tram map uses the committed timetable until it runs out |
-| transport.opendata.ch | Tram board departures (no key) | Board empty |
+| transport.opendata.ch | Tram board, Kilchberg and Zürich HB boards (no key) | Boards say "Keine Daten" |
+| VVS departure monitor (`www3.vvs.de`, EFA) | The live trains on the Ländle map (no key) | The map shows no trains |
+| OpenStreetMap (Overpass), AWS terrain tiles | Build time only: the Ländle map (`tools/build_laend.py`) | Uses the committed map |
 | adsb.lol, adsbdb.com | Planes (no key) | No aircraft; the map is still drawn |
 | CelesTrak | Satellites (no key) | Last cached elements |
 | Open-Meteo | Wind and Snow (no key) | Last cached data |
@@ -346,7 +356,7 @@ There is no automated test suite. `tests/` holds manual scripts that you run and
 
 | Script | Needs | Shows |
 |---|---|---|
-| `python3 tests/test_printer.py` | the venv | Writes a receipt preview PNG to `tests/sim_receipts/` (no printer needed; `--strip` for the booth strip) |
+| `python3 tests/test_printer.py` | the venv | Writes a receipt preview PNG to `tests/sim_receipts/` (no printer needed; `--strip` for the booth strip). `python3 tools/print_test_slip.py --no-print` previews the print-quality test slip |
 | `python3 tests/test_text.py`, `test_animations.py`, `test_silhouette.py` | pygame and a desktop session | Text, idle animations, silhouette in the simulator window (in `test_animations.py`: `q` quits, `n` skips, `g` toggles the grid) |
 | `python3 tests/test_full_sim.py`, `python3 tests/test_64x64.py --camera webcam` | pygame, a webcam, an AI key for real lines (`--no-api` for canned ones) | The mirror state machine end to end; `test_64x64.py` is a single 64 x 64 panel (`--hardware` on a Pi) |
 | `python3 tests/test_ai.py --image some.jpg` | a key in `.env`; the default image `tests/test_image.jpg` is not in the repo | One vision call |
@@ -364,7 +374,13 @@ A cheap sanity check anywhere: `python3 -m compileall -q .` and the layout check
 | **Flicker or low refresh** | `./panel_setup/run.sh bar --show-refresh`, then `run.sh tune`; lower `MATRIX_PWM_BITS`; keep onboard audio off; watch the `[PI]` line for throttling |
 | **Shader art, including Art of the day, is black** | `moderngl` missing or no GL context (`[shaders] no GPU context` in `panel_setup/logs/<mode>.log`). On the Pi: `sudo pip3 install --break-system-packages moderngl` |
 | **No app at `http://<pi>/`** | `sudo systemctl status wall-control` and `sudo journalctl -u wall-control -e`; per-mode logs are in `panel_setup/logs/`. Use the Pi's IP if `.local` does not resolve |
-| **Mirror shows nothing, or the wrong camera** | Attach the camera ribbon before power-on; `rpicam-hello --list-cameras`; in the app press *Photos, Start the mirror* (a fresh state tries a network stream) |
+| **Mirror shows nothing, or the wrong camera** | Attach the camera ribbon before power-on; `rpicam-hello --list-cameras`; in the app press *Mirror, Start the mirror* (a fresh state tries a network stream) |
+| **The mirror picture flickers or pumps** | See "Flicker" in [docs/mirror.md](docs/mirror.md): check `[CAMERA] light locked` in `panel_setup/logs/mirror.log`, the mains frequency (`CAMERA_MAINS_HZ`), the room light |
+| **Hand signals do nothing** | Is the *Hand signal* switch on, are the two hand models in `assets/models/` (`get_models.sh`), is a whole person in frame (the check needs a person-sized silhouette), and is the hand open and facing the camera for 1.3 s? |
+| **Stray symbols at the top of every printout** | Your printer does not know the heat/density commands: keep `PRINTER_QUALITY` off (the default) |
+| **Printouts too light, blotchy or grainy** | Run `python3 tools/print_test_slip.py` and set the winner ([docs/printing.md](docs/printing.md)) |
+| **The printer Pi says 503 or the wall says "Not reachable"** | `curl http://<printer>.local:8631/health`, `lsusb` on the printer Pi, `journalctl -u print-server`: [docs/printer-pi.md](docs/printer-pi.md) |
+| **The QR code does not appear on strips** | Drive is not set up (`GOOGLE_DRIVE_FOLDER_ID`, `token.json` on the Pi): [docs/google-drive.md](docs/google-drive.md) |
 | **Music mode does not react** | `arecord -l` must list a capture device; raise Sensitivity and check the trace; on the simulator see the microphone note above |
 | **No AI lines, daily piece stuck** | Key in `.env` on the Pi (not just the laptop), restart `wall-control`; `WALL_AI_PROVIDER`; the placeholder `ANTHROPIC_API_KEY=your_key_here` counts as a key |
 | **Lights card missing** | It appears only when the wall knows devices: `devices.json` (from `python -m tinytuya wizard`) or `panel_setup/lights.json`. With devices but no `tinytuya` installed the card says so |
@@ -377,7 +393,8 @@ led_matrix.py                 the panel driver: remap to the chain(s), power lim
 main.py, api.py               mirror mode (state machine) and its internal API
 ai_client.py                  AI calls: provider switch (OpenAI, Anthropic, Groq), vision, JSON helper
 camera.py, vision.py, smartcrop.py, faces.py, moods.py   camera, silhouette, portrait crop, recognition, smile
-printer.py, print_out.py, photo_store.py, cloud_uploader.py   receipts, ESC/POS output, photo archive, Drive
+printer.py, print_out.py, photo_store.py, cloud_uploader.py   receipt and strip layouts, ESC/POS output and dithering, photo archive, Drive (the day folder)
+hands.py                      hand signals (open palm, peace sign) with two small ONNX models
 lights.py, led_strip.py, mqtt_bridge.py, gpio_button.py, mirror_settings.py   Smart Life, LED strip, MQTT, touch sensor, mirror settings
 display/                      everything drawn on the wall
   library.py                  the one catalogue of gallery pieces
@@ -385,18 +402,20 @@ display/                      everything drawn on the wall
   art.py artsy.py shapes.py light_art.py organic.py ...     hand-written generative galleries
   daily.py directions.py moodboard.py publish.py            art of the day, directions, mood board, gallery publisher
   music.py beat.py intensity.py vj_fx.py cast.py spotify.py cover.py   music engine and now-playing sources
-  planes.py satellites.py wind.py snow.py limmat.py westcork.py tides.py quakes.py tramlines.py departures.py   live boards
-  welcome.py pride_show.py dewa_story.py maeva_story.py wheel_of_fortuna.py cards.py   shows
+  planes.py satellites.py wind.py snow.py limmat.py westcork.py tides.py quakes.py tramlines.py departures.py kilchberg.py   live boards
+  laend.py laend_intro.py laend_trains.py                    the Remstal map, its German intro film and the live S-Bahn
+  welcome.py pride_show.py dewa_story.py maeva_story.py lennart_film.py wheel_of_fortuna.py cards.py   shows
   dedications.py presence.py rods.py ...                     guests' lines, people on the art, Bluetooth rods
 panel_setup/                  wall_control.py (app server and process runner), web/index.html (the app), play.py (runs one mode),
                               deploy.sh, bootstrap_pi.sh, install_control.sh, update.sh, sim.sh, run.sh, bring-up tools, README
-tools/                        build_gallery.py, make_today.py, build_maps.py, build_relief.py, build_land.py, build_trams.py,
-                              auth_drive.py, spotify_login.py, print_server.py, install_print_server.sh, timelapse.py
-assets/                       shaders/, maps/, models/ (face models), trams/ (timetable and layout), daily/ (local editions)
+tools/                        build_gallery.py, make_today.py, build_maps.py, build_relief.py, build_land.py, build_trams.py, build_laend.py,
+                              auth_drive.py, spotify_login.py, print_server.py, install_print_server.sh, setup_printer_pi.sh,
+                              flash_sd.sh, print_test_slip.py, timelapse.py
+assets/                       shaders/, maps/ (incl. laend.npz), models/ (face and hand models), trams/ (timetable and layout), daily/ (local editions)
 gallery/, site/, wall/        published editions, the public site's static files, the wall's announced tunnel address
 simulator/                    pygame panel window, webcam and button mocks
 tests/                        manual test scripts (see Tests)
-docs/                         gallery.md, remote-access.md, google-drive.md
+docs/                         mirror.md, printing.md, printer-pi.md, laendle.md, train-boards.md, gallery.md, remote-access.md, google-drive.md, livecam.md
 hardware/led-wall-frame/      the printable frame (STL, 3MF, OpenSCAD)
 .github/workflows/            daily.yml (cloud artist), gallery.yml (Pages site)
 ```
@@ -410,7 +429,8 @@ hardware/led-wall-frame/      the printable frame (STL, 3MF, OpenSCAD)
   `panel_setup/lights.json`, `panel_setup/spotify_token.json`, `panel_setup/faces.json`, `panel_setup/.session_secret`, `photos/`. `devices.json` holds your lights' local keys; `tinytuya.json` holds your Tuya API secret.
   `git status` before every commit. The gallery repo is public: the wall publishes only the public fields of each edition (song titles and token counts stay on the Pi).
 - **The home network is trusted.** Any device on your Wi-Fi can drive the wall with no password, and the guest page `/d` is unfiltered by design. Do not expose port 80 to the internet; use the password and tunnel in [docs/remote-access.md](docs/remote-access.md).
-- **Faces.** Recognition is opt-in per person and stores only numbers (`faces.json`), never photos. Tell people who stand in front of a camera that it is there.
+- **Faces.** Recognition is opt-in per person and stores only numbers (`faces.json`), never photos. Hand signals run on the Pi and keep nothing. Tell people who stand in front of a camera that it is there.
+- **Photos.** With Drive set up, the day's pictures sit in a folder that anyone with its link (the QR code on a printed strip) can open ([docs/google-drive.md](docs/google-drive.md)). Do not post that link publicly; leave `GOOGLE_DRIVE_FOLDER_ID` unset to keep photos on the Pi only.
 
 ## Contributing
 
@@ -422,5 +442,5 @@ the Pi bootstrap script and Smart Life import have not been verified on fresh se
 
 The code, the generated art and the 3D models in `hardware/` are released under the [MIT licence](LICENSE).
 Third-party pieces keep their own terms, and data fetched at run time is not covered. **Some bundled data is not MIT:** `assets/migrations/wanderers.json` (Ocean wanderers: Arctic tern and turtle tracks from OBIS-SEAMAP) is CC BY-NC 4.0, non-commercial only, with the datasets credited inside the file; `assets/migrations/polarbears.json` is CC BY 4.0 (Norwegian Polar Institute, credit required). Remove those files, or ask the data owners, before any commercial use: the panel library
-[hzeller/rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) is compiled on the Pi, not included here (its licence is GPL-2.0 per upstream; not checked here); the face models come from the OpenCV Zoo (YuNet MIT, SFace Apache-2.0,
-see `assets/models/README.md`); the maps are built from Natural Earth (public domain) and OpenStreetMap (ODbL) data; the timetable data comes from opentransportdata.swiss (check its terms of use).
+[hzeller/rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) is compiled on the Pi, not included here (its licence is GPL-2.0 per upstream; not checked here); the face and hand models come from the OpenCV Zoo (YuNet MIT, SFace Apache-2.0, MediaPipe palm and hand-landmark models Apache-2.0,
+see `assets/models/README.md`); the maps are built from Natural Earth (public domain), OpenStreetMap (ODbL) and, for the Ländle relief, AWS open terrain tiles ([attribution](https://github.com/tilezen/joerd/blob/master/docs/attribution.md)); the timetable data comes from opentransportdata.swiss (check its terms of use).

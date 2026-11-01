@@ -115,6 +115,8 @@ Every test prints a `[PI]` line every 2 s and logs to `panel_setup/monitor.csv`:
   (list of `(col, row)` per chain position, starting at the Bonnet cable).
 - **A panel upside down** -> `PANEL_ROTATE = {chain_index: 180}`.
 - **Scrambled/striped image** -> `--multiplexing 1` (or 2, 4); try `--row-address 3` (display_test commands such as `run.sh walk`); with `run.sh --single` the flag is `--row-addr-type 3`.
+- **Flicker in mirror mode specifically** -> the camera's auto-exposure, not the panels: see "Flicker" in [`../docs/mirror.md`](../docs/mirror.md)
+  (`[CAMERA] light locked` in `logs/mirror.log`, `CAMERA_MAINS_HZ`).
 - **Flicker / low refresh** -> lower `--pwm-bits` (7->6, 6->5), `--lsb-ns`, or the refresh limit;
   run `run.sh tune`; add `isolcpus=3` to `/boot/firmware/cmdline.txt`; keep onboard audio off
   (`bootstrap_pi.sh` does that: it also blacklists `snd_bcm2835`).
@@ -163,7 +165,7 @@ misbehaves). `sudo journalctl -u wall-control` has the service's own output.
 Every photo (the picture the AI comments on, the receipt, the photobooth shots) is cut to
 portrait **around the people**: a small local face detector (`smartcrop.py`, model in
 `assets/models/`) places the crop over everyone's face; if no face is found it uses where the
-scene changed against the empty room, then the centre. The app's Photos tab can switch this off
+scene changed against the empty room, then the centre. The app's Mirror tab can switch this off
 (config `SMART_CROP`, env `WALL_SMART_CROP`). The live silhouette on the wall keeps its cheap centred crop.
 
 ## Smart Life lights (Tuya, local control)
@@ -221,7 +223,10 @@ Keep `devices.json`, `tinytuya.json` and `panel_setup/lights*.json` out of git (
 - **People**: "Learn my face" needs mirror mode running (it looks through the camera ~5 s). Stored only as numbers in
   `faces.json` on the Pi. "Learn frequent faces" is OFF by default; it suggests unnamed regulars after 5 sightings on 2 days.
   Models: `assets/models/get_models.sh` (the bootstrap script runs it).
-- **Aura** / **Pixel portrait** buttons (Photos tab, mirror mode): AI colour reading with the wall glowing in that colour; 48x48 sprite portrait.
+- **Two modes only**: a plain photo and the photobooth (the older aura reading and pixel portrait were removed). **Photobooth mode**, hand signals (open palm = photo, peace sign = strip),
+  the warm-white edge flash, "no comment", photos per strip (2 to 6), photobooth repeat, the flicker work and the settings table are all in [`../docs/mirror.md`](../docs/mirror.md).
+- **Start-up greeting**: after a real power-on (the Pi has been up for under 5 minutes) the wall shows a loading bar and a 6 second "Welcome to HOUSE FORTUNA" (`play.py`, `welcome.py`), then the art of the day.
+  Restarting the app never replays it. `boot_welcome: false` in `wall_state.json` turns it off.
 - **Quiet hours**: after N quiet minutes (the app offers never / 5 / 10 / 30) the mirror shows art; motion or a face
   brings the silhouette back only if "Wake the mirror when someone moves" is ticked (default off: only a button does).
 - **Guests**: visitors open `http://<pi>/d` (or scan the QR from the app) and their message scrolls across the bottom of the wall.
@@ -271,11 +276,12 @@ default to `0x0416` / `0x5011` (a GOOJPRT/Xprinter-type 58 mm printer): check yo
 | Wi-Fi / Ethernet ESC/POS printer | `tcp://<printer-ip>:9100` |
 | Bluetooth printer (paired, bound to `/dev/rfcomm0`) | `serial:/dev/rfcomm0` |
 
-Second Pi: copy `print_out.py`, `tools/print_server.py` and `tools/install_print_server.sh` into
-one folder on it and run `PRINT_KEY=<secret> ./install_print_server.sh`. It installs a service
+Second Pi: the quick way is `PRINTER_PI=<host>.local ./tools/setup_printer_pi.sh` from the laptop ([`../docs/printer-pi.md`](../docs/printer-pi.md)); by hand, copy
+`print_out.py`, `tools/print_server.py` and `tools/install_print_server.sh` into one folder on it and run `PRINT_KEY=<secret> ./install_print_server.sh`. It installs a service
 on port 8631, and the app's More tab shows whether the printer answers.
 
-Quality always beats speed. Paper is 57 mm, so the printable width is 384 dots at 203 dpi, the
-printer's full resolution. Pictures are Atkinson-dithered at exactly that width and sent as native
-raster. The head prints slowly and hot (`PRINTER_HEAT`, `PRINTER_DENSITY`, `PRINTER_DITHER` env
-vars in `print_out.py` if a printer needs tuning).
+Quality: paper is 57 mm, so the printable width is 384 dots at 203 dpi. Pictures are dithered (Floyd-Steinberg by default, single dots) and sent as native raster, with text, frames and
+the QR code drawn crisp on top; the feed after a print is a short exact 90 dots. Printers differ, so print the test slip (`python3 tools/print_test_slip.py`) and set `PRINTER_DITHER` /
+`PRINTER_SCALE` in `.env`; the heat and density commands are off unless `PRINTER_QUALITY=1` (some printers print their bytes as stray symbols). Details, the layouts and every setting:
+[`../docs/printing.md`](../docs/printing.md). Setting up a second Pi for the printer, from a blank SD card: [`../docs/printer-pi.md`](../docs/printer-pi.md)
+(`tools/setup_printer_pi.sh`).

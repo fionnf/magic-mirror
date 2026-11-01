@@ -1,0 +1,51 @@
+{
+ "name": "Cold Corona, Sunday",
+ "description": "A dark rounded body sits in a deep blue night while a cold halo of glacier light spills round its whole edge, widening and paling slowly through the day until by midnight the dark form floats inside a broad field of ice glow.",
+ "image": "2026-11-01.png",
+ "animation_source": "2026-11-01.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-01"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#060d1c #3f86c4 #dff3ff"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "Bass breath swells the corona's reach a little, tension tightens the rim, treble adds a fine airy haze to the halo's edge, the key leans its tint between ice blue and glacier white, and each hour's music leaves a faint soft lift in the outer glow so the day's sound is kept as the halo's breadth.",
+ "palette": [
+  "#060d1c",
+  "#3f86c4",
+  "#dff3ff"
+ ],
+ "source_sha256": "f76eee8d32e2e2c8e2d35476adb19e4c2ceced76bfb9b13b918e2ea1d452597f",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 3,
+ "created": 1793526060.2447293,
+ "curator": {
+  "score": 7,
+  "verdict": "A faithful, elegant ice-halo eclipse: one dark disc with a crisp glacier-white rim and a cold blue glow that widens through the day, clearly distinct from the recent warm pieces. It hangs, though the arc is modest, since 9 am and 3 pm read almost identically and the morning halo glow sits close to the 80/255 black threshold."
+ },
+ "direction": "Ice halo"
+}

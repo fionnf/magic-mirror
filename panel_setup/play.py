@@ -295,9 +295,17 @@ def main():
     if booting and a.anim not in ("welcome", "music"):
         try:                                             # power-on greeting, once
             from display import welcome
+            import numpy as np
+            from PIL import Image
             tw = time.monotonic()
-            while time.monotonic() - tw < welcome.LOOP_SEC:
-                if not matrix.draw(welcome.welcome_frame(time.monotonic() - tw), frame_fraction=2):
+            hello, fade = 6.0, 0.7                           # just "Welcome to HOUSE FORTUNA" (the wheel and the plasma are skipped)
+            while time.monotonic() - tw < hello:
+                e = time.monotonic() - tw
+                img = welcome.welcome_frame(e)
+                k = min(1.0, max(0.0, (hello - e) / fade))   # a quick fade to black at the end
+                if k < 1.0:
+                    img = Image.fromarray((np.asarray(img, np.float32) * k).astype(np.uint8), "RGB")
+                if not matrix.draw(img, frame_fraction=2):
                     time.sleep(interval)
         except KeyboardInterrupt:
             return

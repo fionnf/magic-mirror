@@ -227,7 +227,7 @@ PRINTER_PRODUCT_ID = 0x5011
 PRINTER_WIDTH_DOTS = 384
 # Text wrap column at the chosen size. AI line printed at 1x bold = ~32 cols.
 PRINTER_TEXT_COLS = 32
-PRINTER_MESSAGE_FONT_SIZE = 34   # AI message on the receipt (px at 203 dpi)
+PRINTER_MESSAGE_FONT_SIZE = 24   # AI message on the receipt (px at 203 dpi; was 34, too big)
 PRINTER_HEADER_FONT_SIZE = 20
 # width / height of the printed image. <1 = portrait; 0.75 = classic 3:4.
 PRINTER_IMAGE_ASPECT = 0.75   # width/height of the printed photo (0.75 = 3:4 portrait)

@@ -32,6 +32,7 @@ SCALE = max(1, int(os.environ.get("PRINTER_SCALE", 2)))
 # Some printers do not know the heat/density commands and PRINT their bytes instead (a stray angle, "(" and "#" at the top
 # of every slip). Off unless the printer is known to understand them: PRINTER_QUALITY=1.
 QUALITY = os.environ.get("PRINTER_QUALITY", "0") == "1"
+FEED_DOTS = max(0, min(255, int(os.environ.get("PRINTER_FEED_DOTS", 90))))   # blank paper after a print (8 dots = 1 mm); the cutter sits ~10 mm past the head
 
 
 def where():
@@ -45,6 +46,8 @@ def where():
 
 def to_1bit(img):
     """Greyscale picture -> 1-bit at exactly the printer's width (no scaling on the printer)."""
+    if getattr(img, "mode", "") == "1" and img.width == WIDTH:   # already dots at the printer's width: print exactly that
+        return img
     base, ink = img.info.get("base"), img.info.get("ink")       # a picture made in layers (printer.py): photos + crisp ink
     g = (base if base is not None else img).convert("L")
     target = max(8, WIDTH // SCALE)                              # dither at this width, then print each pixel as a block
@@ -63,8 +66,16 @@ def to_1bit(img):
     return bw
 
 
+_BAYER = (np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]], np.float32) + 0.5) / 16.0 * 255.0
+
+
 def _dither(g):
     """Greyscale -> 1-bit, same size."""
+    if DITHER == "bayer":                                        # ordered: a regular pattern, which thermal paper holds well
+        a = np.asarray(g, np.float32)
+        h, w = a.shape
+        t = np.tile(_BAYER, (h // 4 + 1, w // 4 + 1))[:h, :w]
+        return Image.fromarray(((a > t) * 255).astype(np.uint8)).convert("1", dither=Image.NONE)
     if DITHER != "atkinson":
         return g.convert("1")                                    # Floyd-Steinberg
     a = np.asarray(g, np.float32).copy()
@@ -119,9 +130,11 @@ def print_local(bw, spec="usb", cut=True):
         _quality(p)
         p.image(bw, impl="bitImageRaster", high_density_vertical=True, high_density_horizontal=True,
                 fragment_height=256, center=False)                # small bands: the head never starves
-        p.ln(4)
         if cut:
-            p.cut()
+            p._raw(b"\x1b\x4a" + bytes([FEED_DOTS]))                # feed just enough to clear the cutter, no more
+            p.cut(feed=False)
+        else:
+            p._raw(b"\x1b\x4a" + bytes([FEED_DOTS // 2]))
     finally:
         p.close()
 

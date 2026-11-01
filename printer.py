@@ -221,10 +221,12 @@ def render_booth_pil(frames: List[np.ndarray], label: str = "PHOTOBOOTH",
     if qr_url:
         try:
             import qrcode as _qrcode
-            qr = _qrcode.QRCode(box_size=3, border=2)
+            qr = _qrcode.QRCode(box_size=1, border=0, error_correction=_qrcode.constants.ERROR_CORRECT_L)
             qr.add_data(qr_url)
             qr.make(fit=True)
-            qr_img = qr.make_image(fill_color="black", back_color="white").convert("L").resize((104, 104), Image.LANCZOS)
+            mod = qr.make_image(fill_color="black", back_color="white").convert("L")
+            k = max(2, 104 // mod.width)                       # whole dots per module: crisp squares that scan off thermal paper
+            qr_img = mod.resize((mod.width * k, mod.width * k), Image.NEAREST)
         except Exception as e:
             print(f"[PRINTER] QR generation skipped: {e}")
             qr_img = None
@@ -281,7 +283,7 @@ def render_booth_pil(frames: List[np.ndarray], label: str = "PHOTOBOOTH",
         d.text((tx, y + 12), house, fill=0, font=small)
         _heart(d, tx + hw + 14, y + 24, 7)
         d.text((tx, y + 40), ts, fill=0, font=small)
-        d.text((tx, y + 68), "scan for your photos", fill=0, font=tiny)
+        d.text((tx, y + 68), "scan: all of today's photos", fill=0, font=tiny)
     else:
         hw = d.textlength(house, font=small)
         d.text(((W - hw) / 2, y + 1), house, fill=0, font=small)

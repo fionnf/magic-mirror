@@ -980,7 +980,7 @@ async function loadVersion() {
   try {
     const v = await api('/api/version'); if (!v.commit) return;
     const d = new Date(v.time * 1000);
-    $('version').textContent = `Running: ${v.subject} (${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})})`;
+    $('version').textContent = `Running: ${v.subject} (${v.commit}, ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})})` + (v.update ? ` · Last update: ${v.update}` : '');
   } catch (e) {}
 }
 async function updateWall(reboot) {

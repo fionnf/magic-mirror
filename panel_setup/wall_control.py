@@ -839,7 +839,15 @@ def make_app(runner):
         try:
             out = subprocess.run(["git", "-c", f"safe.directory={ROOT}", "-C", ROOT, "log", "-1", "--format=%h%x00%s%x00%ct"],
                                  capture_output=True, text=True, timeout=5).stdout.strip().split("\0")
-            return jsonify({"commit": out[0], "subject": out[1], "time": int(out[2])})
+            last = ""
+            try:
+                with open(os.path.join(LOG_DIR, "update.log"), "rb") as fh:
+                    fh.seek(max(0, os.path.getsize(fh.name) - 600))
+                    lines = [x for x in fh.read().decode(errors="replace").splitlines() if x.strip()]
+                    last = lines[-1] if lines else ""
+            except OSError:
+                pass
+            return jsonify({"commit": out[0], "subject": out[1], "time": int(out[2]), "update": last})
         except Exception:
             return jsonify({"commit": None})
 

@@ -1226,18 +1226,36 @@ function dismissSug(id) { api('/api/faces/dismiss', {id}).then(loadMore); }
 
 /* ---------- start ---------- */
 let started = false;
+async function loadDaily() {            // only feeds the title/subtitle of the "Art of the day" mode
+  try {
+    DAILY = await api('/api/daily');
+    const eds = DAILY.editions || [];
+    DAILY.chosenMeta = eds.find(e => e.date === (DAILY.chosen || DAILY.today)) || eds[0];
+    render();
+  } catch (e) { console.error('loadDaily', e); }
+}
+/* One failing section must never take the rest of the app down: every step runs on its own. */
+const step = (name, fn) => { try { const r = fn(); if (r && r.catch) r.catch(e => console.error(name, e)); } catch (e) { console.error(name, e); } };
 async function start() {
   if (started) return;
-  try { await refresh(); await loadModes(); } catch (e) { return; }
   started = true;
-  if (welcome.piece && window.Fortuna) { window.Fortuna.remove(welcome.piece); welcome.piece = null; }   // the door piece stops once inside
-  $('qrImg').src = $('qrLink').href = u('/d/qr.png');
-  shaderLib(); loadScenes(); loadDaily(); loadMusic(); refreshNow(); loadArt(); loadVersion(); loadMatter(); loadWallSwitch(); loadLook();
-  try { const t = localStorage.getItem('tab'); if (t) document.querySelector(`nav [data-tab="${t}"]`).click(); } catch (e) {}
-  setInterval(refresh, 3000); setInterval(loadMusic, 5000); setInterval(loadDaily, 60000); setInterval(refreshNow, 1500); setInterval(loadScenes, 30000); setInterval(loadLook, 15000);
-  const rows = Math.round((STATUS.wall_h || 192) / 64), cols = Math.round((STATUS.wall_w || 192) / 64);
-  document.documentElement.style.setProperty('--aspect', `${cols} / ${rows}`);
-  document.documentElement.style.setProperty('--rows', rows); document.documentElement.style.setProperty('--cols', cols);
+  /* the preview and the polling come first, so the page stays alive whatever else fails */
+  step('refreshNow', refreshNow);
+  setInterval(() => step('refresh', refresh), 3000); setInterval(() => step('loadMusic', loadMusic), 5000);
+  setInterval(() => step('loadDaily', loadDaily), 60000); setInterval(() => step('refreshNow', refreshNow), 1500);
+  setInterval(() => step('loadScenes', loadScenes), 30000); setInterval(() => step('loadLook', loadLook), 15000);
+  step('refresh', refresh);
+  await Promise.resolve(loadModes()).catch(e => console.error('loadModes', e));
+  step('welcome.piece', () => { if (welcome.piece && window.Fortuna) { window.Fortuna.remove(welcome.piece); welcome.piece = null; } });   // the door piece stops once inside
+  step('qr', () => { $('qrImg').src = $('qrLink').href = u('/d/qr.png'); });
+  for (const [n, f] of [['shaderLib', shaderLib], ['loadScenes', loadScenes], ['loadDaily', loadDaily], ['loadMusic', loadMusic], ['loadArt', loadArt],
+      ['loadVersion', loadVersion], ['loadMatter', loadMatter], ['loadWallSwitch', loadWallSwitch], ['loadLook', loadLook]]) step(n, f);
+  step('tab', () => { const t = localStorage.getItem('tab'); if (t) document.querySelector(`nav [data-tab="${t}"]`).click(); });
+  step('aspect', () => {
+    const r = Math.round((STATUS.wall_h || 192) / 64), c = Math.round((STATUS.wall_w || 192) / 64);
+    document.documentElement.style.setProperty('--aspect', `${c} / ${r}`);
+    document.documentElement.style.setProperty('--rows', r); document.documentElement.style.setProperty('--cols', c);
+  });
 }
 (async () => {
   if (!(await findWall())) { document.body.classList.add('away'); if (REMOTE) welcome($('gateAway').querySelector('.wrap')); return; }

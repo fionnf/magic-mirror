@@ -2,7 +2,8 @@
 
 It works without mirror mode. The camera is opened only while someone is watching (the app's "Look through the camera" button) and
 closed 10 seconds after the last viewer leaves; the picture is a small, low-rate MJPEG stream (about 6 frames a second, 640 px), light
-enough for the tunnel. While the mirror is running it owns the camera, so the live view then takes its pictures from the mirror
+enough for the tunnel. The camera is opened by a small helper process (`python3 camera_live.py --worker`), never by the web server itself, so
+if the camera layer misbehaves only the helper dies and the app gets the reason. While the mirror is running it owns the camera, so the live view then takes its pictures from the mirror
 (`/api/frame.jpg` on the mirror's own port). Starting the mirror closes the live view's camera first.
 
 Visitors from outside the home network need the wall's password, like every other part of the app. And it is never secret that it is
@@ -10,6 +11,10 @@ on: while anyone is watching, a small red dot blinks in a corner of the wall (pl
 touches every second) and the app says so.
 """
 import os
+import select
+import struct
+import subprocess
+import sys
 import threading
 import time
 
@@ -18,8 +23,57 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FLAG = os.path.join(HERE, "panel_setup", "liveview.on")
+LOG = os.path.join(HERE, "panel_setup", "logs", "camera_live.log")
 WIDTH, FPS, IDLE = 640, 6, 10.0
 
+
+def _jpeg(frame):
+    h, w = frame.shape[:2]
+    if w > WIDTH:
+        frame = cv2.resize(frame, (WIDTH, int(h * WIDTH / w)), interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 62])
+    return buf.tobytes() if ok else None
+
+
+# ------------------------------------------------------------------ the helper process ---
+
+def worker():
+    """Open the camera and write JPEG frames to stdout, each as a 4-byte big-endian length and the bytes, until stdin closes or SIGTERM."""
+    if os.environ.get("CAMERA_LIVE_FAKE"):                    # tests: a synthetic picture, no camera
+        n = {"i": 0}
+
+        def grab():
+            n["i"] += 1
+            f = np.zeros((480, 640, 3), np.uint8)
+            f[:, :, 1] = (n["i"] * 20) % 255
+            return f
+    else:
+        try:
+            from picamera2 import Picamera2
+            cam = Picamera2()
+            cam.configure(cam.create_video_configuration(main={"size": (WIDTH, 480), "format": "RGB888"}, buffer_count=2))
+            cam.start()
+            time.sleep(0.8)                                   # let the exposure settle
+            grab = lambda: cv2.cvtColor(cam.capture_array(), cv2.COLOR_RGB2BGR)
+        except ImportError:
+            if not os.environ.get("WALL_SIM"):
+                sys.exit("no Pi camera on this machine (picamera2 is not installed)")
+            cap = cv2.VideoCapture(0)                         # the laptop simulator: its own webcam
+            if not cap.isOpened():
+                sys.exit("no camera found")
+            grab = lambda: cap.read()[1]
+    out = sys.stdout.buffer
+    while True:
+        t0 = time.time()
+        frame = grab()
+        jpg = _jpeg(frame) if frame is not None else None
+        if jpg:
+            out.write(struct.pack(">I", len(jpg)) + jpg)
+            out.flush()
+        time.sleep(max(0.0, 1.0 / FPS - (time.time() - t0)))
+
+
+# ------------------------------------------------------------------ the web server's side ---
 
 class LiveView:
     def __init__(self, mirror_on=lambda: False, mirror_frame=lambda: None):
@@ -28,37 +82,59 @@ class LiveView:
         self.latest, self.error, self.source = None, "", ""
         self._lock = threading.Lock()
         self._thread = None
+        self._proc = None
         self._stop = threading.Event()
         self._first = threading.Event()
 
-    # ---- the camera ----
-    @staticmethod
-    def _open():
-        """-> a function returning a BGR frame, and a function that closes the camera."""
-        try:
-            from picamera2 import Picamera2
-            cam = Picamera2()
-            cam.configure(cam.create_video_configuration(main={"size": (WIDTH, 480), "format": "RGB888"}, buffer_count=2))
-            cam.start()
-            time.sleep(0.8)                                       # let the exposure settle
-            return (lambda: cv2.cvtColor(cam.capture_array(), cv2.COLOR_RGB2BGR)), (lambda: (cam.stop(), cam.close()))
-        except ImportError:
-            if not os.environ.get("WALL_SIM"):
-                raise RuntimeError("no Pi camera on this machine")
-            cap = cv2.VideoCapture(0)                             # the laptop simulator: its own webcam
-            if not cap.isOpened():
-                raise RuntimeError("no camera found")
-            return (lambda: cap.read()[1]), cap.release
+    def _spawn(self):
+        os.makedirs(os.path.dirname(LOG), exist_ok=True)
+        log = open(LOG, "ab")
+        log.write(f"\n==== {time.ctime()} live view starts the camera helper\n".encode())
+        log.flush()
+        return subprocess.Popen([sys.executable, "-u", os.path.abspath(__file__), "--worker"], cwd=HERE, stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE, stderr=log, env=dict(os.environ))
 
-    def _jpeg(self, frame):
-        h, w = frame.shape[:2]
-        if w > WIDTH:
-            frame = cv2.resize(frame, (WIDTH, int(h * WIDTH / w)), interpolation=cv2.INTER_AREA)
-        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 62])
-        return buf.tobytes() if ok else None
+    def _why_it_died(self, proc):
+        try:
+            with open(LOG, "rb") as fh:
+                fh.seek(max(0, os.path.getsize(LOG) - 1500))
+                tail = [x for x in fh.read().decode(errors="replace").strip().splitlines() if x.strip()]
+        except OSError:
+            tail = []
+        return (tail[-1] if tail else f"the camera helper stopped (exit {proc.returncode})")[:200]
+
+    def _kill(self):
+        proc, self._proc = self._proc, None
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(3)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+
+    def _read_frame(self, proc, timeout=1.0):
+        """One JPEG from the helper, None if none came in `timeout` seconds, raises EOFError when it has gone."""
+        r, _, _ = select.select([proc.stdout], [], [], timeout)
+        if not r:
+            if proc.poll() is not None:
+                raise EOFError
+            return None
+        hdr = proc.stdout.read(4)
+        if len(hdr) < 4:
+            raise EOFError
+        n = struct.unpack(">I", hdr)[0]
+        data = b""
+        while len(data) < n:
+            chunk = proc.stdout.read(n - len(data))
+            if not chunk:
+                raise EOFError
+            data += chunk
+        return data
 
     def _loop(self):
-        grab = close = None
         last_seen = time.time()
         try:
             while not self._stop.is_set():
@@ -73,32 +149,39 @@ class LiveView:
                     pass
                 t0 = time.time()
                 try:
-                    if self.mirror_on():
-                        if close:                                  # the mirror owns the camera now
-                            close(); grab = close = None
-                        jpg = self.mirror_frame()
+                    if self.mirror_on():                      # the mirror owns the camera: its pictures, not ours
+                        self._kill()
                         self.source = "mirror"
-                    else:
-                        if grab is None:
-                            grab, close = self._open()
-                        frame = grab()
-                        jpg = self._jpeg(frame) if frame is not None else None
-                        self.source = "camera"
+                        jpg = self.mirror_frame()
+                        if jpg:
+                            self.latest, self.error = jpg, ""
+                        else:
+                            self.error = "the mirror is running but sent no picture (restart the mirror)"
+                        self._first.set()
+                        time.sleep(max(0.0, 1.0 / FPS - (time.time() - t0)))
+                        continue
+                    self.source = "camera"
+                    if self._proc is None:
+                        self._proc = self._spawn()
+                    jpg = self._read_frame(self._proc)
                     if jpg:
                         self.latest, self.error = jpg, ""
                         self._first.set()
-                except Exception as e:
-                    self.error = str(e)[:100]
+                except EOFError:
+                    proc = self._proc
+                    self.error = self._why_it_died(proc) if proc else "the camera helper stopped"
+                    print(f"[camera] live view: {self.error}", flush=True)
+                    self._kill()
                     self._first.set()
-                    if grab is None:
-                        time.sleep(2.0)
-                time.sleep(max(0.0, 1.0 / FPS - (time.time() - t0)))
+                    time.sleep(2.0)                           # not in a tight loop if the camera cannot be opened
+                except Exception as e:
+                    self.error = (type(e).__name__ + ": " + str(e))[:160]
+                    print(f"[camera] live view: {self.error}", flush=True)
+                    self._kill()
+                    self._first.set()
+                    time.sleep(2.0)
         finally:
-            if close:
-                try:
-                    close()
-                except Exception:
-                    pass
+            self._kill()
             try:
                 os.remove(FLAG)
             except OSError:
@@ -114,7 +197,7 @@ class LiveView:
                 self._first.clear()
                 self._thread = threading.Thread(target=self._loop, daemon=True, name="camera-live")
                 self._thread.start()
-        self._first.wait(6.0)
+        self._first.wait(8.0)
 
     # ---- for the app ----
     def stream(self):
@@ -135,7 +218,7 @@ class LiveView:
             self.viewers = max(0, self.viewers - 1)
 
     def snapshot(self):
-        """One JPEG now (starts the camera for a moment if nobody is watching), or None."""
+        """One JPEG now (starts the camera for a moment if nobody is watching), or None (then `error` says why)."""
         self.viewers += 1
         try:
             self._ensure()
@@ -151,4 +234,10 @@ class LiveView:
         self._stop.set()
         th = self._thread
         if th is not None:
-            th.join(timeout=4.0)
+            th.join(timeout=5.0)
+        self._kill()
+
+
+if __name__ == "__main__":
+    if "--worker" in sys.argv:
+        worker()

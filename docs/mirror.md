@@ -66,9 +66,15 @@ The photobooth no longer gives pose directions: the shots are just 3, 2, 1, flas
 ## A look through the camera (More tab, without mirror mode)
 
 *More, Look through the camera, Look now* shows what the wall's camera sees, live, like a webcam: from the sofa or from anywhere you can reach the app (outside the home network it needs the wall's password like everything else).
-It works with the mirror off: the camera is opened only while someone is watching and closed 10 seconds after the last viewer leaves (`camera_live.py`). It is a light stream, about 6 pictures a second at 640 px (`/api/camera/live.mjpg`; `/api/camera/snapshot.jpg` gives one picture).
+It works with the mirror off: the camera is opened only while someone is watching and closed 10 seconds after the last viewer leaves (`camera_live.py`). The camera is opened by a **small helper process** (`python3 camera_live.py --worker`), never by the web server itself: if the camera layer fails or crashes, only the helper dies, the app stays up and tells you why (the error text is shown under the picture; the helper's own output is in `panel_setup/logs/camera_live.log`). It is a light stream, about 6 pictures a second at 640 px (`/api/camera/live.mjpg`; `/api/camera/snapshot.jpg` gives one picture).
 If the mirror is running it owns the camera, so the live view then takes its pictures from the mirror (`/api/frame.jpg` on the mirror's port); starting the mirror closes the live view's own camera first.
 It is never hidden: **while anyone is watching, a small red dot blinks in the top-right corner of the wall** (`play.py` reads `panel_setup/liveview.on`, which the live view touches every second), the app says so, and each viewer is logged (`[camera] live view opened by <address>`).
+
+## Sharing links from the app (More tab, *Share*)
+
+- **Write on the wall**: the guest-message page (`/d`, works on the home Wi-Fi: by name, `http://<hostname>.local/d`, and by address). *Share* opens the phone's share sheet; *Copy* puts the link on the clipboard.
+- **Photo galleries**: one Drive link per day (today's first), each opening that day's pictures in full size and no other day. The list comes from Drive (`cloud_uploader.list_day_folders`, `GET /api/share`); today's folder is made if it does not exist yet.
+  It is the same link the QR code on a printed strip carries. Anyone who has a day's link can see that whole day, so share the right one.
 
 ## Settings (the Mirror tab and More tab; `panel_setup/mirror_settings.json`, re-read at every use, no restart)
 

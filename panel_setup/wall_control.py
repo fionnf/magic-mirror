@@ -965,6 +965,41 @@ def make_app(runner):
         runner.play("daily")
         return jsonify(runner.status())
 
+    # ---- links to share: the guest-message page and the day galleries ----
+    def _lan_urls():
+        import socket
+        ip = ""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("10.255.255.255", 1))
+            ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            pass
+        host = socket.gethostname()
+        return [f"http://{host}.local/d"] + ([f"http://{ip}/d"] if ip else [])
+
+    @app.get("/api/share")
+    def share_links():
+        """What the app can hand out: the guest page (works on the home Wi-Fi) and the day galleries (work anywhere, one link per day)."""
+        out = {"guest": _lan_urls(), "days": [], "gallery": False, "error": ""}
+        try:
+            import cloud_uploader
+            if cloud_uploader._build_service() is not None and cloud_uploader._parent_folder_id():
+                out["gallery"] = True
+                out["days"] = cloud_uploader.list_day_folders(30)
+                today = datetime.date.today().isoformat()
+                if not out["days"] or out["days"][0]["date"] != today:
+                    try:                                                  # today's folder, so there is always a link for today
+                        link = cloud_uploader.today_link()
+                        if link:
+                            out["days"].insert(0, {"date": today, "url": link})
+                    except Exception as e:
+                        out["error"] = str(e)[:100]
+        except Exception as e:
+            out["error"] = str(e)[:100]
+        return jsonify(out)
+
     # ---- a live look through the camera, without mirror mode (see camera_live.py) ----
     import camera_live
 
@@ -983,7 +1018,8 @@ def make_app(runner):
         print(f"[camera] live view opened by {request.remote_addr}", flush=True)
         snap = LIVE.snapshot()
         if snap is None:
-            return jsonify({"error": LIVE.error or "the camera is not available"}), 503
+            print(f"[camera] live view failed: {LIVE.error or 'no picture'}", flush=True)
+            return jsonify({"error": LIVE.error or "no picture came from the camera"}), 503
         return Response(LIVE.stream(), mimetype="multipart/x-mixed-replace; boundary=frame",
                         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 

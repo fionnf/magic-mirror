@@ -205,6 +205,29 @@ def _do_create_session_folder() -> Optional[Tuple[str, str]]:
         return _day_cache[day]
 
 
+def list_day_folders(limit: int = 30):
+    """The day folders that exist, newest first: [{"date": "2026-11-01", "url": ...}]. [] when Drive is not set up."""
+    service = _build_service()
+    parent_id = _parent_folder_id()
+    if service is None or not parent_id:
+        return []
+    res = service.files().list(
+        q=f"'{parent_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and name contains 'Photobooth ' and trashed = false",
+        fields="files(id,name)", orderBy="name desc", pageSize=limit).execute().get("files", [])
+    out = []
+    for f in res:
+        d = f["name"].replace("Photobooth ", "").strip()
+        if len(d) == 10 and d[4] == "-" and d[7] == "-":
+            out.append({"date": d, "url": f"https://drive.google.com/drive/folders/{f['id']}"})
+    return out
+
+
+def today_link() -> Optional[str]:
+    """The link to today's folder (made if it does not exist yet): what a guest sees."""
+    got = _do_create_session_folder()
+    return got[1] if got else None
+
+
 def _day_folder_id() -> Optional[str]:
     """Where today's pictures go: the day folder, or the plain parent folder if the day folder cannot be made."""
     try:

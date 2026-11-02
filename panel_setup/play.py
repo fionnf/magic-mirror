@@ -210,7 +210,15 @@ _live = {"t": 0.0, "on": False}
 
 
 def _live_dot(img):
-    """While someone is looking through the camera from the app, a small red dot blinks in the top-right corner of the wall."""
+    """While someone is looking through the camera from the app, a small red dot blinks in the top-right corner of the wall.
+    Wrapped so that nothing in here can ever take the display down."""
+    try:
+        return _live_dot_inner(img)
+    except Exception:
+        return img
+
+
+def _live_dot_inner(img):
     now = time.monotonic()
     if now - _live["t"] > 1.0:
         _live["t"] = now

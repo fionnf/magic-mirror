@@ -2,16 +2,16 @@
 # Set up the room's second Pi as the wireless receipt-printer server, from this laptop, once it has booted and joined
 # the Wi-Fi (flash it with Raspberry Pi Imager: hostname printpi, user pi, your Wi-Fi, SSH on - see docs/printer-pi.md).
 #
-#   PRINTER_PI=printpi.local ./tools/setup_printer_pi.sh
+#   PRINTER_PI=printer.local ./tools/setup_printer_pi.sh
 #
 # It (1) copies the print server to the printer Pi, (2) installs and starts it as a service with a fresh shared secret,
 # (3) tells the wall's Pi (WALL_HOST, default the live wall) where the printer is, and restarts the wall's app.
 # Nothing here prints: after it, "Mirror" > photo or photobooth strip prints on the wireless printer.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-PRINTER_PI="${PRINTER_PI:-printpi.local}"
+PRINTER_PI="${PRINTER_PI:-printer.local}"
 PRINTER_USER="${PRINTER_USER:-pi}"
-WALL_HOST="${WALL_HOST:-192.168.1.129}"
+WALL_HOST="${WALL_HOST:-mirror4.local}"
 WALL_USER="${WALL_USER:-pi}"
 PRINTER_TARGET="${PRINTER_TARGET:-usb}"          # usb | serial:/dev/rfcomm0 (Bluetooth) | tcp://192.168.1.50:9100
 KEY="${PRINT_KEY:-$(openssl rand -hex 16)}"

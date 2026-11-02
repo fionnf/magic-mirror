@@ -117,6 +117,7 @@ def _dir_bytes() -> int:
 def shrink(path: str, side: int = SMALL_SIDE) -> int:
     """Replace a picture by a small copy of itself, in place; returns the bytes saved."""
     before = os.path.getsize(path)
+    st = os.stat(path)
     im = Image.open(path)
     im.draft("RGB", (side * 2, side * 2))
     im = im.convert("RGB")
@@ -124,6 +125,10 @@ def shrink(path: str, side: int = SMALL_SIDE) -> int:
     tmp = path + ".tmp.jpg"
     im.save(tmp, format="JPEG", quality=82)
     os.replace(tmp, path)
+    try:
+        os.utime(path, (st.st_atime, st.st_mtime))             # keep the picture's date: the gallery sorts by it
+    except OSError:
+        pass
     return max(0, before - os.path.getsize(path))
 
 

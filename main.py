@@ -459,7 +459,7 @@ class MagicMirror:
             key = (self._silhouette_version, id(self._overlay_image),
                    self._overlay_text, int(time.monotonic() * 8) if sparkling else None,
                    int(time.monotonic() * 4) if self.booth_mode else None,
-                   (self._gesture[0], int(self._gesture[1] * 24)) if self._gesture is not None else None)
+                   (lambda g: (g[0], int(g[1] * 24)) if g is not None else None)(self._gesture))
             if key != last_key:
                 last_key = key
                 canvas = self._silhouette()
@@ -840,7 +840,8 @@ class MagicMirror:
                 d = ImageDraw.Draw(canvas)
                 d.rectangle([0, 0, W - 1, H - 1], outline=gold, width=2)
                 self._show(canvas)
-        tw_, th_ = (W - 2 * 6 - 2 * 4) // 3, 0
+        n_ = max(1, len(shots))
+        tw_, th_ = min((W - 2 * 6 - 4 * (n_ - 1)) // n_, int((H - 40) * 0.75)), 0
         th_ = int(tw_ / 0.75)
         t0 = time.monotonic()
         while not self._stop.is_set() and time.monotonic() - t0 < 3.5:

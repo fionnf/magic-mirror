@@ -1,7 +1,7 @@
 {
  "name": "Amber Aperture",
  "description": "A soft rectangular window of amber light hovers in darkness, breathing from a narrow morning slit into a fuller evening glow as the day leaves faint sediment in its frame.",
- "image": "2026-11-02.png",
+ "image": "2026-11-02.final.png",
  "animation_source": "2026-11-02.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 8
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 4
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": 16
   }
  ],
  "listening": "It listens as a slow tide: bass widens the aperture, treble sharpens the rim, and the day-memory settles as a faint warm halo that accumulates hour by hour.",
@@ -47,5 +59,36 @@
   "score": 8,
   "verdict": "This piece captures the direction beautifully with a clear, soft amber rectangular aperture glowing against a dark background. The gradual breathing light throughout the day gives it a serene, elegant arc that fits the house's restrained taste perfectly."
  },
- "direction": "Amber aperture"
+ "direction": "Amber aperture",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.194,
+  0.861,
+  0.306,
+  0.358,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "\"Amber Aperture\" shared the rhythm of a calm late afternoon, with music gently swelling and receding like a slow tide. The amber glow grew quietly warmer and fuller, tracing the day's shifting light in soft pulses without a clear melody to mark its passing. The still captures a warm, rounded frame of sound that lingered into the night.",
+  "alt": "A soft amber rectangular light with rounded corners glows against a dark background, its edges gently blurred to create a warm halo effect."
+ },
+ "final": true
 }

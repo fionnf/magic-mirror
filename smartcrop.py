@@ -40,6 +40,26 @@ def _detector(w, h):
     return _det
 
 
+def focus_rect(rows, w, h, min_side=40):
+    """The face to focus and expose for, as a rectangle (x, y, w, h) normalised to a w x h frame: the biggest face, preferring
+    ones nearer the middle (area / (1 + distance from the centre))). None if there is no face of at least min_side pixels."""
+    best, best_v = None, 0.0
+    for r in rows:
+        if min(r[2], r[3]) < min_side:
+            continue
+        cx, cy = (r[0] + r[2] / 2.0) / w - 0.5, (r[1] + r[3] / 2.0) / h - 0.5
+        v = (r[2] * r[3]) / (1.0 + 2.0 * (cx * cx + cy * cy) ** 0.5)
+        if v > best_v:
+            best, best_v = r, v
+    if best is None:
+        return None
+    x0, y0 = max(0.0, best[0] / w), max(0.0, best[1] / h)
+    x1, y1 = min(1.0, (best[0] + best[2]) / w), min(1.0, (best[1] + best[3]) / h)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return (float(x0), float(y0), float(x1 - x0), float(y1 - y0))
+
+
 def find_face_rows(frame):
     """YuNet rows in the coordinates of `frame`: x, y, w, h, 5 landmarks (x, y) x5, score.
     Landmark order: right eye, left eye, nose tip, right mouth corner, left mouth corner."""

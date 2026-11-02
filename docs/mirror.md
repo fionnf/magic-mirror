@@ -48,6 +48,17 @@ The page works at once, but until it has a Google **API key** it shows the Drive
 2. Edit the key: *Application restrictions: Websites*, add `https://fionnf.github.io/*`; *API restrictions: Google Drive API*. (The key sits in the public page, which is fine because it can only call the Drive API from that website, and only reads folders that are shared by link.)
 3. Give it to the site: `gh variable set GALLERY_API_KEY --body <the key>` in the repository (or *Settings, Secrets and variables, Actions, Variables*), then run the *Fortuna gallery* workflow (or push anything under `site/`). `tools/build_gallery.py` puts the key into `p/index.html`.
 
+## Autofocus and face exposure (Camera Module 3)
+
+The live stream runs **continuous autofocus** (fast, normal range: no macro). The live frame is not the whole sensor: it is a 4:3 window of it (`ScalerCrop`, 2304 x 1728 of the 4608 x 2592 array on our camera), so a face rectangle on the raw 640x480 frame maps linearly into that window (`camera.face_to_af_window`).
+With `face_focus` on, `_capture_with_flash` does this while the pre-glow runs:
+
+1. finds the face in the newest raw live frame (YuNet; the biggest face, preferring the middle: `smartcrop.focus_rect`) and starts one AF cycle on a window around it (`Camera.start_focus`); the pre-glow is held for up to 1.2 s until the camera reports *focused* (`[FOCUS] ...` in the log);
+2. the still is exposed for the face (`capture_still(face_rect=...)`): the face's mean luma in the live frame is brought towards 0.5 by scaling exposure x gain by up to 0.5x-2x, exposure in whole mains-flicker periods (10, 20, 30 ms), the rest as gain (1-16). The lens is pinned where AF left it for the exposure (manual focus at the same lens position);
+3. afterwards the normal locked light returns and continuous AF resumes.
+
+Everything fails safe: no face, no autofocus (simulator cameras, a USB webcam), the setting off, any error or a focus that does not finish in time leaves the photo exactly as it was before. The live view's locked exposure is untouched.
+
 ## Resolution: pictures are saved as the camera took them
 
 A photo is taken in the camera's **still mode at the sensor's full resolution** (`config.STILL_SIZE`, 4608 x 2592 on a Camera Module 3), then cut to portrait around the people: about 1944 x 2592, 5 megapixels.
@@ -95,6 +106,7 @@ It is never hidden: **while anyone is watching, a small red dot blinks in the to
 | `photos_gb` | 1 | How many GB of full-size photos to keep on the wall; beyond it the oldest ones already in Drive shrink to small copies |
 | `booth_shots` | 3 | Photos in one strip (2 to 6) |
 | `booth_repeat` | off | Photobooth mode keeps going: another strip 7 s after the last while someone is still in front; it stops by itself 30 s after everyone has left |
+| `face_focus` | on | The photo is focused and exposed for the face (see below); off = the camera decides |
 | `gesture` | on | Hand signals |
 | `smile` | on | Sparkles around a smiling face |
 | `recognise`, `learn_faces` | on, off | Greet enrolled people by name; suggest names for regulars (see the panel_setup README) |

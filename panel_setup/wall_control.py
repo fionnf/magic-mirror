@@ -582,7 +582,7 @@ def _minutes(v):
 
 
 def make_app(runner):
-    from flask import Flask, jsonify, request, send_from_directory, redirect, make_response
+    from flask import Flask, jsonify, request, send_from_directory, redirect, make_response, Response
     import hmac
     import hashlib as _hl
     app = Flask(__name__, static_folder=None)

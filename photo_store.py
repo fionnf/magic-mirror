@@ -20,7 +20,37 @@ from PIL import Image
 
 import config
 
-PHOTOS_DIR = os.path.join(os.path.dirname(__file__), "photos")
+# Where the pictures live. Set WALL_PHOTOS_DIR in .env to keep them on a USB stick or SSD (mount it, e.g. at /mnt/photos).
+PHOTOS_DIR = os.environ.get("WALL_PHOTOS_DIR") or os.path.join(os.path.dirname(__file__), "photos")
+MIN_FREE = 400 * 1024 * 1024          # below this much free space new photos are not saved (the wall must never fill its card)
+
+
+def disk_info() -> Dict:
+    """{'dir', 'photos', 'bytes', 'free', 'total', 'low'}: what the pictures take, and what is left on the disk they are on."""
+    d = PHOTOS_DIR
+    n = size = 0
+    try:
+        for f in os.scandir(d):
+            if f.name.endswith(".jpg") and not f.name.endswith(("_thumb.jpg", "_frame.jpg")) and "_shot" not in f.name and not f.name.startswith("strip_"):
+                n += 1
+            if f.is_file():
+                size += f.stat().st_size
+    except OSError:
+        pass
+    try:
+        st = os.statvfs(d if os.path.isdir(d) else os.path.dirname(d))
+        free, total = st.f_bavail * st.f_frsize, st.f_blocks * st.f_frsize
+    except OSError:
+        free = total = 0
+    return {"dir": d, "photos": n, "bytes": size, "free": free, "total": total, "low": free < 3 * MIN_FREE}
+
+
+def _room_for_more() -> bool:
+    free = disk_info()["free"]
+    if free and free < MIN_FREE:
+        print(f"[PHOTOS] disk almost full ({free // 1048576} MB free): not saving this picture. Free space or set WALL_PHOTOS_DIR to a USB stick.", flush=True)
+        return False
+    return True
 
 
 def _dir() -> str:
@@ -30,6 +60,8 @@ def _dir() -> str:
 
 def _save_full(frame: np.ndarray, path: str) -> None:
     """The picture at its full resolution: JPEG at config.PHOTO_JPEG_QUALITY, no chroma subsampling."""
+    if not _room_for_more():
+        return
     Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).save(
         path, format="JPEG", quality=getattr(config, "PHOTO_JPEG_QUALITY", 95), subsampling=0, optimize=True)
 

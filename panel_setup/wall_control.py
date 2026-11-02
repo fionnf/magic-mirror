@@ -52,6 +52,7 @@ MODES = [
     ("music", "Live", "Music", "Art that breathes with the music in the room"),
     ("ambient", "Live", "Art + trams", "Lava & Coral with a small Rennweg tram strip"),
     ("trams", "Live", "Tram board", "Live departures from Rennweg, split-flap style"),
+    ("snapshots", "Art", "Mirror photos", "A slideshow of every picture the mirror has taken, in random order, with a slow zoom and soft fades"),
     ("kilchberg", "Live", "Kilchberg trains", "Live S-Bahn departures from Kilchberg ZH on a station display, with delays and platforms"),
     ("zurichhb", "Live", "Zürich HB trains", "Live train departures from Zürich HB on a station display: line, destination, platform, minutes, delays"),
     ("planes", "Art", "Planes", "Every aircraft over Zürich right now, drawing its path in light"),
@@ -77,7 +78,7 @@ MODES = [
 MODE_IDS = {m[0] for m in MODES}
 LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "westcork.thumb",   # mode -> module.thumb
                "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "wanderers": "wanderers.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
-               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb", "lennart": "lennart_film.thumb", "kilchberg": "kilchberg.thumb", "zurichhb": "kilchberg.thumb_hb",
+               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb", "lennart": "lennart_film.thumb", "kilchberg": "kilchberg.thumb", "snapshots": "slideshow.thumb", "zurichhb": "kilchberg.thumb_hb",
                "quakes": "quakes.thumb"}
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",
@@ -211,7 +212,30 @@ class Runner:
                                      stdin=subprocess.DEVNULL, start_new_session=True)
 
     # -- public API
+    @staticmethod
+    def _close_listening():
+        """Listening mode (follow the speakers, show the album art) ends when something else is chosen by hand."""
+        try:
+            from display import music as mu
+            st = mu.load_settings()
+            if st.get("cast_follow") or st.get("cast_all"):
+                st["cast_follow"], st["cast_all"] = False, False
+                mu._write_json(mu.SETTINGS_FILE, st)
+        except Exception as e:
+            print(f"[listen] {e}", flush=True)
+
+    def _start_entry(self, entry):
+        """A playlist entry: a mode id, or "piece:<id>" for one gallery piece."""
+        if entry.startswith("piece:"):
+            self.state["piece"] = entry[6:]
+            save_state(self.state)
+            self._start("piece")
+        else:
+            self._start(entry)
+
     def play(self, what, remember=True):
+        if remember and what != "music":
+            self._close_listening()
         with self.lock:
             self.oneshot_resume = None
             self.cast_resume = None                    # a choice by hand wins over the speakers
@@ -222,9 +246,10 @@ class Runner:
             self._start(what)
 
     def playlist(self, ids, minutes):
-        ids = [i for i in ids if i in MODE_IDS]
+        ids = [i for i in ids if i in MODE_IDS or (isinstance(i, str) and i.startswith("piece:") and len(i) < 80)]
         if not ids:
             return
+        self._close_listening()
         with self.lock:
             self.state["playlist"] = {"ids": ids, "minutes": max(1, int(minutes))}
             self.state["mode"] = "playlist"
@@ -232,7 +257,7 @@ class Runner:
             save_state(self.state)
             self.playlist_idx = 0
             self.playlist_next = time.time() + self.state["playlist"]["minutes"] * 60
-            self._start(ids[0])
+            self._start_entry(ids[0])
 
     def oneshot(self, what):
         with self.lock:
@@ -298,10 +323,7 @@ class Runner:
                 self._start(self.current)
 
     # -- scenes: one tap sets the whole room
-    SCENES = {"Dinner": {"mode": "lava", "brightness": 30, "art_speed": 0.08},
-              "Party": {"mode": "music", "brightness": 70, "party": 80},
-              "Reading": {"mode": "shapes", "brightness": 25, "art_speed": 0.05},
-              "Sleep": {"mode": "daily", "brightness": 10, "art_speed": 0.03, "sleep_minutes": 45}}
+    SCENES = {}          # no built-in scenes: the app's moods (Album art, Mirror, Photobooth, Hour-long art) are actions; yours are saved scenes
 
     def scenes(self):
         return {**self.SCENES, **self.state.get("scenes", {})}
@@ -423,7 +445,7 @@ class Runner:
                         and time.time() >= self.playlist_next):
                     self.playlist_idx = (self.playlist_idx + 1) % len(pl["ids"])
                     self.playlist_next = time.time() + pl["minutes"] * 60
-                    self._start(pl["ids"][self.playlist_idx])
+                    self._start_entry(pl["ids"][self.playlist_idx])
 
     def shutdown(self):
         with self.lock:
@@ -960,19 +982,26 @@ def make_app(runner):
         st = mu.load_settings()
         old_source = st.get("source")
         for k in ("style", "palette", "vibe", "source", "sensitivity", "ai", "shazam",
-                  "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt", "mode", "party", "art", "cast_follow", "cast_devices", "cover_show", "cover_colours"):
+                  "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt", "mode", "party", "art", "cast_follow", "cast_devices", "cast_all", "cover_show", "cover_colours"):
             if k in d:
                 st[k] = d[k]
+        if "cast_devices" in d:
+            st["cast_all"] = False                       # choosing speakers by hand ends "all speakers"
+        if d.get("album_art"):                           # the Album art mood: listen to every speaker, show the cover, in its colours
+            st.update(cast_follow=True, cast_all=True, cover_show=True, cover_colours=True)
         mu._write_json(mu.SETTINGS_FILE, st)
         if "cast_follow" in d and not d["cast_follow"]:
             runner.cast_music(False)                      # switched off mid-song: go back now
-        if d.get("start") and runner.current != "music":
+        if d.get("album_art"):
+            runner.play("music")
+        elif d.get("start") and runner.current != "music":
             runner.play("music")
         elif runner.current == "music" and mu.load_settings()["source"] != old_source:
             runner.restart_current()                      # new microphone: restart listening
         return jsonify({"settings": mu.load_settings(), "status": runner.status()})
 
-    PHOTOS = os.path.join(ROOT, "photos")
+    import photo_store
+    PHOTOS = photo_store.PHOTOS_DIR                          # ./photos, or WALL_PHOTOS_DIR (a USB stick)
 
     @app.post("/api/presence")
     def presence_set():
@@ -1036,7 +1065,7 @@ def make_app(runner):
             out.append({"name": x, "url": f"/photos/{x}", "thumb": f"/photos/{th}" if os.path.exists(os.path.join(PHOTOS, th)) else f"/photos/{x}",
                         "text": meta.get("text", ""),
                         "kind": meta.get("type", "receipt"), "time": os.path.getmtime(os.path.join(PHOTOS, x))})
-        return jsonify({"total": len(names), "photos": out})
+        return jsonify({"total": len(names), "photos": out, "storage": photo_store.disk_info()})
 
     @app.post("/api/photos/delete")
     def photos_delete():
@@ -1146,7 +1175,8 @@ def make_app(runner):
     @app.get("/api/mirror/settings")
     def mirror_settings_get():
         import mirror_settings as ms
-        return jsonify({**ms.load(), "languages": list(ms.LANGUAGES)})
+        import config as _cfg
+        return jsonify({**ms.load(), "languages": list(ms.LANGUAGES), "default_prompt": _cfg.MIRROR_PERSONA})
 
     @app.post("/api/mirror/settings")
     def mirror_settings_set():
@@ -1154,6 +1184,8 @@ def make_app(runner):
         d = request.get_json(force=True, silent=True) or {}
         if "language" in d and d["language"] not in ms.LANGUAGES:
             return jsonify({"error": "unknown language"}), 400
+        if "prompt" in d and len(str(d["prompt"])) > 3000:
+            return jsonify({"error": "the prompt is too long (3000 characters at most)"}), 400
         return jsonify(ms.save(d))
 
     # ---- dedications: a guest page (/d) anybody on the Wi-Fi can use + admin API for the app

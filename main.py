@@ -842,38 +842,6 @@ class MagicMirror:
                 d.text(((W - w) / 2, H - label_h - 1), label, font=font, fill=(255, 200, 80), stroke_width=1, stroke_fill=(0, 0, 0))
             self._show(canvas)
 
-    def _show_booth_prompt(self, text: str, seconds: float):
-        """Display a pose direction big on the matrix for `seconds`."""
-        import textwrap
-        from display.text_renderer import _FONT, _text_size
-        from PIL import ImageDraw as _ImageDraw
-        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
-
-        # measure character width to pick a sensible wrap column
-        probe = Image.new("RGB", (W, H))
-        d = _ImageDraw.Draw(probe)
-        char_w, _ = _text_size(d, "M")
-        cols = max(8, W // max(1, char_w))
-        lines = textwrap.wrap(text, width=cols) or [text]
-
-        # Use a brighter silhouette than the normal text-overlay state — the
-        # prompt is a call-to-action, not a quiet caption, and dim blue with
-        # amber-on-top reads as "off". Bright base + white text is legible
-        # even from across the hallway.
-        canvas = self._silhouette(dim=0.7)
-        d = _ImageDraw.Draw(canvas)
-        line_h = _text_size(d, "Ag")[1] + 2
-        total_h = line_h * len(lines)
-        y0 = max(0, (H - total_h) // 2)
-        for i, line in enumerate(lines):
-            tw, _ = _text_size(d, line)
-            d.text(((W - tw) // 2, y0 + i * line_h),
-                   line, fill=(255, 255, 255), font=_FONT)
-
-        end = time.monotonic() + seconds
-        while time.monotonic() < end and not self._stop.is_set():
-            self._show(canvas)
-
     def run_booth_cycle(self):
         self._overlay_text = None
         self._overlay_image = None

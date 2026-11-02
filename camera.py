@@ -27,6 +27,7 @@ class Camera:
         time.sleep(config.CAMERA_WARMUP_SEC)
         self._lock_light()                      # no more auto-exposure / auto-white-balance hunting: that is the biggest flicker
         self._latest, self._seq = None, 0
+        self._cam_lock = threading.Lock()        # the live reader and a full-resolution still never use the camera together
         self._cond = threading.Condition()
         self._running = True
         threading.Thread(target=self._reader, daemon=True, name="camera-reader").start()
@@ -58,6 +59,27 @@ class Camera:
         except Exception as e:
             self._locked = False
             print(f"[CAMERA] could not lock exposure ({e}); staying on auto")
+
+    def capture_still(self, size=None):
+        """A photo at the sensor's full resolution (config.STILL_SIZE: 4608 x 2592 on a Camera Module 3), BGR, or None if it cannot
+        be taken (the caller then uses the live frame). The live stream pauses for about a second while the camera switches mode;
+        the exposure is the one the camera has just metered (the flash is lit), held fixed for the exposure itself."""
+        size = tuple(size or getattr(config, "STILL_SIZE", (4608, 2592)))
+        try:
+            with self._cam_lock:
+                md = self.cam.capture_metadata()
+                ctl = {"AeEnable": False, "AwbEnable": False,
+                       "ExposureTime": int(md["ExposureTime"]), "AnalogueGain": float(md["AnalogueGain"])}
+                if "ColourGains" in md:
+                    ctl["ColourGains"] = tuple(md["ColourGains"])
+                cfg = self.cam.create_still_configuration(main={"size": size, "format": "RGB888"}, buffer_count=1, controls=ctl)
+                arr = self.cam.switch_mode_and_capture_array(cfg, "main")
+            frame = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+            print(f"[CAMERA] still {frame.shape[1]}x{frame.shape[0]}", flush=True)
+            return frame
+        except Exception as e:
+            print(f"[CAMERA] full-resolution still failed ({e}); using the live frame", flush=True)
+            return None
 
     def light_auto(self):
         """For the photo flash: let the camera meter freely while the screen edge lights the person."""
@@ -102,7 +124,9 @@ class Camera:
         """Keeps only the newest frame, so a slow consumer never sees an old picture."""
         while self._running:
             try:
-                frame = cv2.cvtColor(self.cam.capture_array(), cv2.COLOR_RGB2BGR)
+                with self._cam_lock:
+                    arr = self.cam.capture_array()
+                frame = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
             except Exception:
                 time.sleep(0.05)
                 continue

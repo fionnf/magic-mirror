@@ -10,12 +10,12 @@ Everything on this page is in `main.py` (the state machine), `camera.py`, `visio
 | | Photo | Photobooth |
 |---|---|---|
 | Started by | the **Photo** tile, a tap, or an open palm | the **Photobooth strip** tile, a tap (in booth mode), a peace sign, or an open palm (in booth mode) |
-| Sequence | 3, 2, 1, the flash, one photo | for each shot: a pose direction on the wall, 3, 2, 1, the flash, the photo |
-| On the wall afterwards | the photo in colour for 5 s (no comment) or the AI line scrolling over you | each photo full-screen in portrait with its pose direction, one after another, then all of them side by side |
-| On paper | a portrait receipt: header, a framed photo, the AI line | one strip of portrait photos, each the shape of a single printout, numbered, with its pose direction, and a QR code |
+| Sequence | 3, 2, 1 with a glowing frame, the flash, one photo | for each shot: 3, 2, 1, the flash, the photo (no prompts: just pose) |
+| On the wall afterwards | the photo in colour for 5 s (no comment) or the AI line **appearing** over you (a fade-in, no scrolling, held long enough to read) | each photo full-screen in portrait, one after another, then all of them side by side |
+| On paper | a portrait receipt: header, a framed photo, the AI line | one strip titled **HOUSE FORTUNA**: portrait photos, each the shape of a single printout, no numbers or captions, and a QR code |
 
 **Photobooth mode** (the app's *Photobooth mode* switch, or *Start the photobooth*) makes the touch sensor and the Photo tile run the booth instead.
-The wall then shows `PHOTOBOOTH` and a pulsing "tap to start" while it waits.
+The wall then shows `PHOTOBOOTH` and a pulsing "high five to start" while it waits (an open palm starts it; so does a tap).
 
 ## Starting a photo without touching anything: hand signals
 
@@ -32,18 +32,34 @@ It checks about three times a second (0.12 to 0.19 s per check on a Pi 4), only 
 (an empty, noisy hall costs nothing), and a signal can fire at most every 6 seconds. Switch it off with the *Hand signal* switch in the app (`gesture`).
 Missing models just turn the feature off (`assets/models/get_models.sh` fetches them; they are also committed).
 
-## The flash
+## The flash, timed with the photo
 
-Every photo, single or booth, gets a **bright warm-white frame round the screen edge** (26 LEDs deep, `FLASH_WARM = (255, 242, 210)`), with your silhouette dimmed in the middle so you can still see yourself.
-It swells in 0.18 s, holds while the photo is taken, and fades over a quarter of a second. The camera normally has its exposure locked (see Flicker below); during the flash
-`Camera.light_auto()` lets it meter for the lit scene and `light_restore()` puts the locked values back afterwards, so a lit face is neither dark nor blown out.
+- **The border.** In mirror mode the wall always has a plain **2 LED warm-white frame** round its edge. It exists to light a raised hand for the hand-signal detector.
+- **The countdown glows.** Round the dimmed silhouette the frame glows in time with 3, 2, 1: each number starts with a beat that fades, and the glow's floor rises with every count, so the flash feels charged.
+- **The flash.** A 0.35 s pre-glow (the camera meters for the lit scene), then two whole frames at full power: the frame at full brightness and the whole wall washed warm gold (`FLASH_WARM = (255, 222, 158)`).
+  **The photo is taken during those frames**: the wall simply holds the flash while the camera exposes. After a short hold the light decays like a flash tube (the wash in about 0.15 s, the glow in 0.5 s).
+- Exposure: the camera is normally locked (see Flicker). During the flash `Camera.light_auto()` lets it meter, and `capture_still()` fixes the exposure it just metered for the exposure itself; `light_restore()` puts the locked values back afterwards.
+
+## Resolution: pictures are saved as the camera took them
+
+A photo is taken in the camera's **still mode at the sensor's full resolution** (`config.STILL_SIZE`, 4608 x 2592 on a Camera Module 3), then cut to portrait around the people: about 1944 x 2592, 5 megapixels.
+The live silhouette stays small and fast; only the photo is full size, and the live picture pauses for about a second while the camera switches mode. If the still cannot be taken the live frame is used (and the log says so).
+Saved photos are JPEGs at `config.PHOTO_JPEG_QUALITY` (95, no chroma subsampling), about 2 to 4 MB each:
+
+- `photos/receipt_*.jpg` (single photos) and `photos/strip_*_shotN.jpg` (every booth shot) at full resolution, plus `_thumb.jpg` (640 px) copies for the app's grid and the slideshow, and a small JSON each;
+- Google Drive, if set up, gets the full-resolution originals too ([google-drive.md](google-drive.md));
+- the printer and the AI get downscaled copies (they do not need more).
+
+**Storage.** At about 3 MB a photo, 1000 photos are 3 GB: a 32 GB card holds years of normal use, so a USB stick is not needed. Safeguards: the app's Mirror tab shows how much the pictures take and how much is free;
+below 400 MB free the mirror stops saving new pictures instead of filling the card (it says so in the log); and `WALL_PHOTOS_DIR` in `.env` moves the whole folder to a USB stick or SSD (mount it, e.g. at `/mnt/photos`). Drive is the cloud copy.
 
 ## What it says
 
-The AI line (4 to 8 words) comes from `ai_client.get_mirror_message`. The prompt (`config.MIRROR_PERSONA`) asks for one concrete thing it can see, with a twist; it is told the weekday, the time of day and the
+The AI line (4 to 9 words) comes from `ai_client.get_mirror_message`. The prompt (`config.MIRROR_PERSONA`) asks for one concrete thing it can see, with a twist; it is told the weekday, the time of day and the
 month, who is in the picture if people are enrolled, whether they smile, and the last eight lines it said so it does not repeat itself. Tone (sweet to roast) and language are settings.
-Photobooth pose directions (`config.BOOTH_AI_PROMPT_SYSTEM`) build from an easy warm-up to a grand finale, with a random "flavour" (telenovela, heist film, boy-band album cover...) and a list of recent ones to avoid;
-`config.BOOTH_FALLBACK_PROMPTS` is used when there is no key. Turn the line off entirely with the **comment** switch ("no comment": the photo is shown and printed on its own).
+The photobooth no longer gives pose directions: the shots are just 3, 2, 1, flash. Turn the line off entirely with the **comment** switch ("no comment": the photo is shown and printed on its own).
+
+**Write your own prompt.** The Mirror tab's *What it says* box (More: *Voice, faces and quiet hours*) holds the mirror's instructions in plain words, starting with the built-in ones (`config.MIRROR_PERSONA`). Edit them and press Save (`prompt` in `mirror_settings.json`); *Back to the built-in* restores them. Your text replaces the built-in persona **and** the random "voice for this photo" (`config.MIRROR_STYLES`: a nature-documentary narrator, a movie trailer, a sommelier...), so describe the voice yourself. The tone slider, the language and a fixed safety tail (`config.MIRROR_RULES`: one short line, no remarks about bodies or anything a person cannot choose) are always added after it.
 
 ## Settings (the Mirror tab and More tab; `panel_setup/mirror_settings.json`, re-read at every use, no restart)
 
@@ -52,6 +68,7 @@ Photobooth pose directions (`config.BOOTH_AI_PROMPT_SYSTEM`) build from an easy 
 | `tone` | 50 | 0 sweet, 50 cheeky, 100 affectionate roast |
 | `language` | English | English, Deutsch, Züridütsch, Français, Drama queen |
 | `comment` | on | The mirror says a line about you with every photo. Off = just the photo |
+| `prompt` | empty | Your own instructions for what the mirror says (empty = the built-in prompt) |
 | `booth_shots` | 3 | Photos in one strip (2 to 6) |
 | `booth_repeat` | off | Photobooth mode keeps going: another strip 7 s after the last while someone is still in front; it stops by itself 30 s after everyone has left |
 | `gesture` | on | Hand signals |
@@ -62,8 +79,11 @@ Photobooth pose directions (`config.BOOTH_AI_PROMPT_SYSTEM`) build from an easy 
 ## Where the pictures go
 
 - `photos/` on the Pi (never deployed, git-ignored): every photo and strip with a small JSON next to it.
-- **Google Drive**, if set up ([google-drive.md](google-drive.md)): one folder per day, "Photobooth YYYY-MM-DD", readable by anyone with its link. The QR code on a printed strip opens it, so a guest can
-  browse and download every picture the wall took that day. Anyone with the link can see the whole day: do not post it publicly if that matters.
+- **Google Drive**, if set up ([google-drive.md](google-drive.md)): one folder per day, "Photobooth YYYY-MM-DD", readable by anyone with its link. The QR code on a printed strip opens **that day's folder and nothing else**:
+  every day is its own folder and the parent folder is not shared, so there is no way from one day to another. Anyone with the link can see the whole day: do not post it publicly if that matters.
+  (A public web gallery of every photo was deliberately not built: a page in a public repository cannot hide other days.)
+- **Mirror photos**, an art mode in the gallery: a slideshow of every picture the mirror took, in random order (`display/slideshow.py`).
+- The app's **Mirror** tab lists every photo under a heading for each day, newest first.
 - The printer, wherever it is ([printing.md](printing.md)).
 
 ## Flicker: what was done and what to tune

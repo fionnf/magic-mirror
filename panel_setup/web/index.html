@@ -263,7 +263,7 @@
     <section>
       <h2>Moods</h2>
       <div class="scenes" id="scenes"></div>
-      <p class="hint" id="sceneHint">One tap sets the piece, the light and the pace. Hold one you made to remove it.</p>
+      <p class="hint" id="sceneHint">One tap changes what the wall is doing. <b>Album art</b> listens to every speaker and shows the cover; choosing anything else ends it. Hold a mood you saved to remove it.</p>
     </section>
     <section>
       <h2>Today's piece</h2>
@@ -275,37 +275,8 @@
       <div class="find"><input type="search" id="artFind" placeholder="Search the gallery" aria-label="Search the gallery" autocomplete="off"></div>
       <div class="chips" id="artChips"></div>
       <div class="gallery" id="artGrid"></div>
-      <p class="hint">Tap a piece to hang it. It stays until you choose something else.</p>
+      <p class="hint">Everything the wall can show is here: tap one to hang it. It stays until you choose something else.</p>
     </section>
-    <details class="more"><summary>More ways to play</summary>
-    <section>
-      <h2>Pace</h2>
-      <input type="range" id="pace" min="0" max="100" step="1" aria-label="Art pace">
-      <div class="ends"><span>barely moving</span><span>lively</span></div>
-    </section>
-    <section>
-      <h2>Tour</h2>
-      <p class="hint" style="margin:0 0 10px">The wall changes piece by itself.</p>
-      <div class="row">
-        <button class="btn primary" onclick="tour('art')">Tour the art</button>
-        <button class="btn" onclick="tour('all')">Art and music</button>
-        <select id="tourMins" aria-label="Minutes per piece"><option value="10">10 min each</option><option value="20" selected>20 min each</option><option value="45">45 min each</option></select>
-      </div>
-    </section>
-    <section>
-      <h2>Slideshows</h2>
-      <div class="list" id="collections"></div>
-    </section>
-    <section>
-      <h2>Shows and boards</h2>
-      <div class="list" id="shows"></div>
-    </section>
-    <section>
-      <div class="switch"><span>Show people on the art</span><input type="checkbox" id="tPresence"></div>
-      <p class="hint">The camera sees who is in the room, and the art's colours shift slightly where they are. Nothing is recorded.</p>
-      <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/" target="_blank" rel="noopener">The public gallery</a> shows every day's piece.</p>
-    </section>
-    </details>
   </div>
 
   <!-- MUSIC -->
@@ -329,18 +300,15 @@
         <div class="gallery" id="musicArtGrid"></div>
       </div>
     </section>
-    <details class="more"><summary>Speakers and album covers</summary>
     <section>
-      <h2>Speakers</h2>
+      <h2>Speakers and album covers</h2>
       <div class="switch"><span>Follow the speakers</span><input type="checkbox" id="tCast"></div>
       <p class="hint" id="castHint">When one of these speakers plays music, the wall shows music art. When the music stops, it goes back to what it was showing.</p>
       <div class="chips" id="castChips"></div>
       <div class="switch"><span>Show the album cover</span><input type="checkbox" id="tCover"></div>
       <div class="switch"><span>Colour the art from the album cover</span><input type="checkbox" id="tCoverCol"></div>
-      <p class="hint">Covers come from the speakers and Spotify, so they show when the wall knows the song.</p>
+      <p class="hint">Covers come from the speakers and Spotify, so they show when the wall knows the song. The <b>Album art</b> mood on the Art tab switches all of this on in one tap.</p>
     </section>
-    </details>
-    <details class="more"><summary>Microphone and listening</summary>
     <section>
       <h2>Microphone</h2>
       <canvas class="scope" id="scope" width="600" height="160"></canvas>
@@ -355,7 +323,6 @@
       <div class="switch"><span>Show the song title on the wall</span><input type="checkbox" id="tWall"></div>
       <div class="switch"><span>Let all art move to music</span><input type="checkbox" id="tReact"></div>
     </section>
-    </details>
   </div>
 
   <!-- ROOM -->
@@ -410,7 +377,7 @@
         <h3 id="mirrorTitle">The mirror is on</h3>
         <p class="hint" id="mirrorHint">Step in front of the wall, then choose what happens.</p>
         <div class="tiles">
-          <button class="tile" onclick="mirrorDo('booth')"><b>Photobooth strip</b><small>Three poses, a prompt each, printed</small></button>
+          <button class="tile" onclick="mirrorDo('booth')"><b>Photobooth strip</b><small>Photos in a row, printed as one strip</small></button>
           <button class="tile" id="boothToggle" onclick="toggleBooth()"><b>Photobooth mode</b><small>A tap on the wall takes a strip</small></button>
           <button class="tile" onclick="mirrorDo('photo')"><b>Photo</b><small>3, 2, 1, and a line about you</small></button>
         </div>
@@ -418,7 +385,8 @@
     </section>
     <section>
       <h2 id="photoCount">Photos</h2>
-      <div class="photos" id="photos"></div>
+      <p class="hint" id="storageLine" style="margin:-4px 0 8px"></p>
+      <div id="photos"></div>
       <button class="btn" id="morePhotos" style="margin-top:12px" hidden onclick="loadPhotos(true)">Show older photos</button>
     </section>
     <details class="more"><summary>Voice, faces and quiet hours</summary>
@@ -428,6 +396,10 @@
       <div class="ends"><span>sweet</span><span>roast</span></div>
       <div class="row" style="margin-top:12px"><span class="hint" style="margin:0">Speaks</span><select id="lang" aria-label="Language"></select></div>
       <div class="switch"><span>The mirror comments on every photo (off = just the photo, no comment)</span><input type="checkbox" id="tComment" data-ms="comment"></div>
+      <h3 class="sub">What it says</h3>
+      <textarea id="mirrorPrompt" rows="8" aria-label="Instructions for what the mirror says" style="width:100%;border-radius:12px;padding:10px;font:inherit;background:var(--card, #1d1922);color:inherit;border:1px solid var(--line)"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn primary" onclick="savePrompt()">Save</button><button class="btn" onclick="resetPrompt()">Back to the built-in</button></div>
+      <p class="hint" id="promptHint">These are the mirror's instructions, in your words. Change them to change what it says. A voice style is picked at random for each photo until you save your own. Safety rules (no remarks about bodies, one short line) are always added.</p>
       <div class="row" style="margin-top:12px"><span class="hint" style="margin:0">Photobooth: photos per strip</span><select id="boothShots" aria-label="Photos per strip"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></div>
       <div class="switch"><span>Photobooth keeps going: a new strip every few seconds while you stay</span><input type="checkbox" id="tBoothRepeat" data-ms="booth_repeat"></div>
     </section>
@@ -456,6 +428,15 @@
 
   <!-- SETTINGS -->
   <div class="view" id="v-more">
+    <section>
+      <h2>The art</h2>
+      <h3 class="sub" style="margin-top:0">Pace</h3>
+      <input type="range" id="pace" min="0" max="100" step="1" aria-label="Art pace">
+      <div class="ends"><span>barely moving</span><span>lively</span></div>
+      <div class="switch"><span>Show people on the art</span><input type="checkbox" id="tPresence"></div>
+      <p class="hint">The camera sees who is in the room, and the art's colours shift slightly where they are. Nothing is recorded.</p>
+      <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/" target="_blank" rel="noopener">The public gallery</a> shows every day's piece.</p>
+    </section>
     <section>
       <h2>Guests</h2>
       <div class="switch"><span>Messages from guests on the wall</span><input type="checkbox" id="dOn"></div>
@@ -750,6 +731,7 @@ function render() {
   $('mirrorHint').textContent = bm ? 'Tap the wall, or press Photobooth strip: three poses, three countdowns, one printed strip.' : 'Step in front of the wall, then choose what happens.';
   $('boothToggle').querySelector('b').textContent = bm ? 'Photobooth mode: ON' : 'Photobooth mode';
   $('musicBtn').textContent = cur === 'music' ? 'Listening now' : 'Let the wall listen';
+  if (typeof markScene === 'function' && $('scenes').children.length) markScene();
 }
 async function refresh() { try { STATUS = await api('/api/status'); render(); } catch (e) {} }
 async function power() {
@@ -765,76 +747,48 @@ async function play(id) { try { STATUS = await api('/api/play', {mode: id}); ren
 /* ---------- art ---------- */
 async function loadModes() {
   MODES = await api('/api/modes');
-  const row = m => `
-    <button data-id="${m.id}" onclick="play('${m.id}')">
-      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-      <span><b>${m.title}</b><small>${m.desc}</small></span><i class="now" hidden></i></button>`;
-  $('shows').innerHTML = MODES.filter(m => m.cat !== 'Art' && m.cat !== 'Piece' && m.id !== 'music').map(row).join('');
-  $('collections').innerHTML = MODES.filter(m => m.id !== 'daily' && m.cat === 'Art').map(m => `
-    <button data-id="${m.id}" onclick="play('${m.id}')">
-      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-      <span><b>${m.title}</b><small>${m.desc}</small></span><i class="now" hidden></i></button>`).join('');
+  loadArt();
   render();
-}
-async function loadDaily() {
-  try { DAILY = await api('/api/daily'); } catch (e) { return; }
-  const eds = DAILY.editions || [];
-  const pick = eds.find(e => e.date === (DAILY.chosen || DAILY.today)) || eds[0];
-  DAILY.chosenMeta = pick;
-  if (pick && !SCRUB.browsing && pick.date !== SCRUB.date) describeDaily(pick);   // first load, or a new day
-  updateHang();
-  $('archive').innerHTML = eds.map(e => `<button class="${e.date === (SCRUB.date || (pick && pick.date)) ? 'sel' : ''}" onclick="pickDaily('${e.date}')">
-      <img src="${u('/daily/' + e.date + '.png')}" alt="" loading="lazy"><span>${e.date === DAILY.today ? 'Today' : new Date(e.date).toLocaleDateString(undefined, {day: 'numeric', month: 'short'})}</span></button>`).join('');
-  render();
-}
-function describeDaily(ed) {
-  if (SCRUB.piece && window.Fortuna) window.Fortuna.remove(SCRUB.piece);   // its canvas is about to be replaced
-  SCRUB.piece = null;
-  const hanging = DAILY.chosenMeta && DAILY.chosenMeta.date === ed.date && STATUS.current === 'daily';
-  $('today').innerHTML = `<div class="row between"><h3>${esc(ed.name)}</h3><button class="btn primary" id="hangBtn" onclick="showDaily('${ed.date === DAILY.today ? '' : ed.date}')">${hanging ? 'On the wall now' : 'Hang it'}</button></div>
-    <details class="more"><summary id="hangHint">About this piece</summary><p>${esc(ed.description || '')}</p>${ed.listening ? `<p class="listen">${esc(ed.listening)}</p>` : ''}</details>`;
-  SCRUB.date = ed.date; updateHang();
-}
-function updateHang() {                    // the label under the preview follows the wall and the date
-  const b = $('hangBtn'), h = $('hangHint'); if (!b || !SCRUB.date) return;
-  const hanging = DAILY.chosenMeta && DAILY.chosenMeta.date === SCRUB.date && STATUS.current === 'daily';
-  b.textContent = hanging ? 'On the wall now' : 'Hang it';
-  b.setAttribute('onclick', `showDaily('${SCRUB.date === DAILY.today ? '' : SCRUB.date}')`);
-  h.textContent = SCRUB.date === DAILY.today ? "Today's piece" : 'From ' + new Date(SCRUB.date).toLocaleDateString(undefined, {day: 'numeric', month: 'long'});
-}
-function pickDaily(date) {
-  const ed = (DAILY.editions || []).find(e => e.date === date); if (!ed) return;
-  SCRUB.browsing = date !== (DAILY.chosenMeta && DAILY.chosenMeta.date);
-  describeDaily(ed);
-  document.querySelectorAll('#archive button').forEach(b => b.classList.toggle('sel', b.textContent.trim() === (date === DAILY.today ? 'Today' : new Date(date).toLocaleDateString(undefined, {day: 'numeric', month: 'short'}))));
-}
-async function showDaily(date) { try { STATUS = await api('/api/daily/show', {date}); SCRUB.browsing = false; await loadDaily(); toast('Showing ' + titleFor('daily')); } catch (e) { toast(e.message); } }
-function tour(kind) {
-  const art = ['daily', 'shaders', 'artsy', 'glass', 'shapes', 'lava'];
-  const ids = kind === 'all' ? art.concat(['music']) : art;
-  for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
-  api('/api/playlist', {ids, minutes: +$('tourMins').value}).then(s => { STATUS = s; render(); toast('Touring'); }).catch(e => toast(e.message));
 }
 const esc = t => String(t || '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 
-/* ---------- scenes ---------- */
+/* ---------- moods: a few one-tap actions, and the scenes you saved ---------- */
 let SCENES = {}, BUILTIN = [], SCENE_ON = null;
+const MOODS = [
+  {id: 'album', title: 'Album art', run: () => api('/api/music', {album_art: true}).then(r => { STATUS = r.status; render(); loadMusic(); toast('Listening to every speaker: the album art follows the music'); }),
+   on: () => STATUS.current === 'music' && MUSIC.settings && MUSIC.settings.cast_follow && MUSIC.settings.cover_show},
+  {id: 'mirror', title: 'Mirror', run: () => api('/api/mirror', {camera: 'pi', booth: false}).then(r => { STATUS = r; render(); toast('The mirror is on'); }),
+   on: () => STATUS.current === 'mirror' && !STATUS.mirror_booth},
+  {id: 'booth', title: 'Photobooth', run: () => api('/api/mirror', {camera: 'pi', booth: true}).then(r => { STATUS = r; render(); toast('Photobooth on: hold up an open hand'); }),
+   on: () => STATUS.current === 'mirror' && !!STATUS.mirror_booth},
+  {id: 'hour', title: 'Hour-long art', run: () => api('/api/playlist', {ids: HOUR_IDS.map(i => 'piece:' + i), minutes: 15}).then(r => { STATUS = r; render(); toast('Cycling through the hour-long pieces'); }),
+   on: () => !!(STATUS.playlist && STATUS.playlist.ids && STATUS.playlist.ids.every(i => i.startsWith('piece:shader-')))},
+];
 async function loadScenes() {
   let d; try { d = await api('/api/scenes'); } catch (e) { return; }
   const sig = JSON.stringify(Object.keys(d.scenes));
   if (sig === loadScenes.sig) return;          // unchanged: keep the buttons (a press may be under way)
   loadScenes.sig = sig;
-  SCENES = d.scenes; BUILTIN = d.builtin;
-  const chip = n => `<button data-scene="${esc(n)}" class="${SCENE_ON === n ? 'on' : ''}">${esc(n)}</button>`;
-  $('scenes').innerHTML = Object.keys(SCENES).map(chip).join('') + '<button class="add" onclick="saveScene()">+ Save this</button>';
+  SCENES = d.scenes; BUILTIN = d.builtin || [];
+  $('scenes').innerHTML = MOODS.map(m => `<button data-mood="${m.id}">${esc(m.title)}</button>`).join('') +
+    Object.keys(SCENES).map(n => `<button data-scene="${esc(n)}" class="${SCENE_ON === n ? 'on' : ''}">${esc(n)}</button>`).join('') +
+    '<button class="add" onclick="saveScene()">+ Save this</button>';
+  document.querySelectorAll('#scenes button[data-mood]').forEach(b => b.onclick = async () => {
+    const m = MOODS.find(x => x.id === b.dataset.mood);
+    try { SCENE_ON = null; await m.run(); markScene(); if (navigator.vibrate) navigator.vibrate(8); } catch (e) { toast(e.message); }
+  });
   document.querySelectorAll('#scenes button[data-scene]').forEach(b => {
     let hold;
     b.addEventListener('pointerdown', () => { hold = setTimeout(() => { hold = null; forgetScene(b.dataset.scene); }, 650); });
     b.addEventListener('pointerup', () => { if (hold) { clearTimeout(hold); applyScene(b.dataset.scene); } hold = null; });
     b.addEventListener('pointerleave', () => { clearTimeout(hold); hold = null; });
   });
+  markScene();
 }
-function markScene() { document.querySelectorAll('#scenes [data-scene]').forEach(b => b.classList.toggle('on', b.dataset.scene === SCENE_ON)); }
+function markScene() {
+  document.querySelectorAll('#scenes [data-scene]').forEach(b => b.classList.toggle('on', b.dataset.scene === SCENE_ON));
+  document.querySelectorAll('#scenes [data-mood]').forEach(b => { const m = MOODS.find(x => x.id === b.dataset.mood); b.classList.toggle('on', !SCENE_ON && !!m.on()); });
+}
 async function applyScene(n) {
   try { const r = await api('/api/scenes', {name: n}); STATUS = r.status; SCENE_ON = n; markScene(); render(); loadMusic(); toast(n); if (navigator.vibrate) navigator.vibrate(8); }
   catch (e) { toast(e.message); }
@@ -845,11 +799,10 @@ async function saveScene() {
   try { await api('/api/scenes', {name: n.trim().slice(0, 24), save: true, lights: lights ? true : null}); SCENE_ON = n.trim().slice(0, 24); loadScenes.sig = null; loadScenes(); toast('Saved ' + n); } catch (e) { toast(e.message); }
 }
 async function forgetScene(n) {
-  if (BUILTIN.includes(n)) return toast(n + ' is built in');
-  if (!confirm('Remove the scene ' + n + '?')) return;
+  if (!confirm('Remove the mood ' + n + '?')) return;
   await api('/api/scenes', {name: n, delete: true}); if (SCENE_ON === n) SCENE_ON = null; loadScenes.sig = null; loadScenes();
 }
-document.addEventListener('click', e => { if (e.target.closest('.list button, .strip button, #power')) { SCENE_ON = null; markScene(); } });
+document.addEventListener('click', e => { if (e.target.closest('.list button, .strip button, #power, #artGrid button')) { SCENE_ON = null; setTimeout(markScene, 50); } });
 
 /* ---------- sleep ---------- */
 async function sleepIn(m) { try { STATUS = await api('/api/sleep', {minutes: m}); render(); sleepSheet.close(); toast('Off in ' + (m >= 60 ? m / 60 + ' h' : m + ' min')); } catch (e) { toast(e.message); } }
@@ -865,17 +818,30 @@ async function shaderLib() {
 }
 /* ---------- the gallery: every piece, one tap to hang ---------- */
 let ART = null, artFilter = 'all', musicArtFilter = 'all';
+// the hour-long pieces (their shader plays out a whole story once an hour), the live boards, the shows and the slideshows
+const HOUR_IDS = ['shader-aurora', 'shader-bloom', 'shader-crystal', 'shader-inkcloud', 'shader-metamorphosis', 'shader-orbit', 'shader-totality'];
+const LIVE_IDS = ['trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'windeu', 'polarbears', 'livecam', 'skylines', 'wanderers', 'nighttrains', 'issday', 'snow', 'tides', 'limmat', 'westcork', 'quakes', 'laend', 'kilchberg', 'zurichhb'];
+const SLIDE_IDS = ['lava', 'shapes', 'flow', 'shaders', 'artsy', 'glass', 'art', 'snapshots'];
+const SHOW_IDS = ['pride', 'dewa', 'maeva', 'lennart', 'welcome', 'cow'];
+const modeGroup = {live: LIVE_IDS, slides: SLIDE_IDS, shows: SHOW_IDS};
+function modeTiles() {                       // the non-piece things the wall can show, filtered like the pieces
+  const q = ($('artFind').value || '').trim().toLowerCase();
+  const ids = artFilter === 'all' ? [].concat(SLIDE_IDS, SHOW_IDS, LIVE_IDS) : (modeGroup[artFilter] || []);
+  return ids.map(id => MODES.find(m => m.id === id)).filter(m => m && (!q || (m.title + ' ' + m.desc).toLowerCase().includes(q)));
+}
 async function loadArt() {
   if (!ART) { try { ART = await api('/api/art'); } catch (e) { return; } }
-  const chips = (sel, fn) => [{key: 'all', title: 'All'}].concat(fn === 'filterArt' ? [{key: 'live', title: 'Live boards'}] : [], ART.collections, fn === 'filterArt' ? [{key: 'hour', title: 'Hour-long'}] : [])
+  const chips = (sel, fn) => [{key: 'all', title: 'All'}].concat(fn === 'filterArt' ? [{key: 'slides', title: 'Slideshows'}, {key: 'shows', title: 'Shows'}, {key: 'live', title: 'Live boards'}] : [],
+      ART.collections, fn === 'filterArt' ? [{key: 'hour', title: 'Hour-long'}] : [])
     .map(c => `<button class="${sel === c.key ? 'on' : ''}" onclick="${fn}('${c.key}')">${esc(c.title)}</button>`).join('');
   $('artChips').innerHTML = chips(artFilter, 'filterArt');
   const cur = STATUS.current === 'piece' ? STATUS.piece : null;
   const list = shownPieces();
-  $('galleryHead').textContent = `Gallery · ${ART.pieces.length} pieces`;
-  $('artGrid').innerHTML = artFilter === 'live' ? liveBoards().map(m => `<button class="${STATUS.current === m.id ? 'sel' : ''}" onclick="play('${m.id}')">
-      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span>${esc(m.title)}</span></button>`).join('')
-    : list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
+  const modes = modeTiles();
+  $('galleryHead').textContent = `Gallery · ${ART.pieces.length + MODES.filter(m => [].concat(SLIDE_IDS, SHOW_IDS, LIVE_IDS).includes(m.id)).length} things to show`;
+  const modeTile = m => `<button class="${STATUS.current === m.id ? 'sel' : ''}" onclick="play('${m.id}')">
+      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span>${esc(m.title)}</span></button>`;
+  $('artGrid').innerHTML = modes.map(modeTile).join('') + list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
       <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   if (MUSIC.settings && MUSIC.settings.style === 'art') {
     $('musicArtChips').innerHTML = chips(musicArtFilter, 'filterMusicArt');
@@ -886,16 +852,9 @@ async function loadArt() {
         <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   }
 }
-// pieces whose shader plays out a whole story once every hour (their first comment says so)
-const HOUR_IDS = ['shader-aurora', 'shader-bloom', 'shader-crystal', 'shader-inkcloud', 'shader-metamorphosis', 'shader-orbit', 'shader-totality'];
-const LIVE_IDS = ['trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'windeu', 'polarbears', 'livecam', 'skylines', 'wanderers', 'nighttrains', 'issday', 'snow', 'tides', 'limmat', 'westcork', 'quakes', 'laend', 'kilchberg', 'zurichhb'];
-function liveBoards() {                    // modes fed by real-time data, shown as a gallery chip
-  const q = ($('artFind').value || '').trim().toLowerCase();
-  return MODES.filter(m => LIVE_IDS.includes(m.id) && (!q || (m.title + ' ' + m.desc).toLowerCase().includes(q)));
-}
 function shownPieces() {
   const q = ($('artFind').value || '').trim().toLowerCase();
-  if (artFilter === 'live') return [];
+  if (modeGroup[artFilter]) return [];
   return ART.pieces.filter(p => (artFilter === 'all' || (artFilter === 'hour' ? HOUR_IDS.includes(p.id) : p.collection === artFilter)) &&
     (!q || (p.title + ' ' + (p.collection_title || '')).toLowerCase().includes(q)));
 }
@@ -908,7 +867,7 @@ async function stepPiece(d) {
 }
 async function surprise() {
   if (!ART) await loadArt(); if (!ART) return;
-  if (artFilter === 'live') { const b = liveBoards(); if (b.length) play(b[Math.floor(Math.random() * b.length)].id); return; }
+  if (modeGroup[artFilter]) { const b = modeTiles(); if (b.length) play(b[Math.floor(Math.random() * b.length)].id); return; }
   const l = shownPieces().length ? shownPieces() : ART.pieces;
   hangPiece(l[Math.floor(Math.random() * l.length)].id);
 }
@@ -1117,13 +1076,22 @@ async function loadPhotos(more) {
   let d; try { d = await api(`/api/photos?offset=${photoOff}&limit=60`); } catch (e) { return; }
   PHOTOS = PHOTOS.concat(d.photos); photoOff += d.photos.length;
   $('photoCount').textContent = d.total ? `${d.total} photos` : 'Photos';
-  $('photos').innerHTML = PHOTOS.length ? PHOTOS.map((p, i) => `<button onclick="openPhoto(${i})" aria-label="Open photo"><img src="${u(p.url)}" alt="" loading="lazy"></button>`).join('')
-    : '<p class="empty" style="grid-column:1/-1">Photos from the mirror appear here.</p>';
+  const st = d.storage;
+  $('storageLine').textContent = st && st.total ? `${(st.bytes / 1073741824).toFixed(1)} GB of pictures on the wall, ${(st.free / 1073741824).toFixed(0)} GB free` +
+    (st.low ? '. Space is running low: free some or move the pictures to a USB stick (WALL_PHOTOS_DIR).' : '.') : '';
+  const day = p => new Date(p.time * 1000).toLocaleDateString(undefined, {weekday: 'long', day: 'numeric', month: 'long'});
+  let html = '', last = '';
+  PHOTOS.forEach((p, i) => {                       // newest first, under a heading for each day
+    const dn = day(p);
+    if (dn !== last) { html += (last ? '</div>' : '') + `<h3 class="sub" style="margin:16px 0 6px">${esc(dn)}</h3><div class="photos">`; last = dn; }
+    html += `<button onclick="openPhoto(${i})" aria-label="Open photo"><img src="${u(p.thumb || p.url)}" alt="" loading="lazy"></button>`;
+  });
+  $('photos').innerHTML = PHOTOS.length ? html + '</div>' : '<p class="empty">Photos from the mirror appear here.</p>';
   $('morePhotos').hidden = photoOff >= d.total;
 }
 function openPhoto(i) {
   viewing = PHOTOS[i];
-  $('vImg').src = u(viewing.url); $('vText').textContent = viewing.text || ''; $('vSave').href = u(viewing.url);
+  $('vImg').src = u(viewing.url);          // the full-resolution original $('vText').textContent = viewing.text || ''; $('vSave').href = u(viewing.url);
   $('vTime').textContent = new Date(viewing.time * 1000).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
   $('viewer').showModal();
 }
@@ -1137,11 +1105,20 @@ function toggleBooth() { const on = !(STATUS && STATUS.mirror_booth); api('/api/
 function mirrorDo(what) { api('/api/mirror/' + what, {}).then(() => { toast('Look at the wall'); setTimeout(loadPhotos, 15000); }).catch(e => toast(e.message)); }
 
 /* ---------- more ---------- */
+let DEFAULT_PROMPT = '';
+async function savePrompt() {
+  const v = $('mirrorPrompt').value.trim();
+  try { await api('/api/mirror/settings', {prompt: v === DEFAULT_PROMPT.trim() ? '' : v}); toast(v && v !== DEFAULT_PROMPT.trim() ? 'Saved: the mirror follows your words from the next photo' : 'The built-in prompt'); } catch (e) { toast(e.message); }
+}
+async function resetPrompt() { try { await api('/api/mirror/settings', {prompt: ''}); $('mirrorPrompt').value = DEFAULT_PROMPT; toast('Back to the built-in prompt'); } catch (e) { toast(e.message); } }
 const toneLabel = v => v <= 15 ? 'sweet' : v <= 40 ? 'kind' : v <= 65 ? 'cheeky' : v <= 85 ? 'sassy' : 'roast';
 async function loadMore() {
   try {
     const m = await api('/api/mirror/settings');
     if (!$('lang').options.length) $('lang').innerHTML = m.languages.map(l => `<option>${l}</option>`).join('');
+    DEFAULT_PROMPT = m.default_prompt || '';
+    if (document.activeElement !== $('mirrorPrompt')) $('mirrorPrompt').value = m.prompt || DEFAULT_PROMPT;
+    $('promptHint').dataset.custom = m.prompt ? '1' : '';
     $('tone').value = m.tone; $('lang').value = m.language; $('idleArt').value = String(m.idle_art_minutes); $('boothShots').value = String(m.booth_shots);
     document.querySelectorAll('[data-ms]').forEach(i => i.checked = !!m[i.dataset.ms]);
   } catch (e) {}

@@ -87,6 +87,8 @@ class CastWatcher:
         """The devices that count. Default: every Cast speaker not in another room (bathroom...), plus
         `home` (Spotify devices that are a TV or speaker). settings["cast_devices"] = {name: bool}
         holds only what was switched by hand, so a newly found device still gets the default."""
+        if settings.get("cast_all"):                       # the "Album art" mood: every speaker counts, whichever room it is in
+            return set(self.all_names(extra))
         pick = settings.get("cast_devices") or {}
         default = {n for n in list(self.names()) + list(home) if not any(r in n.lower() for r in OTHER_ROOMS)}
         return {n for n in self.all_names(extra) if pick.get(n, n in default)}

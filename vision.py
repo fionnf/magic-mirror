@@ -15,6 +15,7 @@ _clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(4, 6))
 last = {"alpha": None, "detail": None, "colour": None}      # the latest silhouette at wall size: soft edge 0..1 and shading 0..1
 
 
+_alpha_hist = {"a": None}                     # the previous soft edge
 _range = {"lo": None, "hi": None}            # the contrast stretch, averaged over time
 _tone = {"rgb": None}                             # the last picture: new frames are blended into it
 
@@ -120,6 +121,12 @@ def silhouette_mask(frame: np.ndarray, background=None, subtractor=None) -> np.n
         detail, colour = _detail(frame, alpha)
         if config.SILHOUETTE_MIRROR:
             alpha, detail, colour = cv2.flip(alpha, 1), cv2.flip(detail, 1), cv2.flip(colour, 1)
+        prev = _alpha_hist["a"]
+        if prev is not None and prev.shape == alpha.shape:       # soften the edge in time: an edge pixel that wavers between in and out
+            d = np.abs(alpha - prev)                             # follows slowly, while real movement (big changes) still goes straight through
+            keep = 0.20 + 0.50 * np.exp(-(d / 0.8) ** 2)
+            alpha = prev * keep + alpha * (1.0 - keep)
+        _alpha_hist["a"] = alpha
         last["alpha"], last["detail"], last["colour"] = alpha, detail, colour
         mask = (alpha > 0.5).astype(np.uint8) * 255                      # the binary mask the rest of the code expects
         return mask

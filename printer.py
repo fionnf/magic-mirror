@@ -202,20 +202,19 @@ def _receipt_image(frame: np.ndarray, text: str) -> Image.Image:
 # Photobooth strip composer
 # ---------------------------------------------------------------------------
 
-def render_booth_pil(frames: List[np.ndarray], label: str = "PHOTOBOOTH",
+def render_booth_pil(frames: List[np.ndarray], label: Optional[str] = None,
                      prompts: Optional[List[str]] = None,
                      qr_url: Optional[str] = None) -> Image.Image:
-    """Compose the photo strip (greyscale "L") for printing: a scalloped title, then each photo as a rounded portrait
-    sticker the shape of a single printout, numbered, with its pose direction under it between sparkles, and a footer with
-    the QR code beside the date. Shorter than the plain strip it replaces."""
-    if prompts is None:
-        prompts = []
+    """Compose the photo strip (greyscale "L") for printing: "HOUSE FORTUNA" over a scalloped edge, then the photos, each a portrait
+    framed sticker the shape of a single printout (no numbers, no captions: just the pictures), and a footer with the house, the
+    date and the QR code to the gallery. `prompts` is ignored (kept so older callers still work)."""
+    label = label or getattr(config, "BOOTH_TITLE", "HOUSE FORTUNA")
     W = config.PRINTER_WIDTH_DOTS
     pw = W - 24                                              # photo width: a 12-dot margin each side
     ph = int(round(pw / config.PRINTER_IMAGE_ASPECT))        # portrait, 3:4
-    title_font, cap_font = _ttf(30), _ttf(21)
+    title_font = _ttf(28)
     small, tiny = _ttf(18), _ttf(14)
-    header_h, cap_h, gap = 50, 30, 8
+    header_h, gap = 50, 10
 
     qr_img: Optional[Image.Image] = None
     if qr_url:
@@ -232,21 +231,19 @@ def render_booth_pil(frames: List[np.ndarray], label: str = "PHOTOBOOTH",
             qr_img = None
     footer_h = 112 if qr_img is not None else 46
 
-    total_h = header_h + len(frames) * (ph + cap_h + gap) + footer_h
+    total_h = header_h + len(frames) * (ph + gap) + footer_h
     base, ink, d = _layers(W, total_h)
 
     # ---- title ----
     tw = d.textlength(label, font=title_font)
-    d.text(((W - tw) / 2, 4), label, fill=0, font=title_font)
-    _heart(d, (W - tw) / 2 - 24, 24, 10)
-    _heart(d, (W + tw) / 2 + 24, 24, 10)
-    _sparkle(d, 22, 34, 7)
-    _sparkle(d, W - 22, 34, 7)
+    d.text(((W - tw) / 2, 6), label, fill=0, font=title_font)
+    _heart(d, max(14, (W - tw) / 2 - 20), 24, 9)
+    _heart(d, min(W - 14, (W + tw) / 2 + 20), 24, 9)
     _scallop(d, header_h - 8, W)
     y = header_h
 
     # ---- photos ----
-    for i, frame in enumerate(frames):
+    for frame in frames:
         try:                       # keep the people in the frame (face-aware, then centre)
             import smartcrop
             frame, _ = smartcrop.portrait_crop(frame, pw / ph)
@@ -254,36 +251,19 @@ def render_booth_pil(frames: List[np.ndarray], label: str = "PHOTOBOOTH",
             pass
         photo = _crop_portrait(_frame_to_pil(frame), pw, ph)
         _sticker(base, d, _preprocess(photo), (12, y), 0)
-        bx, by = 12 + 24, y + 24                             # a round number sticker on the corner
-        d.ellipse([bx - 19, by - 19, bx + 19, by + 19], fill=255, outline=0, width=3)
-        n = str(i + 1)
-        d.text((bx - d.textlength(n, font=cap_font) / 2, by - 13), n, fill=0, font=cap_font)
-        y += ph
-        caption = (prompts[i] if i < len(prompts) else f"Photo {i + 1}").strip()
-        font = cap_font
-        for size in (21, 19, 17, 15):                        # shrink a long direction to fit between the sparkles
-            font = _ttf(size)
-            if d.textlength(caption, font=font) <= W - 80:
-                break
-        while d.textlength(caption, font=font) > W - 80 and len(caption) > 6:
-            caption = caption[:-2]                           # last resort: never wider than the paper
-        cw = d.textlength(caption, font=font)
-        d.text(((W - cw) / 2, y + 5 + (21 - font.size) // 2 if hasattr(font, "size") else y + 3), caption, fill=0, font=font)
-        _sparkle(d, (W - cw) / 2 - 16, y + 16, 7)
-        _sparkle(d, (W + cw) / 2 + 16, y + 16, 7)
-        y += cap_h + gap
+        y += ph + gap
 
     # ---- footer: QR beside the date and the house, or just the house ----
     ts = datetime.datetime.now().strftime("%d.%m.%Y  %H:%M")
     house = config.PRINTER_HEADER or "HOUSE FORTUNA"
     if qr_img is not None:
         ink.paste(qr_img.point(lambda v: 0 if v < 128 else 255), (14, y + 4))
-        tx = 14 + 104 + 14
+        tx = 14 + qr_img.width + 14
         hw = d.textlength(house, font=small)
         d.text((tx, y + 12), house, fill=0, font=small)
         _heart(d, tx + hw + 14, y + 24, 7)
         d.text((tx, y + 40), ts, fill=0, font=small)
-        d.text((tx, y + 68), "scan: all of today's photos", fill=0, font=tiny)
+        d.text((tx, y + 68), "scan: today's photos", fill=0, font=tiny)
     else:
         hw = d.textlength(house, font=small)
         d.text(((W - hw) / 2, y + 1), house, fill=0, font=small)

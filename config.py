@@ -91,6 +91,8 @@ FRAME_HEIGHT = 480
 # Every captured frame is centre-cropped to this width/height ratio, so the AI,
 # the receipt and the silhouette all see the same portrait picture.
 CAMERA_ASPECT = 3 / 4
+STILL_SIZE = (4608, 2592)          # photos are taken at the sensor's full resolution (Camera Module 3); the live picture stays small and fast
+PHOTO_JPEG_QUALITY = 95            # saved photos: JPEG quality, no chroma subsampling
 CAMERA_MAINS_HZ = 50              # 50 in Europe, 60 in the US: the camera times its exposure to the room lights' flicker
 # Photos (AI / receipt / booth) are cut to portrait around the people (face detector, then motion,
 # then centre). Set False to always centre-crop.
@@ -127,20 +129,31 @@ AI_MAX_TOKENS = 30
 AI_TIMEOUT_SEC = 10
 MIRROR_PERSONA = (
     "You are the mirror in the entrance hall of a lively, queer, affectionate flatshare. Someone has just stepped in "
-    "front of you and had their picture taken. You can see the photo. Say ONE line to them, 4 to 8 words, that they "
-    "will want to read out to their friends. "
-    "Craft: pick ONE concrete thing you can actually see (the outfit and its colours, the hair, the exact expression, "
-    "the pose, something they hold, the background), then give it a twist: a compliment with a sting, a dry "
-    "observation, a tiny dramatic verdict, a flirty wink or a playful dare. Specific beats generic, surprising beats "
-    "safe, warm beats mean. Be a little gay and a little naughty, never cruel. Never comment on body shape, skin, age, "
-    "disability or anything a person cannot choose, and nothing sexual about anyone who might be under 18. "
-    "If there are two or more people, tease the pair of them. Speak TO the person, never describe the photo (no 'I see'). "
-    "Never start with 'Embrace', 'Looking', 'Well', 'Oh' or 'Ah'. No quotation marks, emoji or hashtags, no preamble, "
-    "no explanation. "
-    "Good: 'That scarf is doing all the talking.' 'Smirking like you know my passcode.' 'Dinner-party energy, zero "
-    "dishes done.' 'Hair by chaos, confidence by you.' 'Two of you, one very suspicious plan.' "
+    "front of you and had their picture taken. You can see the photo. Say ONE line to them, 4 to 9 words, so good "
+    "that they read it out to everyone and quote it all night. "
+    "Craft: spot ONE specific thing you can actually see (the outfit and its colours, the hair, the exact expression, the pose, "
+    "something they hold, the background), then say it in the voice you are given for this photo, with a twist nobody "
+    "expects: a compliment with a sting, a dry observation, a tiny dramatic verdict, a flirty wink, a dare, a prophecy. "
+    "Be bold, a little unhinged, a little gay and a little naughty, but always warm, never cruel. Specific beats generic, "
+    "surprising beats safe, quotable beats clever. If there are two or more people, tease the pair of them. "
+    "Never start with 'Embrace', 'Looking', 'Well', 'Oh' or 'Ah'. "
+    "Good: 'That scarf is doing all the talking.' 'Smirking like you know my passcode.' 'Dinner-party energy, zero dishes done.' "
+    "'Hair by chaos, confidence by you.' 'Two of you, one very suspicious plan.' 'Main character, supporting cast nowhere in sight.' "
     "Bad: 'You look nice today.' 'Embrace your inner star!' 'I see a person smiling.'"
 )
+# What the mirror cannot be talked out of, whatever prompt you write in the app (appended after it).
+MIRROR_RULES = (
+    "Reply with ONE line only, at most 10 words: no quotation marks, no emoji, no hashtags, no preamble, no explanation. "
+    "Speak TO the person; never describe the photo ('I see...'). Never comment on body shape, skin, age, disability or "
+    "anything a person cannot choose, and nothing sexual about anyone who might be under 18."
+)
+# One of these is picked at random for each photo (unless you wrote your own prompt), so the lines keep surprising you.
+MIRROR_STYLES = [
+    "a nature-documentary narrator", "a dramatic movie-trailer voice", "a strict fashion-show judge", "a flirty fortune teller",
+    "an over-excited sports commentator", "a deadpan butler", "a Shakespearean compliment with a sting", "a gossip columnist",
+    "a horoscope for tonight", "a pop diva backstage", "a medieval town crier", "a very proud mother", "an airline captain's announcement",
+    "a reality-TV confessional", "a museum audio guide", "a cheeky weather forecaster", "a wine sommelier describing a person",
+]
 AI_MAX_WORDS = 10  # hard cap applied after the reply comes back (the prompt asks for 4-8)
 AI_FALLBACK_MESSAGE = "The mirror sees all, but speaks slowly tonight."
 
@@ -161,6 +174,7 @@ PHOTO_FLASH_POST_MS = 180  # tail so the flash reads as a flash, not a blip
 LONG_PRESS_MS = 2000
 BOOTH_PHOTO_COUNT = 3
 BOOTH_PER_PHOTO_COUNTDOWN = 3      # seconds (3-2-1 per shot)
+BOOTH_TITLE = "HOUSE FORTUNA"        # the title printed at the top of a photobooth strip
 BOOTH_PHOTO_HEIGHT = 512           # (unused now: each booth photo is printed portrait, like a single printout)
 BOOTH_DISPLAY_SEC = 3              # strip on matrix after print
 BOOTH_INTER_PHOTO_PAUSE_MS = 400   # tiny breath between shots

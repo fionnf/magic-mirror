@@ -459,7 +459,7 @@
       <p class="hint" style="margin:0 0 6px">Guests on the home Wi-Fi open this page and write a line that scrolls across the wall.</p>
       <div id="shareGuest"></div>
       <h3 class="sub">Photo galleries</h3>
-      <p class="hint" style="margin:0 0 6px">One link per day with that day's pictures, in full size. Anyone with a day's link sees that day and no other, so share the right one. The QR code on a printed strip opens today's.</p>
+      <p class="hint" style="margin:0 0 6px">One link per day, to a page with that day's pictures (and a download button for each, in full size). Anyone with a day's link sees that day and no other, so share the right one. The QR code on a printed strip opens today's.</p>
       <div id="shareDays"><p class="hint">Loading…</p></div>
     </section>
     <section>
@@ -1148,7 +1148,7 @@ async function loadShare() {
   $('shareGuest').innerHTML = (d.guest || []).map((g, i) => linkRow(i ? 'By address' : 'By name', g, 'Write on the wall at Fortunagasse 24')).join('') || '<p class="hint">Not found.</p>';
   const nice = s => new Date(s + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'long', day: 'numeric', month: 'long'});
   $('shareDays').innerHTML = !d.gallery ? '<p class="hint">Google Drive is not set up on the wall, so there are no galleries to share.</p>'
-    : d.days.length ? d.days.slice(0, 14).map((x, i) => linkRow((i === 0 && x.date === new Date().toISOString().slice(0, 10) ? 'Today · ' : '') + nice(x.date), x.url, 'Photos from ' + nice(x.date))).join('')
+    : d.days.length ? d.days.slice(0, 14).map((x, i) => linkRow((i === 0 && x.date === new Date().toISOString().slice(0, 10) ? 'Today · ' : '') + nice(x.date), x.page || x.url, 'Photos from ' + nice(x.date))).join('')
     : '<p class="hint">No galleries yet: the first photo makes today\'s.</p>';
   document.querySelectorAll('#v-more [data-share]').forEach(b => b.onclick = () => shareLink(b.dataset.title, b.dataset.share));
   document.querySelectorAll('#v-more [data-copy]').forEach(b => b.onclick = () => copyLink(b.dataset.copy));

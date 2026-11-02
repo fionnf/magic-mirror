@@ -268,9 +268,14 @@ def main():
         fh.write(index(eds))
     os.makedirs(os.path.join(a.out, "window"))
     shutil.copy(os.path.join(ROOT, "site", "window.html"), os.path.join(a.out, "window", "index.html"))
+    os.makedirs(os.path.join(a.out, "p"))                         # the photo pages: <site>/p/#<the day's Drive folder>, see docs/mirror.md
+    with open(os.path.join(ROOT, "site", "photos.html")) as fh:
+        page_html = fh.read().replace("__DRIVE_API_KEY__", os.environ.get("GALLERY_API_KEY", "").strip())
+    with open(os.path.join(a.out, "p", "index.html"), "w") as fh:
+        fh.write(page_html)
     with open(os.path.join(a.out, ".nojekyll"), "w"):
         pass
-    print(f"gallery: {len(eds)} editions -> {a.out}")
+    print(f"gallery: {len(eds)} editions -> {a.out} (photo page {'with' if os.environ.get('GALLERY_API_KEY') else 'without'} a Drive key)")
 
 
 if __name__ == "__main__":

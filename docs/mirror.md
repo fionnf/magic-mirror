@@ -40,6 +40,14 @@ Missing models just turn the feature off (`assets/models/get_models.sh` fetches 
   **The photo is taken during those frames**: the wall simply holds the flash while the camera exposes. After a short hold the light decays like a flash tube (the wash in about 0.15 s, the glow in 0.5 s).
 - Exposure: the camera is normally locked (see Flicker). During the flash `Camera.light_auto()` lets it meter, and `capture_still()` fixes the exposure it just metered for the exposure itself; `light_restore()` puts the locked values back afterwards.
 
+### Setting up the gallery page's styled view (one time, 5 minutes)
+
+The page works at once, but until it has a Google **API key** it shows the Drive folder inside a styled frame. With a key it lists the folder itself and draws the grid and big view above:
+
+1. Google Cloud console (the project your Drive uploads use), *APIs & Services, Credentials, Create credentials, API key*.
+2. Edit the key: *Application restrictions: Websites*, add `https://fionnf.github.io/*`; *API restrictions: Google Drive API*. (The key sits in the public page, which is fine because it can only call the Drive API from that website, and only reads folders that are shared by link.)
+3. Give it to the site: `gh variable set GALLERY_API_KEY --body <the key>` in the repository (or *Settings, Secrets and variables, Actions, Variables*), then run the *Fortuna gallery* workflow (or push anything under `site/`). `tools/build_gallery.py` puts the key into `p/index.html`.
+
 ## Resolution: pictures are saved as the camera took them
 
 A photo is taken in the camera's **still mode at the sensor's full resolution** (`config.STILL_SIZE`, 4608 x 2592 on a Camera Module 3), then cut to portrait around the people: about 1944 x 2592, 5 megapixels.
@@ -95,9 +103,11 @@ It is never hidden: **while anyone is watching, a small red dot blinks in the to
 ## Where the pictures go
 
 - `photos/` on the Pi (never deployed, git-ignored): every photo and strip with a small JSON next to it.
-- **Google Drive**, if set up ([google-drive.md](google-drive.md)): one folder per day, "Photobooth YYYY-MM-DD", readable by anyone with its link. The QR code on a printed strip opens **that day's folder and nothing else**:
-  every day is its own folder and the parent folder is not shared, so there is no way from one day to another. Anyone with the link can see the whole day: do not post it publicly if that matters.
-  (A public web gallery of every photo was deliberately not built: a page in a public repository cannot hide other days.)
+- **Google Drive**, if set up ([google-drive.md](google-drive.md)): the cloud copy, one folder per day, "Photobooth YYYY-MM-DD", readable by anyone with its link.
+- **The gallery page** (`site/photos.html`, published at `<GALLERY_URL>p/`): the QR code on a printed strip and the links in the app's *Share* section open `…/p/#<the day's Drive folder>`, a nicely styled page for **that day only**:
+  the pictures in a masonry grid, tap for a big view with the mirror's line and a **Download** button (the full-size original from Drive), and the printed strips underneath. The folder id is in the `#` part of the link, which browsers never send to any server,
+  and the page only asks Drive for that one folder, so there is no way from one day to another. Anyone with the link can see that whole day: do not post it publicly if that matters.
+  (A public gallery of every photo was deliberately not built: a page in a public repository cannot hide other days.) Switch to plain Drive links with the `gallery_page` setting.
 - **Mirror photos**, an art mode in the gallery: a slideshow of every picture the mirror took, in random order (`display/slideshow.py`).
 - The app's **Mirror** tab lists every photo under a heading for each day, newest first.
 - The printer, wherever it is ([printing.md](printing.md)).

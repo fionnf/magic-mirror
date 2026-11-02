@@ -36,8 +36,8 @@ and restart `wall-control`.
 ## Layouts
 
 - **Receipt** (`_receipt_image`): the street name with a sparkle each side, the date, a portrait photo in a frame with a small heart sticker, and the AI line. With "no comment" there is no text block at all.
-- **Photobooth strip** (`render_booth_pil`): **HOUSE FORTUNA** (`config.BOOTH_TITLE`) with hearts over a scalloped edge; each photo a portrait (360 x 480 dots, 3:4, the shape of a single printout) in a square frame, no numbers and no captions; a footer with the house, the date and the QR code. 1566 dots (about 20 cm) with a QR code, 1500 without. All of it is shapes and ordinary text, so it prints the same whichever font is installed.
-- **The QR code** points at the day's own Drive folder, shared by link ([google-drive.md](google-drive.md)): it shows that day's pictures and no other day; it is drawn with whole-dot modules so it scans off thermal paper (checked by decoding the final 1-bit image). No Drive set up = no QR code and a shorter footer.
+- **Photobooth strip** (`render_booth_pil`): **HOUSE FORTUNA** (`config.BOOTH_TITLE`) with hearts over a scalloped edge; each photo a portrait (360 x 480 dots, 3:4, the shape of a single printout) in a square frame, no numbers and no captions; a footer with the house, the date and the QR code. 1640 dots (about 21 cm) with a QR code, 1566 without. All of it is shapes and ordinary text, so it prints the same whichever font is installed.
+- **The QR code** opens the day's **gallery page** (`https://fionnf.github.io/magic-mirror/p/#<the day's Drive folder>`, see [mirror.md](mirror.md)): that day's pictures and no other day; it is drawn with whole-dot modules so it scans off thermal paper (checked by decoding the final 1-bit image). No Drive set up = no QR code and a shorter footer.
 
 ## Several printers' worth of options
 

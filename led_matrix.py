@@ -117,6 +117,7 @@ class LedMatrix:
         self._luts = None
         if config.MATRIX_APPLY_PANEL_GAINS:
             self._load_gains()
+        print(f"[power] current budget {config.MATRIX_MAX_AMPS:g} A (WALL_MAX_AMPS in .env; the supply is rated higher, see panel_setup/README.md)", flush=True)
 
     @staticmethod
     def _hw_brightness(value) -> int:

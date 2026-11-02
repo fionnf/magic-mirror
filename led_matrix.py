@@ -253,6 +253,7 @@ class LedMatrix:
             cur = max(want, cur - 0.15)                              # down: a hard jump is caught within ~3 frames
         else:
             cur = min(want, cur + 0.004)                             # up: gently
+        cur = min(cur, want_peak)                                    # the single-frame cap is instant, not eased
         self._pscale = cur
         if cur >= 0.999:
             return arr

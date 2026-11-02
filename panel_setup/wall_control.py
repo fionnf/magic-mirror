@@ -1156,12 +1156,12 @@ def make_app(runner):
     @app.post("/api/photos/delete")
     def photos_delete():
         x = os.path.basename((request.get_json(force=True, silent=True) or {}).get("name", ""))
-        if not x.endswith(".jpg"):
+        if not x.endswith(".jpg") or not re.fullmatch(r"[A-Za-z0-9_.\-]+", x):
             return jsonify({"error": "no such photo"}), 404
         removed = 0
         import glob
         stem = x[:-4]
-        for f in [x, stem + ".json", stem + "_frame.jpg", stem + "_thumb.jpg"] + [os.path.basename(g) for g in glob.glob(os.path.join(PHOTOS, stem + "_shot*.jpg"))]:
+        for f in [x, stem + ".json", stem + "_frame.jpg", stem + "_thumb.jpg"] + [os.path.basename(g) for g in glob.glob(os.path.join(glob.escape(PHOTOS), glob.escape(stem) + "_shot*.jpg"))]:
             try:
                 os.remove(os.path.join(PHOTOS, f))
                 removed += 1

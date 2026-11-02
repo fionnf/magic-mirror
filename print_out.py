@@ -61,7 +61,9 @@ def to_1bit(img):
         full = Image.new("1", (WIDTH, bw.height), 1)
         full.paste(bw, ((WIDTH - bw.width) // 2, 0))
         bw = full
-    if ink is not None and ink.size == bw.size:                  # text, frames, drawings: full-resolution black on top
+    if ink is not None and ink.size != bw.size:                  # the ink layer follows the dots' size
+        ink = ink.resize(bw.size, Image.LANCZOS)
+    if ink is not None:                                          # text, frames, drawings: full-resolution black on top
         ink_bw = ink.convert("L").point(lambda v: 0 if v < 140 else 255).convert("1", dither=Image.NONE)
         bw = ImageChops.darker(bw.convert("L"), ink_bw.convert("L")).convert("1", dither=Image.NONE)
     return bw

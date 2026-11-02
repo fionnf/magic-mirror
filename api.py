@@ -50,6 +50,8 @@ class MirrorAPI:
         @self.app.route("/api/frame.jpg", methods=["GET"])
         def frame_jpg():
             """The newest camera picture (for the control app's live view while the mirror owns the camera)."""
+            if request.remote_addr not in ("127.0.0.1", "::1"):
+                return jsonify({"error": "local only"}), 403      # the camera picture is private: only the control app on this Pi may read it
             f = self.mirror._latest_frame
             if f is None:
                 return jsonify({"error": "no picture yet"}), 404

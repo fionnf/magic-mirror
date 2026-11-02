@@ -1,0 +1,51 @@
+{
+ "name": "Amber Aperture",
+ "description": "A soft rectangular window of amber light hovers in darkness, breathing from a narrow morning slit into a fuller evening glow as the day leaves faint sediment in its frame.",
+ "image": "2026-11-02.png",
+ "animation_source": "2026-11-02.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-02"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#090b12 #7d4b1f #ffd38a"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 8
+  }
+ ],
+ "listening": "It listens as a slow tide: bass widens the aperture, treble sharpens the rim, and the day-memory settles as a faint warm halo that accumulates hour by hour.",
+ "palette": [
+  "#090b12",
+  "#7d4b1f",
+  "#ffd38a"
+ ],
+ "source_sha256": "cf28603fe2bcbe274b3c504e7322a1c39dd22d4643a15921ee3200b0bbe81d8f",
+ "model": "gpt-5.4-mini",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 6,
+ "created": 1793610620.301947,
+ "curator": {
+  "score": 8,
+  "verdict": "This piece captures the direction beautifully with a clear, soft amber rectangular aperture glowing against a dark background. The gradual breathing light throughout the day gives it a serene, elegant arc that fits the house's restrained taste perfectly."
+ },
+ "direction": "Amber aperture"
+}

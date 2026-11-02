@@ -205,6 +205,28 @@ def _matrix():
     return LedMatrix()
 
 
+_LIVE_FLAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "liveview.on")
+_live = {"t": 0.0, "on": False}
+
+
+def _live_dot(img):
+    """While someone is looking through the camera from the app, a small red dot blinks in the top-right corner of the wall."""
+    now = time.monotonic()
+    if now - _live["t"] > 1.0:
+        _live["t"] = now
+        try:
+            _live["on"] = time.time() - os.path.getmtime(_LIVE_FLAG) < 4.0
+        except OSError:
+            _live["on"] = False
+    if not _live["on"] or int(now * 1.5) % 2:
+        return img
+    from PIL import ImageDraw
+    img = img.copy()
+    W = img.width
+    ImageDraw.Draw(img).rectangle([W - 7, 3, W - 4, 6], fill=(255, 30, 30))
+    return img
+
+
 def _boot_frame(progress):
     """Start-up screen: HOUSE FORTUNA and a progress bar (shown while the animation loads)."""
     from PIL import Image, ImageDraw
@@ -409,6 +431,7 @@ def main():
             if presence is not None:
                 img = presence.apply(img, ff / refresh)
             img = overlay.apply(img)
+            img = _live_dot(img)
             if netstate is not None:
                 img = netstate.mark(img)
             if rods is not None:

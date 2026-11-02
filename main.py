@@ -900,10 +900,11 @@ class MagicMirror:
                 import cloud_uploader
                 for i, f in enumerate(frames):
                     desc = f"Photobooth {i + 1}/{len(frames)}"
+                    local = f"{strip_stem}_shot{i + 1}.jpg" if strip_stem else None
                     if booth_folder_id:
-                        cloud_uploader.upload_photo_to_folder_async(f, booth_folder_id, desc)
+                        cloud_uploader.upload_photo_to_folder_async(f, booth_folder_id, desc, local=local)
                     else:
-                        cloud_uploader.upload_photo_only_async(f, desc)
+                        cloud_uploader.upload_photo_only_async(f, desc, local=local)
                 cloud_uploader.upload_booth_async(strip_image, stem=strip_stem)
             except Exception as e:
                 print(f"[BOOTH] drive upload skip: {e}")

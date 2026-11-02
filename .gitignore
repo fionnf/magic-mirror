@@ -66,3 +66,4 @@ panel_setup/matter_pairing.json
 panel_setup/wall_switch.json
 panel_setup/exposure_now.npz
 panel_setup/exposures/
+panel_setup/liveview.on

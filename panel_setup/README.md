@@ -127,8 +127,10 @@ Every test prints a `[PI]` line every 2 s and logs to `panel_setup/monitor.csv`:
 `config.py` estimates 4 A per panel at full white (`MATRIX_AMPS_PER_PANEL`, a guess: measure yours). So 12
 panels at full white are about 48 A, more than the 40 A supply in the parts list. Protections in software:
 - `MATRIX_BRIGHTNESS = 40` (full white then ~19 A by that estimate; 9 panels ~14 A);
-- `MATRIX_MAX_AMPS = 28`: the driver estimates current per frame from pixel values and dims the frame to stay under it.
-  This is an estimate, **not** a fuse or a measurement.
+- `MATRIX_MAX_AMPS = 28` (set it with `WALL_MAX_AMPS` in `.env`): the driver estimates current from pixel values and dims the picture to stay under it.
+  This is an estimate, **not** a fuse or a measurement. The dimming follows the **average** current over about 1.5 s (one frame may be 8% over; a hard jump is caught within three frames),
+  because a limiter that reacted to every frame made bright, moving art pump visibly. **At high brightness most bright art is over a 28 A budget, so the limiter is always working:**
+  if you have a bigger supply and wiring for it, raise `WALL_MAX_AMPS` (stay under the rating of the supply, the fuse and the thinnest wire) and bright art stops being dimmed at all.
 - Give each panel (or pair) its own power lead to the PSU. Share GND with the Pi only.
 Fit a fuse on the mains side and on the 5 V output, and see the frame's notes in
 [`hardware/led-wall-frame`](../hardware/led-wall-frame/README.md).

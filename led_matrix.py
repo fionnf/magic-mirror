@@ -223,11 +223,13 @@ class LedMatrix:
     def _limit_power(self, arr: np.ndarray) -> np.ndarray:
         """Scale the frame down if its estimated current exceeds the budget.
 
-        Estimate: each panel draws AMPS_PER_PANEL at full white, linear in mean
-        channel value and in brightness. Mean is taken on a 1-in-16 subsample -
-        plenty accurate for a budget check and ~16x cheaper.
-        The scale is smoothed over time: it drops quickly when the frame needs it (safety)
-        but recovers slowly, so content hovering around the budget never flickers.
+        Estimate: each panel draws AMPS_PER_PANEL at full white, linear in mean channel value and in brightness. Mean is taken on
+        a 1-in-16 subsample - plenty accurate for a budget check and ~16x cheaper.
+
+        The scale follows the AVERAGE current over ~1.5 s, not each frame: the supply and the wiring care about heat, which is an
+        average, and a limiter that reacts to every frame turns bright, moving art into visible pumping (at high brightness most
+        bright art is over the budget, so a fast limiter was working all the time). A single frame may exceed the budget by 8%;
+        a bigger jump is pulled down within a few frames.
         """
         mean = float(arr[::4, ::4].mean()) / 255.0
         amps = (mean * config.CHAIN_LENGTH * config.MATRIX_AMPS_PER_PANEL
@@ -235,12 +237,21 @@ class LedMatrix:
         self.last_amps = amps
         sub = arr[::4, ::4]
         self._adapt_bits(mean, float((sub.max(axis=2) > 200).mean()))
-        want = min(1.0, config.MATRIX_MAX_AMPS * 0.97 / amps) if amps > 0 else 1.0
+        now = time.monotonic()
+        dt = min(0.5, max(0.0, now - getattr(self, "_pt", now)))
+        self._pt = now
+        avg = getattr(self, "_pavg", amps)
+        avg += (amps - avg) * min(1.0, dt / 1.5)                     # the average current over ~1.5 s
+        self._pavg = avg
+        limit = config.MATRIX_MAX_AMPS * 0.97
+        want_avg = min(1.0, limit / avg) if avg > 0 else 1.0          # what the average allows: moves slowly, so no pumping
+        want_peak = min(1.0, 1.08 * limit / amps) if amps > 0 else 1.0  # what a single frame may take: a burst 8% over, never more
+        want = min(want_avg, want_peak)
         cur = getattr(self, "_pscale", 1.0)
         if want < cur:
-            cur = max(want, cur - 0.25)                      # down: within a few frames
+            cur = max(want, cur - 0.15)                              # down: a hard jump is caught within ~3 frames
         else:
-            cur = min(want, cur + 0.008)                     # up: ~2 s to recover
+            cur = min(want, cur + 0.004)                             # up: gently
         self._pscale = cur
         if cur >= 0.999:
             return arr

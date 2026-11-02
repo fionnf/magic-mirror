@@ -44,7 +44,7 @@ MATRIX_BRIGHTNESS = int(__import__("os").environ.get("WALL_BRIGHTNESS", 40))  # 
 # Power budget. PSU is 40 A @ 5 V; keep headroom for the Pi and wiring losses.
 # The driver estimates current per frame from pixel values x brightness and
 # scales the frame down if it would exceed MATRIX_MAX_AMPS.
-MATRIX_MAX_AMPS = 28.0
+MATRIX_MAX_AMPS = float(__import__("os").environ.get("WALL_MAX_AMPS", 28))   # the software current budget (an ESTIMATE, not a measurement or a fuse): set WALL_MAX_AMPS in .env to match YOUR supply and wiring
 # Conservative full-white draw of ONE 64x64 panel at 100% brightness (typical
 # 3-4 A; measure yours and adjust).
 MATRIX_AMPS_PER_PANEL = 4.0

@@ -9,6 +9,7 @@ made in the web app apply to the very next photo with no restart.
   smile       sparkles when someone smiles
   gesture     an open palm held up starts the photo sequence, a peace sign the photobooth strip
   comment     the mirror says a line about you with every photo; off = just the photo, no comment
+  face_focus  the photo focuses and exposes for the face in front of the mirror (Camera Module 3 autofocus; needs a face)
   photos_gb   how much the pictures may take on the wall (GB); beyond it the oldest ones already in Drive shrink to small copies
   gallery_page the QR code and shared links open a styled gallery page (on the Pages site) instead of the plain Drive folder
   prompt      your own instructions for what the mirror says ("" = the built-in prompt, config.MIRROR_PERSONA)
@@ -35,7 +36,8 @@ LANGUAGES = {
 }
 DEFAULTS = {"tone": 50, "language": "English", "recognise": True, "smile": True, "gesture": True,
             "comment": True, "prompt": "", "photos_gb": 1, "gallery_page": True, "booth_shots": 3, "booth_repeat": False,
-            "learn_faces": False, "idle_art_minutes": 10, "wake_on_motion": False}
+            "learn_faces": False, "idle_art_minutes": 10, "wake_on_motion": False,
+            "face_focus": True}
 
 
 def load():
@@ -63,7 +65,7 @@ def load():
         s["photos_gb"] = max(1, min(500, int(s["photos_gb"])))
     except (TypeError, ValueError):
         s["photos_gb"] = 1
-    for k in ("recognise", "smile", "gesture", "comment", "gallery_page", "booth_repeat", "learn_faces", "wake_on_motion"):
+    for k in ("recognise", "smile", "gesture", "comment", "gallery_page", "booth_repeat", "learn_faces", "wake_on_motion", "face_focus"):
         s[k] = bool(s[k])
     return s
 

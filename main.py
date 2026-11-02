@@ -669,11 +669,56 @@ class MagicMirror:
                 text_renderer.render_static_text(canvas, str(n), colour=(255, 244, 224))
                 self._show(canvas)
 
-    def _grab_photo(self):
+    def _face_focus_start(self):
+        """Shortly before the flash: find the face to focus on in the newest live frame and start an autofocus cycle on it.
+        Returns its normalised rectangle, or None (setting off, no autofocus on this camera, no face, any error: then the
+        photo is taken exactly as it always was)."""
+        try:
+            import mirror_settings
+            if not mirror_settings.load().get("face_focus", True):
+                return None
+            if not getattr(self.camera, "has_autofocus", lambda: False)():
+                return None
+            import smartcrop
+            raw = self.camera.capture_frame(raw=True)
+            rect = smartcrop.focus_rect(smartcrop.find_face_rows(raw), raw.shape[1], raw.shape[0])
+            if rect is None or not self.camera.start_focus(rect):
+                return None
+            return rect
+        except Exception as e:
+            print(f"[FOCUS] skipped: {e}")
+            return None
+
+    def _face_focus_wait(self, face, timeout=1.2):
+        """Hold the pre-glow while the autofocus cycle runs (at most `timeout` s). Releases the focus if it did not succeed."""
+        ok = False
+        try:
+            t0 = time.monotonic()
+            r = None
+            while r is None and time.monotonic() - t0 < timeout and not self._stop.is_set():
+                self._show(self._flash_canvas(0.7))
+                r = self.camera.focus_done()
+            ok = bool(r)
+            print(f"[FOCUS] face {tuple(round(v, 2) for v in face)}: {'focused' if ok else 'not focused'} in {time.monotonic() - t0:.2f} s")
+        except Exception as e:
+            print(f"[FOCUS] wait failed: {e}")
+        if not ok:
+            self._face_focus_release()
+        return ok
+
+    def _face_focus_release(self):
+        try:
+            self.camera.focus_release()
+        except Exception:
+            pass
+
+    def _grab_photo(self, face=None):
         """The photo at full resolution (the camera's still mode, 4608 x 2592 on a Camera Module 3) cut to portrait around the
         people (smart crop). Falls back to the live frame, then to the last live frame, if the camera hiccups."""
         still = getattr(self.camera, "capture_still", None)
-        raw = still() if still else None
+        raw = None
+        if still:
+            raw = still(face_rect=face) if face is not None else still()
         if raw is None:
             try:
                 raw = self.camera.capture_frame(raw=True)
@@ -696,22 +741,27 @@ class MagicMirror:
         auto = getattr(self.camera, "light_auto", None)
         if auto:
             auto()                                       # let the camera meter for the lit scene (it is locked otherwise)
+        face = self._face_focus_start()                  # focus (and later expose) for the face, not the whole scene
         t0 = time.monotonic()
         while not self._stop.is_set():                   # pre-glow: 0.35 s, the frame rising to 0.7
             e = time.monotonic() - t0
             if e >= 0.35:
                 break
             self._show(self._flash_canvas(0.45 + 0.25 * e / 0.35))
+        if face is not None:
+            self._face_focus_wait(face)
         for _ in range(2):                               # the flash: two whole frames at full power (~80 ms) so it is really on
             self._show(self._flash_canvas(1.0, wash=0.55, dim=0.2))
         try:
-            frame = self._grab_photo()                   # the wall holds the flash while the camera exposes
+            frame = self._grab_photo(face)               # the wall holds the flash while the camera exposes
         except Exception as ex:
             print(f"[CAPTURE] direct grab failed: {ex}")
             frame = self._latest_frame
         restore = getattr(self.camera, "light_restore", None)
         if restore:
             restore()                                    # back to the steady, locked light
+        if face is not None:
+            self._face_focus_release()                   # and the lens follows the room again
         for _ in range(2):                               # a short hold after the exposure
             self._show(self._flash_canvas(1.0, wash=0.55, dim=0.2))
         t2 = time.monotonic()

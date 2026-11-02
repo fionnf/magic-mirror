@@ -996,12 +996,14 @@ def make_app(runner):
             if cloud_uploader._build_service() is not None and cloud_uploader._parent_folder_id():
                 out["gallery"] = True
                 out["days"] = cloud_uploader.list_day_folders(30)
+                for dd in out["days"]:
+                    dd["page"] = cloud_uploader.share_url(dd["url"].rsplit("/", 1)[-1], dd["url"])
                 today = datetime.date.today().isoformat()
                 if not out["days"] or out["days"][0]["date"] != today:
                     try:                                                  # today's folder, so there is always a link for today
                         link = cloud_uploader.today_link()
                         if link:
-                            out["days"].insert(0, {"date": today, "url": link})
+                            out["days"].insert(0, {"date": today, "url": link, "page": cloud_uploader.share_url(link.rsplit("/", 1)[-1], link)})
                     except Exception as e:
                         out["error"] = str(e)[:100]
         except Exception as e:

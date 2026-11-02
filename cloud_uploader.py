@@ -222,6 +222,21 @@ def list_day_folders(limit: int = 30):
     return out
 
 
+PAGE_URL = os.environ.get("GALLERY_PAGE_URL", "https://fionnf.github.io/magic-mirror/p/")
+
+
+def share_url(folder_id: str, drive_url: str = "") -> str:
+    """What a guest is given for a day: a nicely hosted page (the folder id travels in the # part, so no server ever sees it) when the
+    "gallery_page" setting is on, else the plain Drive folder."""
+    try:
+        import mirror_settings
+        if folder_id and mirror_settings.load().get("gallery_page", True):
+            return PAGE_URL.rstrip("/") + "/#" + folder_id
+    except Exception:
+        pass
+    return drive_url or f"https://drive.google.com/drive/folders/{folder_id}"
+
+
 def today_link() -> Optional[str]:
     """The link to today's folder (made if it does not exist yet): what a guest sees."""
     got = _do_create_session_folder()

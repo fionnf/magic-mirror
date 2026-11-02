@@ -881,7 +881,8 @@ class MagicMirror:
                 import cloud_uploader
                 session = cloud_uploader.create_booth_session_folder()
                 if session is not None:
-                    booth_folder_id, qr_url = session
+                    booth_folder_id, drive_url = session
+                    qr_url = cloud_uploader.share_url(booth_folder_id, drive_url)       # the styled gallery page for today (or the Drive folder)
             except Exception as e:
                 print(f"[BOOTH] folder create skip: {e}")
 

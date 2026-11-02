@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>House Fortuna · Your photos</title>
+<style>
+  :root { --bg:#121014; --ink:#f4ece0; --dim:#9d93a6; --warm:#ffe2a8; --line:#2a242f; --card:#1d1922; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:radial-gradient(1200px 600px at 50% -10%, #2a1f2d 0%, var(--bg) 60%) fixed; color:var(--ink);
+         font:16px/1.45 -apple-system, system-ui, "Segoe UI", sans-serif; min-height:100vh; }
+  .wrap { max-width:1100px; margin:0 auto; padding:28px 16px 70px; }
+  header { text-align:center; padding:14px 0 22px; }
+  header .hearts { color:var(--warm); letter-spacing:.4em; font-size:.9rem; opacity:.8; }
+  header h1 { margin:.2rem 0 0; font:italic 400 clamp(2rem,7vw,3.2rem)/1.05 Georgia, "Times New Roman", serif; color:var(--warm); }
+  header p { margin:.5rem 0 0; color:var(--dim); }
+  .actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:16px 0 4px; }
+  .btn { background:#2a242f; color:var(--ink); border:0; border-radius:999px; padding:9px 18px; font:inherit; text-decoration:none; cursor:pointer; }
+  .btn.warm { background:var(--warm); color:#241a10; font-weight:600; }
+  .grid { column-count:2; column-gap:8px; }
+  @media (min-width:640px) { .grid { column-count:3; } } @media (min-width:980px) { .grid { column-count:4; } }
+  .grid figure { margin:0 0 8px; break-inside:avoid; position:relative; border-radius:10px; overflow:hidden; background:var(--card); cursor:pointer; }
+  .grid img { width:100%; display:block; opacity:0; transition:opacity .4s, transform .3s; }
+  .grid img.in { opacity:1; } .grid figure:hover img { transform:scale(1.03); }
+  .grid figcaption { position:absolute; left:0; right:0; bottom:0; padding:22px 10px 8px; font-size:.85rem; opacity:0; transition:opacity .2s;
+                     background:linear-gradient(transparent, rgba(0,0,0,.78)); }
+  .grid figure:hover figcaption { opacity:1; }
+  h2 { margin:30px 0 10px; font-size:1.05rem; font-weight:600; color:var(--warm); border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .strips { display:flex; gap:10px; overflow-x:auto; padding-bottom:6px; }
+  .strips img { height:260px; border-radius:6px; background:#fff; }
+  iframe { width:100%; height:78vh; border:1px solid var(--line); border-radius:12px; background:#fff; }
+  dialog { border:0; padding:0; background:transparent; max-width:96vw; max-height:96vh; }
+  dialog::backdrop { background:rgba(8,6,10,.93); }
+  dialog figure { margin:0; text-align:center; }
+  dialog img { max-width:94vw; max-height:80vh; border-radius:8px; }
+  dialog figcaption { padding:10px 4px; }
+  dialog .bar { display:flex; gap:8px; justify-content:center; padding-bottom:10px; flex-wrap:wrap; }
+  .msg { text-align:center; color:var(--dim); padding:60px 10px; }
+  footer { text-align:center; color:var(--dim); font-size:.85rem; margin-top:44px; }
+</style></head>
+<body><div class="wrap">
+<header><div class="hearts">♥ ♥ ♥</div><h1>House Fortuna</h1><p id="when">Your photos</p>
+  <div class="actions" id="actions" hidden><a class="btn warm" id="driveAll" target="_blank" rel="noopener">Open all in Google Drive</a></div></header>
+<main id="main"><p class="msg">Loading your photos…</p></main>
+<footer>Taken by the wall at Fortunagasse 24. This page shows only this day's pictures.</footer>
+</div>
+<dialog id="dlg"><figure><div class="bar"><button class="btn" id="prev">‹</button><a class="btn warm" id="save" target="_blank" rel="noopener">Download</a><button class="btn" id="next">›</button><button class="btn" id="close">Close</button></div>
+<img id="big" alt=""><figcaption id="cap"></figcaption></figure></dialog>
+<script>
+const KEY = "__DRIVE_API_KEY__";                              // a browser key for the Drive API, put in at build time (empty = show the Drive folder inside this page)
+const id = decodeURIComponent(location.hash.slice(1)).trim(); // the day's folder: it travels in the # part, which is never sent to any server
+const $ = x => document.getElementById(x);
+const thumb = (f, w) => `https://drive.google.com/thumbnail?id=${f}&sz=w${w}`;
+let PH = [], idx = 0;
+function say(t) { $('main').innerHTML = `<p class="msg">${t}</p>`; }
+async function drive(path) {
+  const r = await fetch(`https://www.googleapis.com/drive/v3/${path}${path.includes('?') ? '&' : '?'}key=${KEY}`);
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+async function start() {
+  if (!/^[\w-]{12,80}$/.test(id)) return say('Scan the QR code on your photo strip to see your pictures.');
+  $('driveAll').href = `https://drive.google.com/drive/folders/${id}`; $('actions').hidden = false;
+  if (!KEY || KEY.startsWith('__')) {                         // no key yet: the Drive folder, shown inside this page
+    $('main').innerHTML = `<iframe src="https://drive.google.com/embeddedfolderview?id=${id}#grid" title="Photos"></iframe>`;
+    return;
+  }
+  try {
+    const f = await drive(`files/${id}?fields=name`);
+    const m = /(\d{4}-\d{2}-\d{2})/.exec(f.name || '');
+    if (m) { const d = new Date(m[1] + 'T12:00:00'); $('when').textContent = d.toLocaleDateString(undefined, {weekday:'long', day:'numeric', month:'long', year:'numeric'}); }
+    const q = encodeURIComponent(`'${id}' in parents and trashed = false and mimeType contains 'image/'`);
+    const all = (await drive(`files?q=${q}&fields=files(id,name,createdTime,description)&orderBy=createdTime&pageSize=300`)).files || [];
+    PH = all.filter(x => !x.name.startsWith('booth_strip_'));
+    const strips = all.filter(x => x.name.startsWith('booth_strip_'));
+    if (!all.length) return say('No pictures here yet.');
+    $('main').innerHTML = `<div class="grid" id="grid"></div>` + (strips.length ? `<h2>The printed strips</h2><div class="strips">${strips.map(s => `<a href="${thumb(s.id, 1600)}" target="_blank" rel="noopener"><img src="${thumb(s.id, 600)}" alt="Printed strip"></a>`).join('')}</div>` : '');
+    $('grid').innerHTML = PH.map((p, i) => `<figure data-i="${i}"><img loading="lazy" src="${thumb(p.id, 700)}" alt="" onload="this.classList.add('in')">` +
+      (cap(p) ? `<figcaption>${esc(cap(p))}</figcaption>` : '') + '</figure>').join('');
+    $('grid').addEventListener('click', e => { const g = e.target.closest('figure'); if (g) show(+g.dataset.i); });
+  } catch (e) {
+    say('This gallery is not available. The link may be wrong, or the day has not been shared.');
+  }
+}
+const esc = t => String(t || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cap = p => /^Photobooth \d/.test(p.description || '') ? '' : (p.description || '');      // the mirror's line; the booth shots have none
+function show(i) {
+  idx = (i + PH.length) % PH.length; const p = PH[idx];
+  $('big').src = thumb(p.id, 2000); $('save').href = `https://drive.google.com/uc?export=download&id=${p.id}`;
+  $('cap').textContent = [cap(p), new Date(p.createdTime).toLocaleString(undefined, {dateStyle:'medium', timeStyle:'short'})].filter(Boolean).join('  ·  ');
+  if (!$('dlg').open) $('dlg').showModal();
+}
+$('prev').onclick = () => show(idx - 1); $('next').onclick = () => show(idx + 1); $('close').onclick = () => $('dlg').close();
+$('dlg').addEventListener('click', e => { if (e.target === $('dlg')) $('dlg').close(); });
+document.addEventListener('keydown', e => { if (!$('dlg').open) return; if (e.key === 'ArrowLeft') show(idx - 1); if (e.key === 'ArrowRight') show(idx + 1); });
+addEventListener('hashchange', () => location.reload());
+start();
+</script></body></html>

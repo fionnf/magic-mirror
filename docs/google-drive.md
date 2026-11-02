@@ -3,7 +3,8 @@
 Mirror photos and photobooth strips can be uploaded to a Google Drive folder
 (`cloud_uploader.py`). Each day gets its own folder, **"Photobooth YYYY-MM-DD"**, made inside your Drive folder on first use and shared as *anyone with the link can view*: every
 photo, booth photo and strip the wall takes that day goes into it, and the **QR code on a printed photobooth strip opens it**, so guests can browse and download the day's pictures.
-The folder is not listed anywhere, but anyone who has the link (a strip, a photo of a strip) can see everything from that day: do not post the link publicly if that matters. It is fire-and-forget: if no credentials or no folder id are found, every
+The folder is not listed anywhere, but anyone who has the link (a strip, a photo of a strip) can see everything from that day: do not post the link publicly if that matters.
+The QR code and the app's share links point at a styled page that shows this folder (`<GALLERY_URL>p/#<folder id>`, [mirror.md](mirror.md)), not at the raw Drive view. It is fire-and-forget: if no credentials or no folder id are found, every
 upload call returns silently and the rest of the app is unaffected. The wall only ever *writes*
 (scope `drive.file`: files the app itself created).
 

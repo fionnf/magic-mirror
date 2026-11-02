@@ -438,6 +438,22 @@
       <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/" target="_blank" rel="noopener">The public gallery</a> shows every day's piece.</p>
     </section>
     <section>
+      <h2>Look through the camera</h2>
+      <p class="hint" style="margin:0 0 10px">See what is in front of the wall right now, from anywhere, without turning the mirror on. While anyone is watching, a small red dot blinks in the corner of the wall.</p>
+      <button class="btn primary" id="liveBtn" onclick="toggleLive()">Look now</button>
+      <div id="liveBox" hidden style="margin-top:10px">
+        <img id="liveImg" alt="Live view of the wall's camera" style="width:100%;border-radius:12px;background:#000;display:block">
+        <p class="hint" id="liveNote" style="margin:6px 0 0">Live, a few pictures a second. It closes when you leave this page.</p>
+      </div>
+    </section>
+    <section>
+      <h2>Photos on the wall</h2>
+      <div class="row"><span class="hint" style="margin:0">Keep up to</span>
+        <select id="photosGb" aria-label="Gigabytes of photos kept on the wall"><option value="1">1 GB</option><option value="2">2 GB</option><option value="5">5 GB</option><option value="10">10 GB</option><option value="20">20 GB</option></select>
+        <span class="hint" style="margin:0">of full-size photos here</span></div>
+      <p class="hint">Every photo is also saved to Google Drive in full size. When this share is full, the oldest photos that Drive already has shrink to small copies here (the app and the slideshow still show them; the originals stay in Drive). Photos that are not in Drive yet are never touched.</p>
+    </section>
+    <section>
       <h2>Guests</h2>
       <div class="switch"><span>Messages from guests on the wall</span><input type="checkbox" id="dOn"></div>
       <div class="row" style="gap:14px;margin-top:10px">
@@ -581,6 +597,7 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button').forEach(x => x.removeAttribute('aria-current'));
   b.setAttribute('aria-current', 'page');
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + b.dataset.tab));
+  if (b.dataset.tab !== 'more') stopLive();
   if (b.dataset.tab === 'photos') loadPhotos();
   if (b.dataset.tab === 'room') loadRoom();
   if (b.dataset.tab === 'more' || b.dataset.tab === 'photos') loadMore();
@@ -1077,7 +1094,7 @@ async function loadPhotos(more) {
   PHOTOS = PHOTOS.concat(d.photos); photoOff += d.photos.length;
   $('photoCount').textContent = d.total ? `${d.total} photos` : 'Photos';
   const st = d.storage;
-  $('storageLine').textContent = st && st.total ? `${(st.bytes / 1073741824).toFixed(1)} GB of pictures on the wall, ${(st.free / 1073741824).toFixed(0)} GB free` +
+  $('storageLine').textContent = st && st.total ? `${(st.bytes / 1073741824).toFixed(1)} of ${(st.budget / 1073741824).toFixed(0)} GB used by pictures on the wall (${st.backed_up} backed up in Drive), ${(st.free / 1073741824).toFixed(0)} GB free` +
     (st.low ? '. Space is running low: free some or move the pictures to a USB stick (WALL_PHOTOS_DIR).' : '.') : '';
   const day = p => new Date(p.time * 1000).toLocaleDateString(undefined, {weekday: 'long', day: 'numeric', month: 'long'});
   let html = '', last = '';
@@ -1104,6 +1121,17 @@ function startBooth() { api('/api/mirror', {camera: 'pi', booth: true}).then(s =
 function toggleBooth() { const on = !(STATUS && STATUS.mirror_booth); api('/api/mirror', {camera: 'pi', booth: on}).then(s => { STATUS = s; render(); toast(on ? 'Photobooth mode on' : 'Photobooth mode off'); }).catch(e => toast(e.message)); }
 function mirrorDo(what) { api('/api/mirror/' + what, {}).then(() => { toast('Look at the wall'); setTimeout(loadPhotos, 15000); }).catch(e => toast(e.message)); }
 
+/* ---------- a look through the camera ---------- */
+function stopLive() { const i = $('liveImg'); if (i && i.getAttribute('src')) i.removeAttribute('src'); $('liveBox').hidden = true; $('liveBtn').textContent = 'Look now'; }
+function toggleLive() {
+  if (!$('liveBox').hidden) return stopLive();
+  const i = $('liveImg'); $('liveNote').textContent = 'Opening the camera…'; $('liveBox').hidden = false; $('liveBtn').textContent = 'Stop looking';
+  i.onload = () => { $('liveNote').textContent = 'Live, a few pictures a second. A red dot shows on the wall while you look. It closes when you leave this page.'; };
+  i.onerror = () => { $('liveNote').textContent = 'The camera is not available right now.'; };
+  i.src = u('/api/camera/live.mjpg') + (u('/api/camera/live.mjpg').includes('?') ? '&' : '?') + 't=' + Date.now();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopLive(); });
+
 /* ---------- more ---------- */
 let DEFAULT_PROMPT = '';
 async function savePrompt() {
@@ -1119,7 +1147,7 @@ async function loadMore() {
     DEFAULT_PROMPT = m.default_prompt || '';
     if (document.activeElement !== $('mirrorPrompt')) $('mirrorPrompt').value = m.prompt || DEFAULT_PROMPT;
     $('promptHint').dataset.custom = m.prompt ? '1' : '';
-    $('tone').value = m.tone; $('lang').value = m.language; $('idleArt').value = String(m.idle_art_minutes); $('boothShots').value = String(m.booth_shots);
+    $('tone').value = m.tone; $('lang').value = m.language; $('idleArt').value = String(m.idle_art_minutes); $('boothShots').value = String(m.booth_shots); $('photosGb').value = String(m.photos_gb || 1);
     document.querySelectorAll('[data-ms]').forEach(i => i.checked = !!m[i.dataset.ms]);
   } catch (e) {}
   try {
@@ -1146,6 +1174,7 @@ async function loadMore() {
 $('tone').addEventListener('change', e => api('/api/mirror/settings', {tone: +e.target.value}).then(() => toast('Tone: ' + toneLabel(+e.target.value))));
 $('lang').addEventListener('change', e => api('/api/mirror/settings', {language: e.target.value}));
 $('idleArt').addEventListener('change', e => api('/api/mirror/settings', {idle_art_minutes: +e.target.value}));
+$('photosGb').addEventListener('change', e => api('/api/mirror/settings', {photos_gb: +e.target.value}).then(() => toast('Keeping up to ' + e.target.value + ' GB of photos on the wall')));
 $('boothShots').addEventListener('change', e => api('/api/mirror/settings', {booth_shots: +e.target.value}));
 document.querySelectorAll('[data-ms]').forEach(i => i.addEventListener('change', () => api('/api/mirror/settings', {[i.dataset.ms]: i.checked})));
 $('dOn').addEventListener('change', e => api('/api/dedications', {enabled: e.target.checked}));

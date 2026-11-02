@@ -9,6 +9,7 @@ made in the web app apply to the very next photo with no restart.
   smile       sparkles when someone smiles
   gesture     an open palm held up starts the photo sequence, a peace sign the photobooth strip
   comment     the mirror says a line about you with every photo; off = just the photo, no comment
+  photos_gb   how much the pictures may take on the wall (GB); beyond it the oldest ones already in Drive shrink to small copies
   prompt      your own instructions for what the mirror says ("" = the built-in prompt, config.MIRROR_PERSONA)
   booth_shots photos in a photobooth strip (2 to 6)
   booth_repeat  photobooth mode keeps going: another strip a few seconds after the last while someone is still there
@@ -32,7 +33,7 @@ LANGUAGES = {
     "Drama queen": "Reply in English as the most dramatic, over-the-top drama queen alive.",
 }
 DEFAULTS = {"tone": 50, "language": "English", "recognise": True, "smile": True, "gesture": True,
-            "comment": True, "prompt": "", "booth_shots": 3, "booth_repeat": False,
+            "comment": True, "prompt": "", "photos_gb": 1, "booth_shots": 3, "booth_repeat": False,
             "learn_faces": False, "idle_art_minutes": 10, "wake_on_motion": False}
 
 
@@ -57,6 +58,10 @@ def load():
     except (TypeError, ValueError):
         s["booth_shots"] = 3
     s["prompt"] = str(s.get("prompt") or "").strip()[:3000]
+    try:
+        s["photos_gb"] = max(1, min(500, int(s["photos_gb"])))
+    except (TypeError, ValueError):
+        s["photos_gb"] = 1
     for k in ("recognise", "smile", "gesture", "comment", "booth_repeat", "learn_faces", "wake_on_motion"):
         s[k] = bool(s[k])
     return s

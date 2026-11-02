@@ -12,7 +12,7 @@ from typing import Any, Dict
 
 
 try:
-    from flask import Flask, jsonify, request, send_from_directory
+    from flask import Flask, Response, jsonify, request, send_from_directory
     from flask_cors import CORS
     HAS_FLASK = True
 except ImportError:
@@ -46,6 +46,19 @@ class MirrorAPI:
             })
 
         # --------------------------------------------------------- control
+
+        @self.app.route("/api/frame.jpg", methods=["GET"])
+        def frame_jpg():
+            """The newest camera picture (for the control app's live view while the mirror owns the camera)."""
+            f = self.mirror._latest_frame
+            if f is None:
+                return jsonify({"error": "no picture yet"}), 404
+            import cv2
+            h, w = f.shape[:2]
+            if w > 640:
+                f = cv2.resize(f, (640, int(h * 640 / w)), interpolation=cv2.INTER_AREA)
+            ok, buf = cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 62])
+            return Response(buf.tobytes(), mimetype="image/jpeg", headers={"Cache-Control": "no-store"})
 
         @self.app.route("/api/trigger/short", methods=["POST"])
         def trigger_short():

@@ -42,7 +42,127 @@ def disk_info() -> Dict:
         free, total = st.f_bavail * st.f_frsize, st.f_blocks * st.f_frsize
     except OSError:
         free = total = 0
-    return {"dir": d, "photos": n, "bytes": size, "free": free, "total": total, "low": free < 3 * MIN_FREE}
+    reg = _load_reg()
+    return {"dir": d, "photos": n, "bytes": size, "free": free, "total": total, "low": free < 3 * MIN_FREE,
+            "budget": budget_bytes(), "backed_up": sum(1 for v in reg.values() if v.get("drive")),
+            "shrunk": sum(1 for v in reg.values() if v.get("shrunk"))}
+
+
+# ---- the budget: how much the pictures may take on the wall, and what is allowed to shrink ----------------------------------
+# Drive keeps the originals. When the pictures on the wall exceed the budget (the "photos_gb" setting, default 1 GB), the oldest ones that
+# Drive has CONFIRMED are replaced in place by a small copy (640 px), so the app and the slideshow still show them. Nothing that is not
+# safely in Drive is ever touched. Strips (the small print layouts) and the sidecar files are never shrunk.
+import threading
+
+_reg_lock = threading.Lock()
+SMALL_SIDE = 640
+
+
+def _reg_path() -> str:
+    return os.path.join(PHOTOS_DIR, ".backed_up.json")
+
+
+def _load_reg() -> Dict:
+    try:
+        with open(_reg_path()) as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
+def _save_reg(reg: Dict) -> None:
+    tmp = _reg_path() + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump(reg, fh)
+    os.replace(tmp, _reg_path())
+
+
+def mark_backed_up(name: str, drive_id: str) -> None:
+    """Record that Drive has this file (called by cloud_uploader after a successful upload), then see whether the budget needs tidying."""
+    if not name or not drive_id:
+        return
+    with _reg_lock:
+        reg = _load_reg()
+        reg.setdefault(name, {})["drive"] = drive_id
+        _save_reg(reg)
+    prune_async()
+
+
+def budget_bytes() -> int:
+    gb = None
+    try:
+        import mirror_settings
+        gb = mirror_settings.load().get("photos_gb")
+    except Exception:
+        pass
+    if gb is None:
+        gb = os.environ.get("WALL_PHOTOS_MAX_GB", 1)
+    try:
+        return int(float(gb) * 1024 ** 3)
+    except (TypeError, ValueError):
+        return 1024 ** 3
+
+
+def _dir_bytes() -> int:
+    total = 0
+    try:
+        for f in os.scandir(PHOTOS_DIR):
+            if f.is_file():
+                total += f.stat().st_size
+    except OSError:
+        pass
+    return total
+
+
+def shrink(path: str, side: int = SMALL_SIDE) -> int:
+    """Replace a picture by a small copy of itself, in place; returns the bytes saved."""
+    before = os.path.getsize(path)
+    im = Image.open(path)
+    im.draft("RGB", (side * 2, side * 2))
+    im = im.convert("RGB")
+    im.thumbnail((side, side), Image.LANCZOS)
+    tmp = path + ".tmp.jpg"
+    im.save(tmp, format="JPEG", quality=82)
+    os.replace(tmp, path)
+    return max(0, before - os.path.getsize(path))
+
+
+def prune() -> int:
+    """Over budget? Shrink the oldest pictures that Drive has confirmed until it fits. Returns how many were shrunk."""
+    budget = budget_bytes()
+    total = _dir_bytes()
+    if total <= budget:
+        return 0
+    done = 0
+    with _reg_lock:
+        reg = _load_reg()
+        cands = [n for n, v in reg.items() if v.get("drive") and not v.get("shrunk") and n.endswith(".jpg")
+                 and not (n.startswith("strip_") and "_shot" not in n) and os.path.exists(os.path.join(PHOTOS_DIR, n))]
+        cands.sort(key=lambda n: os.path.getmtime(os.path.join(PHOTOS_DIR, n)))
+        for n in cands:
+            if total <= budget:
+                break
+            try:
+                total -= shrink(os.path.join(PHOTOS_DIR, n))
+                reg[n]["shrunk"] = True
+                done += 1
+            except Exception as e:
+                print(f"[PHOTOS] could not shrink {n}: {e}", flush=True)
+        _save_reg(reg)
+    if done:
+        print(f"[PHOTOS] over the {budget // 1048576} MB budget: shrank {done} backed-up picture(s) to small copies (originals are in Drive)", flush=True)
+    return done
+
+
+def prune_async() -> None:
+    threading.Thread(target=lambda: _safe(prune), daemon=True, name="photo-prune").start()
+
+
+def _safe(fn):
+    try:
+        fn()
+    except Exception as e:
+        print(f"[PHOTOS] prune failed: {e}", flush=True)
 
 
 def _room_for_more() -> bool:

@@ -126,12 +126,13 @@ def _do_upload(frame: np.ndarray, text: str,
         try:
             import photo_store
             photo_store.set_drive_id(stem, fid)
+            photo_store.mark_backed_up(f"{stem}.jpg", fid)
         except Exception as e:
             print(f"[DRIVE] set_drive_id failed: {e}")
 
 
 def _do_upload_photo(frame: np.ndarray, desc: str,
-                     folder_id: Optional[str] = None) -> None:
+                     folder_id: Optional[str] = None, local: Optional[str] = None) -> None:
     service = _build_service()
     if service is None:
         return
@@ -142,6 +143,12 @@ def _do_upload_photo(frame: np.ndarray, desc: str,
                        _frame_to_jpeg_bytes(frame), folder_id,
                        description=desc)
     print(f"[DRIVE] uploaded photo_{ts}.jpg -> {folder_id} (id={fid})")
+    if fid and local:
+        try:
+            import photo_store
+            photo_store.mark_backed_up(local, fid)                   # the full-size file on the wall is now safe to shrink when space is needed
+        except Exception as e:
+            print(f"[DRIVE] mark_backed_up failed: {e}")
 
 
 def _do_upload_booth(strip_image: Image.Image,
@@ -221,19 +228,19 @@ def upload_async(frame: np.ndarray, text: str,
     _executor.submit(_do_upload, frame, text, stem)
 
 
-def upload_photo_only_async(frame: np.ndarray, desc: str) -> None:
-    """Fire-and-forget: upload a single frame with a description."""
+def upload_photo_only_async(frame: np.ndarray, desc: str, local: Optional[str] = None) -> None:
+    """Fire-and-forget: upload a single frame with a description (`local`: its file name in photos/, to record the backup)."""
     if frame is None:
         return
-    _executor.submit(_do_upload_photo, frame, desc)
+    _executor.submit(_do_upload_photo, frame, desc, None, local)
 
 
 def upload_photo_to_folder_async(frame: np.ndarray,
-                                 folder_id: str, desc: str) -> None:
-    """Fire-and-forget: upload a frame into a specific Drive folder."""
+                                 folder_id: str, desc: str, local: Optional[str] = None) -> None:
+    """Fire-and-forget: upload a frame into a specific Drive folder (`local`: its file name in photos/, to record the backup)."""
     if frame is None:
         return
-    _executor.submit(_do_upload_photo, frame, desc, folder_id)
+    _executor.submit(_do_upload_photo, frame, desc, folder_id, local)
 
 
 def upload_booth_async(strip_image: Image.Image,

@@ -50,8 +50,10 @@ Saved photos are JPEGs at `config.PHOTO_JPEG_QUALITY` (95, no chroma subsampling
 - Google Drive, if set up, gets the full-resolution originals too ([google-drive.md](google-drive.md));
 - the printer and the AI get downscaled copies (they do not need more).
 
-**Storage.** At about 3 MB a photo, 1000 photos are 3 GB: a 32 GB card holds years of normal use, so a USB stick is not needed. Safeguards: the app's Mirror tab shows how much the pictures take and how much is free;
-below 400 MB free the mirror stops saving new pictures instead of filling the card (it says so in the log); and `WALL_PHOTOS_DIR` in `.env` moves the whole folder to a USB stick or SSD (mount it, e.g. at `/mnt/photos`). Drive is the cloud copy.
+**Storage: a budget on the wall, Drive keeps the originals.** At about 3 MB a photo a USB stick is not needed. Every photo is uploaded to Drive in full size; the wall keeps a **budget** of full-size photos (More: *Photos on the wall*, `photos_gb`, default 1 GB, or `WALL_PHOTOS_MAX_GB`).
+When the pictures on the wall go over it, the **oldest pictures that Drive has confirmed** are replaced in place by a small 640 px copy (`photo_store.prune`, run after every upload): the app's grid and the slideshow keep showing them, the original is in Drive. A photo is only shrunk after its upload succeeded (recorded in `photos/.backed_up.json`), so
+anything not yet in Drive, or taken while the wall is offline or Drive is not set up, keeps its full size. Strips and the JSON files are never shrunk. Further safeguards: the Mirror tab shows what the pictures take, how much is backed up and how much disk is free;
+below 400 MB free the mirror stops saving new pictures instead of filling the card; `WALL_PHOTOS_DIR` in `.env` moves the whole folder to a USB stick or SSD (mount it, e.g. at `/mnt/photos`).
 
 ## What it says
 
@@ -61,6 +63,13 @@ The photobooth no longer gives pose directions: the shots are just 3, 2, 1, flas
 
 **Write your own prompt.** The Mirror tab's *What it says* box (More: *Voice, faces and quiet hours*) holds the mirror's instructions in plain words, starting with the built-in ones (`config.MIRROR_PERSONA`). Edit them and press Save (`prompt` in `mirror_settings.json`); *Back to the built-in* restores them. Your text replaces the built-in persona **and** the random "voice for this photo" (`config.MIRROR_STYLES`: a nature-documentary narrator, a movie trailer, a sommelier...), so describe the voice yourself. The tone slider, the language and a fixed safety tail (`config.MIRROR_RULES`: one short line, no remarks about bodies or anything a person cannot choose) are always added after it.
 
+## A look through the camera (More tab, without mirror mode)
+
+*More, Look through the camera, Look now* shows what the wall's camera sees, live, like a webcam: from the sofa or from anywhere you can reach the app (outside the home network it needs the wall's password like everything else).
+It works with the mirror off: the camera is opened only while someone is watching and closed 10 seconds after the last viewer leaves (`camera_live.py`). It is a light stream, about 6 pictures a second at 640 px (`/api/camera/live.mjpg`; `/api/camera/snapshot.jpg` gives one picture).
+If the mirror is running it owns the camera, so the live view then takes its pictures from the mirror (`/api/frame.jpg` on the mirror's port); starting the mirror closes the live view's own camera first.
+It is never hidden: **while anyone is watching, a small red dot blinks in the top-right corner of the wall** (`play.py` reads `panel_setup/liveview.on`, which the live view touches every second), the app says so, and each viewer is logged (`[camera] live view opened by <address>`).
+
 ## Settings (the Mirror tab and More tab; `panel_setup/mirror_settings.json`, re-read at every use, no restart)
 
 | Key | Default | What it does |
@@ -69,6 +78,7 @@ The photobooth no longer gives pose directions: the shots are just 3, 2, 1, flas
 | `language` | English | English, Deutsch, Züridütsch, Français, Drama queen |
 | `comment` | on | The mirror says a line about you with every photo. Off = just the photo |
 | `prompt` | empty | Your own instructions for what the mirror says (empty = the built-in prompt) |
+| `photos_gb` | 1 | How many GB of full-size photos to keep on the wall; beyond it the oldest ones already in Drive shrink to small copies |
 | `booth_shots` | 3 | Photos in one strip (2 to 6) |
 | `booth_repeat` | off | Photobooth mode keeps going: another strip 7 s after the last while someone is still in front; it stops by itself 30 s after everyone has left |
 | `gesture` | on | Hand signals |
@@ -102,4 +112,4 @@ If you still see flicker: check `[CAMERA] light locked: ... us, gain ...` in `pa
 ## API (the app uses these; port 80 on the Pi)
 
 `POST /api/mirror` `{camera, booth}` starts the mirror (booth: true for the photobooth), `POST /api/mirror/photo` takes a photo, `POST /api/mirror/booth` takes a strip,
-`GET/POST /api/mirror/settings` reads and sets the table above, `POST /api/mirror/crop` switches the smart portrait crop. The mirror itself listens on port 5000 (`api.py`) for `/api/trigger/short` and `/api/trigger/long`.
+`GET/POST /api/mirror/settings` reads and sets the table above, `GET /api/camera/live.mjpg`, `/api/camera/snapshot.jpg` and `/api/camera/status` are the live view, `POST /api/mirror/crop` switches the smart portrait crop. The mirror itself listens on port 5000 (`api.py`) for `/api/trigger/short` and `/api/trigger/long`.

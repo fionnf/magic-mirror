@@ -188,8 +188,15 @@ class Runner:
                 except Exception:
                     pass
 
+    on_mirror_start = None       # set by make_app: closes the live camera view before the mirror takes the camera
+
     def _start(self, what):
         self._stop_proc()
+        if what == "mirror" and self.on_mirror_start:
+            try:
+                self.on_mirror_start()                  # the live view lets go of the camera first
+            except Exception as e:
+                print(f"[camera] could not close the live view: {e}", flush=True)
         self.current, self.since, self.error = what, time.time(), ""
         cmd = self._cmd(what)
         if cmd is None:                                 # "off"
@@ -957,6 +964,39 @@ def make_app(runner):
         save_state(runner.state)
         runner.play("daily")
         return jsonify(runner.status())
+
+    # ---- a live look through the camera, without mirror mode (see camera_live.py) ----
+    import camera_live
+
+    def _mirror_frame():
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:5000/api/frame.jpg", timeout=2) as r:
+                return r.read()
+        except Exception:
+            return None
+    LIVE = camera_live.LiveView(mirror_on=lambda: runner.current == "mirror", mirror_frame=_mirror_frame)
+    runner.on_mirror_start = LIVE.stop
+
+    @app.get("/api/camera/live.mjpg")
+    def camera_live_stream():
+        """The camera as an MJPEG stream. It opens the camera only while somebody watches, and a red dot shows on the wall."""
+        print(f"[camera] live view opened by {request.remote_addr}", flush=True)
+        snap = LIVE.snapshot()
+        if snap is None:
+            return jsonify({"error": LIVE.error or "the camera is not available"}), 503
+        return Response(LIVE.stream(), mimetype="multipart/x-mixed-replace; boundary=frame",
+                        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+    @app.get("/api/camera/snapshot.jpg")
+    def camera_live_snapshot():
+        snap = LIVE.snapshot()
+        if snap is None:
+            return jsonify({"error": LIVE.error or "the camera is not available"}), 503
+        return Response(snap, mimetype="image/jpeg", headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/camera/status")
+    def camera_live_status():
+        return jsonify(LIVE.status())
 
     @app.get("/api/music")
     def music_get():

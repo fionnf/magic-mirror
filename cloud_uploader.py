@@ -75,10 +75,9 @@ def _parent_folder_id() -> Optional[str]:
 
 def _frame_to_jpeg_bytes(frame: np.ndarray) -> bytes:
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    img = Image.fromarray(rgb)
-    img.thumbnail((1024, 1024))
+    img = Image.fromarray(rgb)                 # full resolution: Drive is the archive, so it gets the original
     buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=85)
+    img.save(buf, format="JPEG", quality=getattr(config, "PHOTO_JPEG_QUALITY", 95), subsampling=0)
     return buf.getvalue()
 
 

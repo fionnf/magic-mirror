@@ -1017,8 +1017,8 @@ def make_app(runner):
     def photos_list():
         """Every stored photo, newest first: the mirror's photos and photobooth strips."""
         try:
-            names = [x for x in os.listdir(PHOTOS) if x.endswith(".jpg") and not x.endswith("_frame.jpg")
-                     and not x.endswith(".tmp.jpg")]
+            names = [x for x in os.listdir(PHOTOS) if x.endswith(".jpg") and not x.endswith(("_frame.jpg", "_thumb.jpg", ".tmp.jpg"))
+                     and "_shot" not in x]
         except OSError:
             names = []
         names.sort(key=lambda x: os.path.getmtime(os.path.join(PHOTOS, x)), reverse=True)
@@ -1032,7 +1032,9 @@ def make_app(runner):
                     meta = json.load(fh)
             except Exception:
                 pass
-            out.append({"name": x, "url": f"/photos/{x}", "text": meta.get("text", ""),
+            th = x[:-4] + "_thumb.jpg"
+            out.append({"name": x, "url": f"/photos/{x}", "thumb": f"/photos/{th}" if os.path.exists(os.path.join(PHOTOS, th)) else f"/photos/{x}",
+                        "text": meta.get("text", ""),
                         "kind": meta.get("type", "receipt"), "time": os.path.getmtime(os.path.join(PHOTOS, x))})
         return jsonify({"total": len(names), "photos": out})
 
@@ -1042,7 +1044,9 @@ def make_app(runner):
         if not x.endswith(".jpg"):
             return jsonify({"error": "no such photo"}), 404
         removed = 0
-        for f in (x, x[:-4] + ".json", x[:-4] + "_frame.jpg"):
+        import glob
+        stem = x[:-4]
+        for f in [x, stem + ".json", stem + "_frame.jpg", stem + "_thumb.jpg"] + [os.path.basename(g) for g in glob.glob(os.path.join(PHOTOS, stem + "_shot*.jpg"))]:
             try:
                 os.remove(os.path.join(PHOTOS, f))
                 removed += 1

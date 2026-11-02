@@ -8,6 +8,7 @@ captures camera frames, extracts the silhouette mask, and stores the latest
 rendered overlay in `_live_silhouette` for the display loop to composite.
 """
 import argparse
+import os
 import signal
 import sys
 import time
@@ -85,6 +86,7 @@ class MagicMirror:
         self.state = State.IDLE
         self._trigger_event = threading.Event()
         self._booth_event = threading.Event()
+        self._stats = {"t0": time.monotonic(), "draws": 0, "max_gap": 0.0, "late": 0, "last_draw": 0.0, "cap": 0, "proc_ms": 0.0}
         self._gesture = None                     # (name, progress 0..1, x, y, valid_until): an open palm / peace sign being held
         self._repeat_at = 0.0                    # photobooth repeat: when the next strip starts by itself (0 = not repeating)
         self._gesture_cd = 0.0                   # no new hand signal before this time
@@ -150,6 +152,8 @@ class MagicMirror:
                 mask = self.camera.extract_silhouette(
                     frame, getattr(self.camera, "_background", None))
                 img = silhouette_render.render_silhouette(mask)
+                self._stats["cap"] += 1
+                self._stats["proc_ms"] += ((time.monotonic() - t0) * 1000 - self._stats["proc_ms"]) * 0.1      # moving average
                 with self._silhouette_lock:
                     self._live_silhouette = img
                     self._silhouette_version += 1
@@ -169,11 +173,21 @@ class MagicMirror:
                 continue
             time.sleep(max(0.0, min_dt - (time.monotonic() - t0)))
 
+    @staticmethod
+    def _lower_priority():
+        """Background looks (smiles, hands) run at the lowest priority, so they can never delay the picture or the panel driver."""
+        try:
+            os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 19)
+        except Exception:
+            pass
+
     def _smile_loop(self):
-        """Face detection is slow (about a tenth of a second on the Pi): keep it off the picture's thread."""
-        while not self._stop.wait(0.1):
+        """Face detection is slow (about a tenth of a second on the Pi): keep it off the picture's thread, at the lowest priority,
+        and only while somebody is actually standing there."""
+        self._lower_priority()
+        while not self._stop.wait(0.5):
             frame = self._latest_frame
-            if frame is not None:
+            if frame is not None and self._person_here():
                 self._look_for_smile(frame)
 
     HAND_HOLD_SEC = 1.3                          # how long a hand signal must be held
@@ -183,6 +197,7 @@ class MagicMirror:
         """A few times a second, while the mirror waits and someone is about: an open palm held up for a moment starts the
         photo sequence (in photobooth mode: the strip); a peace sign starts the photobooth strip. The wall draws a ring
         around the hand that fills as you hold it. Off with the "hand signal" switch in the app (mirror_settings)."""
+        self._lower_priority()
         try:
             import hands
             import mirror_settings
@@ -360,6 +375,21 @@ class MagicMirror:
         faster only costs the CPU the panel driver needs."""
         refresh = float(config.MATRIX_REFRESH_LIMIT_HZ)
         ff = max(1, round(refresh / fps))
+        img = img.copy()                                     # a plain 2 LED warm-white frame all round, always on in mirror mode:
+        ImageDraw.Draw(img).rectangle([0, 0, img.width - 1, img.height - 1], outline=self.BORDER_WARM, width=2)   # it lights a raised hand
+        now = time.monotonic()
+        st = self._stats
+        if st["last_draw"]:
+            gap = now - st["last_draw"]
+            st["draws"] += 1
+            st["max_gap"] = max(st["max_gap"], gap)
+            st["late"] += gap > 2.0 / fps                        # a frame that took more than two frame times
+        st["last_draw"] = now
+        if now - st["t0"] >= 10.0:                               # one line every 10 s in logs/mirror.log: is the loop steady?
+            n = max(1, now - st["t0"])
+            print(f"[STATS] draw {st['draws'] / n:.1f} fps, longest gap {st['max_gap'] * 1000:.0f} ms, late frames {st['late']}, "
+                  f"camera frames used {st['cap'] / n:.1f}/s, processing {st['proc_ms']:.0f} ms", flush=True)
+            st.update(t0=now, draws=0, max_gap=0.0, late=0, cap=0)
         try:
             drew = self.matrix.draw(img, frame_fraction=ff)
         except TypeError:                                   # the simulator has no frame_fraction
@@ -463,42 +493,17 @@ class MagicMirror:
                     # Ease towards the newest picture, per pixel: where it only wobbles a little (camera noise, the mains light's
                     # flicker) the wall barely follows, where something really moved it follows fast. That removes the shimmer
                     # without smearing a moving person.
+                    now_e = time.monotonic()
+                    frames_passed = min(4.0, (now_e - getattr(self, "_ease_t", now_e - 0.04)) * 25.0)   # by elapsed time, so a late frame catches up evenly
+                    self._ease_t = now_e
                     diff = np.abs(target - shown).max(axis=2, keepdims=True)
-                    shown += (target - shown) * (0.10 + 0.40 * np.clip(diff / 36.0, 0.0, 1.0))
+                    k0 = 0.10 + 0.40 * np.clip(diff / 36.0, 0.0, 1.0)
+                    shown += (target - shown) * (1.0 - (1.0 - k0) ** max(0.25, frames_passed))
                 self._shown = shown
                 self._show(Image.fromarray(np.clip(shown + 0.5, 0, 255).astype(np.uint8), "RGB"))
             else:
                 time.sleep(interval)
         return "short"
-
-    def _do_countdown(self, seconds: int = 3):
-        """Show a 3-2-1 countdown centred on top of the live silhouette,
-        with the strip breathing in sync."""
-        self.strip.set_mode("countdown")
-        interval = 1.0 / config.IDLE_ANIMATION_FPS
-        for n in range(seconds, 0, -1):
-            end = time.monotonic() + 1.0
-            while time.monotonic() < end and not self._stop.is_set():
-                canvas = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
-                text_renderer.render_static_text(canvas, str(n),
-                                                 colour=(255, 255, 255))
-                self._show(canvas)
-
-    def _grab_photo(self):
-        """A full-width frame cut to portrait around the people (smart crop). Falls back to
-        the last live frame (already a centred portrait crop) if the camera hiccups."""
-        try:
-            raw = self.camera.capture_frame(raw=True)
-        except TypeError:                        # a camera without raw support
-            return self.camera.capture_frame()
-        import smartcrop
-        rows = smartcrop.find_face_rows(raw)
-        self._read_faces(raw, rows)
-        faces = [(float(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[14])) for r in rows]
-        frame, how = smartcrop.portrait_crop(raw, config.CAMERA_ASPECT,
-                                             getattr(self.camera, "_background_raw", None), faces=faces)
-        print(f"[CROP] portrait via {how}")
-        return frame
 
     def _read_faces(self, raw, rows):
         """Who is in front of the mirror and are they smiling (names only for people who were
@@ -575,71 +580,146 @@ class MagicMirror:
             print(f"[SIM] API response: {text!r}")
         return text
 
+    def _text_card(self, text: str) -> Image.Image:
+        """The AI line as a full-screen transparent layer: wrapped, centred, as big as fits, white with a black outline."""
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        card = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(card)
+        best = None
+        for size in range(34, 11, -2):
+            font = text_renderer._load_font(size)
+            lines, cur = [], ""
+            for word in text.split():
+                trial = (cur + " " + word).strip()
+                if d.textlength(trial, font=font) <= W - 14 or not cur:
+                    cur = trial
+                else:
+                    lines.append(cur)
+                    cur = word
+            if cur:
+                lines.append(cur)
+            lh = size + 5
+            fits = len(lines) * lh <= H * 0.62 and all(d.textlength(ln, font=font) <= W - 8 for ln in lines)
+            best = (font, lines, lh)
+            if fits:
+                break
+        font, lines, lh = best
+        y0 = (H - len(lines) * lh) / 2
+        for i, ln in enumerate(lines):
+            w = d.textlength(ln, font=font)
+            d.text(((W - w) / 2, y0 + i * lh), ln, font=font, fill=(255, 244, 224, 255), stroke_width=2, stroke_fill=(0, 0, 0, 255))
+        return card
+
     def _do_display(self, text: str):
+        """The AI line APPEARS (a quick fade-in, no scrolling), stays long enough to read, then the caller fades it out."""
         self._set_state(State.DISPLAYING)
         self.strip.set_mode("displaying")
-        if self.sim_mode:
-            print("[SIM] Scrolling text...")
-
-        interval = 1.0 / config.IDLE_ANIMATION_FPS
-        # Text frames are transparent except for the outlined message; paste
-        # them over the *current* (dimmed) live silhouette so the person stays
-        # visible underneath while the outline keeps the text readable.
-        gen = text_renderer.scroll_text_frames(text, rgba=True)
-        for text_frame, finished in gen:
-            canvas = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
-            canvas.paste(text_frame, (0, 0), text_frame)
-            self._show(canvas, 25)
-            if finished:
+        card = self._text_card(text)
+        alpha = card.getchannel("A")
+        hold = max(3.5, 1.5 + 0.45 * len(text.split()))
+        t0 = time.monotonic()
+        while not self._stop.is_set():
+            e = time.monotonic() - t0
+            if e >= hold:
                 break
-        # return the dim live silhouette for the fade-out to consume
+            k = min(1.0, e / 0.45)
+            k = k * k * (3 - 2 * k)                                   # ease in
+            canvas = self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
+            layer = card.copy()
+            layer.putalpha(alpha.point(lambda v: int(v * k)))
+            canvas.paste(layer, (0, 0), layer)
+            self._show(canvas)
         return self._silhouette(dim=config.SILHOUETTE_DIM_FACTOR)
 
     FLASH_BORDER = 26                                   # LEDs deep, all round the screen
-    FLASH_WARM = (255, 242, 210)                        # warm white: kind to skin, and the brightest the panels can do
+    FLASH_WARM = (255, 222, 158)                        # a warm, golden white: kind to skin
+    BORDER_WARM = (255, 232, 188)                       # the quiet 2 LED frame
 
-    def _flash_canvas(self, level: float) -> Image.Image:
-        """The flash picture: a bright warm-white frame round the screen edge (it lights the person standing in front), with
-        the live silhouette, dimmed, in the middle so they can still see themselves. level 0..1 fades the frame in and out."""
+    def _flash_canvas(self, level: float, wash: float = 0.0, dim: float = 0.3) -> Image.Image:
+        """The glow picture: a warm-white frame round the screen edge (it lights the person standing in front), with the live
+        silhouette, dimmed, in the middle so they can still see themselves. level 0..1 is how bright the frame is; wash 0..1
+        floods the whole wall warm (the flash itself)."""
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
         m = getattr(self, "_flash_mask", None)
         if m is None:
             yy, xx = np.mgrid[0:H, 0:W]
             d = np.minimum(np.minimum(xx, W - 1 - xx), np.minimum(yy, H - 1 - yy)).astype(np.float32)
             m = self._flash_mask = np.clip((self.FLASH_BORDER - d) / 8.0, 0.0, 1.0)[..., None]      # 1 at the edge, soft by 26 px in
-        base = np.asarray(self._silhouette(dim=0.3), np.float32)
+        base = np.asarray(self._silhouette(dim=dim), np.float32)
+        warm = np.array(self.FLASH_WARM, np.float32)
         k = m * float(max(0.0, min(1.0, level)))
-        out = base * (1.0 - k) + np.array(self.FLASH_WARM, np.float32) * k
+        out = base * (1.0 - k) + warm * k
+        if wash > 0:
+            w = float(min(1.0, wash))
+            out = out * (1.0 - w) + warm * w
         return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
 
+    def _do_countdown(self, seconds: int = 3):
+        """3-2-1 over the dimmed silhouette. The warm frame round the screen glows with it: each number starts with a beat that
+        fades, and the glow's floor rises with every count, so the flash feels like it is being charged."""
+        self.strip.set_mode("countdown")
+        for i, n in enumerate(range(seconds, 0, -1)):
+            t0 = time.monotonic()
+            while not self._stop.is_set():
+                t = time.monotonic() - t0
+                if t >= 1.0:
+                    break
+                level = 0.10 + 0.16 * i + 0.45 * (1.0 - t) ** 2
+                canvas = self._flash_canvas(level, dim=config.SILHOUETTE_DIM_FACTOR)
+                text_renderer.render_static_text(canvas, str(n), colour=(255, 244, 224))
+                self._show(canvas)
+
+    def _grab_photo(self):
+        """The photo at full resolution (the camera's still mode, 4608 x 2592 on a Camera Module 3) cut to portrait around the
+        people (smart crop). Falls back to the live frame, then to the last live frame, if the camera hiccups."""
+        still = getattr(self.camera, "capture_still", None)
+        raw = still() if still else None
+        if raw is None:
+            try:
+                raw = self.camera.capture_frame(raw=True)
+            except TypeError:                        # a camera without raw support
+                return self.camera.capture_frame()
+        import smartcrop
+        rows = smartcrop.find_face_rows(raw)
+        self._read_faces(raw, rows)
+        faces = [(float(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[14])) for r in rows]
+        frame, how = smartcrop.portrait_crop(raw, config.CAMERA_ASPECT,
+                                             getattr(self.camera, "_background_raw", None), faces=faces)
+        print(f"[CROP] portrait via {how}, {frame.shape[1]}x{frame.shape[0]}")
+        return frame
+
     def _capture_with_flash(self):
-        """The photo flash: the screen edge swells to bright warm white, the camera meters for the lit scene, the frame is
-        taken at full brightness, then the light fades. Used for every photo (single shots and each booth shot)."""
+        """A proper flash, timed with the photo: the frame round the screen warms up (the camera meters for the lit scene), then at
+        the moment of the exposure the whole wall floods warm white at full brightness, the photo is taken during it, and the light
+        decays quickly like a real flash tube."""
         self.strip.set_mode("capture_flash")
         auto = getattr(self.camera, "light_auto", None)
         if auto:
             auto()                                       # let the camera meter for the lit scene (it is locked otherwise)
         t0 = time.monotonic()
-        pre = max(0.3, config.PHOTO_FLASH_PRE_MS / 1000.0 + 0.2)
-        while True:                                      # swell: quick, so it reads as a flash, long enough for the exposure to settle
+        while not self._stop.is_set():                   # pre-glow: 0.35 s, the frame rising to 0.7
             e = time.monotonic() - t0
-            self._show(self._flash_canvas(min(1.0, e / 0.18)))
-            if e >= pre or self._stop.is_set():
+            if e >= 0.35:
                 break
+            self._show(self._flash_canvas(0.45 + 0.25 * e / 0.35))
+        for _ in range(2):                               # the flash: two whole frames at full power (~80 ms) so it is really on
+            self._show(self._flash_canvas(1.0, wash=0.55, dim=0.2))
         try:
-            frame = self._grab_photo()
+            frame = self._grab_photo()                   # the wall holds the flash while the camera exposes
         except Exception as ex:
             print(f"[CAPTURE] direct grab failed: {ex}")
             frame = self._latest_frame
-        t1 = time.monotonic()
-        while time.monotonic() - t1 < config.PHOTO_FLASH_POST_MS / 1000.0 + 0.1:
-            self._show(self._flash_canvas(1.0))          # hold, so the frame is lit for the whole exposure
         restore = getattr(self.camera, "light_restore", None)
         if restore:
             restore()                                    # back to the steady, locked light
+        for _ in range(2):                               # a short hold after the exposure
+            self._show(self._flash_canvas(1.0, wash=0.55, dim=0.2))
         t2 = time.monotonic()
-        while time.monotonic() - t2 < 0.25:              # fade out
-            self._show(self._flash_canvas(1.0 - (time.monotonic() - t2) / 0.25))
+        while not self._stop.is_set():                   # decay: the wash dies in ~0.15 s, the glow in ~0.5 s
+            e = time.monotonic() - t2
+            if e >= 0.5:
+                break
+            self._show(self._flash_canvas(math.exp(-e * 6.0), wash=0.55 * math.exp(-e * 22.0), dim=0.2))
         return frame
 
     def _booth_display_strip(self, strip_image):
@@ -673,19 +753,19 @@ class MagicMirror:
             self._show(canvas)
 
     def _booth_hint(self, canvas):
-        """Photobooth mode, waiting: the title in gold and a pulsing 'tap' underneath."""
+        """Photobooth mode, waiting: the title in gold and a pulsing 'high five' underneath (an open palm starts it)."""
         d = ImageDraw.Draw(canvas)
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
         f1, f2 = text_renderer._load_font(15), text_renderer._load_font(10)
         pulse = 0.55 + 0.45 * math.sin(time.monotonic() * 3.0)
-        t1, t2 = "PHOTOBOOTH", "tap to start"
+        t1, t2 = "PHOTOBOOTH", "high five to start"
         if self._repeat_at:
             t2 = f"next strip in {max(0, int(self._repeat_at - time.monotonic()) + 1)}"
         for txt, f, y, col in ((t1, f1, 6, (255, 200, 80)), (t2, f2, H - 20, tuple(int(c * pulse) for c in (255, 235, 190)))):
             w = d.textlength(txt, font=f)
             d.text(((W - w) / 2, y), txt, font=f, fill=col, stroke_width=1, stroke_fill=(0, 0, 0))
 
-    def _booth_display_portraits(self, frames, prompts=()):
+    def _booth_display_portraits(self, frames):
         """Photobooth mode, after the shots: each photo full-screen in portrait (as it was printed), flashing in with its
         pose direction underneath, one after the other; then all of them side by side."""
         import cv2
@@ -693,7 +773,8 @@ class MagicMirror:
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
         shots = []
         for f in frames:
-            img = Image.fromarray(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
+            small = cv2.resize(f, (W * 3, int(f.shape[0] * W * 3 / f.shape[1])), interpolation=cv2.INTER_AREA) if f.shape[1] > W * 3 else f
+            img = Image.fromarray(cv2.cvtColor(small, cv2.COLOR_BGR2RGB))
             img = ImageOps.fit(img, (W, H), Image.LANCZOS, centering=(0.5, 0.35))
             shots.append(ImageEnhance.Color(ImageEnhance.Contrast(img).enhance(1.12)).enhance(1.2))
         font = text_renderer._load_font(11)
@@ -708,14 +789,6 @@ class MagicMirror:
                 canvas = Image.blend(Image.new("RGB", (W, H), (255, 244, 220)), shot, k)
                 d = ImageDraw.Draw(canvas)
                 d.rectangle([0, 0, W - 1, H - 1], outline=gold, width=2)
-                cap = prompts[i] if i < len(prompts) else ""
-                if cap:
-                    arr = np.asarray(canvas, np.float32)
-                    arr[H - 28:] *= 0.45
-                    canvas = Image.fromarray(arr.astype(np.uint8), "RGB")
-                    d = ImageDraw.Draw(canvas)
-                    tw = d.textlength(cap, font=font)
-                    d.text(((W - tw) / 2, H - 22), cap, font=font, fill=(255, 244, 220), stroke_width=1, stroke_fill=(0, 0, 0))
                 self._show(canvas)
         tw_, th_ = (W - 2 * 6 - 2 * 4) // 3, 0
         th_ = int(tw_ / 0.75)
@@ -805,7 +878,6 @@ class MagicMirror:
         self._overlay_text = None
         self._overlay_image = None
         from printer import render_booth_pil
-        import ai_client
         try:
             import mirror_settings
             shots = mirror_settings.load().get("booth_shots", config.BOOTH_PHOTO_COUNT)
@@ -816,33 +888,25 @@ class MagicMirror:
             self.strip.set_mode("countdown")
             self._flash_white(config.TRIGGER_FLASH_MS)
 
-            # ask GPT for direction prompts (with fallback)
-            prompts = ai_client.get_booth_prompts(shots)
-
             frames = []
             for i in range(shots):
-                prompt_text = prompts[i] if i < len(prompts) else ""
-                if prompt_text:
-                    print(f"[BOOTH] prompt {i + 1}: {prompt_text}")
-                    self._show_booth_prompt(prompt_text,
-                                            config.BOOTH_PROMPT_HOLD_SEC)
-                # short countdown per shot
                 self._do_countdown(config.BOOTH_PER_PHOTO_COUNTDOWN)
                 frame = self._capture_with_flash()
                 if frame is not None:
                     frames.append(frame)
                 print(f"[BOOTH] captured photo {i + 1}/{shots}")
-                # tiny breath between shots so people can re-pose
-                if i < shots - 1:
+                if i < shots - 1:                         # a breath between shots so people can re-pose
                     self.strip.set_mode("countdown")
-                    time.sleep(config.BOOTH_INTER_PHOTO_PAUSE_MS / 1000.0)
+                    t_pause = time.monotonic() + config.BOOTH_INTER_PHOTO_PAUSE_MS / 1000.0
+                    while time.monotonic() < t_pause and not self._stop.is_set():
+                        self._show(self._flash_canvas(0.12, dim=config.SILHOUETTE_DIM_FACTOR))
 
             if not frames:
                 print("[BOOTH] no frames captured; aborting cycle")
                 return
 
-            # Create a fresh Drive subfolder for this session so its three
-            # photos live together, and the QR on the strip can link to it.
+            # Where the QR code on the strip goes: the day's own Drive folder, shared by link only. Other days live in other folders
+            # and the parent folder is not shared, so a guest's QR code leads to that day's pictures and nowhere else.
             qr_url = None
             booth_folder_id = None
             try:
@@ -853,10 +917,7 @@ class MagicMirror:
             except Exception as e:
                 print(f"[BOOTH] folder create skip: {e}")
 
-            # compose strip (now with optional QR), print, display, upload.
-            strip_image = render_booth_pil(frames, label="PHOTOBOOTH",
-                                           prompts=prompts[:len(frames)],
-                                           qr_url=qr_url)
+            strip_image = render_booth_pil(frames, qr_url=qr_url)
             try:
                 self.printer.print_strip(strip_image)
             except Exception as e:
@@ -864,23 +925,16 @@ class MagicMirror:
             strip_stem = None
             try:
                 import photo_store
-                strip_stem = photo_store.save_strip(
-                    strip_image, frames, prompts[:len(frames)])
+                strip_stem = photo_store.save_strip(strip_image, frames, [])
             except Exception as e:
                 print(f"[PHOTOS] skip: {e}")
             try:
-                if booth_folder_id:
-                    for i, f in enumerate(frames):
-                        prompt = prompts[i] if i < len(prompts) else ""
-                        desc = (f"Photobooth {i + 1}/{len(frames)}"
-                                + (f" — {prompt}" if prompt else ""))
-                        cloud_uploader.upload_photo_to_folder_async(
-                            f, booth_folder_id, desc)
-                else:
-                    for i, f in enumerate(frames):
-                        prompt = prompts[i] if i < len(prompts) else ""
-                        desc = (f"Photobooth {i + 1}/{len(frames)}"
-                                + (f" — {prompt}" if prompt else ""))
+                import cloud_uploader
+                for i, f in enumerate(frames):
+                    desc = f"Photobooth {i + 1}/{len(frames)}"
+                    if booth_folder_id:
+                        cloud_uploader.upload_photo_to_folder_async(f, booth_folder_id, desc)
+                    else:
                         cloud_uploader.upload_photo_only_async(f, desc)
                 cloud_uploader.upload_booth_async(strip_image, stem=strip_stem)
             except Exception as e:
@@ -888,7 +942,7 @@ class MagicMirror:
 
             self.strip.set_mode("displaying")
             if self.booth_mode:
-                self._booth_display_portraits(frames, prompts[:len(frames)])
+                self._booth_display_portraits(frames)
             else:
                 self._booth_display_strip(strip_image)
 

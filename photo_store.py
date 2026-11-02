@@ -18,6 +18,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
+import config
+
 PHOTOS_DIR = os.path.join(os.path.dirname(__file__), "photos")
 
 
@@ -26,15 +28,25 @@ def _dir() -> str:
     return PHOTOS_DIR
 
 
+def _save_full(frame: np.ndarray, path: str) -> None:
+    """The picture at its full resolution: JPEG at config.PHOTO_JPEG_QUALITY, no chroma subsampling."""
+    Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).save(
+        path, format="JPEG", quality=getattr(config, "PHOTO_JPEG_QUALITY", 95), subsampling=0, optimize=True)
+
+
+def _save_thumb(frame: np.ndarray, path: str, side: int = 640) -> None:
+    img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    img.thumbnail((side, side))
+    img.save(path, format="JPEG", quality=82)
+
+
 def save_receipt(frame: np.ndarray, text: str) -> str:
     """Save a single-trigger capture. Returns the base filename stem."""
     d   = _dir()
     ts  = datetime.datetime.now()
     stem = ts.strftime("receipt_%Y%m%d_%H%M%S_%f")
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    img = Image.fromarray(rgb)
-    img.thumbnail((1024, 1024))
-    img.save(os.path.join(d, f"{stem}.jpg"), format="JPEG", quality=85)
+    _save_full(frame, os.path.join(d, f"{stem}.jpg"))                       # the picture as the camera took it, full resolution
+    _save_thumb(frame, os.path.join(d, f"{stem}_thumb.jpg"))               # a small copy for the app's grid
     with open(os.path.join(d, f"{stem}.json"), "w") as f:
         json.dump({"type": "receipt", "text": text, "ts": ts.isoformat()}, f)
     print(f"[PHOTOS] saved {stem}.jpg")
@@ -48,12 +60,11 @@ def save_strip(strip_image: Image.Image, frames: List[np.ndarray],
     ts   = datetime.datetime.now()
     stem = ts.strftime("strip_%Y%m%d_%H%M%S_%f")
     strip_image.save(os.path.join(d, f"{stem}.jpg"), format="JPEG", quality=90)
-    # save representative frame for reprinting
+    # every shot at full resolution (the strip itself is only the print layout), and a small cover for the app's grid
+    for i, fr in enumerate(frames):
+        _save_full(fr, os.path.join(d, f"{stem}_shot{i + 1}.jpg"))
     if frames:
-        rgb = cv2.cvtColor(frames[0], cv2.COLOR_BGR2RGB)
-        img = Image.fromarray(rgb)
-        img.thumbnail((1024, 1024))
-        img.save(os.path.join(d, f"{stem}_frame.jpg"), format="JPEG", quality=85)
+        _save_thumb(frames[0], os.path.join(d, f"{stem}_frame.jpg"))
     with open(os.path.join(d, f"{stem}.json"), "w") as f:
         json.dump({"type": "strip", "prompts": prompts, "ts": ts.isoformat()}, f)
     print(f"[PHOTOS] saved {stem}.jpg")

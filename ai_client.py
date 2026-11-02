@@ -232,10 +232,10 @@ def _persona() -> str:
     try:
         import mirror_settings as ms
         st = ms.load()
-        return (config.MIRROR_PERSONA + " " + ms.tone_line(st["tone"]) + " "
-                + ms.language_line(st["language"]))
+        return ((st["prompt"] or config.MIRROR_PERSONA) + " " + ms.tone_line(st["tone"]) + " "
+                + ms.language_line(st["language"]) + " " + config.MIRROR_RULES)
     except Exception:
-        return config.MIRROR_PERSONA
+        return config.MIRROR_PERSONA + " " + config.MIRROR_RULES
 
 
 _recent_lines = []                     # what the mirror said lately (kept in memory): so it does not repeat itself
@@ -250,11 +250,19 @@ def _moment() -> str:
 
 
 def _call_api(frame: np.ndarray, hint: str = "") -> tuple[str, int, int]:
+    import random
+    custom = False
+    try:
+        import mirror_settings as ms
+        custom = bool(ms.load()["prompt"])
+    except Exception:
+        pass
+    style = "" if custom else f"Voice for this photo: {random.choice(config.MIRROR_STYLES)}."          # your own prompt decides the voice
     avoid = ("Lines you said recently (do not repeat their jokes or openings): "
              + " | ".join(_recent_lines[-8:]) + ".") if _recent_lines else ""
     text, tin, tout = ask(_persona(),
                           [{"type": "text", "text": " ".join(x for x in (
-                              "Look at this person and speak.", hint, _moment(), avoid) if x).strip()},
+                              "Look at this person and speak.", hint, style, _moment(), avoid) if x).strip()},
                            _image_block(frame)],
                           max_tokens=1024, effort="low", timeout=config.AI_TIMEOUT_SEC)
     text = text.strip().strip('"\'')

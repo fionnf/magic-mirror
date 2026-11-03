@@ -247,6 +247,7 @@
   <div class="label">
     <h1 id="title">Fortuna wall</h1>
     <p id="sub"></p>
+    <p class="hint" id="fwv" style="margin:6px 0 0;opacity:.6"></p>
   </div>
   <div class="stepper"><button class="btn" onclick="stepPiece(-1)" aria-label="Previous piece">&#8592;</button><button class="btn" onclick="surprise()">Surprise me</button><button class="btn" onclick="stepPiece(1)" aria-label="Next piece">&#8594;</button></div>
   <div class="controls">
@@ -1024,7 +1025,8 @@ async function loadVersion() {
   try {
     const v = await api('/api/version'); if (!v.commit) return;
     const d = new Date(v.time * 1000);
-    $('version').textContent = `Running: ${v.subject} (${v.commit}, ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})})` + (v.update ? ` · Last update: ${v.update}` : '');
+    if ($('fwv')) $('fwv').textContent = `Firmware v${v.build || '?'} · ${v.commit}`;
+    $('version').textContent = `Firmware v${v.build || '?'} - ${v.subject} (${v.commit}, ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})})` + (v.update ? ` · Last update: ${v.update}` : '');
   } catch (e) {}
 }
 async function updateWall(reboot) {

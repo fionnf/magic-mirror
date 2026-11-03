@@ -895,7 +895,12 @@ def make_app(runner):
                     last = lines[-1] if lines else ""
             except OSError:
                 pass
-            return jsonify({"commit": out[0], "subject": out[1], "time": int(out[2]), "update": last})
+            try:
+                n = int(subprocess.run(["git", "-c", f"safe.directory={ROOT}", "-C", ROOT, "rev-list", "--count", "HEAD"],
+                                       capture_output=True, text=True, timeout=5).stdout.strip() or 0)
+            except Exception:
+                n = 0
+            return jsonify({"commit": out[0], "subject": out[1], "time": int(out[2]), "update": last, "build": n})
         except Exception:
             return jsonify({"commit": None})
 

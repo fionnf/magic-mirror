@@ -1,0 +1,51 @@
+{
+ "name": "Moss In Shadow",
+ "description": "Three soft leaf-shapes drift through a deep forest field, opening slightly across the day and settling into a quiet dusk glow by night.",
+ "image": "2026-11-03.png",
+ "animation_source": "2026-11-03.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-03"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#0F2218 #294533 #6F8C73"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "It listens to breath as a slow widening and to the day as a tide, while iDay lays down faint mossy sediment from hour to hour.",
+ "palette": [
+  "#0F2218",
+  "#294533",
+  "#6F8C73"
+ ],
+ "source_sha256": "770eef26a8c2e71407dc3c0f6fba03d7faba03f5f77e97000082309ecf010ab6",
+ "model": "gpt-5.4-mini",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 4,
+ "created": 1793696594.1616766,
+ "curator": {
+  "score": 7,
+  "verdict": "This piece embodies the 'Forest dusk' direction well with its deep green palette and soft, drifting leaf forms that carry a quiet luminosity throughout the day. It remains restrained and elegant, with a calm mood suitable for the setting while subtly evolving."
+ },
+ "direction": "Forest dusk"
+}

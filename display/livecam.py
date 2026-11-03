@@ -351,7 +351,12 @@ class Source:
                     return got
                 self._put(f)
                 last, got = newest["datetime"], True
-            self._stop.wait(float(self.cam.get("poll", 120.0)))
+            deadline = time.time() + float(self.cam.get("poll", 120.0))
+            while not self._stop.is_set() and time.time() < deadline:
+                self._stop.wait(3.0)
+                with self._lock:                           # the picture is current while the cam answers: do not call it NO SIGNAL
+                    if self._frame is not None:
+                        self._ts = time.time()
         return got
 
     def _read_video(self):

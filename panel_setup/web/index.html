@@ -118,6 +118,9 @@
   .chips button.on { background: var(--ink); color: var(--room); border-color: var(--ink); }
   .gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 6px; }
   .gallery button { border: 0; padding: 0; background: none; text-align: left; }
+  .gallery button { position: relative; }
+  .gifshare { position: absolute; top: 6px; right: 6px; font: 600 11px/1 var(--sans, system-ui); font-style: normal; padding: 5px 7px; border-radius: 999px; background: rgba(0,0,0,.62); color: #fff; border: 1px solid rgba(255,255,255,.35); }
+  .gifshare.busy { opacity: .6; }
   .gallery img { width: 100%; aspect-ratio: var(--aspect, 1); object-fit: cover; border-radius: 8px; display: block; background: #000;
                  outline: 2px solid transparent; outline-offset: 2px; }
   .gallery .sel img { outline-color: var(--ink); }
@@ -846,7 +849,7 @@ let ART = null, artFilter = 'all', musicArtFilter = 'all';
 const HOUR_IDS = ['shader-aurora', 'shader-bloom', 'shader-crystal', 'shader-inkcloud', 'shader-metamorphosis', 'shader-orbit', 'shader-totality'];
 const LIVE_IDS = ['trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'windeu', 'polarbears', 'livecam', 'skylines', 'wanderers', 'nighttrains', 'issday', 'snow', 'tides', 'limmat', 'westcork', 'quakes', 'laend', 'kilchberg', 'zurichhb'];
 const SLIDE_IDS = ['lava', 'shapes', 'flow', 'shaders', 'artsy', 'glass', 'art', 'snapshots'];
-const SHOW_IDS = ['pride', 'dewa', 'maeva', 'lennart', 'welcome', 'cow'];
+const SHOW_IDS = ['pride', 'dewa', 'maeva', 'maxfionn', 'lennart', 'welcome', 'cow'];
 const modeGroup = {live: LIVE_IDS, slides: SLIDE_IDS, shows: SHOW_IDS};
 function modeTiles() {                       // the non-piece things the wall can show, filtered like the pieces
   const q = ($('artFind').value || '').trim().toLowerCase();
@@ -864,7 +867,7 @@ async function loadArt() {
   const modes = modeTiles();
   $('galleryHead').textContent = `Gallery · ${ART.pieces.length + MODES.filter(m => [].concat(SLIDE_IDS, SHOW_IDS, LIVE_IDS).includes(m.id)).length} things to show`;
   const modeTile = m => `<button class="${STATUS.current === m.id ? 'sel' : ''}" onclick="play('${m.id}')">
-      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy"><span>${esc(m.title)}</span></button>`;
+      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy"><span>${esc(m.title)}</span>${SHOW_IDS.includes(m.id) ? `<i class="gifshare" role="button" tabindex="0" aria-label="Share ${esc(m.title)} as a GIF" onclick="shareGif(event,'${m.id}')">GIF</i>` : ''}</button>`;
   $('artGrid').innerHTML = modes.map(modeTile).join('') + list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
       <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   if (MUSIC.settings && MUSIC.settings.style === 'art') {
@@ -910,6 +913,23 @@ async function newPiece() {
       ART = null; loadArt(); loadDaily();
     } catch (e) {}
   }, 4000);
+}
+
+async function shareGif(ev, id) {       // a short GIF of the show, shared through the phone's own share sheet
+  ev.stopPropagation(); ev.preventDefault();
+  const b = ev.currentTarget; if (b.classList.contains('busy')) return;
+  b.classList.add('busy'); const was = b.textContent; b.textContent = '…';
+  toast('Making the GIF, this takes a moment');
+  try {
+    const headers = TOKEN && REMOTE ? {Authorization: 'Bearer ' + TOKEN} : {};
+    const r = await fetch(BASE + '/api/gif/' + id, {headers});
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'That did not work.');
+    const blob = await r.blob(), name = (MODES.find(m => m.id === id) || {}).title || id;
+    const file = new File([blob], id + '.gif', {type: 'image/gif'});
+    if (navigator.canShare && navigator.canShare({files: [file]})) await navigator.share({files: [file], title: name});
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = id + '.gif'; document.body.appendChild(a); a.click(); a.remove(); toast('GIF saved'); }
+  } catch (e) { if (e.name !== 'AbortError') toast(e.message); }
+  finally { b.classList.remove('busy'); b.textContent = was; }
 }
 function filterArt(k) { artFilter = k; loadArt(); }
 function filterMusicArt(k) { musicArtFilter = k; loadArt(); }

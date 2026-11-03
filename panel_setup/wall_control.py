@@ -49,6 +49,7 @@ MODES = [
     ("pride", "Shows", "Pride Show", "Disco ball, HOUSE FORTUNA, people nearby, vortex, heart"),
     ("dewa", "Shows", "Dewa's Story", "Edelweiss flight attendant, a date at every layover"),
     ("maeva", "Shows", "Maeva in Zürich", "Tram at 8:00:00, the Limmat, Sprüngli, sledging"),
+    ("maxfionn", "Shows", "Max & Fionn: In Arbeit", "Colibri, a pumpkin farm at midnight, the pressure washer, the Porsche in Fortunagasse, Bauhaus, dinner with a prince, Lindenhof, Hive, Monsti (German, ~3 min)"),
     ("welcome", "Shows", "Welcome", "Welcome to HOUSE FORTUNA, wheel of fortune"),
     ("lennart", "Shows", "Lennart zeigt Fionn das Ländle", "Fionn steals apples and grapes, loves Fachwerk, hunts for the sea, meets the vineyard mafia; Karlstein, a kiss, and home in Bittenfeld (German, ~2 min)"),
     ("cow", "Shows", "Dewa is a cow", "A message card"),
@@ -156,7 +157,7 @@ class Runner:
     # -- commands
     def _cmd(self, what):
         if what in MODE_IDS:
-            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva", "flow", "exposure", "laend", "lennart", "kilchberg", "zurichhb")
+            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva", "maxfionn", "flow", "exposure", "laend", "lennart", "kilchberg", "zurichhb")
             return [PY, "panel_setup/play.py", what, "--fps", "29" if heavy else "58"]   # art: 58 fps when it can
         if what == "mirror":
             cmd = [PY, "-u", "main.py", "--no-touch", "--no-mqtt"]
@@ -479,7 +480,7 @@ def make_thumbs():
     os.makedirs(THUMB_DIR, exist_ok=True)
     try:
         from PIL import Image, ImageDraw
-        from display import (art, artsy, cards, dewa_story, maeva_story, light_art, pride_show, shapes, welcome)
+        from display import (art, artsy, cards, dewa_story, maeva_story, max_fionn, light_art, pride_show, shapes, welcome)
         from display.pride_show import _emoji
         import config
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
@@ -509,6 +510,7 @@ def make_thumbs():
             "pride": lambda: pride_show.frame(9.5),
             "dewa": lambda: dewa_story.frame(24.5),
             "maeva": lambda: maeva_story.frame(8.0),
+            "maxfionn": lambda: max_fionn.thumb(),
             "welcome": lambda: welcome.welcome_frame(10.0),
             "cow": lambda: cards.cow_card(),
             "ambient": lambda: seq(art.LavaCoralGallery(), 4.0),
@@ -1067,6 +1069,41 @@ def make_app(runner):
             pass
         host = socket.gethostname()
         return [f"http://{host}.local/d"] + ([f"http://{ip}/d"] if ip else [])
+
+    GIF_DIR = os.path.join(ROOT, "panel_setup", "gifs")
+    GIF_LOCK = threading.Lock()
+    GIF_CLIP = {"maxfionn": (0.0, 12.0), "lennart": (4.0, 12.0)}        # where each show's shared clip starts, and how long
+
+    @app.get("/api/gif/<mode>")
+    def show_gif(mode):
+        """A short GIF of a show, made by play.py in a helper process, for sharing from the phone."""
+        if not re.fullmatch(r"[a-z0-9]+", mode) or mode not in {i for i, c, t, d in MODES}:
+            return jsonify({"error": "no such show"}), 404
+        start, secs = GIF_CLIP.get(mode, (0.0, 10.0))
+        try:
+            start = float(request.args.get("start", start))
+            secs = max(2.0, min(20.0, float(request.args.get("seconds", secs))))
+        except ValueError:
+            return jsonify({"error": "bad time"}), 400
+        os.makedirs(GIF_DIR, exist_ok=True)
+        out = os.path.join(GIF_DIR, f"{mode}-{int(start)}-{int(secs)}.gif")
+        if not os.path.exists(out):
+            if not GIF_LOCK.acquire(blocking=False):
+                return jsonify({"error": "Another GIF is being made. Try again in a minute."}), 429
+            try:
+                tmp = out[:-4] + ".part.gif"
+                r = subprocess.run([sys.executable, os.path.join(ROOT, "panel_setup", "play.py"), mode, "--gif", tmp,
+                                    "--gif-start", str(start), "--gif-seconds", str(secs), "--gif-fps", "12"],
+                                   cwd=ROOT, capture_output=True, text=True, timeout=240)
+                if r.returncode != 0 or not os.path.exists(tmp):
+                    print(f"[gif] {mode}: {r.stderr[-300:]}", flush=True)
+                    return jsonify({"error": "Could not make the GIF."}), 500
+                os.replace(tmp, out)
+            except subprocess.TimeoutExpired:
+                return jsonify({"error": "Making the GIF took too long."}), 504
+            finally:
+                GIF_LOCK.release()
+        return send_from_directory(GIF_DIR, os.path.basename(out), mimetype="image/gif", max_age=300)
 
     @app.get("/api/share")
     def share_links():

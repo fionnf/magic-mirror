@@ -71,7 +71,7 @@ def _lazy(mod, attr):
 
 
 def _anims():
-    from display import (welcome, pride_show, cards, maeva_story, dewa_story, art,
+    from display import (welcome, pride_show, cards, maeva_story, dewa_story, max_fionn, art,
                          departures, music, shapes, light_art, artsy, shaders, daily, flow,
                          planes, limmat, westcork, exposure)
     return {
@@ -112,6 +112,7 @@ def _anims():
         "lava":    (art.frame_lava_coral, art.LAVA_CORAL_LOOP_SEC),
         "dewa":    (dewa_story.frame, dewa_story.LOOP_SEC),
         "maeva":   (maeva_story.frame, maeva_story.LOOP_SEC),
+        "maxfionn": (max_fionn.frame, max_fionn.LOOP_SEC),
         "pride":   (pride_show.frame, pride_show.LOOP_SEC),
         "welcome": (welcome.welcome_frame, welcome.LOOP_SEC),
         "cow":     (cards.cow_card, 1.0),
@@ -292,22 +293,27 @@ def _loading_screen(matrix, frame_fn):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("anim", nargs="?", default="pride", help="music | ambient | trams | shapes | glass | artsy | lava | art | pride | maeva | dewa | welcome | cow")
+    ap.add_argument("anim", nargs="?", default="pride", help="music | ambient | trams | shapes | glass | artsy | lava | art | pride | maeva | maxfionn | dewa | welcome | cow")
     ap.add_argument("--seconds", type=float, default=0, help="stop after N s (0 = forever)")
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--gif", help="write one loop to this GIF instead of the wall")
     ap.add_argument("--gif-scale", type=int, default=2)
+    ap.add_argument("--gif-start", type=float, default=0.0, help="start the GIF this many seconds into the show")
+    ap.add_argument("--gif-seconds", type=float, default=0.0, help="clip length (0 = one whole loop)")
+    ap.add_argument("--gif-fps", type=int, default=15)
     a = ap.parse_args()
     frame_fn, loop_sec = _anims()[a.anim]
 
     if a.gif:
         from PIL import Image
-        n = max(1, int(loop_sec * 15))
-        frames = [frame_fn(i / 15).resize(
+        fps = max(1, a.gif_fps)
+        length = a.gif_seconds if a.gif_seconds > 0 else loop_sec
+        n = max(1, int(length * fps))
+        frames = [frame_fn(a.gif_start + i / fps).resize(
             (config.TOTAL_WIDTH * a.gif_scale, config.TOTAL_HEIGHT * a.gif_scale),
             Image.NEAREST) for i in range(n)]
-        frames[0].save(a.gif, save_all=True, append_images=frames[1:],
-                       duration=int(1000 / 15), loop=0)
+        frames[0].save(a.gif, save_all=True, append_images=frames[1:], optimize=True,
+                       duration=int(1000 / fps), loop=0)
         print(f"wrote {a.gif} ({n} frames)")
         return
 

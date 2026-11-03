@@ -51,25 +51,22 @@
   <div class="tools">
     <button id="prt" type="button" aria-label="Print the house info slip">Print house info</button>
     <button id="fs" type="button" aria-label="Full screen">Full screen</button>
-    <button id="cfg" type="button" aria-label="Edit the Wi-Fi and Jam details">Edit</button>
+    <button id="cfg" type="button" aria-label="Edit the Wi-Fi and house notes">Edit</button>
   </div>
 </header>
 <main id="cards" aria-live="polite"></main>
 
 <dialog id="dlg">
   <form method="dialog" id="form">
-    <h2>Wi-Fi and Spotify Jam</h2>
+    <h2>Wi-Fi and house notes</h2>
     <label for="ssid">Wi-Fi name</label>
     <input id="ssid" autocomplete="off" autocapitalize="off" spellcheck="false">
     <label for="pw">Wi-Fi password</label>
     <input id="pw" autocomplete="off" autocapitalize="off" spellcheck="false">
     <label for="sec">Security</label>
     <select id="sec"><option value="WPA">WPA / WPA2 / WPA3</option><option value="WEP">WEP</option><option value="nopass">None (open)</option></select>
-    <label for="jam">Spotify Jam link</label>
-    <input id="jam" inputmode="url" placeholder="https://spotify.link/..." autocomplete="off" autocapitalize="off" spellcheck="false">
     <label for="notes">House notes (printed on the slip)</label>
     <textarea id="notes" rows="4" maxlength="600" placeholder="Bins on Tuesday. Quiet after 22:00. Spare key in the blue pot."></textarea>
-    <p class="hint">In Spotify: start a Jam, tap Invite, Copy link, and paste it here. A new Jam needs a new link.</p>
     <p id="err" role="alert"></p>
     <div class="row"><button type="button" id="cancel">Cancel</button><button type="submit" class="go" id="save">Save</button></div>
   </form>
@@ -101,8 +98,7 @@ function render() {
     card('1', 'Join the Wi-Fi', w.ssid ? 'Point your camera here' : 'Add the network name and password', 'wifi', !!w.ssid,
       w.ssid ? [`Network: ${w.ssid}`, w.security === 'nopass' || !w.password ? 'No password' : { html: `Password: <b>${esc(w.password)}</b>` }] : []),
     card('2', 'Write on the board', 'Send a message to the LED wall', 'guest', !!d.guest, d.guest ? [d.guest.replace('http://', '') + '  (on the Wi-Fi)'] : []),
-    card('3', 'Join the Jam', 'Add songs to the Spotify Jam', 'jam', !!d.jam, d.jam ? [d.jam.replace(/^https?:\/\//, '')] : []),
-    card('4', "Today's pictures", 'Everything from today, to keep', 'pictures', !!d.pictures, d.pictures ? [d.pictures.replace(/^https?:\/\//, '').slice(0, 48)] : ['No pictures link yet today.'])
+    card('3', "Today's pictures", 'Everything from today, to keep', 'pictures', !!d.pictures, d.pictures ? [d.pictures.replace(/^https?:\/\//, '').slice(0, 48)] : ['No pictures link yet today.'])
   );
 }
 
@@ -120,7 +116,7 @@ async function load() {
 $('cfg').onclick = () => {
   const w = (data && data.wifi) || {};
   $('ssid').value = w.ssid || ''; $('pw').value = w.password || ''; $('sec').value = w.security || 'WPA';
-  $('jam').value = (data && data.jam) || ''; $('notes').value = (data && data.notes) || ''; $('err').textContent = '';
+  $('notes').value = (data && data.notes) || ''; $('err').textContent = '';
   $('dlg').showModal();
 };
 $('cancel').onclick = () => $('dlg').close();
@@ -129,7 +125,7 @@ $('form').onsubmit = async (ev) => {
   $('err').textContent = '';
   try {
     const r = await fetch('/api/home/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wifi_ssid: $('ssid').value, wifi_password: $('pw').value, wifi_security: $('sec').value, jam_url: $('jam').value, notes: $('notes').value }) });
+      body: JSON.stringify({ wifi_ssid: $('ssid').value, wifi_password: $('pw').value, wifi_security: $('sec').value, notes: $('notes').value }) });
     const j = await r.json();
     if (!r.ok) { $('err').textContent = j.error || 'Could not save.'; return; }
     $('dlg').close();

@@ -1,4 +1,4 @@
-"""The house-info slip for the receipt printer: Wi-Fi, writing on the board, the Spotify Jam, today's pictures, and a few notes.
+"""The house-info slip for the receipt printer: Wi-Fi, writing on the board, today's pictures, and a few notes.
 
 slip_image() returns a black-on-white greyscale picture at the printer's width (print_out.WIDTH, 384 dots). The QR codes are pure black and
 white at whole-dot module sizes, so the printer's dithering leaves them crisp and they scan from the paper.
@@ -59,7 +59,7 @@ def _centered(d, y, text, font, fill=0, max_w=WIDTH - 24):
     return y
 
 
-def slip_image(wifi, guest_url, jam_url, pictures_url, notes="", today=None):
+def slip_image(wifi, guest_url, pictures_url, notes="", today=None):
     """wifi = (ssid, password, security, payload) or None. Any missing link is simply left out."""
     today = today or datetime.date.today()
     big, mid, small = _font(40), _font(28), _font(22)
@@ -70,10 +70,8 @@ def slip_image(wifi, guest_url, jam_url, pictures_url, notes="", today=None):
         blocks.append(("1  Join the Wi-Fi", payload, cap))
     if guest_url:
         blocks.append(("2  Write on the board", guest_url, ["Send a message to the LED wall.", "Join the Wi-Fi first."]))
-    if jam_url:
-        blocks.append(("3  Join the Jam", jam_url, ["Add your songs on Spotify."]))
     if pictures_url:
-        blocks.append(("4  Today's pictures", pictures_url, ["Everything from today, to keep."]))
+        blocks.append(("3  Today's pictures", pictures_url, ["Everything from today, to keep."]))
 
     # measure first, draw second
     probe = ImageDraw.Draw(Image.new("L", (WIDTH, 10)))

@@ -121,6 +121,7 @@
   .gallery button { position: relative; }
   .gifshare { position: absolute; top: 6px; right: 6px; font: 600 11px/1 var(--sans, system-ui); font-style: normal; padding: 5px 7px; border-radius: 999px; background: rgba(0,0,0,.62); color: #fff; border: 1px solid rgba(255,255,255,.35); }
   .gifshare.busy { opacity: .6; }
+  .gifshare.ready { background: #1f9d55; border-color: #fff; }
   .gallery img { width: 100%; aspect-ratio: var(--aspect, 1); object-fit: cover; border-radius: 8px; display: block; background: #000;
                  outline: 2px solid transparent; outline-offset: 2px; }
   .gallery .sel img { outline-color: var(--ink); }
@@ -915,21 +916,31 @@ async function newPiece() {
   }, 4000);
 }
 
+const GIFS = {};                        // id -> File, fetched once per page
 async function shareGif(ev, id) {       // a short GIF of the show, shared through the phone's own share sheet
   ev.stopPropagation(); ev.preventDefault();
   const b = ev.currentTarget; if (b.classList.contains('busy')) return;
-  b.classList.add('busy'); const was = b.textContent; b.textContent = '…';
-  toast('Making the GIF, this takes a moment');
+  const name = (MODES.find(m => m.id === id) || {}).title || id;
+  let file = GIFS[id];
+  if (!file) {
+    b.classList.add('busy'); b.textContent = '…'; toast('Making the GIF, this takes a moment');
+    try {
+      const headers = TOKEN && REMOTE ? {Authorization: 'Bearer ' + TOKEN} : {};
+      const r = await fetch(BASE + '/api/gif/' + id, {headers});
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'The wall said ' + r.status);
+      file = GIFS[id] = new File([await r.blob()], id + '.gif', {type: 'image/gif'});
+      b.classList.add('ready');
+    } catch (e) { toast('GIF: ' + (e.message || e)); b.textContent = 'GIF'; b.classList.remove('busy'); return; }
+    b.classList.remove('busy'); b.textContent = 'Share';
+  }
   try {
-    const headers = TOKEN && REMOTE ? {Authorization: 'Bearer ' + TOKEN} : {};
-    const r = await fetch(BASE + '/api/gif/' + id, {headers});
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'That did not work.');
-    const blob = await r.blob(), name = (MODES.find(m => m.id === id) || {}).title || id;
-    const file = new File([blob], id + '.gif', {type: 'image/gif'});
-    if (navigator.canShare && navigator.canShare({files: [file]})) await navigator.share({files: [file], title: name});
-    else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = id + '.gif'; document.body.appendChild(a); a.click(); a.remove(); toast('GIF saved'); }
-  } catch (e) { if (e.name !== 'AbortError') toast(e.message); }
-  finally { b.classList.remove('busy'); b.textContent = was; }
+    if (navigator.canShare && navigator.canShare({files: [file]})) {
+      await navigator.share({files: [file], title: name}); b.textContent = 'GIF'; b.classList.remove('ready');
+    } else { const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = id + '.gif'; document.body.appendChild(a); a.click(); a.remove(); toast('GIF saved'); b.textContent = 'GIF'; }
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    toast(e.name === 'NotAllowedError' ? 'GIF ready: tap Share' : 'GIF: ' + (e.message || e));    // the browser wants a fresh tap
+  }
 }
 function filterArt(k) { artFilter = k; loadArt(); }
 function filterMusicArt(k) { musicArtFilter = k; loadArt(); }

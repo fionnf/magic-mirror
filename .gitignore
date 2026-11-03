@@ -22,6 +22,7 @@ panel_setup/wall_state.json
 panel_setup/web/thumbs/
 panel_setup/logs/
 panel_setup/music_settings.json
+panel_setup/home.json
 panel_setup/music_now.json
 panel_setup/ai_usage.json
 assets/models/face_recognition_sface_2021dec_int8.onnx

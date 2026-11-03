@@ -1179,6 +1179,85 @@ def make_app(runner):
             out["error"] = str(e)[:100]
         return jsonify(out)
 
+    # ---- the home screen: QR codes for guests (message the board, today's pictures, Spotify Jam, Wi-Fi) ----
+    HOME_FILE = os.path.join(HERE, "home.json")                  # git-ignored: holds the Wi-Fi password
+
+    def _home_cfg():
+        try:
+            with open(HOME_FILE) as fh:
+                c = json.load(fh)
+        except (OSError, ValueError):
+            c = {}
+        return {"wifi_ssid": str(c.get("wifi_ssid", "")), "wifi_password": str(c.get("wifi_password", "")),
+                "wifi_security": c.get("wifi_security", "WPA") if c.get("wifi_security") in ("WPA", "WEP", "nopass") else "WPA",
+                "jam_url": str(c.get("jam_url", ""))}
+
+    def _wifi_payload(c):
+        esc = lambda x: "".join("\\" + ch if ch in '\\;,:"' else ch for ch in x)
+        if not c["wifi_ssid"]:
+            return ""
+        if c["wifi_security"] == "nopass" or not c["wifi_password"]:
+            return f"WIFI:T:nopass;S:{esc(c['wifi_ssid'])};;"
+        return f"WIFI:T:{c['wifi_security']};S:{esc(c['wifi_ssid'])};P:{esc(c['wifi_password'])};;"
+
+    def _home_cards():
+        c = _home_cfg()
+        urls = _lan_urls()
+        guest = urls[-1] if urls else ""                       # the IP address works on every phone (".local" does not on Android)
+        pics, date = "", datetime.date.today().isoformat()
+        try:
+            for dd in share_links().get_json().get("days", []):
+                if dd.get("date") == date:
+                    pics = dd.get("page") or dd.get("url") or ""
+                    break
+        except Exception:
+            pass
+        return c, {"guest": guest, "pictures": pics, "jam": c["jam_url"], "wifi": _wifi_payload(c)}
+
+    @app.get("/home")
+    def home_page():
+        return send_from_directory(WEB_DIR, "home.html")
+
+    @app.get("/api/home")
+    def home_data():
+        c, q = _home_cards()
+        return jsonify({"date": datetime.date.today().isoformat(), "guest": q["guest"], "pictures": q["pictures"], "jam": q["jam"],
+                        "wifi": {"ssid": c["wifi_ssid"], "password": c["wifi_password"], "security": c["wifi_security"]}})
+
+    @app.post("/api/home/settings")
+    def home_settings():
+        d = request.get_json(force=True, silent=True) or {}
+        c = _home_cfg()
+        for k in ("wifi_ssid", "wifi_password", "wifi_security", "jam_url"):
+            if k in d:
+                c[k] = str(d[k]).strip()[:200]
+        if c["jam_url"] and not c["jam_url"].startswith(("http://", "https://")):
+            return jsonify({"error": "The Jam link should start with https://"}), 400
+        tmp = HOME_FILE + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(c, fh)
+        os.replace(tmp, HOME_FILE)
+        try:
+            os.chmod(HOME_FILE, 0o600)
+        except OSError:
+            pass
+        return jsonify({"ok": True})
+
+    @app.get("/api/home/qr/<card>.png")
+    def home_qr(card):
+        import io
+        import qrcode
+        _, q = _home_cards()
+        data = q.get(card, "")
+        if not data:
+            return jsonify({"error": "not set up"}), 404
+        qr = qrcode.QRCode(border=2, box_size=12, error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(data)
+        qr.make(fit=True)
+        buf = io.BytesIO()
+        qr.make_image(fill_color="black", back_color="white").convert("RGB").save(buf, "PNG")
+        return Response(buf.getvalue(), mimetype="image/png", headers={"Cache-Control": "no-store"})
+
     # ---- a live look through the camera, without mirror mode (see camera_live.py) ----
     import camera_live
 

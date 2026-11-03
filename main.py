@@ -893,9 +893,134 @@ class MagicMirror:
                 d.text(((W - w) / 2, H - label_h - 1), label, font=font, fill=(255, 200, 80), stroke_width=1, stroke_fill=(0, 0, 0))
             self._show(canvas)
 
+    ENDLESS_LEAVE_SEC = 20.0          # nobody in front of the mirror for this long: the long strip is finished and cut
+    ENDLESS_MAX = 30                  # photos in one long strip (about 3 m of paper)
+
+    def _endless_here(self) -> bool:
+        return self._person_here() or (time.monotonic() - self._last_presence) < 6.0
+
+    def _endless_wait_for_people(self, secs: float) -> bool:
+        """Show the quiet mirror for up to `secs`; True as soon as somebody is in front of it."""
+        t_end = time.monotonic() + secs
+        while not self._stop.is_set():
+            if self._endless_here():
+                return True
+            if time.monotonic() >= t_end:
+                return False
+            self._show(self._flash_canvas(0.12, dim=config.SILHOUETTE_DIM_FACTOR))
+        return False
+
+    def run_endless_booth(self):
+        """The endless photobooth: for as long as people stand in front of the mirror it takes photo after photo (3-2-1, flash),
+        shows each on the wall, and prints it at once, one below the other, into one long strip: a header first, then the photos as
+        they are taken, and when everybody has left a footer with the QR code and the cut. Printing runs on its own thread, so the
+        next countdown never waits for the paper."""
+        import queue
+        import cv2
+        self._overlay_text = None
+        self._overlay_image = None
+        from printer import render_endless_header, render_endless_frame, render_endless_footer, render_booth_pil
+        jobs = queue.Queue()
+        stats = {"printed": 0, "failed": 0}
+
+        def worker():
+            while True:
+                item = jobs.get()
+                if item is None:
+                    return
+                kind, payload = item
+                try:
+                    if kind == "head":
+                        img, cut = render_endless_header(), False
+                    elif kind == "photo":
+                        img, cut = render_endless_frame(payload), False
+                    else:
+                        img, cut = render_endless_footer(*payload), True
+                    self.printer.print_part(img, cut=cut)
+                    stats["printed"] += 1
+                except Exception as e:
+                    stats["failed"] += 1
+                    print(f"[ENDLESS] print failed: {e}")
+
+        th = threading.Thread(target=worker, daemon=True)
+        th.start()
+        frames = []
+        qr_url, folder_id = None, None
+        try:
+            self._set_state(State.BOOTH)
+            self.strip.set_mode("countdown")
+            self._flash_white(config.TRIGGER_FLASH_MS)
+            jobs.put(("head", None))
+            try:
+                import cloud_uploader
+                session = cloud_uploader.create_booth_session_folder()
+                if session is not None:
+                    folder_id, drive_url = session
+                    qr_url = cloud_uploader.share_url(folder_id, drive_url)
+            except Exception as e:
+                print(f"[ENDLESS] folder create skip: {e}")
+            print("[ENDLESS] started")
+            while not self._stop.is_set() and len(frames) < self.ENDLESS_MAX:
+                self._do_countdown(config.BOOTH_PER_PHOTO_COUNTDOWN)
+                frame = self._capture_with_flash()
+                if frame is not None:
+                    keep = frame
+                    if max(frame.shape[:2]) > 1600:                 # 30 full-size stills would not fit in memory
+                        k = 1600.0 / max(frame.shape[:2])
+                        keep = cv2.resize(frame, (int(frame.shape[1] * k), int(frame.shape[0] * k)), interpolation=cv2.INTER_AREA)
+                    frames.append(keep)
+                    jobs.put(("photo", keep))
+                    print(f"[ENDLESS] photo {len(frames)} (printing queue {jobs.qsize()})")
+                    self.strip.set_mode("displaying")
+                    self._booth_display_frames([keep], seconds=2.5, label=None)
+                if len(frames) >= self.ENDLESS_MAX:
+                    break
+                if not self._endless_wait_for_people(self.ENDLESS_LEAVE_SEC):
+                    print("[ENDLESS] everyone left")
+                    break
+            jobs.put(("foot", (qr_url, len(frames))))
+            jobs.put(None)
+            self.strip.set_mode("displaying")
+            t_wait = time.monotonic()
+            while th.is_alive() and not self._stop.is_set() and time.monotonic() - t_wait < 420:   # the wall waits for the paper
+                canvas = self._flash_canvas(0.12, dim=config.SILHOUETTE_DIM_FACTOR)
+                text_renderer.render_static_text(canvas, "THANKS", colour=(255, 200, 80))
+                self._show(canvas)
+            print(f"[ENDLESS] finished: {len(frames)} photos, {stats['printed']} parts printed, {stats['failed']} failed")
+            if frames:                                              # the whole strip goes into the mirror gallery (and can be printed again)
+                try:
+                    import photo_store
+                    strip_image = render_booth_pil(frames, qr_url=qr_url)
+                    stem = photo_store.save_strip(strip_image, frames, [])
+                    import cloud_uploader
+                    for i, f in enumerate(frames):
+                        local = f"{stem}_shot{i + 1}.jpg"
+                        if folder_id:
+                            cloud_uploader.upload_photo_to_folder_async(f, folder_id, f"Photobooth {i + 1}/{len(frames)}", local=local)
+                        else:
+                            cloud_uploader.upload_photo_only_async(f, f"Photobooth {i + 1}/{len(frames)}", local=local)
+                except Exception as e:
+                    print(f"[ENDLESS] save skip: {e}")
+            self._set_state(State.FADE_OUT)
+            self.strip.set_mode("fading")
+            self._fade_out(Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT), (0, 0, 0)), config.FADE_OUT_SEC)
+        except Exception as e:
+            print(f"[ENDLESS] failed: {e}")
+            jobs.put(None)
+        finally:
+            self._set_state(State.IDLE)
+            self.strip.set_mode("idle")
+            self._repeat_at = 0.0
+
     def run_booth_cycle(self):
         self._overlay_text = None
         self._overlay_image = None
+        try:
+            import mirror_settings
+            if mirror_settings.load().get("booth_endless"):
+                return self.run_endless_booth()
+        except Exception as e:
+            print(f"[BOOTH] settings: {e}")
         from printer import render_booth_pil
         try:
             import mirror_settings

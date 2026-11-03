@@ -259,6 +259,25 @@ class LedMatrix:
             return arr
         return (arr.astype(np.float32) * cur).astype(np.uint8)
 
+    _BAYER8 = np.array([[0, 32, 8, 40, 2, 34, 10, 42], [48, 16, 56, 24, 50, 18, 58, 26], [12, 44, 4, 36, 14, 46, 6, 38],
+                        [60, 28, 52, 20, 62, 30, 54, 22], [3, 35, 11, 43, 1, 33, 9, 41], [51, 19, 59, 27, 49, 17, 57, 25],
+                        [15, 47, 7, 39, 13, 45, 5, 37], [63, 31, 55, 23, 61, 29, 53, 21]], np.float32)
+
+    def _dither(self, arr: np.ndarray) -> np.ndarray:
+        """A fixed (not moving, so it cannot flicker) ordered dither: at 5 PWM bits smooth gradients show steps; spreading
+        the rounding over neighbouring LEDs gives the eye more colour depth. config.COLOUR_DITHER = peak size in levels."""
+        amp = float(getattr(config, "COLOUR_DITHER", 0) or 0)
+        if amp <= 0:
+            return arr
+        h, w = arr.shape[:2]
+        if getattr(self, "_dith_shape", None) != (h, w, amp):
+            pat = np.tile((self._BAYER8 + 0.5) / 64.0 - 0.5, (h // 8 + 1, w // 8 + 1))[:h, :w] * 2 * amp
+            self._dith, self._dith_shape = pat[:, :, None].astype(np.float32), (h, w, amp)
+        out = arr.astype(np.float32)
+        lit = out > 3                                    # black stays black
+        out = np.where(lit, out + self._dith, out)
+        return np.clip(out + 0.5, 0, 255).astype(np.uint8)
+
     @staticmethod
     def _lift_lut(strength: float) -> np.ndarray:
         """scale[m] for a pixel whose brightest channel is m: dark pixels are scaled up (hue kept), bright ones left alone."""
@@ -289,7 +308,7 @@ class LedMatrix:
         if not hasattr(self, "_tile_idx"):
             self._prepare_layout()
         pr, pc = config.PANEL_ROWS, config.PANEL_COLS
-        arr = self._limit_power(self._lift(np.asarray(image, dtype=np.uint8)))
+        arr = self._dither(self._limit_power(self._lift(np.asarray(image, dtype=np.uint8))))
         self._shown = arr                                # what the LEDs show (before per-panel calibration)
         tiles = (arr.reshape(config.PANELS_TALL, pr, config.PANELS_WIDE, pc, 3)
                  .transpose(0, 2, 1, 3, 4)

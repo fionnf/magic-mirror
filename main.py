@@ -461,12 +461,16 @@ class MagicMirror:
             n = max(1, now - st["t0"])
             print(f"[STATS] draw {st['draws'] / n:.1f} fps, longest gap {st['max_gap'] * 1000:.0f} ms, late frames {st['late']}, "
                   f"camera frames used {st['cap'] / n:.1f}/s, processing {st['proc_ms']:.0f} ms "
-                  f"(wait {st.get('wait_ms', 0):.0f}, mask {st.get('mask_ms', 0):.0f}, view {st.get('view_ms', 0):.0f})", flush=True)
+                  f"(wait {st.get('wait_ms', 0):.0f}, mask {st.get('mask_ms', 0):.0f}, view {st.get('view_ms', 0):.0f}) "
+                  f"draw() {st.get('draw_ms', 0):.0f} ms (send {st.get('send_ms', 0):.0f}), refresh ff={ff}", flush=True)
             st.update(t0=now, draws=0, max_gap=0.0, late=0, cap=0)
+        t_d = time.perf_counter()
         try:
             drew = self.matrix.draw(img, frame_fraction=ff)
         except TypeError:                                   # the simulator has no frame_fraction
             drew = self.matrix.draw(img)
+        st["draw_ms"] = st.get("draw_ms", 0.0) + ((time.perf_counter() - t_d) * 1000 - st.get("draw_ms", 0.0)) * 0.05
+        st["send_ms"] = st.get("send_ms", 0.0) + (getattr(self.matrix, "send_s", 0.0) * 1000 - st.get("send_ms", 0.0)) * 0.05
         if drew is not True:                                # nothing was sent (unchanged frame) or no vsync: pace by timer
             time.sleep(1.0 / fps)
 

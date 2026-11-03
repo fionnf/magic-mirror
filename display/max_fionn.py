@@ -108,12 +108,13 @@ def _caption(img, key, u):
     lh = 16
     y0 = H - lh * len(lines) - 8
     arr = np.asarray(img, np.float32)
-    arr[y0 - 5:] *= 0.22
+    band = arr[y0 - 5:]
+    arr[y0 - 5:] = band.mean(axis=2, keepdims=True) * 0.2 * np.array([0.92, 0.92, 1.0], np.float32)   # a neutral dark band: no green
     img.paste(Image.fromarray(arr.astype(np.uint8), "RGB"))
     d = ImageDraw.Draw(img)
     for i, ln in enumerate(shown):
         if ln:
-            _text(d, (W / 2, y0 + i * lh + lh / 2), ln, 12, (255, 246, 224), stroke=1)
+            _text(d, (W / 2, y0 + i * lh + lh / 2), ln, 12, (255, 248, 238), stroke=1)
 
 
 class _Safe:

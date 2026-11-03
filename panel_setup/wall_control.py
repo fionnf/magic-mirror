@@ -1190,7 +1190,7 @@ def make_app(runner):
             c = {}
         return {"wifi_ssid": str(c.get("wifi_ssid", "")), "wifi_password": str(c.get("wifi_password", "")),
                 "wifi_security": c.get("wifi_security", "WPA") if c.get("wifi_security") in ("WPA", "WEP", "nopass") else "WPA",
-                "jam_url": str(c.get("jam_url", ""))}
+                "jam_url": str(c.get("jam_url", "")), "notes": str(c.get("notes", ""))[:600]}
 
     def _wifi_payload(c):
         esc = lambda x: "".join("\\" + ch if ch in '\\;,:"' else ch for ch in x)
@@ -1222,15 +1222,15 @@ def make_app(runner):
     def home_data():
         c, q = _home_cards()
         return jsonify({"date": datetime.date.today().isoformat(), "guest": q["guest"], "pictures": q["pictures"], "jam": q["jam"],
-                        "wifi": {"ssid": c["wifi_ssid"], "password": c["wifi_password"], "security": c["wifi_security"]}})
+                        "wifi": {"ssid": c["wifi_ssid"], "password": c["wifi_password"], "security": c["wifi_security"]}, "notes": c["notes"]})
 
     @app.post("/api/home/settings")
     def home_settings():
         d = request.get_json(force=True, silent=True) or {}
         c = _home_cfg()
-        for k in ("wifi_ssid", "wifi_password", "wifi_security", "jam_url"):
+        for k in ("wifi_ssid", "wifi_password", "wifi_security", "jam_url", "notes"):
             if k in d:
-                c[k] = str(d[k]).strip()[:200]
+                c[k] = str(d[k]).strip()[:600 if k == "notes" else 200]
         if c["jam_url"] and not c["jam_url"].startswith(("http://", "https://")):
             return jsonify({"error": "The Jam link should start with https://"}), 400
         tmp = HOME_FILE + ".tmp"
@@ -1241,6 +1241,27 @@ def make_app(runner):
             os.chmod(HOME_FILE, 0o600)
         except OSError:
             pass
+        return jsonify({"ok": True})
+
+    def _slip():
+        from display import houseslip
+        c, q = _home_cards()
+        return houseslip.slip_image((c["wifi_ssid"], c["wifi_password"], c["wifi_security"], q["wifi"]), q["guest"], q["jam"], q["pictures"], c["notes"])
+
+    @app.get("/api/home/slip.png")
+    def home_slip_preview():
+        import io
+        buf = io.BytesIO()
+        _slip().save(buf, "PNG")
+        return Response(buf.getvalue(), mimetype="image/png", headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/home/print")
+    def home_print():
+        import print_out
+        try:
+            print_out.send(_slip())
+        except Exception as e:
+            return jsonify({"error": "Could not print: " + str(e)[:100]}), 502
         return jsonify({"ok": True})
 
     @app.get("/api/home/qr/<card>.png")

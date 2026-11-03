@@ -819,14 +819,14 @@ class MagicMirror:
         """Photobooth mode, after the shots: each photo full-screen in portrait (as it was printed), flashing in with its
         pose direction underneath, one after the other; then all of them side by side."""
         import cv2
-        from PIL import ImageEnhance
+        from display import ledtone
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
         shots = []
         for f in frames:
             small = cv2.resize(f, (W * 3, int(f.shape[0] * W * 3 / f.shape[1])), interpolation=cv2.INTER_AREA) if f.shape[1] > W * 3 else f
             img = Image.fromarray(cv2.cvtColor(small, cv2.COLOR_BGR2RGB))
             img = ImageOps.fit(img, (W, H), Image.LANCZOS, centering=(0.5, 0.35))
-            shots.append(ImageEnhance.Color(ImageEnhance.Contrast(img).enhance(1.12)).enhance(1.2))
+            shots.append(ledtone.tone_pil(img))
         font = text_renderer._load_font(11)
         gold = (255, 200, 80)
         for i, shot in enumerate(shots):
@@ -861,7 +861,7 @@ class MagicMirror:
         """Photobooth mode: the shots themselves, in colour, stacked in a gold-framed strip on the wall.
         Each photo flashes in one after the other."""
         import cv2
-        from PIL import ImageEnhance
+        from display import ledtone
         W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
         n, gap, margin, label_h = len(frames), 4, 6, (16 if label else 0)
         tw = W - 2 * margin
@@ -870,7 +870,7 @@ class MagicMirror:
         for f in frames:
             img = Image.fromarray(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
             t = ImageOps.fit(img, (tw, th), Image.LANCZOS, centering=(0.5, 0.35))
-            t = ImageEnhance.Color(ImageEnhance.Contrast(t).enhance(1.15)).enhance(1.2)
+            t = ledtone.tone_pil(t)
             tiles.append(t)
         font = text_renderer._load_font(11)
         t0 = time.monotonic()

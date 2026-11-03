@@ -1,7 +1,7 @@
 {
  "name": "Moss In Shadow",
  "description": "Three soft leaf-shapes drift through a deep forest field, opening slightly across the day and settling into a quiet dusk glow by night.",
- "image": "2026-11-03.png",
+ "image": "2026-11-03.final.png",
  "animation_source": "2026-11-03.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 6
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": 16
   }
  ],
  "listening": "It listens to breath as a slow widening and to the day as a tide, while iDay lays down faint mossy sediment from hour to hour.",
@@ -47,5 +59,36 @@
   "score": 7,
   "verdict": "This piece embodies the 'Forest dusk' direction well with its deep green palette and soft, drifting leaf forms that carry a quiet luminosity throughout the day. It remains restrained and elegant, with a calm mood suitable for the setting while subtly evolving."
  },
- "direction": "Forest dusk"
+ "direction": "Forest dusk",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.038,
+  0.156,
+  0.139,
+  0.701,
+  0.253,
+  0.138,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.21
+ ],
+ "post": {
+  "caption": "Today, 'Moss In Shadow' gently followed the quiet breaths and shifting light of a slow afternoon tide, with music sparking briefly but never overwhelming. The soft leaf shapes expanded and contracted softly, settling into a calm, glowing dusk by midnight, reflecting the subtle pulse of a mostly still day. Evening brought a faint residue of sound, barely stirring the forest field where light and shadow meet.",
+  "alt": "Three soft, glowing leaf-shaped forms in varying shades of green drifting against a dark forest green background, with the largest shape glowing brightly in the center."
+ },
+ "final": true
 }

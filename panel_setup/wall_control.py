@@ -31,6 +31,8 @@ STATE_FILE = os.path.join(HERE, "wall_state.json")
 LOG_DIR = os.path.join(HERE, "logs")
 WEB_DIR = os.path.join(HERE, "web")
 THUMB_DIR = os.path.join(WEB_DIR, "thumbs")
+ICON_DIR = os.path.join(WEB_DIR, "icons")                      # shipped mode icons (tools/make_icons.py)
+ART_ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "art_icons")   # shipped piece icons
 PY = sys.executable or "/usr/bin/python3"
 
 MODES = [
@@ -667,6 +669,10 @@ def make_app(runner):
         if library.find(pid) is None:
             return jsonify({"error": "no such piece"}), 404
         path = library._thumb_path(pid)
+        shipped = os.path.join(ART_ICON_DIR, os.path.basename(pid) + ".jpg")
+        if not os.path.exists(path) and os.path.exists(shipped):          # shipped with the app: show it now, the wall's own render follows
+            threading.Thread(target=lambda: library.thumbs_in_subprocess([pid], timeout=120), daemon=True).start()
+            return send_from_directory(ART_ICON_DIR, os.path.basename(shipped), max_age=600)
         if not os.path.exists(path):
             with ART_LOCK:                                 # made in a helper process (GPU contexts are per thread)
                 library.thumbs_in_subprocess([pid], timeout=120)
@@ -819,6 +825,8 @@ def make_app(runner):
     def thumbs(name):
         if not os.path.exists(os.path.join(THUMB_DIR, os.path.basename(name))):
             key = os.path.splitext(os.path.basename(name))[0]
+            if os.path.exists(os.path.join(ICON_DIR, os.path.basename(name))):       # the picture shipped with the app
+                return send_from_directory(ICON_DIR, os.path.basename(name), max_age=600)
             return _placeholder(key, next((t for i, c, t, d in MODES if i == key), key))
         return send_from_directory(THUMB_DIR, name, max_age=3600)
 

@@ -314,7 +314,7 @@ These are the personal or place-specific things in the repository. The wall runs
 | Smart Life | `lights.py` `import_room("living")` matches a Smart Life room whose name contains "living"; `devices.json` is yours | Name your room accordingly or call the API with your own names |
 | Bluetooth LED rods | `display/rods.py` `ADDRESSES` (two MELK-OA10 MAC addresses) | Your rods' addresses, or `WALL_RODS=0` |
 | Names, house and street | `config.py` (`MIRROR_PERSONA`, `PRINTER_HEADER = "FORTUNAGASSE 24"`, booth prompts), `display/wheel_of_fortuna.py` (`RESIDENTS`, `STREET`, the verdicts), AI briefs in `display/daily.py` and `display/music.py`, `main.py` ("House Fortuna") | Yours |
-| Personal shows | `display/dewa_story.py`, `display/maeva_story.py`, `display/lennart_film.py` and the Ländle intro `display/laend_intro.py` (real friends, jokes and street names), `display/cards.py` ("Dewa is a cow"), `display/welcome.py`, `display/pride_show.py`; their entries in `MODES` in `panel_setup/wall_control.py` | Delete or rewrite them |
+| Personal shows | `display/dewa_story.py`, `display/maeva_story.py`, `display/max_fionn.py` (Max & Fionn: "In Arbeit", German), `display/lennart_film.py` and the Ländle intro `display/laend_intro.py` (real friends, jokes and street names), `display/cards.py` ("Dewa is a cow"), `display/welcome.py`, `display/pride_show.py`; their entries in `MODES` in `panel_setup/wall_control.py` | Delete or rewrite them |
 | Printer host and the address in the slip | `config.PRINTER_HEADER` ("FORTUNAGASSE 24"), `tools/setup_printer_pi.sh` (`printer.local`, the live wall's address) | Yours |
 | Printer USB ids | `config.PRINTER_VENDOR_ID`, `PRINTER_PRODUCT_ID` | See `lsusb` |
 
@@ -406,7 +406,7 @@ display/                      everything drawn on the wall
   music.py beat.py intensity.py vj_fx.py cast.py spotify.py cover.py   music engine and now-playing sources
   planes.py satellites.py wind.py snow.py limmat.py westcork.py tides.py quakes.py tramlines.py departures.py kilchberg.py   live boards
   laend.py laend_intro.py laend_trains.py                    the Remstal map, its German intro film and the live S-Bahn
-  welcome.py pride_show.py dewa_story.py maeva_story.py lennart_film.py wheel_of_fortuna.py cards.py   shows
+  welcome.py pride_show.py dewa_story.py maeva_story.py max_fionn.py lennart_film.py wheel_of_fortuna.py cards.py   shows
   dedications.py presence.py rods.py ...                     guests' lines, people on the art, Bluetooth rods
 panel_setup/                  wall_control.py (app server and process runner), web/index.html (the app), play.py (runs one mode),
                               deploy.sh, bootstrap_pi.sh, install_control.sh, update.sh, sim.sh, run.sh, bring-up tools, README

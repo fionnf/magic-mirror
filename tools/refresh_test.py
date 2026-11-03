@@ -26,6 +26,14 @@ TESTS = {
     12: (5, 110, 0, 1, "= 7 with the real 35 A budget"),
 }
 BRIGHT = {11: 50}
+# round 3 (brightness capped at 75): more colour depth without flicker. number: (bits, Hz, dither, hardware dither, name, lsb ns)
+TESTS.update({
+    13: (5, 110, 0, 1, "5 bits, 110 Hz, hw dither 1 (the current setting)", 60),
+    14: (6, 100, 0, 1, "6 bits, 100 Hz, hw dither 1", 60),
+    15: (6, 110, 0, 1, "6 bits, 110 Hz (faster pulses), hw dither 1", 48),
+    16: (7, 100, 0, 1, "7 bits, 100 Hz, hw dither 1", 48),
+    17: (5, 110, 0, 2, "5 bits, 110 Hz, hw dither 2", 60),
+})
 
 
 def field(w, h, t):
@@ -43,7 +51,8 @@ def field(w, h, t):
 
 def run(n):
     import config
-    bits, hz, dith, hwd, name = TESTS[n]
+    bits, hz, dith, hwd, name, *rest = TESTS[n]
+    config.MATRIX_PWM_LSB_NS = rest[0] if rest else config.MATRIX_PWM_LSB_NS
     config.MATRIX_PWM_BITS, config.MATRIX_REFRESH_LIMIT_HZ = bits, hz
     config.MATRIX_PWM_DITHER_BITS, config.COLOUR_DITHER = hwd, dith
     config.MATRIX_BRIGHTNESS = BRIGHT.get(n, int(os.environ.get("WALL_BRIGHTNESS", 80)))

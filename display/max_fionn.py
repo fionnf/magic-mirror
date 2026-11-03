@@ -16,6 +16,7 @@ Prosecco in every scene, even at the wheel; Fionn is dirty blond. Running gags: 
  132-148  Hive
  148-160  Monsti
  160-174  Monday morning, credits
+ 174-190  end card: #good life forever + the sticker
 """
 import math
 import random
@@ -29,10 +30,10 @@ from display.laend_intro import _c, _ease, _mix, _sky, _hills, _fachwerk, font
 from display.lennart_film import person
 
 W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
-LOOP_SEC = 174.0
+LOOP_SEC = 196.0
 SCENES = [("titel", 0, 8), ("colibri", 8, 24), ("kuerbis", 24, 38), ("heim", 38, 50), ("terrasse", 50, 66),
-          ("parken", 66, 82), ("bauhaus", 82, 100), ("dinner", 100, 118), ("lindenhof", 118, 132),
-          ("hive", 132, 148), ("monsti", 148, 160), ("montag", 160, 174)]
+          ("parken", 66, 82), ("bauhaus", 82, 106), ("dinner", 106, 124), ("lindenhof", 124, 138),
+          ("hive", 138, 154), ("monsti", 154, 166), ("montag", 166, 180), ("ende", 180, 196)]
 RED, BLUE, PUR, GRN = (176, 30, 40), (40, 44, 128), (124, 44, 124), (30, 104, 64)
 PORSCHE = (122, 128, 140)
 
@@ -199,11 +200,12 @@ def _porsche(d, x, base, s, t, boot=0.0, tools=0.0, face_left=False, sag=0.0, mo
     body, dark, lite = PORSCHE, (78, 82, 92), (176, 182, 194)
     d.ellipse([*P(-42, -2), *P(44, 3)], fill=(0, 0, 0))
     spin = t * 10 * moving
-    for wx in (-24, 26):
-        _wheel(d, x + wx * s * sg, base - 8 * s, 8.2 * s, spin)
     d.polygon([P(-38, -7), P(-39, -20), P(-35, -29), P(-23, -34), P(-9, -41), P(10, -42), P(23, -33), P(34, -28), P(41, -24),
                P(43, -14), P(41, -6)], fill=body)                                                 # the body
     d.polygon([P(-38, -7), P(-39, -17), P(43, -16), P(41, -6)], fill=dark)                       # the dark sill
+    for wx in (-24, 26):                                                                          # wheels ON TOP of the body, in dark arches
+        d.ellipse([*P(wx - 12, -22), *P(wx + 12, 2)], fill=(14, 14, 18))
+        _wheel(d, x + wx * s * sg, base + (-9.5 + sag) * s, 9.6 * s, spin)
     d.line([P(-35, -26), P(30, -25)], fill=lite, width=1)                                         # shoulder line
     d.line([P(-23, -34), P(-9, -41), P(10, -42), P(23, -33)], fill=lite, width=1)                 # roof highlight
     d.line([P(-30, -37), P(0, -44.5), P(15, -44)], fill=(60, 64, 72), width=1)                   # roof rail
@@ -593,16 +595,17 @@ def _bauhaus(u, t):
     else:
         fx = sbx - 12 - _ease(min(1.0, (u - 9.0) / 3.0)) * 24
     park = 70
-    cx_car = 260 - _ease(min(1.0, max(0.0, (u - 11.0) / 2.6))) * (260 - park) if u < 16 else park - _ease((u - 16.0) / 2.0) * 230
+    cx_car = 260 - _ease(min(1.0, max(0.0, (u - 11.0) / 2.6))) * (260 - park) if u < 15.0 else park - _ease(min(1.0, (u - 15.0) / 8.0)) * 250
     if u < 9.0:
         trolley_x = sbx
     elif u < 14.2:
         trolley_x = fx + 36
     else:
-        trolley_x = cx_car + 82                                                                              # hitched on behind the car
+        trolley_x = cx_car + 86                                                                              # hitched on behind the car
+        d.line([(cx_car + 58, 200), (trolley_x - 20, 200)], fill=(60, 60, 66), width=2)                      # the tow bar
     _rolf(d, trolley_x, 208, 1.35, t, plants=min(14, int(max(0.0, u - 12.0) * 4)) if u > 12 else 0, shake=0.0)
     if u > 11.0:
-        _porsche(d, cx_car, 210, 1.4, t, face_left=True, moving=1.0 if (u < 13.6 or u > 16.0) else 0.0)
+        _porsche(d, cx_car, 210, 1.4, t, face_left=True, moving=1.0 if (u < 13.6 or u > 15.0) else 0.0)
     kx = 82
     items = [(fx, 210, "F", "hold" if u < 6.5 else "walk", {"item": "plant" if u < 6.5 else None, "ph": 1.0})]
     if u < 12.4:
@@ -902,9 +905,37 @@ def _montag(u, t):
     return img
 
 
+def _ende(u, t):
+    """End card: the hashtag, a sticker slapped on the street sign, Max and Fionn toasting below."""
+    img = Image.new("RGB", (W, H))
+    d = _street_backdrop(img, None, t)
+    _cobbles(d, 170, H, seed=5)
+    k = _ease(u / 1.2)
+    _text(d, (W / 2, 26), "#good life", int(12 + 14 * k), (255, 236, 200), stroke=3)
+    _text(d, (W / 2, 58), "forever", int(12 + 18 * k), (255, 190, 110), stroke=3)
+    if u > 1.6:                                                             # the sticker: white, red rim, a little crooked
+        pop = _ease((u - 1.6) / 0.6)
+        sw, sh = 150, 74
+        st = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+        sd = ImageDraw.Draw(st)
+        sd.rounded_rectangle([0, 0, sw - 1, sh - 1], 9, fill=(255, 252, 240), outline=(196, 36, 48), width=3)
+        sd.rounded_rectangle([6, 6, sw - 7, sh - 7], 6, outline=(196, 36, 48), width=1)
+        lines = li._wrap("Nett hier. Warst du schon in der Fortunagasse?", 10, sw - 20)
+        f = font(10)
+        y0 = sh / 2 - 6.5 * len(lines)
+        for i, ln in enumerate(lines):
+            sd.text((sw / 2, y0 + i * 13 + 6), ln, font=f, fill=(30, 30, 46), anchor="mm")
+        st = st.rotate(-4, resample=Image.BICUBIC, expand=True)
+        sz = (max(2, int(st.width * pop)), max(2, int(st.height * pop)))
+        st = st.resize(sz, Image.BILINEAR)
+        img.paste(st, (int(W / 2 - sz[0] / 2), int(110 - sz[1] / 2)), st)
+    _persons(img, [(52, 248, "X", "hold", {"item": "prosecco", "ph": 0.3}), (140, 248, "F", "hold", {"flip": True, "item": "prosecco", "ph": 1.1})], t)
+    return img
+
+
 SCENE_FN = {"titel": _titel, "colibri": _colibri, "kuerbis": _kuerbis, "heim": _heim, "terrasse": _terrasse,
             "parken": _parken, "bauhaus": _bauhaus, "dinner": _dinner, "lindenhof": _lindenhof, "hive": _hive,
-            "monsti": _monsti, "montag": _montag}
+            "monsti": _monsti, "montag": _montag, "ende": _ende}
 
 
 def _grade(img):

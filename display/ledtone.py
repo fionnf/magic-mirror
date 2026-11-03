@@ -44,3 +44,24 @@ def tone_rgb(rgb, local=0.45, curve=0.5, sat=1.28, floor=0.05, sharpen=0.5, smoo
 def tone_pil(img, **kw):
     from PIL import Image
     return Image.fromarray(tone_rgb(np.asarray(img.convert("RGB")), **kw), "RGB")
+
+
+def fast_tone(rgb, smooth, sat=1.2, curve=0.45, floor=0.04, sharpen=0.35):
+    """A cheap version of tone_rgb for the live mirror (a few ms on the Pi instead of 60): one lookup table for the tone (range
+    stretch that follows the scene slowly, S-curve, floor), a touch more colour and a small unsharp mask. `smooth` is kept between
+    frames."""
+    small = rgb[::8, ::8]
+    g = small.mean(axis=2)
+    lo, hi = np.percentile(g, (1.5, 98.5))
+    if "lo" in smooth:
+        lo = smooth["lo"] + (lo - smooth["lo"]) * 0.06
+        hi = smooth["hi"] + (hi - smooth["hi"]) * 0.06
+    smooth["lo"], smooth["hi"] = float(lo), float(hi)
+    x = np.clip((np.arange(256, dtype=np.float32) - lo) / max(hi - lo, 70.0), 0, 1)
+    lut = ((floor + (0.985 - floor) * scurve(x, curve)) * 255.0).astype(np.uint8)
+    out = cv2.LUT(rgb, lut)
+    gray = cv2.cvtColor(out, cv2.COLOR_RGB2GRAY)
+    out = cv2.addWeighted(out, sat, cv2.merge([gray, gray, gray]), 1.0 - sat, 0)          # more colour
+    if sharpen:
+        out = cv2.addWeighted(out, 1.0 + sharpen, cv2.GaussianBlur(out, (0, 0), 1.3), -sharpen, 0)
+    return out

@@ -151,11 +151,9 @@ class MagicMirror:
                 self._latest_frame = frame
                 self._note_motion(frame)
                 raw = self._mirror_raw()
-                n = getattr(self, "_cap_n", 0) + 1
-                self._cap_n = n
-                if raw and n % 4 and getattr(self, "_last_mask", None) is not None:
-                    mask = self._last_mask                              # raw view: who is there is worked out every 4th picture only,
-                else:                                                   # so the picture itself can follow the camera at full speed
+                if raw:
+                    mask = getattr(self, "_last_mask", None)           # worked out by the mask thread, a few times a second
+                else:
                     mask = self.camera.extract_silhouette(frame, getattr(self.camera, "_background", None))
                     self._last_mask = mask
                 t_m = time.monotonic()
@@ -175,6 +173,8 @@ class MagicMirror:
                 # follow the person horizontally
                 try:
                     import numpy as np
+                    if mask is None:
+                        raise ValueError("no mask yet")
                     cols = np.where(mask.any(axis=0))[0]
                     if len(cols) > 0:
                         centroid_x = float(cols.mean()) / max(1, mask.shape[1])
@@ -186,6 +186,21 @@ class MagicMirror:
                 time.sleep(0.5)
                 continue
             time.sleep(max(0.0, min_dt - (time.monotonic() - t0)))
+
+    def _mask_loop(self):
+        """The raw mirror view needs to know who is there (presence, hand signals, strip colour), not the silhouette itself: that is
+        worked out here, 4 times a second, at the lowest priority, so it can never hold up the picture."""
+        self._lower_priority()
+        while not self._stop.wait(0.25):
+            if not self._mirror_raw():
+                continue
+            frame = self._latest_frame
+            if frame is None:
+                continue
+            try:
+                self._last_mask = self.camera.extract_silhouette(frame, getattr(self.camera, "_background", None))
+            except Exception as e:
+                print(f"[MASK] {e}")
 
     def _follow_focus(self):
         """Continuous autofocus only while somebody is there (for at least a moment, and until they have been gone a few seconds)."""
@@ -226,7 +241,7 @@ class MagicMirror:
         st = getattr(self, "_raw_tone", None)
         if st is None:
             st = self._raw_tone = {}
-        return Image.fromarray(ledtone.tone_rgb(rgb, local=0.35, curve=0.45, sat=1.2, sharpen=0.3, smooth=st), "RGB")
+        return Image.fromarray(ledtone.fast_tone(rgb, st), "RGB")
 
     @staticmethod
     def _lower_priority():
@@ -1274,6 +1289,7 @@ class MagicMirror:
         self._capture_thread = threading.Thread(
             target=self._capture_loop, daemon=True, name="silhouette-capture")
         self._capture_thread.start()
+        threading.Thread(target=self._mask_loop, daemon=True, name="who-is-there").start()
         threading.Thread(target=self._smile_loop, daemon=True, name="smile-watch").start()
         threading.Thread(target=self._gesture_loop, daemon=True, name="hand-signal").start()
 

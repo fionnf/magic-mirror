@@ -85,7 +85,7 @@ LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "
                "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "wanderers": "wanderers.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
                "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb", "lennart": "lennart_film.thumb", "kilchberg": "kilchberg.thumb", "snapshots": "slideshow.thumb", "zurichhb": "kilchberg.thumb_hb",
                "quakes": "quakes.thumb"}
-MIRROR_MAX_BRIGHTNESS = 60
+MIRROR_MAX_BRIGHTNESS = 75
 DARK_MODES = {"planes", "westcork", "windch", "windie", "windeu", "polarbears", "wanderers", "nighttrains", "issday",
               "snow", "satellites", "tides", "tramlines", "quakes"}   # as play.py's list of dark, light-on-black pieces
 

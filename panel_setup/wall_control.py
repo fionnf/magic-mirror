@@ -12,6 +12,7 @@ panel_setup/install_control.sh.
 """
 import argparse
 import datetime
+import glob
 import json
 import os
 import re
@@ -670,7 +671,8 @@ def make_app(runner):
             with ART_LOCK:                                 # made in a helper process (GPU contexts are per thread)
                 library.thumbs_in_subprocess([pid], timeout=120)
         if not os.path.exists(path):
-            return jsonify({"error": "no thumbnail"}), 503
+            p_ = library.find(pid) or {}
+            return _placeholder(pid, p_.get("title") or pid)
         return send_from_directory(os.path.dirname(path), os.path.basename(path), max_age=86400)
 
     @app.post("/api/art/play")
@@ -780,8 +782,44 @@ def make_app(runner):
             runner.sleep_at(None)
         return jsonify(runner.status())
 
+    def _placeholder(key, title):
+        """An icon for a gallery tile whose picture is not made yet (or could not be): a colour from the name and the
+        title. Never cached for long, so the real thumbnail replaces it as soon as it exists."""
+        import hashlib
+        import io as _io
+        from PIL import Image, ImageDraw
+        import config
+        h = hashlib.md5(key.encode()).digest()
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        a = (30 + h[0] % 90, 30 + h[1] % 90, 40 + h[2] % 110)
+        b = (10 + h[3] % 40, 10 + h[4] % 40, 20 + h[5] % 50)
+        img = Image.new("RGB", (W, H))
+        d = ImageDraw.Draw(img)
+        for y in range(H):
+            t = y / max(1, H - 1)
+            d.line([(0, y), (W, y)], fill=tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3)))
+        d.ellipse([W * .25, H * .25, W * .75, H * .55], outline=(255, 255, 255), width=2)
+        words, lines, cur = (title or key).split(), [], ""
+        for w_ in words:
+            if len(cur) + len(w_) + 1 > 16 and cur:
+                lines.append(cur)
+                cur = w_
+            else:
+                cur = (cur + " " + w_).strip()
+        lines.append(cur)
+        y = int(H * .66)
+        for ln in lines[:3]:
+            d.text((W // 2, y), ln, fill=(255, 255, 255), anchor="mm")
+            y += 14
+        buf = _io.BytesIO()
+        img.save(buf, "PNG")
+        return Response(buf.getvalue(), mimetype="image/png", headers={"Cache-Control": "max-age=60"})
+
     @app.get("/thumbs/<path:name>")
     def thumbs(name):
+        if not os.path.exists(os.path.join(THUMB_DIR, os.path.basename(name))):
+            key = os.path.splitext(os.path.basename(name))[0]
+            return _placeholder(key, next((t for i, c, t, d in MODES if i == key), key))
         return send_from_directory(THUMB_DIR, name, max_age=3600)
 
     @app.get("/api/modes")
@@ -964,6 +1002,41 @@ def make_app(runner):
     def daily_file(name):
         from display import daily
         return send_from_directory(daily.FOLDER, name, max_age=3600)
+
+    GEN = {"busy": False, "error": "", "name": ""}
+
+    @app.post("/api/daily/new")
+    def daily_new():
+        """Make a new piece now with the AI artist (a minute or two, a few cents) and hang it. It replaces today's piece."""
+        if GEN["busy"]:
+            return jsonify({"busy": True}), 202
+        from display import daily, library
+        GEN.update(busy=True, error="", name="")
+
+        def work():
+            try:
+                today = __import__("datetime").date.today().isoformat()
+                meta = daily.generate(today, notes="Make something clearly different from today's earlier piece.")
+                for f in glob.glob(os.path.join(glob.escape(library.THUMBS), "daily-" + today + "-*")):
+                    try:
+                        os.remove(f)                       # the old picture of this date
+                    except OSError:
+                        pass
+                GEN["name"] = meta.get("name", "")
+                runner.state["daily_date"] = ""
+                save_state(runner.state)
+                runner.play("daily") if runner.current != "daily" else runner.restart_current()
+            except Exception as e:
+                GEN["error"] = str(e)[:200]
+                print(f"[daily] new piece failed: {e}", flush=True)
+            finally:
+                GEN["busy"] = False
+        threading.Thread(target=work, daemon=True, name="new-piece").start()
+        return jsonify({"busy": True})
+
+    @app.get("/api/daily/new")
+    def daily_new_state():
+        return jsonify(GEN)
 
     @app.post("/api/daily/show")
     def daily_show():

@@ -266,9 +266,9 @@
       <p class="hint" id="sceneHint">One tap changes what the wall is doing. <b>Album art</b> listens to every speaker and shows the cover; choosing anything else ends it. Hold a mood you saved to remove it.</p>
     </section>
     <section>
-      <h2>Today's piece</h2>
-      <div class="today" id="today"><div class="empty">Today's piece is being made.</div></div>
-      <div class="strip" id="archive" style="margin-top:14px"></div>
+      <h2>New piece</h2>
+      <button class="btn primary" id="newPieceBtn" style="width:100%;padding:10px" onclick="newPiece()">Make a new piece</button>
+      <p class="hint" id="newPieceNote">The AI artist makes a brand-new animation for the wall (a minute or two) and hangs it. It replaces today's piece in the gallery.</p>
     </section>
     <section>
       <h2 id="galleryHead">Gallery</h2>
@@ -399,7 +399,7 @@
       <h3 class="sub">What it says</h3>
       <textarea id="mirrorPrompt" rows="8" aria-label="Instructions for what the mirror says" style="width:100%;border-radius:12px;padding:10px;font:inherit;background:var(--card, #1d1922);color:inherit;border:1px solid var(--line)"></textarea>
       <div class="row" style="margin-top:8px"><button class="btn primary" onclick="savePrompt()">Save</button><button class="btn" onclick="resetPrompt()">Back to the built-in</button></div>
-      <p class="hint" id="promptHint">These are the mirror's instructions, in your words. Change them to change what it says. A voice style is picked at random for each photo until you save your own. Safety rules (no remarks about bodies, one short line) are always added.</p>
+      <p class="hint" id="promptHint">The mirror's instructions.</p>
       <div class="row" style="margin-top:12px"><span class="hint" style="margin:0">Photobooth: photos per strip</span><select id="boothShots" aria-label="Photos per strip"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></div>
       <div class="switch"><span>Photobooth keeps going: a new strip every few seconds while you stay</span><input type="checkbox" id="tBoothRepeat" data-ms="booth_repeat"></div>
     </section>
@@ -435,12 +435,10 @@
       <input type="range" id="pace" min="0" max="100" step="1" aria-label="Art pace">
       <div class="ends"><span>barely moving</span><span>lively</span></div>
       <div class="switch"><span>Show people on the art</span><input type="checkbox" id="tPresence"></div>
-      <p class="hint">The camera sees who is in the room, and the art's colours shift slightly where they are. Nothing is recorded.</p>
       <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/" target="_blank" rel="noopener">The public gallery</a> shows every day's piece.</p>
     </section>
     <section>
       <h2>Look through the camera</h2>
-      <p class="hint" style="margin:0 0 10px">See what is in front of the wall right now, from anywhere, without turning the mirror on. While anyone is watching, a small red dot blinks in the corner of the wall.</p>
       <button class="btn primary" id="liveBtn" onclick="toggleLive()">Look now</button>
       <div id="liveBox" hidden style="margin-top:10px">
         <img id="liveImg" alt="Live view of the wall's camera" style="width:100%;border-radius:12px;background:#000;display:block">
@@ -452,15 +450,12 @@
       <div class="row"><span class="hint" style="margin:0">Keep up to</span>
         <select id="photosGb" aria-label="Gigabytes of photos kept on the wall"><option value="1">1 GB</option><option value="2">2 GB</option><option value="5">5 GB</option><option value="10">10 GB</option><option value="20">20 GB</option></select>
         <span class="hint" style="margin:0">of full-size photos here</span></div>
-      <p class="hint">Every photo is also saved to Google Drive in full size. When this share is full, the oldest photos that Drive already has shrink to small copies here (the app and the slideshow still show them; the originals stay in Drive). Photos that are not in Drive yet are never touched.</p>
     </section>
     <section>
       <h2>Share</h2>
       <h3 class="sub" style="margin-top:0">Write on the wall</h3>
-      <p class="hint" style="margin:0 0 6px">Guests on the home Wi-Fi open this page and write a line that scrolls across the wall.</p>
       <div id="shareGuest"></div>
       <h3 class="sub">Photo galleries</h3>
-      <p class="hint" style="margin:0 0 6px">One link per day, to a page with that day's pictures (and a download button for each, in full size). Anyone with a day's link sees that day and no other, so share the right one. The QR code on a printed strip opens today's.</p>
       <div id="shareDays"><p class="hint">Loading…</p></div>
     </section>
     <section>
@@ -468,18 +463,15 @@
       <div class="switch"><span>Messages from guests on the wall</span><input type="checkbox" id="dOn"></div>
       <div class="row" style="gap:14px;margin-top:10px">
         <a id="qrLink" href="/d/qr.png" target="_blank"><img id="qrImg" src="/d/qr.png" alt="QR code for guests" style="width:96px;height:96px;border-radius:10px;background:#fff"></a>
-        <p class="hint" style="margin:0">Guests scan this on the home Wi-Fi and write a line that scrolls along the bottom of the wall.</p>
       </div>
       <div id="dList" style="margin-top:10px"></div>
     </section>
     <section id="matterBox" hidden>
       <h2>Smart Life &amp; Google Home</h2>
       <div id="matterPair">
-        <p class="hint" style="margin:0 0 8px">The wall is a Matter plug. In Smart Life tap +, Add device, then scan this code (or type the number). Google Home and Apple Home take the same code.</p>
         <div class="row"><img id="matterQr" alt="Matter pairing code" style="width:120px;height:120px;border-radius:10px;background:#fff;image-rendering:pixelated"><b id="matterCode" style="font-size:1.1rem;letter-spacing:.06em"></b></div>
       </div>
-      <p class="hint" id="matterPaired" hidden style="margin:0">Added to a home: switch the wall on and off from Smart Life. To add it to another app, share it from there.</p>
-      <p class="hint" style="margin:12px 0 6px">For Tap-to-Run and automations: let the wall follow a Smart Life plug. When the plug switches on or off, so does the wall; use the plug in your scenes.</p>
+      <p class="hint" id="matterPaired" hidden style="margin:0">Added to a home.</p>
       <select id="wallSwitch" aria-label="Smart Life device the wall follows"></select>
     </section>
     <section>
@@ -636,6 +628,10 @@ function leds(img) {                    // the preview as the wall really looks:
   const F = window.Fortuna; if (!F || !F.ledify) return;
   const cv = $('nowLed'), w = img.naturalWidth || STATUS.wall_w || 192, h = img.naturalHeight || STATUS.wall_h || 256;
   const x = fitCanvas(cv);
+  if (Math.floor(Math.min(cv.width / w, cv.height / h)) < 3) {      // too small for round LED dots: fill the card (ledify would draw 1 px per LED, tiny in the middle)
+    try { x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, w, h, 0, 0, cv.width, cv.height); $('frame').classList.add('led'); } catch (e) {}
+    return;
+  }
   try { F.ledify(x, img, w, h, {x: 0, y: 0, w: cv.width, h: cv.height}, {bloom: false}); $('frame').classList.add('led'); } catch (e) {}
 }
 function fitCanvas(cv) {                // one canvas pixel per screen pixel, so every LED is a whole block (no resampling)
@@ -868,7 +864,7 @@ async function loadArt() {
   const modes = modeTiles();
   $('galleryHead').textContent = `Gallery · ${ART.pieces.length + MODES.filter(m => [].concat(SLIDE_IDS, SHOW_IDS, LIVE_IDS).includes(m.id)).length} things to show`;
   const modeTile = m => `<button class="${STATUS.current === m.id ? 'sel' : ''}" onclick="play('${m.id}')">
-      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span>${esc(m.title)}</span></button>`;
+      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy"><span>${esc(m.title)}</span></button>`;
   $('artGrid').innerHTML = modes.map(modeTile).join('') + list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
       <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   if (MUSIC.settings && MUSIC.settings.style === 'art') {
@@ -898,6 +894,22 @@ async function surprise() {
   if (modeGroup[artFilter]) { const b = modeTiles(); if (b.length) play(b[Math.floor(Math.random() * b.length)].id); return; }
   const l = shownPieces().length ? shownPieces() : ART.pieces;
   hangPiece(l[Math.floor(Math.random() * l.length)].id);
+}
+let newPieceTimer = null;
+async function newPiece() {
+  const b = $('newPieceBtn');
+  try { await api('/api/daily/new', {}); } catch (e) { return toast(e.message); }
+  b.disabled = true; b.textContent = 'Making it…'; $('newPieceNote').textContent = 'The artist is working. This takes a minute or two; you can leave this page.';
+  clearInterval(newPieceTimer);
+  newPieceTimer = setInterval(async () => {
+    try {
+      const g = await api('/api/daily/new'); if (g.busy) return;
+      clearInterval(newPieceTimer); b.disabled = false; b.textContent = 'Make a new piece';
+      if (g.error) { $('newPieceNote').textContent = 'That did not work: ' + g.error; return toast('The artist could not finish. Try again.'); }
+      $('newPieceNote').textContent = 'Now on the wall: ' + (g.name || 'a new piece'); toast('New piece: ' + (g.name || ''));
+      ART = null; loadArt(); loadDaily();
+    } catch (e) {}
+  }, 4000);
 }
 function filterArt(k) { artFilter = k; loadArt(); }
 function filterMusicArt(k) { musicArtFilter = k; loadArt(); }

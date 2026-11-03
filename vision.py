@@ -8,6 +8,7 @@ this is the biggest per-frame CPU cost of the always-on silhouette loop.
 import cv2
 import numpy as np
 import config
+from display import ledtone
 
 _KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 _bg_cache = {"id": None, "small": None}
@@ -41,7 +42,8 @@ def _detail(frame, alpha):
     fine = L - cv2.GaussianBlur(L, (0, 0), 1.0)
     coarse = L - cv2.GaussianBlur(L, (0, 0), 3.0)
     L = np.power(np.clip(L + 0.85 * fine + 0.45 * coarse, 0, 1), 0.85)
-    shade = np.clip(0.14 + 0.80 * L, 0, 1)                              # dark clothes stay above the LEDs' floor
+    L = ledtone.scurve(L, 0.5)                                          # open the middle: a face with real light and shade, not flat
+    shade = np.clip(0.10 + 0.88 * L, 0, 1)                              # dark clothes stay above the LEDs' floor, highlights go all the way up
     a = (lab[:, :, 1].astype(np.float32) - 128.0) * 1.35
     b = (lab[:, :, 2].astype(np.float32) - 128.0) * 1.35
     lab2 = np.dstack([np.clip(shade * 255.0, 0, 255), np.clip(a + 128.0, 0, 255), np.clip(b + 128.0, 0, 255)]).astype(np.uint8)

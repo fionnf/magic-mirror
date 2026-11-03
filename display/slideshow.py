@@ -18,7 +18,7 @@ import numpy as np
 from PIL import Image
 
 import config
-from display import pixelfont
+from display import ledtone, pixelfont
 
 W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
 try:
@@ -60,11 +60,8 @@ def _load(path):
     s = max(tw / im.width, th / im.height)
     im = im.resize((int(round(im.width * s)), int(round(im.height * s))), Image.LANCZOS)
     x0, y0 = (im.width - tw) // 2, int((im.height - th) * 0.35)            # keep the heads
-    a = np.asarray(im.crop((x0, y0, x0 + tw, y0 + th)), np.float32)
-    a = (a - 128.0) * 1.12 + 128.0                                          # a touch more contrast and colour: LEDs wash pictures out
-    g = a.mean(axis=2, keepdims=True)
-    a = g + (a - g) * 1.22
-    return np.clip(a, 0, 255).astype(np.uint8)
+    a = np.asarray(im.crop((x0, y0, x0 + tw, y0 + th)), np.uint8)
+    return ledtone.tone_rgb(a)                                              # local contrast, an S-curve and more colour: LEDs wash pictures out
 
 
 class Show:

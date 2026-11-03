@@ -457,18 +457,6 @@ class MagicMirror:
             st["draws"] += 1
             st["max_gap"] = max(st["max_gap"], gap)
             st["late"] += gap > 2.0 / fps                        # a frame that took more than two frame times
-            # Keep the schedule steady: frames that keep missing their slot (gap > 1.3 slots) make the slot one refresh longer; a long
-            # run of frames with room to spare makes it one shorter again. (Frames that miss their slot at random are what jitter looks like.)
-            slot = ff / refresh
-            win = self._ff_win = (getattr(self, "_ff_win", []) + [gap > 1.3 * slot])[-40:]
-            if len(win) >= 40 and sum(win) >= 8 and ff < 11:
-                self._ff, self._ff_win, self._ff_t = ff + 1, [], now
-                ff += 1
-                print(f"[MIRROR] frames were late: slower steady schedule, {refresh / ff:.0f} fps", flush=True)
-            elif len(win) >= 40 and sum(win) == 0 and ff > max(4, round(refresh / fps)) and now - getattr(self, "_ff_t", 0.0) > 40.0:
-                self._ff, self._ff_win, self._ff_t = ff - 1, [], now
-                ff -= 1
-                print(f"[MIRROR] room to spare: faster schedule, {refresh / ff:.0f} fps", flush=True)
         st["last_draw"] = now
         if now - st["t0"] >= 10.0:                               # one line every 10 s in logs/mirror.log: is the loop steady?
             n = max(1, now - st["t0"])
@@ -485,6 +473,23 @@ class MagicMirror:
             drew = self.matrix.draw(img)
         st["draw_ms"] = st.get("draw_ms", 0.0) + ((time.perf_counter() - t_d) * 1000 - st.get("draw_ms", 0.0)) * 0.05
         st["send_ms"] = st.get("send_ms", 0.0) + (getattr(self.matrix, "send_s", 0.0) * 1000 - st.get("send_ms", 0.0)) * 0.05
+        t_sent = time.monotonic()
+        if drew is True:
+            # Keep the schedule steady: real frames that keep missing their slot (gap > 1.3 slots) make the slot one refresh longer;
+            # a long run with room to spare makes it one shorter again. (Frames missing their slot at random are what jitter looks
+            # like. Only frames that were really sent count: an unchanged picture just waits.)
+            last = getattr(self, "_sent_t", None)
+            if last is not None and getattr(self, "_sent_prev", False):
+                win = self._ff_win = (getattr(self, "_ff_win", []) + [(t_sent - last) > 1.3 * ff / refresh])[-40:]
+                if len(win) >= 40 and sum(win) >= 8 and ff < 11:
+                    self._ff, self._ff_win, self._ff_t = ff + 1, [], t_sent
+                    print(f"[MIRROR] frames were late: slower steady schedule, {refresh / (ff + 1):.0f} fps", flush=True)
+                elif len(win) >= 40 and sum(win) == 0 and ff > max(4, round(refresh / fps)) and t_sent - getattr(self, "_ff_t", 0.0) > 40.0:
+                    self._ff, self._ff_win, self._ff_t = ff - 1, [], t_sent
+                    print(f"[MIRROR] room to spare: faster schedule, {refresh / (ff - 1):.0f} fps", flush=True)
+            self._sent_t, self._sent_prev = t_sent, True
+        else:
+            self._sent_prev = False
         if drew is not True:                                # nothing was sent (unchanged frame) or no vsync: pace by timer
             time.sleep(1.0 / fps)
 

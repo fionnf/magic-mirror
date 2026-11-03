@@ -447,7 +447,7 @@ class MagicMirror:
         30 ms, which does not fit the 40 ms slot of 25 fps, so frames slipped to a later slot unevenly (visible as jitter). The camera
         delivers about 19 pictures a second anyway."""
         refresh = float(config.MATRIX_REFRESH_LIMIT_HZ)
-        ff = max(1, round(refresh / fps))
+        ff = getattr(self, "_ff", None) or max(1, round(refresh / fps))     # adapts below: the slowest schedule the Pi can keep steady
         img = img.copy()                                     # a plain 2 LED warm-white frame all round, always on in mirror mode:
         ImageDraw.Draw(img).rectangle([0, 0, img.width - 1, img.height - 1], outline=self.BORDER_WARM, width=2)   # it lights a raised hand
         now = time.monotonic()
@@ -457,6 +457,18 @@ class MagicMirror:
             st["draws"] += 1
             st["max_gap"] = max(st["max_gap"], gap)
             st["late"] += gap > 2.0 / fps                        # a frame that took more than two frame times
+            # Keep the schedule steady: frames that keep missing their slot (gap > 1.3 slots) make the slot one refresh longer; a long
+            # run of frames with room to spare makes it one shorter again. (Frames that miss their slot at random are what jitter looks like.)
+            slot = ff / refresh
+            win = self._ff_win = (getattr(self, "_ff_win", []) + [gap > 1.3 * slot])[-40:]
+            if len(win) >= 40 and sum(win) >= 8 and ff < 11:
+                self._ff, self._ff_win, self._ff_t = ff + 1, [], now
+                ff += 1
+                print(f"[MIRROR] frames were late: slower steady schedule, {refresh / ff:.0f} fps", flush=True)
+            elif len(win) >= 40 and sum(win) == 0 and ff > max(4, round(refresh / fps)) and now - getattr(self, "_ff_t", 0.0) > 40.0:
+                self._ff, self._ff_win, self._ff_t = ff - 1, [], now
+                ff -= 1
+                print(f"[MIRROR] room to spare: faster schedule, {refresh / ff:.0f} fps", flush=True)
         st["last_draw"] = now
         if now - st["t0"] >= 10.0:                               # one line every 10 s in logs/mirror.log: is the loop steady?
             n = max(1, now - st["t0"])
@@ -583,8 +595,12 @@ class MagicMirror:
                     if gt is None or getattr(self, "_target_grey_for", None) is not target:
                         gt = cv2.cvtColor(target, cv2.COLOR_RGB2GRAY)
                         self._target_grey, self._target_grey_for = gt, target
-                    diff = cv2.absdiff(gt, cv2.cvtColor(shown, cv2.COLOR_RGB2GRAY))
-                    k0 = 0.10 + 0.40 * np.minimum(diff * (1.0 / 36.0), 1.0)
+                    gs = cv2.cvtColor(shown, cv2.COLOR_RGB2GRAY)
+                    diff = cv2.absdiff(gt, gs)
+                    # Camera noise and the mains light's flicker grow with the brightness, so what counts as "just noise" does too:
+                    # bright areas are blended more (they were the jittery ones), a real movement still goes straight through.
+                    tol = 14.0 + 0.30 * gs
+                    k0 = 0.07 + 0.43 * np.minimum(diff / tol, 1.0)
                     k = 1.0 - (1.0 - k0) ** max(0.25, frames_passed)
                     delta = cv2.subtract(target, shown)
                     cv2.add(shown, cv2.multiply(delta, cv2.merge([k, k, k])), dst=shown)

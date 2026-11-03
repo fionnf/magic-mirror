@@ -46,9 +46,13 @@ for k, v in CAPS.items():
     li.CAPTIONS["f_" + k] = v
 
 DIRTY_BLOND, BROWN, GREY = (172, 142, 88), (82, 50, 28), (200, 200, 205)
-SKIN = {"F": (244, 206, 176), "L": (238, 194, 164), "B": (226, 178, 146), "M": (236, 196, 168)}
-TOP = {"F": (84, 120, 152), "L": (66, 150, 84), "B": (60, 90, 170), "M": (22, 22, 28)}
-LEG = {"F": (58, 60, 76), "L": (74, 60, 46), "B": (110, 90, 64), "M": (22, 22, 28)}
+SKIN = {"F": (244, 206, 176), "L": (238, 194, 164), "B": (226, 178, 146), "M": (236, 196, 168),
+        "X": (238, 198, 168), "P": (242, 204, 176), "A": (232, 190, 160), "V": (222, 172, 140), "K": (242, 202, 172)}
+TOP = {"F": (84, 120, 152), "L": (66, 150, 84), "B": (60, 90, 170), "M": (22, 22, 28),
+       "X": (22, 22, 28), "P": (28, 44, 100), "A": (40, 100, 170), "V": (150, 96, 50), "K": (232, 70, 50)}
+LEG = {"F": (58, 60, 76), "L": (74, 60, 46), "B": (110, 90, 64), "M": (22, 22, 28),
+       "X": (20, 20, 26), "P": (30, 30, 50), "A": (36, 56, 100), "V": (60, 50, 44), "K": (50, 50, 60)}
+# X = Max (dark hair, black oversized shirt and trousers), P = a prince, A = Ordnungsamt, V = street vendor, K = Bauhaus cashier
 
 
 # ------------------------------------------------------------------ people ---
@@ -80,6 +84,17 @@ def _body(d, x, y, s, t, who, pose="stand", ph=0.0, bulge=0.0, puff=False, mood=
         d.rectangle([*P(-5 - sw, -1), *P(-1 - sw, 1)], fill=(36, 30, 34))
         d.rectangle([*P(1 + sw, -1), *P(5 + sw, 1)], fill=(36, 30, 34))
     d.rectangle([*P(-4, -19 - bob), *P(4, -9 - bob)], fill=top)
+    if who == "X":                                                            # oversized black shirt: wide, long, baggy
+        d.polygon([P(-5.8, -19 - bob), P(5.8, -19 - bob), P(7, -6 - bob), P(-7, -6 - bob)], fill=top)
+        d.line([P(-5, -17 - bob), P(-5.5, -8 - bob)], fill=(44, 44, 54))
+        d.line([P(1, -12 - bob), P(2, -7 - bob)], fill=(44, 44, 54))
+    if who == "P":                                                            # a sash across the navy jacket
+        d.line([P(-4, -19 - bob), P(4, -10 - bob)], fill=(250, 200, 40), width=max(1, int(1.6 * s)))
+        d.rectangle([*P(-1, -16 - bob), *P(1, -14 - bob)], fill=(250, 200, 40))
+    if who == "K":                                                            # orange Bauhaus-style vest over a white shirt
+        d.rectangle([*P(-1, -19 - bob), *P(1, -10 - bob)], fill=(250, 250, 250))
+    if who == "A":
+        d.rectangle([*P(-4, -17 - bob), *P(4, -16 - bob)], fill=(250, 220, 60))
     if who == "L":
         d.rectangle([*P(-4, -19 - bob), *P(4, -17.5 - bob)], fill=(236, 120, 30))
         d.polygon([P(-1, -16 - bob), P(2, -16 - bob), P(0.5, -13 - bob)], fill=(250, 250, 250))
@@ -130,6 +145,33 @@ def _body(d, x, y, s, t, who, pose="stand", ph=0.0, bulge=0.0, puff=False, mood=
         ax, ay = ra
         for i, (gx, gy) in enumerate(((0, 0), (1.6, 0.6), (-1.4, 0.8), (0.4, 2), (1.6, 2.2), (-0.8, 3))):
             d.ellipse([*P(ax + gx - 1.2, ay + gy - 1), *P(ax + gx + 1.2, ay + gy + 1.4)], fill=(100, 44, 120))
+    if item == "mood":                                                        # a Mood: a cigarillo with a glowing tip
+        ax, ay = ra
+        d.line([P(ax, ay), P(ax + 5, ay - 1.5)], fill=(104, 70, 40), width=max(1, int(s)))
+        d.point(P(ax + 5, ay - 1.5), fill=(255, 130 + int(80 * abs(math.sin(t * 3))), 40))
+    if item == "prosecco":                                                    # a flute, and the bottle pouring into it, always
+        ax, ay = ra
+        d.polygon([P(ax - 2, ay - 3), P(ax + 2, ay - 3), P(ax + 0.7, ay + 3), P(ax - 0.7, ay + 3)], fill=(236, 240, 226))
+        d.rectangle([*P(ax - 1.3, ay - 1.5), *P(ax + 1.3, ay + 0.5)], fill=(250, 214, 96))
+        d.line([P(ax, ay + 3), P(ax, ay + 6)], fill=(226, 228, 232), width=1)
+        d.polygon([P(ax + 1, ay - 15), P(ax + 4.2, ay - 13), P(ax + 2.4, ay - 6), P(ax - 0.4, ay - 8)], fill=(44, 112, 74))
+        d.rectangle([*P(ax + 0.6, ay - 18), *P(ax + 2.2, ay - 14)], fill=(44, 112, 74))
+        d.polygon([P(ax + 0.4, ay - 18), P(ax + 2.4, ay - 18), P(ax + 2.2, ay - 16.5), P(ax + 0.6, ay - 16.5)], fill=(236, 190, 60))
+        d.line([P(ax - 0.2, ay - 7), P(ax, ay - 2)], fill=(250, 214, 96), width=1)
+        for k in range(3):
+            d.point(P(ax + math.sin(t * 5 + k) * 1.1, ay - 2 - ((t * 6 + k * 2) % 4)), fill=(255, 255, 220))
+    if item == "tray":
+        ax, ay = ra
+        d.rectangle([*P(ax - 5, ay + 1), *P(ax + 6, ay + 3)], fill=(110, 76, 44))
+        for k in range(3):
+            d.rectangle([*P(ax - 4 + k * 3.4, ay - 2), *P(ax - 1.8 + k * 3.4, ay + 1)], fill=(70, 40, 90))
+    if item == "ticket":
+        ax, ay = ra
+        d.rectangle([*P(ax - 1, ay - 3), *P(ax + 4, ay + 2)], fill=(255, 226, 96), outline=(120, 80, 20))
+    if item == "plant":
+        ax, ay = ra
+        d.polygon([P(ax - 3, ay + 3), P(ax + 3, ay + 3), P(ax + 2, ay + 7), P(ax - 2, ay + 7)], fill=(196, 100, 60))
+        d.ellipse([*P(ax - 4, ay - 3), *P(ax + 4, ay + 3)], fill=(70, 170, 80))
     if item == "pitchfork":
         ax, ay = ra
         d.line([P(ax, ay + 8), P(ax + 2, ay - 18)], fill=(130, 96, 60), width=max(1, int(s)))
@@ -153,6 +195,27 @@ def _body(d, x, y, s, t, who, pose="stand", ph=0.0, bulge=0.0, puff=False, mood=
         d.rectangle([*P(4, hy - 4), *P(6, hy + 1)], fill=BROWN)
         d.polygon([P(-3, hy - 8), P(-1, hy - 10.5), P(1, hy - 8.5), P(3, hy - 10), P(4, hy - 7)], fill=BROWN)
         d.rectangle([*P(-5, hy + 3), *P(5, hy + 5)], fill=(120, 80, 54))
+    elif who == "X":                                                          # Max: dark, a little tousled
+        d.chord([*P(-6.5, hy - 9), *P(6.5, hy + 2)], 180, 360, fill=(30, 24, 26))
+        d.rectangle([*P(-6, hy - 4), *P(-4, hy + 1)], fill=(30, 24, 26))
+        d.rectangle([*P(4, hy - 4), *P(6, hy + 1)], fill=(30, 24, 26))
+        d.polygon([P(-4, hy - 8), P(-2, hy - 11), P(0, hy - 8.5), P(2, hy - 11.5), P(4, hy - 7.5)], fill=(30, 24, 26))
+    elif who == "P":                                                          # a prince: neat brown hair and a golden crown
+        d.chord([*P(-6, hy - 8), *P(6, hy + 1)], 180, 360, fill=(120, 86, 54))
+        d.polygon([P(-4.5, hy - 6), P(-4.5, hy - 11), P(-2.2, hy - 8), P(0, hy - 12.5), P(2.2, hy - 8), P(4.5, hy - 11), P(4.5, hy - 6)], fill=(250, 200, 40))
+        d.point(P(0, hy - 8), fill=(220, 40, 60))
+    elif who == "A":                                                          # a blue uniform cap
+        d.chord([*P(-6.5, hy - 9.5), *P(6.5, hy + 0.5)], 180, 360, fill=(30, 66, 130))
+        d.rectangle([*P(-6.5, hy - 4), *P(7.5, hy - 2.8)], fill=(20, 40, 90))
+        d.rectangle([*P(-1, hy - 8), *P(1, hy - 6)], fill=(250, 220, 60))
+    elif who == "V":                                                          # a flat cap and a moustache
+        d.chord([*P(-6.5, hy - 9), *P(6.5, hy + 0)], 180, 360, fill=(96, 72, 52))
+        d.rectangle([*P(-6.5, hy - 4.5), *P(7, hy - 3)], fill=(96, 72, 52))
+        d.line([P(-3, hy + 3), P(3, hy + 3)], fill=(60, 40, 30), width=max(1, int(s)))
+    elif who == "K":                                                          # a bob of orange hair
+        d.chord([*P(-6.5, hy - 9), *P(6.5, hy + 2)], 180, 360, fill=(214, 120, 50))
+        d.rectangle([*P(-6.5, hy - 4), *P(-4.5, hy + 4)], fill=(214, 120, 50))
+        d.rectangle([*P(4.5, hy - 4), *P(6.5, hy + 4)], fill=(214, 120, 50))
     elif who == "B":                                                          # grey hair, straw hat, moustache
         d.chord([*P(-6, hy - 6), *P(6, hy + 3)], 180, 360, fill=GREY)
         d.ellipse([*P(-9, hy - 7), *P(9, hy - 3)], fill=(226, 190, 90))

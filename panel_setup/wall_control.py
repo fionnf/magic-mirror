@@ -1073,10 +1073,61 @@ def make_app(runner):
     GIF_DIR = os.path.join(ROOT, "panel_setup", "gifs")
     GIF_LOCK = threading.Lock()
     GIF_CLIP = {"maxfionn": (0.0, 12.0), "lennart": (4.0, 12.0)}        # where each show's shared clip starts, and how long
+    GIF_SHOWS = [i for i, c, t, d in MODES if c == "Shows"]
+
+    def _gif_version():
+        try:
+            return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True, timeout=10).stdout.strip() or "x"
+        except Exception:
+            return "x"
+    GIF_VER = _gif_version()                                             # a show changes with an update: so does its GIF
+
+    def _gif_path(mode, start, secs):
+        return os.path.join(GIF_DIR, f"{mode}-{int(start)}-{int(secs)}-{GIF_VER}.gif")
+
+    def _make_gif(mode, start, secs, wait=False):
+        """The GIF file for a show (made by play.py in a helper process, once per app version); None if it could not be made."""
+        out = _gif_path(mode, start, secs)
+        if os.path.exists(out):
+            return out
+        if not GIF_LOCK.acquire(blocking=wait):
+            return "busy"
+        try:
+            os.makedirs(GIF_DIR, exist_ok=True)
+            tmp = out[:-4] + ".part.gif"
+            r = subprocess.run(["nice", "-n", "10", sys.executable, os.path.join(ROOT, "panel_setup", "play.py"), mode, "--gif", tmp,
+                                "--gif-start", str(start), "--gif-seconds", str(secs), "--gif-fps", "12"],
+                               cwd=ROOT, capture_output=True, text=True, timeout=240)
+            if r.returncode != 0 or not os.path.exists(tmp):
+                print(f"[gif] {mode}: {r.stderr[-300:]}", flush=True)
+                return None
+            os.replace(tmp, out)
+            return out
+        except subprocess.TimeoutExpired:
+            return None
+        finally:
+            GIF_LOCK.release()
+
+    def _warm_gifs():                                                    # so tapping GIF in the app is quick
+        time.sleep(120)
+        try:
+            for f in os.listdir(GIF_DIR):
+                if not f.endswith(f"-{GIF_VER}.gif"):
+                    os.remove(os.path.join(GIF_DIR, f))                  # GIFs of older versions
+        except OSError:
+            pass
+        for mode in GIF_SHOWS:
+            start, secs = GIF_CLIP.get(mode, (0.0, 10.0))
+            try:
+                _make_gif(mode, start, secs, wait=True)
+            except Exception as e:
+                print(f"[gif] warm {mode}: {e}", flush=True)
+            time.sleep(5)
+    threading.Thread(target=_warm_gifs, daemon=True, name="gif-warm").start()
 
     @app.get("/api/gif/<mode>")
     def show_gif(mode):
-        """A short GIF of a show, made by play.py in a helper process, for sharing from the phone."""
+        """A short GIF of a show, for sharing from the phone."""
         if not re.fullmatch(r"[a-z0-9]+", mode) or mode not in {i for i, c, t, d in MODES}:
             return jsonify({"error": "no such show"}), 404
         start, secs = GIF_CLIP.get(mode, (0.0, 10.0))
@@ -1085,24 +1136,11 @@ def make_app(runner):
             secs = max(2.0, min(20.0, float(request.args.get("seconds", secs))))
         except ValueError:
             return jsonify({"error": "bad time"}), 400
-        os.makedirs(GIF_DIR, exist_ok=True)
-        out = os.path.join(GIF_DIR, f"{mode}-{int(start)}-{int(secs)}.gif")
-        if not os.path.exists(out):
-            if not GIF_LOCK.acquire(blocking=False):
-                return jsonify({"error": "Another GIF is being made. Try again in a minute."}), 429
-            try:
-                tmp = out[:-4] + ".part.gif"
-                r = subprocess.run([sys.executable, os.path.join(ROOT, "panel_setup", "play.py"), mode, "--gif", tmp,
-                                    "--gif-start", str(start), "--gif-seconds", str(secs), "--gif-fps", "12"],
-                                   cwd=ROOT, capture_output=True, text=True, timeout=240)
-                if r.returncode != 0 or not os.path.exists(tmp):
-                    print(f"[gif] {mode}: {r.stderr[-300:]}", flush=True)
-                    return jsonify({"error": "Could not make the GIF."}), 500
-                os.replace(tmp, out)
-            except subprocess.TimeoutExpired:
-                return jsonify({"error": "Making the GIF took too long."}), 504
-            finally:
-                GIF_LOCK.release()
+        out = _make_gif(mode, start, secs, wait=False)
+        if out == "busy":
+            return jsonify({"error": "Another GIF is being made. Try again in a minute."}), 429
+        if not out:
+            return jsonify({"error": "Could not make the GIF."}), 500
         return send_from_directory(GIF_DIR, os.path.basename(out), mimetype="image/gif", max_age=300)
 
     @app.get("/api/share")

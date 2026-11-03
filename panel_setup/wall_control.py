@@ -27,6 +27,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+import config  # noqa: E402  (BRIGHTNESS_CAP)
 STATE_FILE = os.path.join(HERE, "wall_state.json")
 LOG_DIR = os.path.join(HERE, "logs")
 WEB_DIR = os.path.join(HERE, "web")
@@ -299,7 +300,7 @@ class Runner:
 
     def set_brightness(self, value):
         with self.lock:
-            self.state["brightness"] = max(5, min(100, int(value)))
+            self.state["brightness"] = max(5, min(config.BRIGHTNESS_CAP, int(value)))
             save_state(self.state)
             if self.current not in (None, "off") and self.oneshot_resume is None:
                 self._start(self.current)               # brightness applies at start
@@ -357,7 +358,7 @@ class Runner:
         if not sc:
             raise KeyError(name)
         with self.lock:
-            self.state["brightness"] = max(5, min(100, int(sc.get("brightness", self.state.get("brightness", 40)))))
+            self.state["brightness"] = max(5, min(config.BRIGHTNESS_CAP, int(sc.get("brightness", self.state.get("brightness", 40)))))
             if "art_speed" in sc:
                 self.state["art_speed"] = max(0.005, min(1.0, float(sc["art_speed"])))
             # a scene sets the whole room: its own sleep timer, or none (an earlier timer is cancelled)

@@ -96,7 +96,9 @@ def load_state():
     try:
         with open(STATE_FILE) as f:
             s = json.load(f)
-        return {**DEFAULT_STATE, **s}
+        st = {**DEFAULT_STATE, **s}
+        st["brightness"] = min(int(st.get("brightness", 40)), config.BRIGHTNESS_CAP)
+        return st
     except Exception:
         return dict(DEFAULT_STATE)
 

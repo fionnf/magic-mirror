@@ -463,7 +463,8 @@ class MagicMirror:
             print(f"[STATS] draw {st['draws'] / n:.1f} fps, longest gap {st['max_gap'] * 1000:.0f} ms, late frames {st['late']}, "
                   f"camera frames used {st['cap'] / n:.1f}/s, processing {st['proc_ms']:.0f} ms "
                   f"(wait {st.get('wait_ms', 0):.0f}, mask {st.get('mask_ms', 0):.0f}, view {st.get('view_ms', 0):.0f}) "
-                  f"draw() {st.get('draw_ms', 0):.0f} ms (send {st.get('send_ms', 0):.0f}), refresh ff={ff}", flush=True)
+                  f"draw() {st.get('draw_ms', 0):.0f} ms (send {st.get('send_ms', 0):.0f}), refresh ff={ff} | loop: compose {st.get('comp_ms', 0):.0f}, "
+                  f"ease {st.get('ease_ms', 0):.0f}, show {st.get('show_ms', 0):.0f} ms", flush=True)
             st.update(t0=now, draws=0, max_gap=0.0, late=0, cap=0)
         t_d = time.perf_counter()
         try:
@@ -538,6 +539,7 @@ class MagicMirror:
                    self._overlay_text, int(time.monotonic() * 8) if sparkling else None,
                    int(time.monotonic() * 4) if self.booth_mode else None,
                    (lambda g: (g[0], int(g[1] * 24)) if g is not None else None)(self._gesture))
+            t_c0 = time.perf_counter()
             if key != last_key:
                 last_key = key
                 canvas = self._silhouette()
@@ -562,6 +564,7 @@ class MagicMirror:
                     except Exception:
                         pass
                 self._target = np.asarray(canvas, np.float32)
+            t_c1 = time.perf_counter()
             target = getattr(self, "_target", None)
             if target is not None:
                 shown = getattr(self, "_shown", None)
@@ -587,7 +590,11 @@ class MagicMirror:
                     cv2.add(shown, cv2.multiply(delta, cv2.merge([k, k, k])), dst=shown)
                 self._shown = shown
                 import cv2
+                t_e = time.perf_counter()
                 self._show(Image.fromarray(cv2.convertScaleAbs(shown), "RGB"))
+                stt = self._stats
+                for nm, v in (("comp_ms", t_c1 - t_c0), ("ease_ms", t_e - t_c1), ("show_ms", time.perf_counter() - t_e)):
+                    stt[nm] = stt.get(nm, 0.0) + (v * 1000 - stt.get(nm, 0.0)) * 0.05
             else:
                 time.sleep(interval)
         return "short"

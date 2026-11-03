@@ -43,6 +43,7 @@ from display import pixelfont
 W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
 ASPECT = W / H
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PAN_PX_S = 2.5                                              # peak pan speed, wall pixels per second
 CFG_FILE = os.path.join(ROOT, "panel_setup", "livecams.json")
 IDLE = 120.0                  # frame() not called for this long: the piece is not showing, stop reading
 STALE = 8.0                   # no new frame for this long: show NO SIGNAL
@@ -402,7 +403,7 @@ class Source:
 
 # ---------------------------------------------------------------- the LED look
 
-_clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(4, 4))
+_clahe = cv2.createCLAHE(clipLimit=1.6, tileGridSize=(2, 2))   # gentle: strong local contrast shimmers in snow and sky as the crop moves
 _LUT = np.clip((LIFT + (1 - LIFT) * np.power(np.arange(256) / 255.0, GAMMA)) * 255.0, 0, 255).astype(np.uint8)
 _BAYER = np.array([[0, 32, 8, 40, 2, 34, 10, 42], [48, 16, 56, 24, 50, 18, 58, 26], [12, 44, 4, 36, 14, 46, 6, 38],
                    [60, 28, 52, 20, 62, 30, 54, 22], [3, 35, 11, 43, 1, 33, 9, 41], [51, 19, 59, 27, 49, 17, 57, 25],
@@ -442,7 +443,9 @@ def crop_box(fw, fh, cam, t):
         if slack > 1:
             amp = min(slack / 2, min(cx - cw / 2, fw - cw / 2 - cx) if (cx - cw / 2 >= 0 and cx + cw / 2 <= fw) else slack / 2)
             amp = max(amp, 0.0) if amp > 0 else slack / 2
-            cx = (fw / 2 if amp == slack / 2 else cx) + amp * np.sin(t * 2 * np.pi / 90.0)
+            # a gentle, fixed on-screen speed (about PAN_PX_S wall pixels a second at its fastest), however wide the panorama
+            period = max(90.0, 2 * np.pi * amp / (PAN_PX_S * cw / W))
+            cx = (fw / 2 if amp == slack / 2 else cx) + amp * np.sin(t * 2 * np.pi / period)
     x0 = min(max(cx - cw / 2, 0), fw - cw)
     y0 = min(max(cy - ch / 2, 0), fh - ch)
     return int(round(x0)), int(round(y0)), int(round(x0 + cw)), int(round(y0 + ch))
@@ -609,9 +612,14 @@ class LiveCam:
             return Image.fromarray(no_signal(t, cam["name"]), "RGB")
         led = bool(cam.get("led")) or os.environ.get("LIVECAM_LED", "") not in ("", "0")
         # re-process only when the picture or (if panning) the crop moved
-        key = (cam["name"], seq, led, int(t * 8) if cam.get("pan") else 0)
+        key = (cam["name"], seq, led, int(t * 12) if cam.get("pan") else 0)
         if key != self.cache_key:
-            self.cache = led_look(f, cam, now, led)
+            new = led_look(f, cam, now, led)
+            prev = self.cache
+            if prev is not None and prev.shape == new.shape and self.cache_key and self.cache_key[:3] == key[:3]:
+                # same picture, crop nudged: blend with the last result so bright areas don't shimmer
+                new = (0.4 * prev.astype(np.float32) + 0.6 * new.astype(np.float32)).astype(np.uint8)
+            self.cache = new
             self.cache_key = key
         alpha = float(np.clip((LABEL_SECS - (now - self.shown_at)) / 1.5, 0, 1))
         out = add_label(self.cache, cam.get("label") or cam["name"], alpha)

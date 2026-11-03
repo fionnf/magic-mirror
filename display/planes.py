@@ -33,9 +33,9 @@ ROUTE_URL = "https://api.adsbdb.com/v0/callsign/{}"      # callsign -> airline, 
 AIRLINE_URL = "https://api.adsbdb.com/v0/airline/{}"     # ICAO airline -> IATA code
 LOOKUPS_PER_FETCH = 4                     # new callsigns looked up per 10 s, so a busy sky never floods it
 HOME_AIRPORT = "ZRH"
-FADE = 150.0                              # seconds for a trail to fall to 1/e
-LOW_COL = np.array([255, 150, 55], np.float32)    # below ~2 km: approach and climb-out
-HIGH_COL = np.array([235, 95, 135], np.float32)   # cruise
+FADE = 210.0                              # seconds for a trail to fall to 1/e
+LOW_COL = np.array([255, 178, 40], np.float32)    # below ~2 km: approach and climb-out
+HIGH_COL = np.array([255, 70, 150], np.float32)   # cruise
 
 
 def to_px(lat, lon):
@@ -46,8 +46,8 @@ def to_px(lat, lon):
 
 
 MAP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "maps", "zurich.json")
-LAKE, LAKE_EDGE = (6, 12, 24), (16, 30, 56)       # the map stays far below the planes
-RIVER, RUNWAY = (12, 22, 40), (44, 42, 46)
+LAKE, LAKE_EDGE = (8, 20, 44), (34, 74, 130)       # the map stays well below the planes, but readable
+RIVER, RUNWAY = (26, 52, 96), (92, 90, 100)
 
 
 def base_map():
@@ -68,7 +68,7 @@ def base_map():
     for r in m.get("runways", []):
         cv2.polylines(img, [pts(r)], False, RUNWAY, 1, cv2.LINE_8)
     x, y = (round(v) for v in to_px(*HOME))
-    img[y, x] = (90, 90, 90)
+    img[y, x] = (150, 150, 150)
     return img
 
 
@@ -171,7 +171,7 @@ class Sky:
             p = (int(round(x)), int(round(y)))
             prev = self.drawn.get(k)
             if prev is not None and prev != p and abs(prev[0] - p[0]) + abs(prev[1] - p[1]) < 40:
-                cv2.line(stamp, prev, p, tuple(int(c * 0.72) for c in col), 1, cv2.LINE_8)
+                cv2.line(stamp, prev, p, tuple(int(c * 0.9) for c in col), 1, cv2.LINE_8)
             self.drawn[k] = p
             heads.append((p, col, a.get("flight", "")))
         np.maximum(self.trail, stamp, out=self.trail)
@@ -180,7 +180,10 @@ class Sky:
         img = np.maximum(self.base, self.trail)
         for (x, y), col, flight in heads:
             if 0 <= x < W and 0 <= y < H:
-                img[y, x] = col                                      # the plane: one bright LED
+                img[y, x] = (255, 255, 255)                            # the plane: a white-hot LED with a coloured cross round it
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    if 0 <= x + dx < W and 0 <= y + dy < H:
+                        img[y + dy, x + dx] = col
                 if flight:
                     label, far = self.names.get(flight, (flight, "", 0))[:2]
                     ty = min(H - 5, max(0, y - 2))
@@ -189,9 +192,9 @@ class Sky:
                         tx = x + 3 if x + 3 + w <= W else x - 2 - w   # beside it, on the side with room
                         if tx >= 0 or text == label:
                             break
-                    pixelfont.draw(img, label, tx, ty, col * 0.6)
+                    pixelfont.draw(img, label, tx, ty, np.clip(col * 0.95 + 25, 0, 255))
                     if text != label:
-                        pixelfont.draw(img, far, tx + pixelfont.width(label) + 4, ty, col * 0.38)
+                        pixelfont.draw(img, far, tx + pixelfont.width(label) + 4, ty, col * 0.62)
         return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
 
 

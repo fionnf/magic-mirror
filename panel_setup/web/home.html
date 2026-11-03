@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>House Fortuna</title>
+<style>
+  :root {
+    --bg: #17120f; --card: #241c17; --line: #3a2d24; --ink: #fbf1e3; --mute: #b9a58f; --gold: #ffb454; --hot: #ff6a4d;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] { --bg: #fbf4ea; --card: #fff; --line: #e8d9c4; --ink: #2a1d12; --mute: #7a6551; --gold: #c4701a; --hot: #d2432a; color-scheme: light; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg: #fbf4ea; --card: #fff; --line: #e8d9c4; --ink: #2a1d12; --mute: #7a6551; --gold: #c4701a; --hot: #d2432a; color-scheme: light; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
+    font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); min-height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 auto 14px; width: 100%; max-width: 1500px; }
+  h1 { font-size: clamp(26px, 4vw, 46px); margin: 0; letter-spacing: .02em; }
+  h1 small { display: block; font-size: .38em; color: var(--mute); font-weight: 500; letter-spacing: .12em; text-transform: uppercase; margin-top: 4px; }
+  .tools { display: flex; gap: 8px; }
+  .tools button { background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font: inherit; font-size: 15px; cursor: pointer; }
+  .tools button:focus-visible, .card a:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  main { flex: 1; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); max-width: 1500px; width: 100%; margin: 0 auto; align-content: stretch; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+  .card h2 { margin: 0; font-size: clamp(20px, 2.2vw, 28px); }
+  .card .sub { color: var(--mute); font-size: clamp(14px, 1.4vw, 17px); margin: -6px 0 0; }
+  .qr { width: 100%; max-width: 340px; aspect-ratio: 1; background: #fff; border-radius: 14px; padding: 10px; display: grid; place-items: center; }
+  .qr img { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+  .qr.empty { background: transparent; border: 2px dashed var(--line); color: var(--mute); padding: 16px; font-size: 16px; }
+  .card .url, .card .pw { font-size: 14px; color: var(--mute); word-break: break-all; margin: 0; }
+  .card .pw b { color: var(--ink); font-size: 20px; letter-spacing: .04em; font-weight: 700; user-select: all; }
+  .step { margin: 0; color: var(--gold); font-weight: 700; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+  dialog { background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 20px; padding: 22px; width: min(92vw, 460px); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog h2 { margin: 0 0 12px; }
+  label { display: block; margin: 12px 0 4px; font-size: 14px; color: var(--mute); }
+  input, select { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-size: 16px; }
+  .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+  .row button { padding: 11px 18px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; cursor: pointer; }
+  .row button.go { background: var(--gold); color: #1b1208; border-color: var(--gold); font-weight: 700; }
+  .hint { color: var(--mute); font-size: 13px; margin: 6px 0 0; }
+  #err { color: var(--hot); min-height: 1.2em; font-size: 14px; margin: 10px 0 0; }
+  @media (max-width: 640px) { .card { padding: 14px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>House Fortuna<small id="date"></small></h1>
+  <div class="tools">
+    <button id="fs" type="button" aria-label="Full screen">Full screen</button>
+    <button id="cfg" type="button" aria-label="Edit the Wi-Fi and Jam details">Edit</button>
+  </div>
+</header>
+<main id="cards" aria-live="polite"></main>
+
+<dialog id="dlg">
+  <form method="dialog" id="form">
+    <h2>Wi-Fi and Spotify Jam</h2>
+    <label for="ssid">Wi-Fi name</label>
+    <input id="ssid" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <label for="pw">Wi-Fi password</label>
+    <input id="pw" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <label for="sec">Security</label>
+    <select id="sec"><option value="WPA">WPA / WPA2 / WPA3</option><option value="WEP">WEP</option><option value="nopass">None (open)</option></select>
+    <label for="jam">Spotify Jam link</label>
+    <input id="jam" inputmode="url" placeholder="https://spotify.link/..." autocomplete="off" autocapitalize="off" spellcheck="false">
+    <p class="hint">In Spotify: start a Jam, tap Invite, Copy link, and paste it here. A new Jam needs a new link.</p>
+    <p id="err" role="alert"></p>
+    <div class="row"><button type="button" id="cancel">Cancel</button><button type="submit" class="go" id="save">Save</button></div>
+  </form>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let data = null;
+
+function card(n, title, sub, key, ok, lines) {
+  const el = document.createElement('section');
+  el.className = 'card';
+  el.innerHTML = `<p class="step">${n}</p><h2></h2><p class="sub"></p>` +
+    (ok ? `<div class="qr"><img alt="QR code: ${title}" src="/api/home/qr/${key}.png?t=${Date.now()}"></div>`
+        : `<div class="qr empty">Not set up yet.<br>Tap Edit above.</div>`) + `<div class="lines"></div>`;
+  el.querySelector('h2').textContent = title;
+  el.querySelector('.sub').textContent = sub;
+  const ln = el.querySelector('.lines');
+  lines.forEach((t) => { const p = document.createElement('p'); p.className = 'url'; if (t.html) p.innerHTML = t.html; else p.textContent = t; ln.appendChild(p); });
+  return el;
+}
+
+function render() {
+  const d = data, w = d.wifi || {};
+  $('date').textContent = new Date(d.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  const main = $('cards'); main.textContent = '';
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  main.append(
+    card('1', 'Join the Wi-Fi', w.ssid ? 'Point your camera here' : 'Add the network name and password', 'wifi', !!w.ssid,
+      w.ssid ? [`Network: ${w.ssid}`, w.security === 'nopass' || !w.password ? 'No password' : { html: `Password: <b>${esc(w.password)}</b>` }] : []),
+    card('2', 'Write on the board', 'Send a message to the LED wall', 'guest', !!d.guest, d.guest ? [d.guest.replace('http://', '') + '  (on the Wi-Fi)'] : []),
+    card('3', 'Join the Jam', 'Add songs to the Spotify Jam', 'jam', !!d.jam, d.jam ? [d.jam.replace(/^https?:\/\//, '')] : []),
+    card('4', "Today's pictures", 'Everything from today, to keep', 'pictures', !!d.pictures, d.pictures ? [d.pictures.replace(/^https?:\/\//, '').slice(0, 48)] : ['No pictures link yet today.'])
+  );
+}
+
+async function load() {
+  try {
+    const r = await fetch('/api/home', { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    data = await r.json();
+    render();
+  } catch (e) {
+    $('cards').innerHTML = '<p style="color:var(--mute)">Could not reach the wall. Retrying...</p>';
+  }
+}
+
+$('cfg').onclick = () => {
+  const w = (data && data.wifi) || {};
+  $('ssid').value = w.ssid || ''; $('pw').value = w.password || ''; $('sec').value = w.security || 'WPA';
+  $('jam').value = (data && data.jam) || ''; $('err').textContent = '';
+  $('dlg').showModal();
+};
+$('cancel').onclick = () => $('dlg').close();
+$('form').onsubmit = async (ev) => {
+  ev.preventDefault();
+  $('err').textContent = '';
+  try {
+    const r = await fetch('/api/home/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wifi_ssid: $('ssid').value, wifi_password: $('pw').value, wifi_security: $('sec').value, jam_url: $('jam').value }) });
+    const j = await r.json();
+    if (!r.ok) { $('err').textContent = j.error || 'Could not save.'; return; }
+    $('dlg').close();
+    load();
+  } catch (e) { $('err').textContent = 'Could not reach the wall.'; }
+};
+$('fs').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else (document.documentElement.requestFullscreen || (() => {})).call(document.documentElement);
+};
+
+let lock = null;
+async function keepAwake() { try { lock = await navigator.wakeLock.request('screen'); } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { keepAwake(); load(); } });
+keepAwake();
+load();
+setInterval(load, 5 * 60 * 1000);
+</script>
+</body>
+</html>

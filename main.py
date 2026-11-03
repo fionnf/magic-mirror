@@ -221,9 +221,9 @@ class MagicMirror:
         if c is None or now - c[0] > 2.0:
             try:
                 import mirror_settings
-                c = (now, bool(mirror_settings.load().get("mirror_raw", True)))
+                c = (now, bool(mirror_settings.load().get("mirror_raw", False)))
             except Exception:
-                c = (now, True)
+                c = (now, False)
             self._raw_cache = c
         return c[1]
 

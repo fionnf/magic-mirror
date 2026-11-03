@@ -37,7 +37,7 @@ LANGUAGES = {
     "Drama queen": "Reply in English as the most dramatic, over-the-top drama queen alive.",
 }
 DEFAULTS = {"tone": 50, "language": "English", "recognise": True, "smile": True, "gesture": True,
-            "comment": True, "prompt": "", "photos_gb": 1, "gallery_page": True, "booth_shots": 3, "booth_repeat": False, "booth_endless": False, "mirror_raw": True,
+            "comment": True, "prompt": "", "photos_gb": 1, "gallery_page": True, "booth_shots": 3, "booth_repeat": False, "booth_endless": False, "mirror_raw": False,
             "learn_faces": False, "idle_art_minutes": 10, "wake_on_motion": False,
             "face_focus": True}
 

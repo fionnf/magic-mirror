@@ -95,6 +95,7 @@ FRAME_HEIGHT = 480
 CAMERA_ASPECT = 3 / 4
 STILL_SIZE = (4608, 2592)          # photos are taken at the sensor's full resolution (Camera Module 3); the live picture stays small and fast
 PHOTO_JPEG_QUALITY = 95            # saved photos: JPEG quality, no chroma subsampling
+CAMERA_IDLE_LENS = 0.8            # lens position (dioptres, 1/m) when nobody is in front of the mirror: about 1.25 m
 CAMERA_MAINS_HZ = 50              # 50 in Europe, 60 in the US: the camera times its exposure to the room lights' flicker
 # Photos (AI / receipt / booth) are cut to portrait around the people (face detector, then motion,
 # then centre). Set False to always centre-crop.

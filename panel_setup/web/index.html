@@ -503,7 +503,7 @@
 </div></nav>
 
 <dialog id="viewer"><img id="vImg" alt=""><div class="body"><p class="quote" id="vText"></p><p class="hint" id="vTime"></p>
-  <div class="row" style="margin-top:12px"><a class="btn" id="vSave" download>Save</a><button class="btn" onclick="deletePhoto()">Delete</button><button class="btn primary" onclick="viewer.close()" style="margin-left:auto">Close</button></div></div></dialog>
+  <div class="row" style="margin-top:12px"><a class="btn" id="vSave" download>Save</a><button class="btn" id="vPrint" onclick="printPhoto()">Print again</button><button class="btn" onclick="deletePhoto()">Delete</button><button class="btn primary" onclick="viewer.close()" style="margin-left:auto">Close</button></div></div></dialog>
 <dialog id="sleepSheet"><div class="sheet">
   <h3>Sleep</h3>
   <p class="hint" id="sleepNow" style="margin:0 0 6px"></p>
@@ -1169,6 +1169,13 @@ function openPhoto(i) {
   $('vText').textContent = viewing.text || ''; $('vSave').href = u(viewing.url);
   $('vTime').textContent = new Date(viewing.time * 1000).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
   $('viewer').showModal();
+}
+async function printPhoto() {
+  if (!viewing) return;
+  const b = $('vPrint'); b.disabled = true; b.textContent = 'Printing...';
+  try { await api('/api/photos/print', {name: viewing.name}); toast('Printed'); b.textContent = 'Printed'; }
+  catch (e) { toast(e.message || 'Could not print'); b.textContent = 'Print again'; }
+  setTimeout(() => { b.disabled = false; b.textContent = 'Print again'; }, 3000);
 }
 async function deletePhoto() {
   if (!viewing || !confirm('Delete this photo?')) return;

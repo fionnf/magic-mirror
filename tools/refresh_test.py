@@ -26,11 +26,19 @@ TESTS = {
     12: (5, 110, 0, 1, "= 7 with the real 35 A budget"),
 }
 BRIGHT = {11: 50}
+SLOW_OF = {18: 5, 19: 4, 20: 3, 21: 4, 22: 1}
 # round 3 (brightness capped at 75): more colour depth without flicker. number: (bits, Hz, dither, hardware dither, name, lsb ns)
+SLOW = {}          # number -> gpio_slowdown (default: the config's)
 TESTS.update({
+    18: (6, 125, 0, 0, "6 bits, gpio slowdown 5 (about 128-140 Hz)", 60),
+    19: (6, 140, 0, 0, "6 bits, gpio slowdown 4 (about 145-160 Hz)", 60),
+    20: (6, 160, 0, 0, "6 bits, gpio slowdown 3 (about 165-185 Hz)", 60),
+    21: (7, 120, 0, 0, "7 bits, gpio slowdown 4", 60),
+    22: (6, 220, 0, 0, "6 bits, gpio slowdown 1 (about 230+ Hz; may glitch)", 60),
+
     13: (5, 110, 0, 1, "5 bits, 110 Hz, hw dither 1 (the current setting)", 60),
-    14: (6, 100, 0, 1, "6 bits, 100 Hz, hw dither 1", 60),
-    15: (6, 110, 0, 1, "6 bits, 110 Hz (faster pulses), hw dither 1", 48),
+    14: (6, 120, 0, 1, "6 bits, fastest the panel can (about 103 Hz), hw dither 1", 50),
+    15: (6, 120, 0, 0, "6 bits, about 103 Hz, no hw dither", 50),
     16: (7, 100, 0, 1, "7 bits, 100 Hz, hw dither 1", 48),
     17: (5, 110, 0, 2, "5 bits, 110 Hz, hw dither 2", 60),
 })
@@ -55,6 +63,7 @@ def run(n):
     config.MATRIX_PWM_LSB_NS = rest[0] if rest else config.MATRIX_PWM_LSB_NS
     config.MATRIX_PWM_BITS, config.MATRIX_REFRESH_LIMIT_HZ = bits, hz
     config.MATRIX_PWM_DITHER_BITS, config.COLOUR_DITHER = hwd, dith
+    config.GPIO_SLOWDOWN = SLOW_OF.get(n, config.GPIO_SLOWDOWN)
     config.MATRIX_BRIGHTNESS = BRIGHT.get(n, int(os.environ.get("WALL_BRIGHTNESS", 80)))
     config.MATRIX_MAX_AMPS = float(os.environ.get("WALL_MAX_AMPS", 35))
     from PIL import Image, ImageDraw, ImageFont

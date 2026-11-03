@@ -1422,6 +1422,42 @@ def make_app(runner):
                         "kind": meta.get("type", "receipt"), "time": os.path.getmtime(os.path.join(PHOTOS, x))})
         return jsonify({"total": len(names), "photos": out, "storage": photo_store.disk_info()})
 
+    PRINT_LOCK = threading.Lock()
+
+    @app.post("/api/photos/print")
+    def photos_print():
+        """Print a stored mirror photo or booth strip again, exactly as it came out the first time."""
+        x = os.path.basename((request.get_json(force=True, silent=True) or {}).get("name", ""))
+        path = os.path.join(PHOTOS, x)
+        if not x.endswith(".jpg") or not re.fullmatch(r"[A-Za-z0-9_.\-]+", x) or not os.path.exists(path):
+            return jsonify({"error": "no such photo"}), 404
+        meta = {}
+        try:
+            with open(os.path.join(PHOTOS, x[:-4] + ".json")) as fh:
+                meta = json.load(fh)
+        except Exception:
+            pass
+        if not PRINT_LOCK.acquire(blocking=False):
+            return jsonify({"error": "The printer is busy, try again in a moment."}), 409
+        try:
+            import print_out
+            if meta.get("type") == "strip":                          # a booth strip is already the print layout
+                from PIL import Image
+                img = Image.open(path).convert("RGB")
+            else:                                                    # a mirror photo: the camera picture and its message, as at the first print
+                import cv2
+                import printer
+                frame = cv2.imread(path)
+                if frame is None:
+                    return jsonify({"error": "Could not read the photo."}), 500
+                img = printer._receipt_image(frame, meta.get("text", ""))
+            print_out.send(img)
+        except Exception as e:
+            return jsonify({"error": "Could not print: " + str(e)[:100]}), 502
+        finally:
+            PRINT_LOCK.release()
+        return jsonify({"ok": True})
+
     @app.post("/api/photos/delete")
     def photos_delete():
         x = os.path.basename((request.get_json(force=True, silent=True) or {}).get("name", ""))

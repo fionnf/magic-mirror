@@ -16,14 +16,20 @@ def scurve(x, amount=0.55):
     return (1.0 - amount) * x + amount * s
 
 
-def tone_rgb(rgb, local=0.45, curve=0.5, sat=1.28, floor=0.05, sharpen=0.5):
-    """rgb: HxWx3 uint8 -> uint8, toned for the wall."""
+def tone_rgb(rgb, local=0.45, curve=0.5, sat=1.28, floor=0.05, sharpen=0.5, smooth=None):
+    """rgb: HxWx3 uint8 -> uint8, toned for the wall. `smooth`: a dict kept between frames of a live picture, so the tonal range
+    follows the scene slowly instead of pumping with every frame."""
     bgr = cv2.cvtColor(np.ascontiguousarray(rgb), cv2.COLOR_RGB2BGR)
     lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
     L0 = lab[:, :, 0].astype(np.float32) / 255.0
     L1 = _clahe.apply(lab[:, :, 0]).astype(np.float32) / 255.0
     L = L0 + local * (L1 - L0)                                       # local contrast, not all of it: skin stays natural
     lo, hi = np.percentile(L, (1.5, 98.5))                           # stretch to what is in the picture
+    if smooth is not None:
+        if "lo" in smooth:
+            lo = smooth["lo"] + (lo - smooth["lo"]) * 0.08
+            hi = smooth["hi"] + (hi - smooth["hi"]) * 0.08
+        smooth["lo"], smooth["hi"] = float(lo), float(hi)
     L = np.clip((L - lo) / max(hi - lo, 0.25), 0, 1)
     L = scurve(L, curve)
     if sharpen:

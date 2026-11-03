@@ -149,9 +149,9 @@ class MagicMirror:
                     frame = self.camera.capture_frame()
                 self._latest_frame = frame
                 self._note_motion(frame)
-                mask = self.camera.extract_silhouette(
+                mask = self.camera.extract_silhouette(                  # still needed: it is how the mirror knows somebody is there
                     frame, getattr(self.camera, "_background", None))
-                img = silhouette_render.render_silhouette(mask)
+                img = self._raw_view(frame) if self._mirror_raw() else silhouette_render.render_silhouette(mask)
                 self._stats["cap"] += 1
                 self._stats["proc_ms"] += ((time.monotonic() - t0) * 1000 - self._stats["proc_ms"]) * 0.1      # moving average
                 with self._silhouette_lock:
@@ -172,6 +172,35 @@ class MagicMirror:
                 time.sleep(0.5)
                 continue
             time.sleep(max(0.0, min_dt - (time.monotonic() - t0)))
+
+    def _mirror_raw(self) -> bool:
+        """Show the camera's own picture (True) or the silhouette with the background removed. Read from the settings every 2 s."""
+        now = time.monotonic()
+        c = getattr(self, "_raw_cache", None)
+        if c is None or now - c[0] > 2.0:
+            try:
+                import mirror_settings
+                c = (now, bool(mirror_settings.load().get("mirror_raw", True)))
+            except Exception:
+                c = (now, True)
+            self._raw_cache = c
+        return c[1]
+
+    def _raw_view(self, frame):
+        """The camera picture on the wall: cut to the wall's shape, mirrored like a mirror, and toned for LEDs (contrast and colour)."""
+        import cv2
+        import vision
+        from display import ledtone
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        crop = vision.crop_to_aspect(frame, W / H, v_bias=0.35)
+        small = cv2.resize(crop, (W, H), interpolation=cv2.INTER_AREA)
+        if config.SILHOUETTE_MIRROR:
+            small = cv2.flip(small, 1)
+        rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+        st = getattr(self, "_raw_tone", None)
+        if st is None:
+            st = self._raw_tone = {}
+        return Image.fromarray(ledtone.tone_rgb(rgb, local=0.35, curve=0.45, sat=1.2, sharpen=0.3, smooth=st), "RGB")
 
     @staticmethod
     def _lower_priority():

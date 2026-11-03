@@ -25,6 +25,7 @@ import config
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FILE = os.path.join(_HERE, "panel_setup", "dedications.json")
 MAX_TEXT, MAX_NAME, MAX_ITEMS = 140, 24, 50
+SHOW_QR_ON_WALL = False
 RATE_SEC = 45.0
 _NO_EMOJI = re.compile("[\U00010000-\U0010ffff\u2190-\u27bf\ufe0f\u200d]")
 _lock = threading.Lock()
@@ -170,7 +171,9 @@ class Overlay:
         img = img.copy()
         W, H = img.size
         self._marquee(img, d, now, W, H)
-        if d["show_qr"] and self.cur is None and (now - self.t_start) % self.QR_EVERY < self.QR_FOR:    # never while a message is going across
+        # No "say hi" QR on the pieces any more: the guest QR lives on the home screen (/home) and the printed house-info slip only.
+        # (_qr below stays for anyone who wants it back: set SHOW_QR_ON_WALL = True.)
+        if SHOW_QR_ON_WALL and d["show_qr"] and self.cur is None and (now - self.t_start) % self.QR_EVERY < self.QR_FOR:
             self._qr(img, W, H)
         return img
 

@@ -85,6 +85,7 @@ LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "
                "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "wanderers": "wanderers.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
                "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb", "lennart": "lennart_film.thumb", "kilchberg": "kilchberg.thumb", "snapshots": "slideshow.thumb", "zurichhb": "kilchberg.thumb_hb",
                "quakes": "quakes.thumb"}
+MIRROR_MAX_BRIGHTNESS = 60
 DARK_MODES = {"planes", "westcork", "windch", "windie", "windeu", "polarbears", "wanderers", "nighttrains", "issday",
               "snow", "satellites", "tides", "tramlines", "quakes"}   # as play.py's list of dark, light-on-black pieces
 
@@ -221,6 +222,8 @@ class Runner:
         if what in DARK_MODES:                   # single lit LEDs on black (West Cork, planes ...): the old, cleanest panel settings
             env["WALL_SLOWDOWN"], env["WALL_REFRESH_HZ"] = "7", "100"
         if what == "mirror":
+            env["WALL_BRIGHTNESS"] = str(min(int(self.state.get("brightness", 40)), MIRROR_MAX_BRIGHTNESS))
+            env["WALL_BRIGHTNESS_CAP"] = str(MIRROR_MAX_BRIGHTNESS)        # mirror mode is never brighter than this, whatever the slider says
             env["WALL_FIXED_DEPTH"] = "1"        # a mostly dark picture must not drop to the slower, flickery refresh
         if getattr(self, "boot_pending", False) and self.state.get("boot_welcome", True):
             env["WALL_BOOT"] = "1"               # power-on only (not an app restart): a short greeting, once

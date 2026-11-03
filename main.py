@@ -147,6 +147,7 @@ class MagicMirror:
                         continue
                 else:
                     frame = self.camera.capture_frame()
+                t_w = time.monotonic()
                 self._latest_frame = frame
                 self._note_motion(frame)
                 raw = self._mirror_raw()
@@ -157,7 +158,14 @@ class MagicMirror:
                 else:                                                   # so the picture itself can follow the camera at full speed
                     mask = self.camera.extract_silhouette(frame, getattr(self.camera, "_background", None))
                     self._last_mask = mask
+                t_m = time.monotonic()
                 img = self._raw_view(frame) if raw else silhouette_render.render_silhouette(mask)
+                t_v = time.monotonic()
+                self._follow_focus()
+                st = self._stats
+                st["wait_ms"] = st.get("wait_ms", 0.0) + ((t_w - t0) * 1000 - st.get("wait_ms", 0.0)) * 0.1
+                st["mask_ms"] = st.get("mask_ms", 0.0) + ((t_m - t_w) * 1000 - st.get("mask_ms", 0.0)) * 0.1
+                st["view_ms"] = st.get("view_ms", 0.0) + ((t_v - t_m) * 1000 - st.get("view_ms", 0.0)) * 0.1
                 self._stats["cap"] += 1
                 self._stats["proc_ms"] += ((time.monotonic() - t0) * 1000 - self._stats["proc_ms"]) * 0.1      # moving average
                 with self._silhouette_lock:
@@ -178,6 +186,18 @@ class MagicMirror:
                 time.sleep(0.5)
                 continue
             time.sleep(max(0.0, min_dt - (time.monotonic() - t0)))
+
+    def _follow_focus(self):
+        """Continuous autofocus only while somebody is there (for at least a moment, and until they have been gone a few seconds)."""
+        now = time.monotonic()
+        if self._person_here():
+            self._seen_person = now
+        want = now - getattr(self, "_seen_person", -99.0) < 4.0
+        if want != getattr(self, "_follow_on", False):
+            self._follow_on = want
+            f = getattr(self.camera, "focus_follow", None)
+            if f:
+                f(want)
 
     def _mirror_raw(self) -> bool:
         """Show the camera's own picture (True) or the silhouette with the background removed. Read from the settings every 2 s."""
@@ -425,7 +445,8 @@ class MagicMirror:
         if now - st["t0"] >= 10.0:                               # one line every 10 s in logs/mirror.log: is the loop steady?
             n = max(1, now - st["t0"])
             print(f"[STATS] draw {st['draws'] / n:.1f} fps, longest gap {st['max_gap'] * 1000:.0f} ms, late frames {st['late']}, "
-                  f"camera frames used {st['cap'] / n:.1f}/s, processing {st['proc_ms']:.0f} ms", flush=True)
+                  f"camera frames used {st['cap'] / n:.1f}/s, processing {st['proc_ms']:.0f} ms "
+                  f"(wait {st.get('wait_ms', 0):.0f}, mask {st.get('mask_ms', 0):.0f}, view {st.get('view_ms', 0):.0f})", flush=True)
             st.update(t0=now, draws=0, max_gap=0.0, late=0, cap=0)
         try:
             drew = self.matrix.draw(img, frame_fraction=ff)

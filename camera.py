@@ -59,7 +59,9 @@ class Camera:
         self._focus_held = False
         try:        # Camera Module 3 has a motorised lens: follow the subject continuously (Fast: a person steps in front)
             if "AfMode" in self.cam.camera_controls:
-                cfg["controls"].update({"AfMode": 2, "AfRange": 0, "AfSpeed": 1})    # Continuous, Normal range (no macro), Fast
+                # Start with the lens held at a normal standing distance: continuous autofocus on an EMPTY scene hunts back and forth
+                # (the wall's picture pumps). focus_follow(True) turns continuous AF on while somebody is in front of the mirror.
+                cfg["controls"].update({"AfMode": 0, "LensPosition": float(getattr(config, "CAMERA_IDLE_LENS", 0.8))})
                 self._af = True
         except Exception:
             pass
@@ -230,14 +232,34 @@ class Camera:
             pass
 
     def focus_release(self):
-        """Back to following the subject continuously, over the whole picture."""
+        """Back to following the subject continuously (when somebody is there), over the whole picture; else the lens rests."""
         if not self._af:
             return
         try:
-            self.cam.set_controls({"AfMetering": 0, "AfMode": 2, "AfRange": 0, "AfSpeed": 1})
+            if getattr(self, "_follow", False):
+                self.cam.set_controls({"AfMetering": 0, "AfMode": 2, "AfRange": 0, "AfSpeed": 1})
+            else:
+                self.cam.set_controls({"AfMetering": 0, "AfMode": 0, "LensPosition": float(getattr(config, "CAMERA_IDLE_LENS", 0.8))})
         except Exception:
             pass
         self._focus_held = False
+
+    def focus_follow(self, on: bool):
+        """Continuous autofocus only while somebody is in front of the mirror. With nobody there the lens rests at a normal
+        distance instead of hunting across an empty room."""
+        if not self._af or on == getattr(self, "_follow", False):
+            return
+        self._follow = on
+        if getattr(self, "_focus_held", False):
+            return                                   # a photo's own focus cycle is running: it calls focus_release when it is done
+        try:
+            if on:
+                self.cam.set_controls({"AfMetering": 0, "AfMode": 2, "AfRange": 0, "AfSpeed": 1})
+            else:
+                self.cam.set_controls({"AfMode": 0, "LensPosition": float(getattr(config, "CAMERA_IDLE_LENS", 0.8))})
+            print(f"[CAMERA] autofocus {'following' if on else 'resting'}", flush=True)
+        except Exception as e:
+            print(f"[CAMERA] focus_follow failed ({e})", flush=True)
 
     # ---- face exposure ---------------------------------------------------------------------------------------------------
     def face_luma(self, face_rect):

@@ -52,6 +52,7 @@ MATRIX_AMPS_PER_PANEL = 4.0
 # 0 = off, 1 = full. Dark colours are lifted into the visible range keeping their hue; bright ones are untouched.
 ART_SHADOW_LIFT = float(__import__("os").environ.get("WALL_LIFT", 0.5))
 MATRIX_PWM_BITS = 5            # (5 bits / 110 Hz: the least flicker in the blind test; bright screens still flickered at 6 bits / 100 Hz) # 1-11; fewer bits = much higher refresh
+COLOUR_DITHER = float(__import__("os").environ.get("WALL_DITHER", 5))   # static ordered dither, +-levels: more colour depth at 5 PWM bits without temporal flicker (0 = off, set WALL_DITHER in .env)
 MATRIX_PWM_DITHER_BITS = 0      # 0-2: smoother gradients at low pwm_bits, costs refresh
 MATRIX_PWM_LSB_NS = 60         # measured 2026-10-14: at 130 the refresh dips to 55 Hz under the 58 Hz lock (judder); at 80 it never drops below 62
 DEPTH_STEPS = [(0.02, 8), (0.04, 7)]   # (picture level below, PWM bits): darker pictures get more colour steps, brighter ones a faster refresh

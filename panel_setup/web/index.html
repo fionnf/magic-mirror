@@ -852,6 +852,7 @@ let ART = null, artFilter = 'all', musicArtFilter = 'all';
 const HOUR_IDS = ['shader-aurora', 'shader-bloom', 'shader-crystal', 'shader-inkcloud', 'shader-metamorphosis', 'shader-orbit', 'shader-totality'];
 const LIVE_IDS = ['trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'windeu', 'polarbears', 'livecam', 'skylines', 'wanderers', 'nighttrains', 'issday', 'snow', 'tides', 'limmat', 'westcork', 'quakes', 'laend', 'kilchberg', 'zurichhb'];
 const SLIDE_IDS = ['lava', 'shapes', 'flow', 'shaders', 'artsy', 'glass', 'art', 'snapshots'];
+function openHome() { window.open(u('/home'), '_blank'); }
 const SHOW_IDS = ['pride', 'dewa', 'maeva', 'maxfionn', 'lennart', 'welcome', 'cow'];
 const modeGroup = {live: LIVE_IDS, slides: SLIDE_IDS, shows: SHOW_IDS};
 function modeTiles() {                       // the non-piece things the wall can show, filtered like the pieces
@@ -871,7 +872,8 @@ async function loadArt() {
   $('galleryHead').textContent = `Gallery · ${ART.pieces.length + MODES.filter(m => [].concat(SLIDE_IDS, SHOW_IDS, LIVE_IDS).includes(m.id)).length} things to show`;
   const modeTile = m => `<button class="${STATUS.current === m.id ? 'sel' : ''}" onclick="play('${m.id}')">
       <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy"><span>${esc(m.title)}</span>${SHOW_IDS.includes(m.id) ? `<i class="gifshare" role="button" tabindex="0" aria-label="Share ${esc(m.title)} as a GIF" onclick="shareGif(event,'${m.id}')">GIF</i>` : ''}</button>`;
-  $('artGrid').innerHTML = modes.map(modeTile).join('') + list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
+  const homeTile = artFilter === 'all' ? `<button onclick="openHome()"><img src="${u('/thumbs/home.png')}" alt="" loading="lazy"><span>Home screen (QR codes)</span></button>` : '';
+  $('artGrid').innerHTML = homeTile + modes.map(modeTile).join('') + list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
       <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   if (MUSIC.settings && MUSIC.settings.style === 'art') {
     $('musicArtChips').innerHTML = chips(musicArtFilter, 'filterMusicArt');

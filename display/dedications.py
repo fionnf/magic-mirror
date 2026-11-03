@@ -170,7 +170,7 @@ class Overlay:
         img = img.copy()
         W, H = img.size
         self._marquee(img, d, now, W, H)
-        if d["show_qr"] and (now - self.t_start) % self.QR_EVERY < self.QR_FOR:
+        if d["show_qr"] and self.cur is None and (now - self.t_start) % self.QR_EVERY < self.QR_FOR:    # never while a message is going across
             self._qr(img, W, H)
         return img
 

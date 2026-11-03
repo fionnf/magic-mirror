@@ -83,11 +83,13 @@ def load_cams():
     """The configured cams: file first, then WALL_LIVECAMS_JSON (JSON text or a file path), env wins by name."""
     cams = {}
     srcs = []
-    try:
-        with open(CFG_FILE) as fh:
-            srcs.append(fh.read())
-    except Exception:
-        pass
+    for path in (CFG_FILE, os.path.join(os.path.dirname(CFG_FILE), "livecams.roundshot.json")):   # yours, else the shipped Roundshot list
+        try:
+            with open(path) as fh:
+                srcs.append(fh.read())
+            break
+        except Exception:
+            continue
     env = os.environ.get("WALL_LIVECAMS_JSON", "").strip()
     if env:
         if env[0] in "[{":

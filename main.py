@@ -356,17 +356,19 @@ class MagicMirror:
             time.sleep(1.0)
             return "The mirror dreams of electric sheep."
         import ai_client
-        return self._shorten(ai_client.get_mirror_message(frame, self._hint()))
+        known = len(dict.fromkeys(self._info.get("names", []))) if self._info.get("all_known") else 1
+        return self._shorten(ai_client.get_mirror_message(frame, self._hint()), self._ai_words(max(1, known)))
 
     @staticmethod
-    def _shorten(text):
-        """Safety net: strip quotes and cap the reply at AI_MAX_WORDS words."""
+    def _shorten(text, max_words=None):
+        """Safety net: strip quotes and cap the reply at AI_MAX_WORDS words (more when it has to name several people)."""
         if not text:
             return text
+        cap = max_words or config.AI_MAX_WORDS
         words = text.strip().strip('"\u201c\u201d').split()
-        if len(words) <= config.AI_MAX_WORDS:
+        if len(words) <= cap:
             return " ".join(words)
-        return " ".join(words[:config.AI_MAX_WORDS]).rstrip(",;:-") + "..."
+        return " ".join(words[:cap]).rstrip(",;:-") + "..."
 
     def _show(self, img, fps: int = 25):
         """One frame to the wall, paced by the panels' own refresh when it can: each frame is held for exactly N refreshes,
@@ -508,7 +510,7 @@ class MagicMirror:
     def _read_faces(self, raw, rows):
         """Who is in front of the mirror and are they smiling (names only for people who were
         enrolled in the app; never anything else is stored)."""
-        info = {"names": [], "smiling": False, "faces": len(rows)}
+        info = {"names": [], "smiling": False, "faces": len(rows), "all_known": False}
         try:
             import mirror_settings
             st = mirror_settings.load()
@@ -524,6 +526,7 @@ class MagicMirror:
                     if book.people():
                         seen = book.observe(raw, rows, learn=st["learn_faces"])
                         info["names"] = [n for _, n, _ in seen if n]
+                        info["all_known"] = bool(seen) and all(n for _, n, _ in seen)       # the mirror knows every face it sees
         except Exception as e:
             print(f"[FACES] skipped: {e}")
         self._info = info
@@ -532,13 +535,26 @@ class MagicMirror:
     def _hint(self):
         """Facts for the AI line, e.g. 'The person is called Fionn. They are smiling.'"""
         i, parts = self._info, []
-        if i["names"]:
-            parts.append("The person is called " + " and ".join(dict.fromkeys(i["names"])) + ".")
+        names = list(dict.fromkeys(i["names"]))
+        if len(names) >= 2 and i.get("all_known"):
+            who = ", ".join(names[:-1]) + " and " + names[-1]
+            parts.append(f"There are {len(names)} people in the picture and the mirror knows every one of them: {who}. "
+                         f"Address ALL of them by name in your line (about {self._ai_words(len(names))} words at most).")
+        elif names:
+            if i["faces"] > 1:
+                parts.append("The mirror recognises " + " and ".join(names) + ". The other people in the picture are not known: do not guess their names.")
+            else:
+                parts.append("The person is called " + names[0] + ".")
         if i["smiling"]:
-            parts.append("They are smiling.")
-        if i["faces"] > 1:
+            parts.append("They are smiling." if len(names) < 2 else "They are smiling.")
+        if i["faces"] > 1 and not (len(names) >= 2 and i.get("all_known")):
             parts.append(f"There are {i['faces']} people in the picture.")
         return " ".join(parts)
+
+    @staticmethod
+    def _ai_words(people: int) -> int:
+        """How long the line may be: a few words more for every extra person it has to name."""
+        return config.AI_MAX_WORDS + 4 * max(0, people - 1)
 
     def _do_trigger_capture(self):
         """Single-shot capture: countdown, then the edge flash and the photo."""
@@ -896,11 +912,28 @@ class MagicMirror:
     ENDLESS_LEAVE_SEC = 20.0          # nobody in front of the mirror for this long: the long strip is finished and cut
     ENDLESS_MAX = 30                  # photos in one long strip (about 3 m of paper)
 
+    def _faces_in_frame(self, frame=None) -> bool:
+        """A face (not just a silhouette or a moving shape) is in the picture: the endless booth only runs for people it can see."""
+        try:
+            import smartcrop
+            f = frame if frame is not None else getattr(self, "_latest_frame", None)
+            if f is None:
+                return False
+            return any(min(r[2], r[3]) >= 40 for r in smartcrop.find_face_rows(f))
+        except Exception:
+            return False
+
     def _endless_here(self) -> bool:
-        return self._person_here() or (time.monotonic() - self._last_presence) < 6.0
+        """Somebody's face is in front of the mirror (looked for about 3 times a second)."""
+        now = time.monotonic()
+        c = getattr(self, "_endless_face_cache", None)
+        if c is None or now - c[0] > 0.35:
+            c = (now, self._faces_in_frame())
+            self._endless_face_cache = c
+        return c[1]
 
     def _endless_wait_for_people(self, secs: float) -> bool:
-        """Show the quiet mirror for up to `secs`; True as soon as somebody is in front of it."""
+        """Show the quiet mirror for up to `secs`; True as soon as a face is in front of it."""
         t_end = time.monotonic() + secs
         while not self._stop.is_set():
             if self._endless_here():
@@ -948,9 +981,12 @@ class MagicMirror:
         qr_url, folder_id = None, None
         try:
             self._set_state(State.BOOTH)
+            if not self._endless_wait_for_people(8.0):                  # it only works with a face in the picture
+                print("[ENDLESS] no face in frame, not starting")
+                jobs.put(None)
+                return
             self.strip.set_mode("countdown")
             self._flash_white(config.TRIGGER_FLASH_MS)
-            jobs.put(("head", None))
             try:
                 import cloud_uploader
                 session = cloud_uploader.create_booth_session_folder()
@@ -960,10 +996,23 @@ class MagicMirror:
             except Exception as e:
                 print(f"[ENDLESS] folder create skip: {e}")
             print("[ENDLESS] started")
+            misses = 0
             while not self._stop.is_set() and len(frames) < self.ENDLESS_MAX:
                 self._do_countdown(config.BOOTH_PER_PHOTO_COUNTDOWN)
                 frame = self._capture_with_flash()
+                if frame is not None and not self._faces_in_frame(frame):
+                    print("[ENDLESS] no face in that photo, not printed")
+                    frame = None
+                if frame is None:
+                    misses += 1
+                    if misses >= 4:                                     # the live view sees a face but the photos never do: stop
+                        print("[ENDLESS] four photos without a face, stopping")
+                        break
+                    continue
+                misses = 0
                 if frame is not None:
+                    if not frames:
+                        jobs.put(("head", None))                        # the strip begins with its first real photo
                     keep = frame
                     if max(frame.shape[:2]) > 1600:                 # 30 full-size stills would not fit in memory
                         k = 1600.0 / max(frame.shape[:2])
@@ -978,7 +1027,8 @@ class MagicMirror:
                 if not self._endless_wait_for_people(self.ENDLESS_LEAVE_SEC):
                     print("[ENDLESS] everyone left")
                     break
-            jobs.put(("foot", (qr_url, len(frames))))
+            if frames:
+                jobs.put(("foot", (qr_url, len(frames))))
             jobs.put(None)
             self.strip.set_mode("displaying")
             t_wait = time.monotonic()

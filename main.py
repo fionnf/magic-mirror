@@ -149,9 +149,15 @@ class MagicMirror:
                     frame = self.camera.capture_frame()
                 self._latest_frame = frame
                 self._note_motion(frame)
-                mask = self.camera.extract_silhouette(                  # still needed: it is how the mirror knows somebody is there
-                    frame, getattr(self.camera, "_background", None))
-                img = self._raw_view(frame) if self._mirror_raw() else silhouette_render.render_silhouette(mask)
+                raw = self._mirror_raw()
+                n = getattr(self, "_cap_n", 0) + 1
+                self._cap_n = n
+                if raw and n % 4 and getattr(self, "_last_mask", None) is not None:
+                    mask = self._last_mask                              # raw view: who is there is worked out every 4th picture only,
+                else:                                                   # so the picture itself can follow the camera at full speed
+                    mask = self.camera.extract_silhouette(frame, getattr(self.camera, "_background", None))
+                    self._last_mask = mask
+                img = self._raw_view(frame) if raw else silhouette_render.render_silhouette(mask)
                 self._stats["cap"] += 1
                 self._stats["proc_ms"] += ((time.monotonic() - t0) * 1000 - self._stats["proc_ms"]) * 0.1      # moving average
                 with self._silhouette_lock:

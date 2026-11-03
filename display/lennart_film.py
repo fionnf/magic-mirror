@@ -254,9 +254,16 @@ def _body(d, x, y, s, t, who, pose="stand", ph=0.0, bulge=0.0, puff=False, mood=
 
 def person(img, x, y, s, t, who, pose="stand", ph=0.0, flip=False, **kw):
     """Draw onto img via a small transparent layer, so a person can face left (flip)."""
-    cw, ch = 110, 120
+    outline = kw.pop("outline", False)
+    cw, ch = 130, 140
     layer = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
     _body(ImageDraw.Draw(layer), cw // 2, ch - 14, s, t, who, pose, ph, **kw)
+    if outline:                                                              # a dark rim lifts the figure off the background
+        from PIL import ImageFilter
+        rim = layer.split()[3].filter(ImageFilter.MaxFilter(5))
+        back = Image.new("RGBA", (cw, ch), (24, 18, 30, 0))
+        back.putalpha(rim.point(lambda v: 255 if v > 0 else 0))
+        layer = Image.alpha_composite(back, layer)
     if flip:
         layer = layer.transpose(Image.FLIP_LEFT_RIGHT)
     img.paste(layer, (int(x - cw // 2), int(y - ch + 14)), layer)

@@ -25,8 +25,8 @@ from PIL import Image, ImageDraw
 
 import config
 from display import laend_intro as li
-from display.laend_intro import _c, _ease, _mix, _sky, _hills, _fachwerk, _text, font
-from display.lennart_film import person, _talk
+from display.laend_intro import _c, _ease, _mix, _sky, _hills, _fachwerk, font
+from display.lennart_film import person
 
 W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
 LOOP_SEC = 174.0
@@ -55,6 +55,65 @@ for _k, _v in CAPS.items():
 
 
 # ---------------------------------------------------------------- helpers ---
+# Readability on the LED wall: nothing under 9 px, bold bubbles and captions, dark rims on the figures, no strobing.
+
+def _text(d, xy, s, size, fill, stroke=2, anchor="mm", sc=(0, 0, 0)):
+    li._text(d, xy, s, max(9, int(size)), fill, stroke=max(1, stroke), anchor=anchor, sc=sc)
+
+
+BUBBLE_UP = 14                                                               # the figures are bigger: bubbles sit higher
+
+
+def _say(d, x, y, txt, col, pop=1.0):
+    """A speech bubble (10 px type, a thick rim) whose tail points down to (x, y - BUBBLE_UP)."""
+    if not txt:
+        return
+    y = y - BUBBLE_UP
+    f = font(10)
+    lines = li._wrap(txt, 10, 150)
+    wd = max(f.getlength(ln) for ln in lines) + 12
+    hh = 13 * len(lines) + 6
+    bx = min(max(x, wd / 2 + 3), W - wd / 2 - 3)
+    top = y - hh * pop - 7
+    d.rounded_rectangle([bx - wd / 2, top, bx + wd / 2, top + hh * pop], 5, fill=(255, 255, 255), outline=(20, 20, 30), width=2)
+    d.polygon([(x - 4, top + hh * pop - 1), (x + 5, top + hh * pop - 1), (x, top + hh * pop + 8)], fill=(255, 255, 255), outline=(20, 20, 30))
+    d.line([(x - 3, top + hh * pop - 1), (x + 4, top + hh * pop - 1)], fill=(255, 255, 255), width=2)
+    if pop > 0.95:
+        for i, ln in enumerate(lines):
+            d.text((bx, top + 10 + i * 13), ln, font=f, fill=col, anchor="mm")
+
+
+def _talk(d, u, items):
+    for t0, t1, x, y, txt, col in items:
+        if t0 <= u < t1:
+            _say(d, x, y, txt, col, min(1.0, (u - t0) / 0.25))
+
+
+def _caption(img, key, u):
+    """The narrator line: 12 px, in a dark band at the bottom, typed out."""
+    cur = None
+    for start, text in li.CAPTIONS.get(key, []):
+        if u >= start:
+            cur = (start, text)
+    if not cur:
+        return
+    start, text = cur
+    lines = li._wrap(text, 12, W - 12)
+    n = int((u - start) * 24) + 1
+    shown, left = [], n
+    for ln in lines:
+        shown.append(ln[:max(0, left)])
+        left -= len(ln) + 1
+    lh = 16
+    y0 = H - lh * len(lines) - 8
+    arr = np.asarray(img, np.float32)
+    arr[y0 - 5:] *= 0.22
+    img.paste(Image.fromarray(arr.astype(np.uint8), "RGB"))
+    d = ImageDraw.Draw(img)
+    for i, ln in enumerate(shown):
+        if ln:
+            _text(d, (W / 2, y0 + i * lh + lh / 2), ln, 12, (255, 246, 224), stroke=1)
+
 
 class _Safe:
     """ImageDraw that accepts boxes drawn right-to-left (mirrored vehicles)."""
@@ -96,27 +155,26 @@ def _light(img, cx, cy, r, col, a=0.5):
 def _cobbles(d, y0, y1, base=(112, 106, 102), seed=1):
     d.rectangle([0, y0, W, y1], fill=base)
     rs = random.Random(seed)
-    rows = max(1, int((y1 - y0) / 5))
+    rows = max(1, int((y1 - y0) / 6))
     for j in range(rows):
-        y = y0 + j * 5 + 2
-        sz = 7 + j * 0.5
+        y = y0 + j * 6 + 2
+        sz = 10 + j * 0.8
         for i in range(-1, int(W / sz) + 2):
             x = i * sz + (sz / 2 if j % 2 else 0)
-            v = rs.randrange(-14, 14)
-            d.ellipse([x, y, x + sz - 1.5, y + 4], fill=(base[0] + v, base[1] + v, base[2] + v), outline=(base[0] - 28, base[1] - 28, base[2] - 26))
+            v = rs.randrange(-6, 6)
+            d.ellipse([x, y, x + sz - 2, y + 5], fill=(base[0] + v, base[1] + v, base[2] + v), outline=(base[0] - 12, base[1] - 12, base[2] - 10))
 
 
 def _stars(d, n, t, ymax=120, seed=2):
     rs = random.Random(seed)
     for i in range(n):
         x, y = rs.randrange(W), rs.randrange(ymax)
-        tw = 0.5 + 0.5 * math.sin(t * 2 + i)
-        d.point((x, y), fill=(int(150 + 100 * tw),) * 3)
+        d.rectangle([x, y, x + 1, y + 1], fill=(230, 230, 230))               # steady stars: twinkling reads as flicker on an LED wall
 
 
 def _persons(img, items, t):
     for (x, y, who, pose, kw) in items:
-        person(img, x, y, kw.pop("s", 1.9), t, who, pose, kw.pop("ph", 0.0), kw.pop("flip", False), **kw)
+        person(img, x, y, kw.pop("s", 2.1), t, who, pose, kw.pop("ph", 0.0), kw.pop("flip", False), outline=True, **kw)
 
 
 def _wheel(d, cx, cy, r, spin):
@@ -164,7 +222,7 @@ def _porsche(d, x, base, s, t, boot=0.0, tools=0.0, face_left=False, sag=0.0, mo
     d.rectangle([*P(-40, -27), *P(-37, -17)], fill=(214, 24, 36))                                 # tail-light bar
     d.polygon([P(32, -21), P(35, -21), P(35, -17), P(33.5, -15.5), P(32, -17)], fill=(236, 200, 60))   # the crest on the wing
     d.rectangle([*P(33, -19), *P(34.4, -17.5)], fill=(190, 30, 40))
-    d.text(P(2, -11), "PORSCHE", font=font(6), fill=(232, 234, 240), anchor="mm")
+    d.text(P(2, -11), "PORSCHE", font=font(8), fill=(232, 234, 240), anchor="mm")
     if boot > 0:                                                                                   # the tailgate opens: dark boot, tools, hi-vis vest
         d.polygon([P(-37, -31), P(-24, -31), P(-24, -11), P(-37, -9)], fill=(12, 12, 16))
         if tools > 0:
@@ -183,7 +241,7 @@ def _porsche(d, x, base, s, t, boot=0.0, tools=0.0, face_left=False, sag=0.0, mo
 def _rolf(d, x, base, s, t, plants=0, shake=0.0):
     """Rolf: a red Bauhaus trolley basket on four little wheels. x = centre."""
     d = _Safe(d)
-    sh = math.sin(t * 15) * shake
+    sh = math.sin(t * 5) * shake
     red, hi = (214, 34, 40), (240, 110, 110)
     x0, x1, y0, y1 = x - 16 * s, x + 16 * s, base - 28 * s + sh, base - 8 * s + sh
     d.rectangle([x0, y0, x1, y1], outline=red, width=max(1, int(1.6 * s)))
@@ -215,10 +273,10 @@ def _karcher(d, x, base, s, t):
     d.rounded_rectangle([x - 14 * s, base - 31 * s, x + 14 * s, base - 5 * s], 3 * s, fill=(255, 204, 0), outline=(70, 56, 0))
     d.rectangle([x - 14 * s, base - 11 * s, x + 14 * s, base - 5 * s], fill=(34, 34, 38))
     d.rectangle([x - 12 * s, base - 28 * s, x + 12 * s, base - 19 * s], fill=(255, 224, 70))
-    d.text((x, base - 24 * s), "KÄRCHER", font=font(7), fill=(20, 20, 24), anchor="mm")
+    d.text((x, base - 24 * s), "KÄRCHER", font=font(9), fill=(20, 20, 24), anchor="mm")
     d.ellipse([x - 9 * s, base - 17 * s, x - 4 * s, base - 12 * s], fill=(34, 34, 38))                # the pressure dial
     d.line([(x - 6.5 * s, base - 16.6 * s), (x - 5.4 * s, base - 14.4 * s)], fill=(250, 60, 40), width=1)
-    d.text((x + 6 * s, base - 14.5 * s), "MAX", font=font(5), fill=(220, 40, 30), anchor="mm")
+    d.text((x + 6 * s, base - 14.5 * s), "MAX", font=font(8), fill=(220, 40, 30), anchor="mm")
     for wx in (x - 11 * s, x + 11 * s):
         d.ellipse([wx - 4 * s, base - 8 * s, wx + 4 * s, base], fill=(24, 24, 28))
         d.ellipse([wx - 1.6 * s, base - 5.6 * s, wx + 1.6 * s, base - 2.4 * s], fill=(120, 120, 126))
@@ -226,13 +284,15 @@ def _karcher(d, x, base, s, t):
         d.arc([x + 12 * s, base - 30 * s + k * 3 * s, x + 24 * s, base - 16 * s + k * 3 * s], 270, 90, fill=(30, 30, 34), width=max(1, int(1.6 * s)))
 
 
-def _spray(d, gx, gy, tx, ty, t, n=70, col=(230, 246, 255)):
-    rs = random.Random(int(t * 24))
-    for _ in range(n):
-        k = rs.random()
-        x = gx + (tx - gx) * k + rs.uniform(-3, 3) * k
-        y = gy + (ty - gy) * k + rs.uniform(-3, 3) * k - math.sin(k * math.pi) * 5
-        d.ellipse([x - 1, y - 1, x + 1.2, y + 1.2], fill=col)
+def _spray(d, gx, gy, tx, ty, t, n=26, col=(236, 248, 255)):
+    """A steady water jet: droplets run along a curve, each at its own phase, so nothing jumps between frames."""
+    for i in range(n):
+        k = ((t * 1.1 + i / n) % 1.0)
+        spread = (i % 5 - 2) * 1.4 * k
+        x = gx + (tx - gx) * k
+        y = gy + (ty - gy) * k - math.sin(k * math.pi) * 5 + spread
+        r = 1.8 + 1.2 * k
+        d.ellipse([x - r, y - r, x + r, y + r], fill=col)
 
 
 def _gummi(d, x, y, s, t):
@@ -296,14 +356,14 @@ def _colibri(u, t):
         d.line([(wx + 35, 84), (wx + 35, 134)], fill=(56, 28, 28), width=2)
     for i, x in enumerate(range(0, W + 8, 8)):                                                         # string lights
         y = 54 + 6 * math.sin(x / W * math.pi * 3)
-        d.ellipse([x - 1.5, y, x + 1.5, y + 3], fill=(255, 220, 130) if (int(t * 2) + i) % 3 else (200, 130, 80))
+        d.ellipse([x - 1.5, y, x + 1.5, y + 3], fill=(255, 214, 130))
     _cobbles(d, 150, H, base=(86, 80, 90), seed=4)
     _light(img, W / 2, 110, 120, (255, 160, 90), 0.22)
     d = ImageDraw.Draw(img)
     d.ellipse([54, 176, 140, 190], fill=(236, 226, 206), outline=(120, 100, 80))                       # the table
     d.line([(97, 190), (97, 206)], fill=(120, 120, 126), width=3)
     d.rectangle([94, 168, 100, 176], fill=(250, 240, 220))
-    d.ellipse([93, 161 + math.sin(t * 12) * 0.6, 101, 170], fill=(255, 190, 70))                       # a candle
+    d.ellipse([93, 161 + math.sin(t * 3) * 0.6, 101, 170], fill=(255, 190, 70))                       # a candle
     n = min(47, int(max(0.0, u - 6.0) * 5.5))
     for i in range(min(16, n // 3)):                                                                    # the Moods pile up
         bx, by = 58 + (i % 8) * 10, 176 - (i // 8) * 5 - 3
@@ -313,7 +373,7 @@ def _colibri(u, t):
     vx = 262 - _ease(min(1.0, max(0.0, (u - 3.0) / 3.2))) * 70
     _persons(img, [(vx, 208, "V", "hold", {"flip": True, "item": "tray"})], t)
     d = ImageDraw.Draw(img)
-    _text(d, (W - 6, 14), f"Moods: {n}", 11, (255, 226, 130), stroke=2, anchor="rm")
+    _text(d, (W - 6, 14), f"Moods: {n}", 14, (255, 226, 130), stroke=2, anchor="rm")
     _talk(d, u, [(0.5, 3.0, 40, 148, "Nur ein Getränk.", RED), (3.0, 5.2, 154, 148, "Ich glaub dir kein Wort.", BLUE),
                  (5.6, 7.6, vx, 148, "Moods?", PUR), (7.6, 9.4, 40, 148, "Ja.", RED), (9.4, 11.2, vx, 148, "Wie viele?", PUR),
                  (11.2, 12.6, 40, 148, "Ja.", RED), (12.6, 15.0, 154, 148, "Max. Das sind 47 Packungen.", BLUE),
@@ -372,18 +432,18 @@ def _heim(u, t):
     _hills(d, 124, 10, (22, 22, 44), 5)
     d.rectangle([0, 148, W, H], fill=(46, 46, 54))
     d.rectangle([0, 148, W, 152], fill=(70, 70, 78))
-    for i in range(-1, 8):
-        xx = (i * 40 - u * 120) % (W + 40) - 20
-        d.rectangle([xx, 196, xx + 22, 199], fill=(230, 220, 150))
-    cx = 96 + math.sin(t * 2.2) * 1.5
-    sag = 2.6 + math.sin(t * 8) * 0.5
+    for i in range(-1, 7):
+        xx = (i * 48 - u * 70) % (W + 48) - 24
+        d.rectangle([xx, 196, xx + 28, 200], fill=(226, 214, 140))
+    cx = 96 + math.sin(t * 1.5) * 1.0
+    sag = 2.6 + math.sin(t * 2.5) * 0.35
     _light(img, cx + 54, 186, 70, (255, 240, 180), 0.22)
     d = ImageDraw.Draw(img)
     _porsche(d, cx, 216, 1.45, t, sag=sag, moving=1.0)
     rs = random.Random(5)
     for i in range(52):                                                                                 # a metric tonne of pumpkins
         px = cx - 60 + rs.random() * 112
-        py = 216 - (44 + rs.random() * 26 + (1 - abs(px - cx) / 60) * 18 + max(0.0, math.sin(t * 8 + i) * 0.5)) * 1.45 + 12
+        py = 216 - (44 + rs.random() * 26 + (1 - abs(px - cx) / 60) * 18 + 0.0) * 1.45 + 12
         _pumpkin(d, px, py, 6.5 + rs.random() * 3.5)
     d.polygon([(cx - 14, 164), (cx + 26, 164), (cx + 24, 174), (cx - 12, 174)], fill=(46, 70, 100))   # people in the window
     d.ellipse([cx - 8, 158, cx + 2, 170], fill=(238, 198, 168))
@@ -457,7 +517,7 @@ def _terrasse(u, t):
         d.line([(172, 140), (172, 148)], fill=(100, 84, 70), width=2)
     d.rectangle([40, 6, 152, 18], outline=(255, 255, 255))
     d.rectangle([41, 7, 41 + 110 * 0.12, 17], fill=(255, 190, 60))
-    _text(d, (96, 12), "in Arbeit: 12 %", 8, (255, 255, 255), stroke=1)
+    _text(d, (96, 12), "in Arbeit: 12 %", 10, (255, 255, 255), stroke=1)
     _talk(d, u, [(0.3, 2.4, 150, 148, "Mehr Druck!", BLUE), (2.4, 4.4, mxp, 148, "Ist schon Stufe MAX.", RED),
                  (4.4, 6.3, 150, 148, "Mehr!", BLUE), (6.3, 8.4, mxp, 148, "Es gibt kein mehr!", RED),
                  (8.4, 10.4, 172, 110, "Das war mein Rasen!", PUR), (10.4, 12.6, 150, 148, "Max. Die Fugen sind weg.", BLUE),
@@ -475,7 +535,7 @@ def _parken(u, t):
     d.rectangle([76, 60, 116, 156], fill=(180, 160, 140))
     d.polygon([(72, 60), (96, 40), (120, 60)], fill=(150, 66, 58))
     d.rectangle([80, 70, 112, 84], fill=(250, 246, 232), outline=(110, 80, 60))
-    _text(d, (96, 77), "Fortunagasse 24", 7, (50, 40, 36), stroke=0)
+    _text(d, (96, 77), "Fortunagasse 24", 10, (50, 40, 36), stroke=0)
     _cobbles(d, 156, H, seed=5)
     d.rectangle([20, 104, 22, 156], fill=(120, 120, 126))                                                 # the signs
     d.ellipse([10, 82, 32, 104], fill=(40, 70, 190), outline=(255, 255, 255), width=2)
@@ -484,7 +544,6 @@ def _parken(u, t):
     d.rectangle([160, 100, 186, 122], fill=(40, 90, 190))
     d.ellipse([168, 103, 178, 113], fill=(255, 255, 255))
     d.rectangle([168, 113, 178, 118], fill=(255, 255, 255))
-    d.text((173, 128), "Fussgängerzone", font=font(5), fill=(60, 60, 70), anchor="mm")
     px = -80 + (82 + 80) * _ease(min(1.0, u / 3.0))
     boot = _c((u - 3.4) / 0.9) * 0.95
     _porsche(d, px, 208, 1.45, t, boot=boot, tools=_c((u - 4.4) / 2.0), moving=1.0 if u < 3.0 else 0.0)
@@ -525,7 +584,7 @@ def _bauhaus(u, t):
             d.polygon([(tx + k * 6, 112), (tx + k * 6 + 5, 112), (tx + k * 6 + 4, 105), (tx + k * 6 + 1, 105)], fill=(200, 100, 60))
             d.ellipse([tx + k * 6 - 1, 98 - (k % 2) * 2, tx + k * 6 + 6, 106], fill=[(70, 170, 80), (50, 140, 70), (90, 190, 100)][k % 3])
     n = int(_c(u / 6.0) * 47)
-    _text(d, (W - 6, 12), f"Pflanzen: {n}/47", 10, (255, 255, 255), stroke=2, anchor="rm")
+    _text(d, (W - 6, 12), f"Pflanzen: {n}/47", 12, (255, 255, 255), stroke=2, anchor="rm")
     sbx = 176                                                                                               # the cart bay: a red trolley waits
     if u < 6.5:
         fx = 40 + 30 * _ease(min(1.0, u / 4.0))
@@ -541,7 +600,7 @@ def _bauhaus(u, t):
         trolley_x = fx + 36
     else:
         trolley_x = cx_car + 82                                                                              # hitched on behind the car
-    _rolf(d, trolley_x, 208, 1.35, t, plants=min(14, int(max(0.0, u - 12.0) * 4)) if u > 12 else 0, shake=0.5 if u > 16 else 0.0)
+    _rolf(d, trolley_x, 208, 1.35, t, plants=min(14, int(max(0.0, u - 12.0) * 4)) if u > 12 else 0, shake=0.0)
     if u > 11.0:
         _porsche(d, cx_car, 210, 1.4, t, face_left=True, moving=1.0 if (u < 13.6 or u > 16.0) else 0.0)
     kx = 82
@@ -582,7 +641,7 @@ def _dinner(u, t):
     d.rectangle([20, 160, 172, 190], fill=(250, 246, 236))
     for cxx in (50, 144):
         d.rectangle([cxx - 2, 128, cxx + 2, 148], fill=(250, 240, 220))
-        d.ellipse([cxx - 3, 120 + math.sin(t * 12 + cxx) * 0.8, cxx + 3, 130], fill=(255, 190, 70))
+        d.ellipse([cxx - 3, 120 + math.sin(t * 3 + cxx) * 0.8, cxx + 3, 130], fill=(255, 190, 70))
     d.rectangle([92, 124, 98, 148], fill=(44, 90, 56))
     d.rectangle([94, 116, 96, 124], fill=(44, 90, 56))
     _light(img, 96, 130, 110, (255, 180, 90), 0.26)
@@ -591,7 +650,7 @@ def _dinner(u, t):
     d = ImageDraw.Draw(img)
     if u > 4.6:
         d.rectangle([66, 164, 126, 180], fill=(252, 248, 232), outline=(70, 44, 24))
-        _text(d, (96, 172), "1 x PALETTE WEIN", 6, (170, 30, 30), stroke=0)
+        _text(d, (96, 172), "1 x PALETTE WEIN", 8, (170, 30, 30), stroke=0)
     _talk(d, u, [(0.3, 2.4, 96, 140, "Ein sehr guter Wein.", (30, 40, 110)), (2.4, 4.4, 36, 140, "Bestell eine Palette.", RED),
                  (4.4, 6.2, 96, 140, "Eine Flasche?", (30, 40, 110)), (6.2, 8.0, 36, 140, "PALETTE.", RED),
                  (8.0, 10.0, 96, 140, "Aber mein Keller...", (30, 40, 110)), (10.0, 12.0, 36, 140, "Dann bau einen.", RED)])
@@ -629,7 +688,7 @@ def _palast(u, t):
     for wx in (tx - 18, tx + 56):
         d.ellipse([wx - 7, 194, wx + 7, 208], fill=(20, 20, 24))
         d.ellipse([wx - 3, 198, wx + 3, 204], fill=(150, 150, 156))
-    _text(d, (tx + 40, 160), "PALETTE", 7, (170, 30, 40), stroke=1)
+    _text(d, (tx + 40, 160), "PALETTE", 9, (170, 30, 40), stroke=1)
     px = 150 - 0 if u < 2 else 150
     _persons(img, [(60, 214, "A", "stand", {"ph": 0.4}), (px, 216, "P", "hold", {"flip": True, "ph": 0.9}),
                    (20, 214, "X", "hold", {"item": "prosecco", "ph": 0.3})], t)
@@ -675,12 +734,12 @@ def _lindenhof(u, t):
         d.rectangle([tx - 3, 70, tx + 3, 150], fill=(70, 48, 32))
         d.ellipse([tx - 30, 20, tx + 30, 84], fill=(58, 112, 56))
         for i in range(10):
-            d.ellipse([tx - 24 + (i * 13) % 48, 30 + (i * 9) % 44, tx - 21 + (i * 13) % 48, 33 + (i * 9) % 44], fill=(255, 222, 140) if (int(t * 2) + i) % 3 else (200, 150, 90))
+            d.ellipse([tx - 24 + (i * 13) % 48, 30 + (i * 9) % 44, tx - 21 + (i * 13) % 48, 33 + (i * 9) % 44], fill=(255, 222, 140))
     d.rectangle([34, 186, 160, 222], fill=(176, 62, 72))                                                   # the blanket
     d.rectangle([34, 186, 160, 190], fill=(236, 196, 196))
     for cxx in (62, 132):
         d.rectangle([cxx - 2, 176, cxx + 2, 190], fill=(250, 240, 220))
-        fl = 7 + math.sin(t * 13 + cxx) * 1.3
+        fl = 7 + math.sin(t * 3 + cxx) * 1.3
         d.ellipse([cxx - 3, 176 - fl, cxx + 3, 178], fill=(255, 190, 70))
         _light(img, cxx, 176, 40, (255, 170, 60), 0.3)
         d = ImageDraw.Draw(img)
@@ -713,7 +772,7 @@ def _hive(u, t):
         for col in range(12):                                                                              # honeycomb
             cx, cy = col * r * 1.8 + (r * 0.9 if row % 2 else 0), 12 + row * r * 1.55
             pts = [(cx + r * 0.95 * math.cos(math.radians(60 * k + 30)), cy + r * 0.95 * math.sin(math.radians(60 * k + 30))) for k in range(6)]
-            d.polygon(pts, outline=_mix((80, 50, 10), (255, 190, 40), 0.5 + 0.5 * math.sin(t * 3 + col + row)))
+            d.polygon(pts, fill=_mix((34, 22, 8), (110, 74, 14), 0.5 + 0.5 * math.sin(t * 0.8 + col * 0.7 + row * 0.5)), outline=(150, 100, 20))
     _text(d, (W / 2, 20), "HIVE", 28, (255, 200, 50), stroke=2)
     if not inside:
         d.rectangle([0, 150, W, H], fill=(40, 38, 46))
@@ -728,10 +787,10 @@ def _hive(u, t):
                      (4.4, 6.2, 116, 152, "Auf welcher?", PUR), (6.2, 8.0, 26, 152, "Rolf.", RED), (8.0, 10.0, 116, 152, "...Rolf darf rein.", PUR)])
     else:
         d.rectangle([0, 150, W, H], fill=(34, 20, 44))
-        for i in range(36):
-            a = t * 1.6 + i
+        for i in range(10):                                                   # slow wide beams instead of many thin fast lines
+            a = t * 0.5 + i * 0.63
             c = [(255, 60, 140), (80, 200, 255), (255, 210, 70)][i % 3]
-            d.line([(W / 2, 60), (W / 2 + math.cos(a) * 160, 60 + abs(math.sin(a)) * 160)], fill=_mix(c, (10, 6, 25), 0.6), width=1)
+            d.polygon([(W / 2, 60), (W / 2 + math.cos(a) * 170 - 8, 60 + abs(math.sin(a)) * 170), (W / 2 + math.cos(a) * 170 + 8, 60 + abs(math.sin(a)) * 170)], fill=_mix(c, (14, 8, 30), 0.62))
         d.ellipse([W / 2 - 12, 46, W / 2 + 12, 70], fill=(200, 204, 220))                                  # the disco ball
         for k in range(8):
             d.line([(W / 2 - 12 + k * 3, 46), (W / 2 - 12 + k * 3, 70)], fill=(120, 124, 140), width=1)
@@ -740,11 +799,9 @@ def _hive(u, t):
         _gummi(d, 176, 214, 1.4, t)
         _rolf(d, 96 + math.sin(t * 5) * 4, 214 + abs(math.sin(t * 5)) * -3, 1.5, t, plants=4)
         clock = "02:00" if u < 13.0 else "06:00"
-        _text(d, (W - 6, 12), clock, 14, (120, 255, 140), stroke=2, anchor="rm")
+        _text(d, (W - 6, 14), clock, 16, (120, 255, 140), stroke=2, anchor="rm")
         _talk(d, u, [(10.4, 12.6, 150, 150, "Nur noch ein Lied.", BLUE), (12.6, 14.4, 40, 150, "Nur noch ein Prosecco.", RED),
                      (14.4, 16.0, 96, 150, "*klapper*", (150, 30, 40))])
-    if int(t * 6) % 2:
-        d.rectangle([0, 0, W - 1, H - 1], outline=(255, 255, 255), width=2)
     return img
 
 
@@ -760,7 +817,7 @@ def _monsti(u, t):
         d.line([(30 + i, 28), (30 + i, 170)], fill=(214, 172, 140))
     d.polygon([(22, 28), (96, 4), (170, 28)], fill=(160, 70, 60))
     d.rectangle([54, 8, 138, 22], fill=(240, 226, 196))
-    _text(d, (96, 15), "FORTUNAGASSE 24", 8, (90, 50, 40), stroke=0)
+    _text(d, (96, 15), "FORTUNAGASSE 24", 10, (90, 50, 40), stroke=0)
     for wx, wy in ((38, 36), (118, 36), (38, 120)):
         d.rectangle([wx, wy, wx + 32, wy + 30], fill=(255, 220, 140), outline=(110, 70, 50))
         d.rectangle([wx - 8, wy, wx - 1, wy + 30], fill=(60, 120, 80))
@@ -792,7 +849,7 @@ def _monsti(u, t):
         for hx in (-0.5, 0.0, 0.5):
             d.ellipse([cx + hx * r - 1.5, cy - 2, cx + hx * r + 1.5, cy + 3], fill=(226, 184, 150))
         d.line([(lx, ly), (cx, cy)], fill=(40, 100, 50), width=1)
-    _text(d, (fx + 20, fy - 10), "Monsti", 11, (190, 255, 200), stroke=2)
+    _text(d, (fx + 20, fy - 10), "Monsti", 13, (190, 255, 200), stroke=2)
     if u > 6.2:                                                                                              # Monsti takes the Prosecco
         lx, ly = pts[-1]
         d.line([(lx, ly), (100, 200)], fill=(40, 100, 50), width=2)
@@ -850,18 +907,36 @@ SCENE_FN = {"titel": _titel, "colibri": _colibri, "kuerbis": _kuerbis, "heim": _
             "monsti": _monsti, "montag": _montag}
 
 
-def frame(t: float) -> Image.Image:
-    t = t % LOOP_SEC
+def _grade(img):
+    """Lift the shadows and open the midtones so dark scenes (night, club) stay readable on the LEDs."""
+    a = np.asarray(img, np.float32) / 255.0
+    a = np.power(a, 0.82)
+    a = 0.07 + a * 0.93
+    lum = a.mean(axis=2, keepdims=True)
+    a = np.clip(lum + (a - lum) * 1.12, 0, 1)
+    return Image.fromarray((a * 255).astype(np.uint8), "RGB")
+
+
+def _scene_at(t):
     for name, a, b in SCENES:
         if a <= t < b:
             u = t - a
             img = SCENE_FN[name](u, t)
-            li._caption(img, "mx_" + name, u)
+            _caption(img, "mx_" + name, u)
             fade = min(_c(u / 0.4), _c((b - t) / 0.4))
             if fade < 1:
                 img = Image.fromarray((np.asarray(img, np.float32) * fade).astype(np.uint8), "RGB")
-            return img
-    return Image.new("RGB", (W, H))
+            return name, img
+    return None, Image.new("RGB", (W, H))
+
+
+def frame(t: float) -> Image.Image:
+    t = t % LOOP_SEC
+    name, img = _scene_at(t)
+    pname, prev = _scene_at(t - 0.04) if t >= 0.04 else (None, None)
+    if pname == name:                                                       # 25 % of the previous frame: fine detail does not shimmer
+        img = Image.blend(img, prev, 0.25)
+    return _grade(img)
 
 
 def thumb() -> Image.Image:

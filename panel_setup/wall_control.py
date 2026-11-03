@@ -85,6 +85,9 @@ LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "
                "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "wanderers": "wanderers.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
                "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb", "lennart": "lennart_film.thumb", "kilchberg": "kilchberg.thumb", "snapshots": "slideshow.thumb", "zurichhb": "kilchberg.thumb_hb",
                "quakes": "quakes.thumb"}
+DARK_MODES = {"planes", "westcork", "windch", "windie", "windeu", "polarbears", "wanderers", "nighttrains", "issday",
+              "snow", "satellites", "tides", "tramlines", "quakes"}   # as play.py's list of dark, light-on-black pieces
+
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
                  "camera_url": "http://192.168.1.217:8090/cam.mjpg", "camera": "stream",
                  "mirror_auto": 0, "mirror_booth": False, "smart_crop": True, "art_speed": 0.12}
@@ -215,6 +218,8 @@ class Runner:
                    WALL_PRESENCE="1" if self.state.get("presence") else "0",
                    WALL_SMART_CROP="1" if self.state.get("smart_crop", True) else "0",
                    PYTHONUNBUFFERED="1")
+        if what in DARK_MODES:                   # single lit LEDs on black (West Cork, planes ...): the old, cleanest panel settings
+            env["WALL_SLOWDOWN"], env["WALL_REFRESH_HZ"] = "7", "100"
         if what == "mirror":
             env["WALL_FIXED_DEPTH"] = "1"        # a mostly dark picture must not drop to the slower, flickery refresh
         if getattr(self, "boot_pending", False) and self.state.get("boot_welcome", True):

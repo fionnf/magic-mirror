@@ -35,7 +35,8 @@
   dialog::backdrop { background: rgba(0,0,0,.6); }
   dialog h2 { margin: 0 0 12px; }
   label { display: block; margin: 12px 0 4px; font-size: 14px; color: var(--mute); }
-  input, select { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-size: 16px; }
+  input, select, textarea { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-size: 16px; }
+  textarea { resize: vertical; }
   .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
   .row button { padding: 11px 18px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; cursor: pointer; }
   .row button.go { background: var(--gold); color: #1b1208; border-color: var(--gold); font-weight: 700; }
@@ -48,6 +49,7 @@
 <header>
   <h1>House Fortuna<small id="date"></small></h1>
   <div class="tools">
+    <button id="prt" type="button" aria-label="Print the house info slip">Print house info</button>
     <button id="fs" type="button" aria-label="Full screen">Full screen</button>
     <button id="cfg" type="button" aria-label="Edit the Wi-Fi and Jam details">Edit</button>
   </div>
@@ -65,6 +67,8 @@
     <select id="sec"><option value="WPA">WPA / WPA2 / WPA3</option><option value="WEP">WEP</option><option value="nopass">None (open)</option></select>
     <label for="jam">Spotify Jam link</label>
     <input id="jam" inputmode="url" placeholder="https://spotify.link/..." autocomplete="off" autocapitalize="off" spellcheck="false">
+    <label for="notes">House notes (printed on the slip)</label>
+    <textarea id="notes" rows="4" maxlength="600" placeholder="Bins on Tuesday. Quiet after 22:00. Spare key in the blue pot."></textarea>
     <p class="hint">In Spotify: start a Jam, tap Invite, Copy link, and paste it here. A new Jam needs a new link.</p>
     <p id="err" role="alert"></p>
     <div class="row"><button type="button" id="cancel">Cancel</button><button type="submit" class="go" id="save">Save</button></div>
@@ -116,7 +120,7 @@ async function load() {
 $('cfg').onclick = () => {
   const w = (data && data.wifi) || {};
   $('ssid').value = w.ssid || ''; $('pw').value = w.password || ''; $('sec').value = w.security || 'WPA';
-  $('jam').value = (data && data.jam) || ''; $('err').textContent = '';
+  $('jam').value = (data && data.jam) || ''; $('notes').value = (data && data.notes) || ''; $('err').textContent = '';
   $('dlg').showModal();
 };
 $('cancel').onclick = () => $('dlg').close();
@@ -125,12 +129,21 @@ $('form').onsubmit = async (ev) => {
   $('err').textContent = '';
   try {
     const r = await fetch('/api/home/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wifi_ssid: $('ssid').value, wifi_password: $('pw').value, wifi_security: $('sec').value, jam_url: $('jam').value }) });
+      body: JSON.stringify({ wifi_ssid: $('ssid').value, wifi_password: $('pw').value, wifi_security: $('sec').value, jam_url: $('jam').value, notes: $('notes').value }) });
     const j = await r.json();
     if (!r.ok) { $('err').textContent = j.error || 'Could not save.'; return; }
     $('dlg').close();
     load();
   } catch (e) { $('err').textContent = 'Could not reach the wall.'; }
+};
+$('prt').onclick = async () => {
+  const b = $('prt'); b.disabled = true; b.textContent = 'Printing...';
+  try {
+    const r = await fetch('/api/home/print', { method: 'POST' });
+    const j = await r.json();
+    b.textContent = r.ok ? 'Printed' : (j.error || 'Could not print');
+  } catch (e) { b.textContent = 'Could not reach the wall'; }
+  setTimeout(() => { b.disabled = false; b.textContent = 'Print house info'; }, 4000);
 };
 $('fs').onclick = () => {
   if (document.fullscreenElement) document.exitFullscreen();

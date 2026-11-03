@@ -1,10 +1,11 @@
 """Dedications wall: guests scan a QR code, type a message, and it scrolls across the bottom of
 the wall. Deliberately NOT filtered (house rule) - the only guard rails are a length cap, a rate
-limit per phone, a pause switch and delete/clear in the app.
+limit per phone and delete/clear in the app. They are always on (there is no off switch), and every
+message is shown on the wall exactly once.
 
 Stored in panel_setup/dedications.json (git-ignored):
-  {"enabled": false, "show_qr": true, "paused": false,
-   "items": [{"id", "text", "name", "ts"}]}
+  {"v": 2, "show_qr": true,
+   "items": [{"id", "text", "name", "ts", "shown"}]}      ("shown" = when it went across the wall; it never goes again)
 
     add(text, name, who)       -> item (raises ValueError with a friendly message)
     Overlay().apply(img, now)  -> img with the marquee / QR painted on (used by panel_setup/play.py)
@@ -41,23 +42,25 @@ def load():
             d = json.load(fh)
     except Exception:
         d = {}
-    return {"enabled": bool(d.get("enabled", False)), "show_qr": bool(d.get("show_qr", True)),
-            "paused": bool(d.get("paused", False)), "items": list(d.get("items", []))}
+    items = list(d.get("items", []))
+    if d.get("v") != 2:                                   # a file from before "shown once": nothing old comes back
+        for i in items:
+            i.setdefault("shown", i.get("ts") or time.time())
+    return {"enabled": True, "paused": False, "show_qr": bool(d.get("show_qr", True)), "items": items}
 
 
 def _save(d):
     tmp = FILE + ".tmp"
     with open(tmp, "w") as fh:
-        json.dump(d, fh)
+        json.dump({"v": 2, "show_qr": d["show_qr"], "items": d["items"]}, fh)
     os.replace(tmp, FILE)
 
 
 def update(**kw):
     with _lock:
         d = load()
-        for k in ("enabled", "show_qr", "paused"):
-            if k in kw:
-                d[k] = bool(kw[k])
+        if "show_qr" in kw:                               # the messages themselves can not be switched off
+            d["show_qr"] = bool(kw["show_qr"])
         _save(d)
         return d
 
@@ -69,8 +72,6 @@ def add(text, name="", who="?", now=None):
         raise ValueError("Write something first")
     with _lock:
         d = load()
-        if not d["enabled"] or d["paused"]:
-            raise ValueError("The wall is not taking dedications right now")
         wait = RATE_SEC - (now - _last_by.get(who, 0))
         if wait > 0:
             raise ValueError(f"Slow down a little - try again in {int(wait) + 1} s")
@@ -79,6 +80,16 @@ def add(text, name="", who="?", now=None):
         d["items"] = (d["items"] + [item])[-MAX_ITEMS:]
         _save(d)
     return item
+
+
+def mark_shown(item_id, now=None):
+    """A message has been all the way across the wall: it will not be shown again."""
+    with _lock:
+        d = load()
+        for i in d["items"]:
+            if i["id"] == item_id and not i.get("shown"):
+                i["shown"] = now if now is not None else time.time()
+        _save(d)
 
 
 def delete(item_id):
@@ -156,13 +167,9 @@ class Overlay:
         now = now if now is not None else time.monotonic()
         self._refresh(now)
         d = self._data
-        if not d["enabled"] or d["paused"]:
-            self.cur = None
-            return img
         img = img.copy()
         W, H = img.size
-        if d["items"]:
-            self._marquee(img, d, now, W, H)
+        self._marquee(img, d, now, W, H)
         if d["show_qr"] and (now - self.t_start) % self.QR_EVERY < self.QR_FOR:
             self._qr(img, W, H)
         return img
@@ -170,23 +177,26 @@ class Overlay:
     def _marquee(self, img, d, now, W, H):
         items = d["items"]
         if self.cur is None and now >= self.next_at:
-            fresh = [i for i in items if i["id"] not in self.shown]
-            item = fresh[0] if fresh else items[self.idx % len(items)]
+            fresh = [i for i in items if not i.get("shown") and i["id"] not in self.shown]    # each message goes across once
             if not fresh:
-                self.idx += 1
+                return
+            item = fresh[0]
             self.shown.add(item["id"])
             label = (item["name"] + ": " if item["name"] else "") + item["text"]
             label = " ".join(_NO_EMOJI.sub("", label).split())      # the LED font has no emoji
             w = int(ImageDraw.Draw(img).textlength(label, font=self.font))
-            self.cur = (label, now, w)
+            self.cur = (label, now, w, item["id"])
         if self.cur is None:
             return
-        label, t0, w = self.cur
+        label, t0, w, mid = self.cur
         x = W - (now - t0) * self.SPEED
         if x < -w:
             self.cur = None
-            fresh = any(i["id"] not in self.shown for i in items)
-            self.next_at = now + (2.0 if fresh else self.GAP)
+            try:
+                mark_shown(mid)                                  # saved: it never comes back, not even after a restart
+            except Exception:
+                pass
+            self.next_at = now + 2.0
             return
         band = Image.new("RGBA", (W, self.BAND), (0, 0, 0, 170))
         ImageDraw.Draw(band).text((x, 2), label, font=self.font, fill=(255, 225, 245, 255),

@@ -465,7 +465,7 @@
     </section>
     <section>
       <h2>Guests</h2>
-      <div class="switch"><span>Messages from guests on the wall</span><input type="checkbox" id="dOn"></div>
+      <p class="hint" style="margin:0">Messages from guests always go across the wall, once each.</p>
       <div class="row" style="gap:14px;margin-top:10px">
         <a id="qrLink" href="/d/qr.png" target="_blank"><img id="qrImg" src="/d/qr.png" alt="QR code for guests" style="width:96px;height:96px;border-radius:10px;background:#fff"></a>
       </div>
@@ -1251,8 +1251,7 @@ async function loadMore() {
   } catch (e) {}
   try {
     const d = await api('/api/dedications');
-    $('dOn').checked = !!d.enabled;
-    $('dList').innerHTML = d.items.slice(0, 8).map(i => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${i.name ? '<b>' + esc(i.name) + '</b> ' : ''}${esc(i.text)}</span>
+    $('dList').innerHTML = d.items.slice(0, 8).map(i => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${i.name ? '<b>' + esc(i.name) + '</b> ' : ''}${esc(i.text)}${i.shown ? '' : ' <small style="opacity:.6">(waiting)</small>'}</span>
       <button class="btn" style="padding:4px 10px" onclick="api('/api/dedications/delete',{id:'${i.id}'}).then(loadMore)" aria-label="Delete message">✕</button></div>`).join('');
   } catch (e) {}
 }
@@ -1262,7 +1261,6 @@ $('idleArt').addEventListener('change', e => api('/api/mirror/settings', {idle_a
 $('photosGb').addEventListener('change', e => api('/api/mirror/settings', {photos_gb: +e.target.value}).then(() => toast('Keeping up to ' + e.target.value + ' GB of photos on the wall')));
 $('boothShots').addEventListener('change', e => api('/api/mirror/settings', {booth_shots: +e.target.value}));
 document.querySelectorAll('[data-ms]').forEach(i => i.addEventListener('change', () => api('/api/mirror/settings', {[i.dataset.ms]: i.checked})));
-$('dOn').addEventListener('change', e => api('/api/dedications', {enabled: e.target.checked}));
 async function enrol() {
   const name = $('newName').value.trim(); if (!name) return toast('Type a name first');
   toast('Look at the wall for five seconds');

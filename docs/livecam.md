@@ -15,6 +15,7 @@ Kinds of sources that are usually fine (check the actual terms of each one):
 - municipal or transport webcams published under an open licence
 - commercial webcam networks such as EarthCam, only as their own terms allow
 - local video files and still-image URLs you have the rights to
+- Roundshot panorama cams: use `<camera page>/structure.json` as the url (for example `https://zermatt.roundshot.com/schonegg/structure.json`). The wall reads the list of pictures and shows the newest, about every 10 minutes. Check the operator's terms before you add one.
 
 ## Configure
 

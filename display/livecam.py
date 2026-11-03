@@ -13,7 +13,7 @@ environment variable WALL_LIVECAMS_JSON (JSON text or the path of a JSON file; i
 Each cam: name, url, optional x, y (focus 0..1), zoom (1 = full frame height, 2 = twice as close),
 pan (slow drift across the frame), label, rotation (0/90/180/270), flip ("h", "v", "hv" or true), led (dither).
 A url may be an HLS .m3u8, an MJPEG http stream, an RTSP URL, a local video file (looped), or an image URL
-(polled every few seconds). The cam named "test" is a synthetic crossing and needs no network.
+(polled every few seconds), or a Roundshot camera's .../structure.json (the newest panorama, refreshed as it updates). The cam named "test" is a synthetic crossing and needs no network.
 
 Settings (environment): LIVECAM_MINUTES (default 10) is how long each cam stays on before the next;
 LIVECAM_NAME=name stays on one cam; LIVECAM_LED=1 turns on the dithered LED mode for every cam.
@@ -270,6 +270,8 @@ class Source:
         path = urlparse(url).path.lower()
         if url.lower().startswith(("http://", "https://")) and path.endswith(IMG_EXT):
             return "image"
+        if url.lower().startswith(("http://", "https://")) and path.endswith("structure.json"):
+            return "roundshot"                             # a Roundshot camera page's structure.json: newest panorama
         return "video"
 
     def start(self):
@@ -303,7 +305,8 @@ class Source:
         backoff = 1.0
         while not self._stop.is_set():
             try:
-                ok = self._poll_images() if self.kind == "image" else self._read_video()
+                ok = (self._poll_images() if self.kind == "image" else
+                      self._poll_roundshot() if self.kind == "roundshot" else self._read_video())
             except Exception:
                 ok = False
             if self._stop.is_set():
@@ -323,6 +326,30 @@ class Source:
             self._put(f)
             got = True
             self._stop.wait(float(self.cam.get("poll", 3.0)))
+        return got
+
+    def _poll_roundshot(self):
+        """Roundshot panoramas: <camera page>/structure.json lists timestamped pictures (a new one about every 10 minutes);
+        fetch the newest in the size the cam asks for ("size": half (default) | full | quarter), only when it is new."""
+        import requests
+        got, last = False, None
+        size = str(self.cam.get("size", "half"))
+        while not self._stop.is_set():
+            r = requests.get(self.url, timeout=15, headers={"User-Agent": "magic-mirror-livecam"})
+            r.raise_for_status()
+            ims = [i for i in r.json().get("images", []) if i.get("status") == "finished" and size in (i.get("structure") or {})]
+            if not ims:
+                return got
+            newest = max(ims, key=lambda i: i.get("datetime", 0))
+            if newest["datetime"] != last:
+                img = requests.get(newest["structure"][size]["url_full"], timeout=30, headers={"User-Agent": "magic-mirror-livecam"})
+                img.raise_for_status()
+                f = cv2.imdecode(np.frombuffer(img.content, np.uint8), cv2.IMREAD_COLOR)
+                if f is None:
+                    return got
+                self._put(f)
+                last, got = newest["datetime"], True
+            self._stop.wait(float(self.cam.get("poll", 120.0)))
         return got
 
     def _read_video(self):

@@ -2,6 +2,22 @@
   "_readme": "Copy to panel_setup/livecams.json (git-ignored). Only use streams you are permitted to use on a display like this one: your own IP cameras, webcams published under an open licence, or a provider's feed where its terms allow. Keys starting with _ are ignored.",
   "cams": [
     {
+      "name": "Matterhorn",
+      "url": "https://zermatt.roundshot.com/schonegg/structure.json",
+      "label": "Matterhorn, Zermatt",
+      "x": 0.5,
+      "y": 0.5,
+      "zoom": 1,
+      "_roundshot": "A Roundshot camera page's address + structure.json: the newest panorama (updates about every 10 minutes). Optional \"size\": half (default) | full | quarter."
+    },
+    {
+      "name": "Titlis",
+      "url": "https://titlis.roundshot.com/titlis/structure.json",
+      "label": "Titlis, Engelberg",
+      "x": 0.5,
+      "pan": true
+    },
+    {
       "name": "Crossing",
       "url": "https://example.invalid/your-licensed-stream/playlist.m3u8",
       "_url": "HLS .m3u8, MJPEG http(s) stream, rtsp://user:pass@host/stream, a local video file (looped), or an image URL (polled every 'poll' seconds, default 3).",
@@ -17,6 +33,8 @@
       "led": false,
       "_led": "true: ordered dither against the 6-bit LED banding."
     },
-    { "name": "test" }
+    {
+      "name": "test"
+    }
   ]
 }

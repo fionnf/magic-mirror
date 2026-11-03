@@ -102,12 +102,12 @@ class LedMatrix:
         opts.pwm_lsb_nanoseconds = config.MATRIX_PWM_LSB_NS
         opts.limit_refresh_rate_hz = config.MATRIX_REFRESH_LIMIT_HZ
         opts.show_refresh_rate = config.MATRIX_SHOW_REFRESH
-        opts.brightness = self._hw_brightness(config.MATRIX_BRIGHTNESS)
+        opts.brightness = self._hw_brightness(min(config.MATRIX_BRIGHTNESS, config.BRIGHTNESS_CAP))
         opts.drop_privileges = False
         self.matrix = RGBMatrix(options=opts)
         self.canvas = self.matrix.CreateFrameCanvas()
         self._lock = threading.Lock()
-        self._brightness = config.MATRIX_BRIGHTNESS
+        self._brightness = min(config.MATRIX_BRIGHTNESS, config.BRIGHTNESS_CAP)
         self.last_amps = 0.0
         self._bits, self._bits_t = config.MATRIX_PWM_BITS, time.monotonic()
         self._lvl, self._lvl_t = 1.0, time.monotonic()                 # start "bright": the start-up animation stays on the safe bits
@@ -357,7 +357,7 @@ class LedMatrix:
         self.draw(black)
 
     def set_brightness(self, value: int) -> None:
-        value = max(0, min(100, int(value)))
+        value = max(0, min(config.BRIGHTNESS_CAP, int(value)))
         self._brightness = value
         with self._lock:
             self.matrix.brightness = self._hw_brightness(value)

@@ -1,5 +1,5 @@
 {
- "_readme": "Copy to panel_setup/livecams.json on the wall Pi. These are public Roundshot panorama cameras (https://www.roundshot.com); the wall shows each one's newest picture, about every 10 minutes. Check the operators' terms before you show them. Cams that stop updating are skipped automatically; delete any you do not want. Found via Roundshot's own camera list (backend.roundshot.com/schema_list/12/list_frame.json).",
+ "_readme": "The wall uses this list when panel_setup/livecams.json does not exist; copy it there to change it. These are public Roundshot panorama cameras (https://www.roundshot.com); the wall shows each one's newest picture, about every 10 minutes. Check the operators' terms before you show them. Cams that stop updating are skipped automatically; delete any you do not want. Found via Roundshot's own camera list (backend.roundshot.com/schema_list/12/list_frame.json).",
  "cams": [
   {
    "name": "Matterhorn",
@@ -39,81 +39,15 @@
    "pan": true
   },
   {
-   "name": "Saentis",
-   "url": "https://saentis.roundshot.com/structure.json",
-   "label": "Säntis",
-   "pan": true
-  },
-  {
-   "name": "Pilatus",
-   "url": "https://pilatus.roundshot.com/structure.json",
-   "label": "Pilatus",
-   "pan": true
-  },
-  {
-   "name": "Rigi",
-   "url": "https://rigi.roundshot.com/structure.json",
-   "label": "Rigi",
-   "pan": true
-  },
-  {
-   "name": "Glacier 3000",
-   "url": "https://glacier3000.roundshot.com/structure.json",
-   "label": "Glacier 3000, Gstaad",
-   "pan": true
-  },
-  {
-   "name": "St Moritz",
-   "url": "https://schweizerhof.roundshot.com/stmoritz/structure.json",
-   "label": "St. Moritz",
-   "pan": true
-  },
-  {
-   "name": "Arosa",
-   "url": "https://weisshorn.roundshot.com/structure.json",
-   "label": "Arosa Weisshorn",
-   "pan": true
-  },
-  {
-   "name": "Laax",
-   "url": "https://laax.roundshot.com/la-siala/structure.json",
-   "label": "Laax, La Siala",
-   "pan": true
-  },
-  {
    "name": "Andermatt",
    "url": "https://andermatt-sedrun-disentis.roundshot.com/gemsstock/structure.json",
    "label": "Andermatt, Gemsstock",
    "pan": true
   },
   {
-   "name": "Tignes",
-   "url": "https://tignes.roundshot.com/grande-motte/structure.json",
-   "label": "Tignes, Grande Motte",
-   "pan": true
-  },
-  {
-   "name": "Val d'Isere",
-   "url": "https://valdisere.roundshot.com/bellevarde/structure.json",
-   "label": "Val d'Isère",
-   "pan": true
-  },
-  {
    "name": "Sonnenbuehl",
    "url": "https://kachelmannwetter.roundshot.com/sonnenbuehl/structure.json",
    "label": "Sonnenbühl, Swabian Alb",
-   "pan": true
-  },
-  {
-   "name": "Heidelberg",
-   "url": "https://berggasthofkoenigstuhl.roundshot.com/structure.json",
-   "label": "Heidelberg, Königstuhl",
-   "pan": true
-  },
-  {
-   "name": "Cornwall",
-   "url": "https://headlandhotel.roundshot.com/structure.json",
-   "label": "Newquay, Cornwall",
    "pan": true
   },
   {

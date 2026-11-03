@@ -275,6 +275,81 @@ def render_booth_pil(frames: List[np.ndarray], label: Optional[str] = None,
 
 
 # ---------------------------------------------------------------------------
+# The endless photobooth: a header, then photo after photo, then a footer, printed as they are taken
+# ---------------------------------------------------------------------------
+
+def render_endless_header(label: Optional[str] = None) -> Image.Image:
+    """The top of a long strip: the title over a scalloped edge."""
+    label = label or getattr(config, "BOOTH_TITLE", "HOUSE FORTUNA")
+    W = config.PRINTER_WIDTH_DOTS
+    base, ink, d = _layers(W, 50)
+    title_font = _ttf(28)
+    tw = d.textlength(label, font=title_font)
+    d.text(((W - tw) / 2, 6), label, fill=0, font=title_font)
+    _heart(d, max(14, (W - tw) / 2 - 20), 24, 9)
+    _heart(d, min(W - 14, (W + tw) / 2 + 20), 24, 9)
+    _scallop(d, 42, W)
+    return _compose(base, ink)
+
+
+def render_endless_frame(frame: np.ndarray, gap: int = 4) -> Image.Image:
+    """One photo of the long strip: a framed portrait sticker, the same as in the normal strip."""
+    W = config.PRINTER_WIDTH_DOTS
+    pw = W - 24
+    ph = int(round(pw / config.PRINTER_IMAGE_ASPECT))
+    try:
+        import smartcrop
+        frame, _ = smartcrop.portrait_crop(frame, pw / ph)
+    except Exception:
+        pass
+    photo = _crop_portrait(_frame_to_pil(frame), pw, ph)
+    base, ink, d = _layers(W, ph + gap)
+    _sticker(base, d, _preprocess(photo), (12, 0), 0)
+    return _compose(base, ink)
+
+
+def render_endless_footer(qr_url: Optional[str] = None, count: int = 0) -> Image.Image:
+    """The end of a long strip: the QR code to the day's pictures, the house, the date and how many photos it holds."""
+    W = config.PRINTER_WIDTH_DOTS
+    small, tiny = _ttf(18), _ttf(14)
+    qr_img = None
+    if qr_url:
+        try:
+            import qrcode as _qrcode
+            qr = _qrcode.QRCode(box_size=1, border=0, error_correction=_qrcode.constants.ERROR_CORRECT_L)
+            qr.add_data(qr_url)
+            qr.make(fit=True)
+            mod = qr.make_image(fill_color="black", back_color="white").convert("L")
+            k = max(2, 111 // mod.width)
+            qr_img = mod.resize((mod.width * k, mod.width * k), Image.NEAREST)
+        except Exception as e:
+            print(f"[PRINTER] QR generation skipped: {e}")
+    h = 120 if qr_img is not None else 60
+    base, ink, d = _layers(W, h)
+    ts = datetime.datetime.now().strftime("%d.%m.%Y  %H:%M")
+    house = config.PRINTER_HEADER or "HOUSE FORTUNA"
+    note = f"{count} photos" if count else ""
+    if qr_img is not None:
+        ink.paste(qr_img.point(lambda v: 0 if v < 128 else 255), (14, 6))
+        tx = 14 + qr_img.width + 14
+        hw = d.textlength(house, font=small)
+        d.text((tx, 14), house, fill=0, font=small)
+        _heart(d, tx + hw + 14, 26, 7)
+        d.text((tx, 42), ts, fill=0, font=small)
+        d.text((tx, 70), "scan for your photos", fill=0, font=tiny)
+        if note:
+            d.text((tx, 90), note, fill=0, font=tiny)
+    else:
+        hw = d.textlength(house, font=small)
+        d.text(((W - hw) / 2, 4), house, fill=0, font=small)
+        _heart(d, (W - hw) / 2 - 18, 16, 7)
+        _heart(d, (W + hw) / 2 + 18, 16, 7)
+        tw2 = d.textlength(ts + ("  " + note if note else ""), font=tiny)
+        d.text(((W - tw2) / 2, 30), ts + ("  " + note if note else ""), fill=0, font=tiny)
+    return _compose(base, ink)
+
+
+# ---------------------------------------------------------------------------
 # Printer classes
 # ---------------------------------------------------------------------------
 
@@ -297,6 +372,16 @@ class ReceiptPrinter:
         if pil_image is not None:
             self._emit(pil_image, "print_strip")
 
+    def print_part(self, pil_image: Image.Image, cut: bool = False) -> None:
+        """One piece of a long strip: no cut unless it is the last."""
+        if pil_image is not None:
+            import print_out
+            try:
+                print_out.send(pil_image, cut=cut)
+            except Exception as e:
+                print(f"[PRINTER] print_part failed ({print_out.where()}): {e}")
+                raise
+
     def shutdown(self) -> None:
         pass
 
@@ -306,6 +391,9 @@ class _NullPrinter:
         pass
 
     def print_strip(self, pil_image) -> None:
+        pass
+
+    def print_part(self, pil_image, cut=False) -> None:
         pass
 
     def shutdown(self) -> None:

@@ -14,6 +14,7 @@ made in the web app apply to the very next photo with no restart.
   gallery_page the QR code and shared links open a styled gallery page (on the Pages site) instead of the plain Drive folder
   prompt      your own instructions for what the mirror says ("" = the built-in prompt, config.MIRROR_PERSONA)
   booth_shots photos in a photobooth strip (2 to 6)
+  booth_endless  endless photobooth: one photo after another is printed into one long strip for as long as people stand there
   booth_repeat  photobooth mode keeps going: another strip a few seconds after the last while someone is still there
   idle_art_minutes  nobody in front of the mirror for this long -> show art; 0 = never
   wake_on_motion  False: once art is showing, only a button/trigger brings the silhouette back;
@@ -35,7 +36,7 @@ LANGUAGES = {
     "Drama queen": "Reply in English as the most dramatic, over-the-top drama queen alive.",
 }
 DEFAULTS = {"tone": 50, "language": "English", "recognise": True, "smile": True, "gesture": True,
-            "comment": True, "prompt": "", "photos_gb": 1, "gallery_page": True, "booth_shots": 3, "booth_repeat": False,
+            "comment": True, "prompt": "", "photos_gb": 1, "gallery_page": True, "booth_shots": 3, "booth_repeat": False, "booth_endless": False,
             "learn_faces": False, "idle_art_minutes": 10, "wake_on_motion": False,
             "face_focus": True}
 
@@ -65,7 +66,7 @@ def load():
         s["photos_gb"] = max(1, min(500, int(s["photos_gb"])))
     except (TypeError, ValueError):
         s["photos_gb"] = 1
-    for k in ("recognise", "smile", "gesture", "comment", "gallery_page", "booth_repeat", "learn_faces", "wake_on_motion", "face_focus"):
+    for k in ("recognise", "smile", "gesture", "comment", "gallery_page", "booth_repeat", "booth_endless", "learn_faces", "wake_on_motion", "face_focus"):
         s[k] = bool(s[k])
     return s
 

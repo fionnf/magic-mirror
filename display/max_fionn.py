@@ -634,8 +634,7 @@ def _palast(u, t):
     _persons(img, [(60, 214, "A", "stand", {"ph": 0.4}), (px, 216, "P", "hold", {"flip": True, "ph": 0.9}),
                    (20, 214, "X", "hold", {"item": "prosecco", "ph": 0.3})], t)
     d = ImageDraw.Draw(img)
-    _talk(d, u, [(2.2, 4.2, 60, 156, "Wer hat DAS bestellt?", PUR), (4.2, 5.8, px, 156, "...Ich.", (30, 40, 110)),
-                 (5.8, 6.0, 20, 156, "", RED)])
+    _talk(d, u, [(2.2, 4.2, 60, 156, "Wer hat DAS bestellt?", PUR), (4.2, 5.8, px, 156, "...Ich.", (30, 40, 110))])
     if u > 4.4:
         d.polygon([(px - 8, 176), (px - 6, 170), (px - 2, 174), (px, 169), (px + 2, 174), (px + 6, 170), (px + 8, 176)], fill=(250, 200, 40))
         d.line([(24, 186), (px - 6, 176)], fill=(250, 214, 96), width=1)                                  # Max pours Prosecco into the crown

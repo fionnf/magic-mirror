@@ -266,6 +266,8 @@ def _say(d, x, y, txt, col=(190, 30, 40), pop=1.0):
     """A speech bubble whose tail points down to (x, y)."""
     f = font(8)
     lines = li._wrap(txt, 8, 120)
+    if not lines:
+        return
     wd = max(f.getlength(ln) for ln in lines) + 8
     hh = 11 * len(lines) + 3
     bx = min(max(x, wd / 2 + 2), W - wd / 2 - 2)

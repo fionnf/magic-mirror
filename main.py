@@ -440,11 +440,12 @@ class MagicMirror:
             return " ".join(words)
         return " ".join(words[:cap]).rstrip(",;:-") + "..."
 
-    def _show(self, img, fps: int = 25):
+    def _show(self, img, fps: int = 18):
         """One frame to the wall, paced by the panels' own refresh when it can: each frame is held for exactly N refreshes,
         so motion advances in equal steps (a sleep() timer drifts against the refresh, and that unevenness is flicker).
-        25 fps (each frame held 4 refreshes at 100 Hz) is plenty: the camera delivers 15-20 pictures a second, and drawing
-        faster only costs the CPU the panel driver needs."""
+        18 fps (each frame held 7 refreshes at 125 Hz) fits what the Pi can do: colour processing and uploading a frame take about
+        30 ms, which does not fit the 40 ms slot of 25 fps, so frames slipped to a later slot unevenly (visible as jitter). The camera
+        delivers about 19 pictures a second anyway."""
         refresh = float(config.MATRIX_REFRESH_LIMIT_HZ)
         ff = max(1, round(refresh / fps))
         img = img.copy()                                     # a plain 2 LED warm-white frame all round, always on in mirror mode:

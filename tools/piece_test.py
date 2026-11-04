@@ -17,6 +17,9 @@ TESTS = {
     4: ("5 bits, slowdown 5, 125 Hz", {"MATRIX_PWM_BITS": 5}),
     5: ("current, brightness 60", {"_BRIGHT": 60}),
     6: ("current, 20 fps pieces (slower, steadier)", {"_FPS": 20}),
+    7: ("old: slowdown 7, 100 Hz, brightness 75", {"GPIO_SLOWDOWN": 7, "MATRIX_REFRESH_LIMIT_HZ": 100, "_BRIGHT": 75}),
+    8: ("old: slowdown 7, 100 Hz, brightness 60", {"GPIO_SLOWDOWN": 7, "MATRIX_REFRESH_LIMIT_HZ": 100, "_BRIGHT": 60}),
+    9: ("current (live now): slowdown 5, 125 Hz, brightness 60", {"_BRIGHT": 60}),
 }
 
 
@@ -27,6 +30,7 @@ def one(n):
         if not k.startswith("_"):
             setattr(config, k, v)
     config.DEPTH_STEPS = []
+    config.BRIGHTNESS_CAP = 100                       # the test sets its own brightness
     config.MATRIX_BRIGHTNESS = ov.get("_BRIGHT", int(os.environ.get("WALL_BRIGHTNESS", 75)))
     config.MATRIX_MAX_AMPS = float(os.environ.get("WALL_MAX_AMPS", 35))
     from PIL import ImageDraw

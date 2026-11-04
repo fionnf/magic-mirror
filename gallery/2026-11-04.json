@@ -1,7 +1,7 @@
 {
  "name": "Halftone Halo",
  "description": "A single ring of living halftone light hangs in a dark room, warming from magenta to orange as the day gathers and then settles into a glowing afterimage by night.",
- "image": "2026-11-04.png",
+ "image": "2026-11-04.final.png",
  "animation_source": "2026-11-04.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 1
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": 22
   }
  ],
  "listening": "It listens as a slow tide: iBreath rounds the ring, iBright sharpens the dot edges, iSong nudges the ring\u2019s asymmetry, and iDay leaves faint sediment in the halo from hour to hour.",
@@ -47,5 +59,36 @@
   "score": 7,
   "verdict": "This piece successfully interprets the 'halftone ring' direction with a calm, luminous form that glows warmly and evolves through the day. The palette and spacing respect the house's mood board and offer a gentle presence suitable for the living room, though the halftone dots could be slightly larger for stronger LED visibility."
  },
- "direction": "Halftone ring"
+ "direction": "Halftone ring",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.185,
+  0.0
+ ],
+ "post": {
+  "caption": "Tonight's Halftone Halo lingers in soft magenta and orange hues, reflecting a quiet evening with almost no music. The ring gently breathes and glows, a calm reservoir of light that holds the day's stillness as it settles into night. The faint patterns hint at subtle movement, a gentle shape born from the silence.",
+  "alt": "A glowing ring of warm magenta and orange halftone lights floats in a dark space, softly radiating a halo with tiny bright dots forming the circle."
+ },
+ "final": true
 }

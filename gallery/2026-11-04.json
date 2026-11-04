@@ -1,0 +1,51 @@
+{
+ "name": "Halftone Halo",
+ "description": "A single ring of living halftone light hangs in a dark room, warming from magenta to orange as the day gathers and then settles into a glowing afterimage by night.",
+ "image": "2026-11-04.png",
+ "animation_source": "2026-11-04.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-04"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#120812 #9A2D7D #FF9A4D"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "It listens as a slow tide: iBreath rounds the ring, iBright sharpens the dot edges, iSong nudges the ring\u2019s asymmetry, and iDay leaves faint sediment in the halo from hour to hour.",
+ "palette": [
+  "#120812",
+  "#9A2D7D",
+  "#FF9A4D"
+ ],
+ "source_sha256": "622b21f7da132a2cd558754cd56da05afe4306ccbd8797f8647aed653f582226",
+ "model": "gpt-5.4-mini",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 5,
+ "created": 1793782927.9422865,
+ "curator": {
+  "score": 7,
+  "verdict": "This piece successfully interprets the 'halftone ring' direction with a calm, luminous form that glows warmly and evolves through the day. The palette and spacing respect the house's mood board and offer a gentle presence suitable for the living room, though the halftone dots could be slightly larger for stronger LED visibility."
+ },
+ "direction": "Halftone ring"
+}

@@ -101,7 +101,7 @@ def load_state():
         with open(STATE_FILE) as f:
             s = json.load(f)
         st = {**DEFAULT_STATE, **s}
-        st["brightness"] = min(int(st.get("brightness", 40)), config.BRIGHTNESS_CAP)
+        st["brightness"] = min(int(st.get("brightness", 40)), 100)
         return st
     except Exception:
         return dict(DEFAULT_STATE)
@@ -221,6 +221,7 @@ class Runner:
                    PYTHONUNBUFFERED="1")
         if what in DARK_MODES:                   # single lit LEDs on black (West Cork, planes ...): the old, cleanest panel settings
             env["WALL_SLOWDOWN"], env["WALL_REFRESH_HZ"] = "7", "100"
+            env["WALL_BRIGHTNESS_CAP"] = "100"                          # light on black: no flicker problem, and it needs the light
         if what == "mirror":
             env["WALL_BRIGHTNESS"] = str(min(int(self.state.get("brightness", 40)), MIRROR_MAX_BRIGHTNESS))
             env["WALL_BRIGHTNESS_CAP"] = str(MIRROR_MAX_BRIGHTNESS)        # mirror mode is never brighter than this, whatever the slider says
@@ -310,7 +311,7 @@ class Runner:
 
     def set_brightness(self, value):
         with self.lock:
-            self.state["brightness"] = max(5, min(config.BRIGHTNESS_CAP, int(value)))
+            self.state["brightness"] = max(5, min(100, int(value)))
             save_state(self.state)
             if self.current not in (None, "off") and self.oneshot_resume is None:
                 self._start(self.current)               # brightness applies at start
@@ -368,7 +369,7 @@ class Runner:
         if not sc:
             raise KeyError(name)
         with self.lock:
-            self.state["brightness"] = max(5, min(config.BRIGHTNESS_CAP, int(sc.get("brightness", self.state.get("brightness", 40)))))
+            self.state["brightness"] = max(5, min(100, int(sc.get("brightness", self.state.get("brightness", 40)))))
             if "art_speed" in sc:
                 self.state["art_speed"] = max(0.005, min(1.0, float(sc["art_speed"])))
             # a scene sets the whole room: its own sleep timer, or none (an earlier timer is cancelled)

@@ -40,7 +40,7 @@ GPIO_SLOWDOWN = int(__import__("os").environ.get("WALL_SLOWDOWN", 5))   # 5 = ab
                     # 8 = ~57 Hz banding returns. 6-bit at slowdown 6 = ~77 Hz but colour banding.
 MATRIX_PANEL_TYPE = "FM6126A"
 # Long chain => low refresh rate. These are the main tuning knobs:
-BRIGHTNESS_CAP = int(__import__("os").environ.get("WALL_BRIGHTNESS_CAP", 100))   # the most the wall is ever driven at (above it the brightest pieces flicker)
+BRIGHTNESS_CAP = int(__import__("os").environ.get("WALL_BRIGHTNESS_CAP", 60))   # the most a piece is ever driven at: brighter than this the bright, smooth ones flicker (numbered tests 2026-11-04). The dark light-on-black pieces and the mirror raise it for themselves (wall_control.py)
 MATRIX_BRIGHTNESS = int(__import__("os").environ.get("WALL_BRIGHTNESS", 40))  # 0-100; the web panel sets WALL_BRIGHTNESS
 # Power budget. PSU is 40 A @ 5 V; keep headroom for the Pi and wiring losses.
 # The driver estimates current per frame from pixel values x brightness and

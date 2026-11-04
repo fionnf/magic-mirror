@@ -1175,9 +1175,69 @@ class MagicMirror:
             self.strip.set_mode("idle")
             self._repeat_at = 0.0
 
+    def _pay_card(self, url: str, line: str, demo: bool) -> Image.Image:
+        """The experimental pay screen: PAY WITH TWINT, the QR code on a white tile, the price line, and what to do next."""
+        import qrcode
+        W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+        img = Image.new("RGB", (W, H), (0, 0, 0))
+        d = ImageDraw.Draw(img)
+        big, mid, small = text_renderer._load_font(22), text_renderer._load_font(14), text_renderer._load_font(11)
+
+        def centred(y, text, font, fill):
+            w = d.textlength(text, font=font)
+            d.text(((W - w) / 2, y), text, font=font, fill=fill, stroke_width=1, stroke_fill=(0, 0, 0))
+        centred(8, "PAY WITH", mid, (255, 255, 255))
+        centred(26, "TWINT", big, (255, 255, 255))
+        qr = qrcode.QRCode(border=2, box_size=1, error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(url)
+        qr.make(fit=True)
+        n = len(qr.get_matrix())
+        box = max(2, 136 // n)
+        tile = qr.make_image(fill_color="black", back_color="white").convert("RGB").resize((n * box, n * box), Image.NEAREST)
+        img.paste(tile, ((W - tile.width) // 2, 62))
+        y = 62 + tile.height + 8
+        centred(y, line, mid, (255, 255, 255))
+        centred(y + 22, "then tap the wall", small, (255, 206, 120))
+        if demo:
+            centred(y + 38, "DEMO CODE", small, (255, 80, 80))
+        return img
+
+    def _booth_pay_screen(self) -> bool:
+        """EXPERIMENT (setting booth_pay, off by default): before a photobooth starts, show a TWINT pay QR. A tap or hand signal goes on,
+        30 s with none cancels. Nothing here can see whether anybody paid."""
+        try:
+            import mirror_settings
+            st = mirror_settings.load()
+        except Exception:
+            return True
+        if not st.get("booth_pay"):
+            return True
+        url = st.get("booth_pay_url") or "https://www.twint.ch/"
+        try:
+            card = self._pay_card(url, st.get("booth_pay_text") or "CHF 5 per strip", demo=not st.get("booth_pay_url"))
+        except Exception as e:
+            print(f"[PAY] could not draw the pay screen: {e}")
+            return True
+        print("[PAY] showing the pay screen")
+        self._booth_event.clear()
+        self._trigger_event.clear()
+        self._last_presence = time.monotonic()
+        t0 = time.monotonic()
+        while not self._stop.is_set() and time.monotonic() - t0 < 30.0:
+            self._show(card)
+            if self._booth_event.is_set() or self._trigger_event.is_set():
+                self._booth_event.clear()
+                self._trigger_event.clear()
+                print("[PAY] go on")
+                return True
+        print("[PAY] no tap: booth cancelled")
+        return False
+
     def run_booth_cycle(self):
         self._overlay_text = None
         self._overlay_image = None
+        if not self._booth_pay_screen():
+            return
         try:
             import mirror_settings
             if mirror_settings.load().get("booth_endless"):

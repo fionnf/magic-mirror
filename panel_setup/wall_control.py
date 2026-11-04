@@ -220,7 +220,7 @@ class Runner:
                    WALL_SMART_CROP="1" if self.state.get("smart_crop", True) else "0",
                    PYTHONUNBUFFERED="1")
         if what in DARK_MODES:                   # single lit LEDs on black (West Cork, planes ...): the old, cleanest panel settings
-            env["WALL_SLOWDOWN"], env["WALL_REFRESH_HZ"] = "7", "100"
+            env["WALL_SLOWDOWN"], env["WALL_REFRESH_HZ"] = "7", "100"                # (now the same as every piece)
             env["WALL_BRIGHTNESS_CAP"] = "100"                          # light on black: no flicker problem, and it needs the light
         if what == "mirror":
             env["WALL_BRIGHTNESS"] = str(min(int(self.state.get("brightness", 40)), MIRROR_MAX_BRIGHTNESS))

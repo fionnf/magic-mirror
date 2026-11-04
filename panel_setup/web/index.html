@@ -407,6 +407,8 @@
       <p class="hint" id="promptHint">The mirror's instructions.</p>
       <div class="row" style="margin-top:12px"><span class="hint" style="margin:0">Photobooth: photos per strip</span><select id="boothShots" aria-label="Photos per strip"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></div>
       <div class="switch"><span>Photobooth keeps going: a new strip every few seconds while you stay</span><input type="checkbox" id="tBoothRepeat" data-ms="booth_repeat"></div>
+      <div class="switch"><span>Experiment: show a TWINT pay QR before the photobooth (a tap goes on; nothing checks the payment)</span><input type="checkbox" id="tBoothPay" data-ms="booth_pay"></div>
+      <div class="row" style="margin-top:8px;gap:8px"><input id="boothPayUrl" placeholder="Your TWINT payment link or QR text" aria-label="TWINT payment link" style="flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 12px"><input id="boothPayText" placeholder="CHF 5 per strip" aria-label="Price line" maxlength="40" style="width:42%;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 12px"></div>
       <div class="switch"><span>Mirror shows the camera picture (off = you as a silhouette, background removed)</span><input type="checkbox" id="tMirrorRaw" data-ms="mirror_raw"></div>
       <div class="switch"><span>Endless photobooth: one photo after another, printed into one long strip for as long as people stay (cut when they leave)</span><input type="checkbox" id="tBoothEndless" data-ms="booth_endless"></div>
     </section>
@@ -1241,7 +1243,7 @@ async function loadMore() {
     DEFAULT_PROMPT = m.default_prompt || '';
     if (document.activeElement !== $('mirrorPrompt')) $('mirrorPrompt').value = m.prompt || DEFAULT_PROMPT;
     $('promptHint').dataset.custom = m.prompt ? '1' : '';
-    $('tone').value = m.tone; $('lang').value = m.language; $('idleArt').value = String(m.idle_art_minutes); $('boothShots').value = String(m.booth_shots); $('photosGb').value = String(m.photos_gb || 1);
+    $('tone').value = m.tone; $('lang').value = m.language; $('idleArt').value = String(m.idle_art_minutes); $('boothShots').value = String(m.booth_shots); $('boothPayUrl').value = m.booth_pay_url || ''; $('boothPayText').value = m.booth_pay_text || ''; $('photosGb').value = String(m.photos_gb || 1);
     document.querySelectorAll('[data-ms]').forEach(i => i.checked = !!m[i.dataset.ms]);
   } catch (e) {}
   try {
@@ -1268,6 +1270,8 @@ $('tone').addEventListener('change', e => api('/api/mirror/settings', {tone: +e.
 $('lang').addEventListener('change', e => api('/api/mirror/settings', {language: e.target.value}));
 $('idleArt').addEventListener('change', e => api('/api/mirror/settings', {idle_art_minutes: +e.target.value}));
 $('photosGb').addEventListener('change', e => api('/api/mirror/settings', {photos_gb: +e.target.value}).then(() => toast('Keeping up to ' + e.target.value + ' GB of photos on the wall')));
+$('boothPayUrl').addEventListener('change', e => api('/api/mirror/settings', {booth_pay_url: e.target.value.trim()}).then(() => toast('TWINT link saved')));
+$('boothPayText').addEventListener('change', e => api('/api/mirror/settings', {booth_pay_text: e.target.value.trim()}));
 $('boothShots').addEventListener('change', e => api('/api/mirror/settings', {booth_shots: +e.target.value}));
 document.querySelectorAll('[data-ms]').forEach(i => i.addEventListener('change', () => api('/api/mirror/settings', {[i.dataset.ms]: i.checked})));
 async function enrol() {

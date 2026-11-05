@@ -1,7 +1,7 @@
 {
  "name": "One Veil Down Deep",
  "description": "A single curtain of muted aqua light hangs off-centre in deep petrol water, widening, swaying and brightening slowly through the day while the dark around it stays still.",
- "image": "2026-11-05.png",
+ "image": "2026-11-05.final.png",
  "animation_source": "2026-11-05.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "The bass breathes the veil's width, tension tightens its core, the key leans its tint within the teal family, treble softens or sharpens its edge ripple, and each hour's energy leaves a faint tide mark down the veil's length.",
@@ -47,5 +59,36 @@
   "score": 7,
   "verdict": "A single soft aqua veil on a true petrol ground, clearly different from the recent warm-on-black days, with a real arc from a faint thread at 9 am to a broad, swaying curtain by 11 pm. It is quiet, on-direction and readable on the grid, though visible horizontal banding at the panel seams in the later stills slightly breaks the lake-light illusion."
  },
- "direction": "Petrol depth"
+ "direction": "Petrol depth",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "Today, the piece held a quiet calm, the veil barely moving in the deep stillness of a silent day. Without music, it stayed soft and muted, a gentle presence in the dark water, untouched by sound or rhythm. The subtle shifts invite a moment of quiet reflection, like a breath held in gentle waiting.",
+  "alt": "A vertical curtain of muted aqua light slowly widens and brightens against a deep petrol blue background, with soft gradients and a still, calm atmosphere."
+ },
+ "final": true
 }

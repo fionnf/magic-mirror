@@ -1,0 +1,51 @@
+{
+ "name": "Ink Swell, One Crest",
+ "description": "A single long crest of deep water seen from above rises out of an ink-navy field, lit faintly as if by a moon you cannot see, and through the day it travels up the wall, broadens and gathers the hours' music as faint tide marks below it.",
+ "image": "2026-11-06.png",
+ "animation_source": "2026-11-06.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-06"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#0c1a3a #2e4a78 #9fb6d4"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "Bass breath swells the crest's width like a slow tide, rising tension tightens and lifts its lit edge, the key leans the steel highlight cooler or warmer, treble softens or sharpens the sheen, and each hour's energy leaves a faint tide line beneath the wave.",
+ "palette": [
+  "#0c1a3a",
+  "#2e4a78",
+  "#9fb6d4"
+ ],
+ "source_sha256": "9d809afce14e57b23ec42d6ca8d37f1817afb28c323286db5ee92e2d7e496d31",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 1,
+ "created": 1793958534.3732395,
+ "curator": {
+  "score": 7,
+  "verdict": "A calm, on-brief ink-navy field with one faint steel-blue crest that climbs and broadens through the day, clearly different from the recent warm-on-black pieces. The ground reads as a true deep colour and the crest is luminous without neon, so I would hang it."
+ },
+ "direction": "Ink tide"
+}

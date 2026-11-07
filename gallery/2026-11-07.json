@@ -1,7 +1,7 @@
 {
  "name": "Ink Swell, One Crest",
  "description": "A single broad swell rolls through a sea of ink seen from above, its one long crest catching a faint steel light that grows from a thin dawn glint into a wide luminous body by night, with a darker trough behind it giving the water its weight.",
- "image": "2026-11-07.png",
+ "image": "2026-11-07.final.png",
  "animation_source": "2026-11-07.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "The bass breath slowly widens and lifts the swell, tension tightens the crest's core, the key leans its tint between slate and steel, each song re-seeds the crest's gentle meander, and the day's hourly energy settles as faint tide marks in the trough.",
@@ -47,5 +59,36 @@
   "score": 7,
   "verdict": "A genuinely different day for the wall: a cool navy field with one soft steel crest that thickens and rises from a thin dawn glint to a broad luminous swell, on-direction and calm enough to sleep in front of. I would hang it, though the faint fine wave lines appearing in the lower trough at 3 pm onward are the one thing that could shimmer on the LED grid."
  },
- "direction": "Ink tide"
+ "direction": "Ink tide",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "Today passed in quiet stillness, untouched by music, allowing the swell to grow gently and rest deeply in its dark, undisturbed trough. The faint steel light rises slowly through the day, embracing a calm that fills the space like a soft, steady breath. This peaceful pause leaves a quiet impression on the wave\u2019s gentle curve at midnight.",
+  "alt": "A deep, dark blue gradient painting showing a single broad, soft wave crest glowing faintly with a steel-like light across the middle, with darker areas underneath suggesting depth and weight in the water."
+ },
+ "final": true
 }

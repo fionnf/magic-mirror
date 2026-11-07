@@ -1,0 +1,51 @@
+{
+ "name": "Ink Swell, One Crest",
+ "description": "A single broad swell rolls through a sea of ink seen from above, its one long crest catching a faint steel light that grows from a thin dawn glint into a wide luminous body by night, with a darker trough behind it giving the water its weight.",
+ "image": "2026-11-07.png",
+ "animation_source": "2026-11-07.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-07"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#0e1a3a #3a5378 #9ab2d2"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "The bass breath slowly widens and lifts the swell, tension tightens the crest's core, the key leans its tint between slate and steel, each song re-seeds the crest's gentle meander, and the day's hourly energy settles as faint tide marks in the trough.",
+ "palette": [
+  "#0e1a3a",
+  "#3a5378",
+  "#9ab2d2"
+ ],
+ "source_sha256": "85d62418c1400dc86f8a35e0212403e8ca452ae81e8c12fd854153fdd89436d9",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 4,
+ "created": 1794042792.1929133,
+ "curator": {
+  "score": 7,
+  "verdict": "A genuinely different day for the wall: a cool navy field with one soft steel crest that thickens and rises from a thin dawn glint to a broad luminous swell, on-direction and calm enough to sleep in front of. I would hang it, though the faint fine wave lines appearing in the lower trough at 3 pm onward are the one thing that could shimmer on the LED grid."
+ },
+ "direction": "Ink tide"
+}

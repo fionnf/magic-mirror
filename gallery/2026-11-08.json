@@ -1,0 +1,51 @@
+{
+ "name": "Ink Tide, One Crest",
+ "description": "A single long swell moves through deep ink-blue water seen from above, its crest catching a faint steel light that rises, broadens and travels up the wall as the day goes on.",
+ "image": "2026-11-08.png",
+ "animation_source": "2026-11-08.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-08"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#0c1a3a #2e4a78 #9fb4d2"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "The bass breathes the swell's width like a tide, rising tension tightens the crest, the key leans its tint between navy and steel, treble adds a fine haze of glints along the crest, and each hour's energy leaves a faint tide mark below it.",
+ "palette": [
+  "#0c1a3a",
+  "#2e4a78",
+  "#9fb4d2"
+ ],
+ "source_sha256": "b5b1bbcb21c3083b859e6a42b5d4afb3ea1d4311b07a33afdcd3daaa56915500",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 1,
+ "created": 1794129965.2320704,
+ "curator": {
+  "score": 7,
+  "verdict": "A single soft steel crest on a true ink-blue ground answers the direction well, and the slow rise and broadening across the day gives a real arc while staying clearly apart from the recent warm glows on black. It is quiet and readable, though the crest is close to the recent day's single diagonal line, and the faint banding below the crest in the later stills edges toward busy."
+ },
+ "direction": "Ink tide"
+}

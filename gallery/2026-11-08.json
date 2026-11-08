@@ -1,7 +1,7 @@
 {
  "name": "Ink Tide, One Crest",
  "description": "A single long swell moves through deep ink-blue water seen from above, its crest catching a faint steel light that rises, broadens and travels up the wall as the day goes on.",
- "image": "2026-11-08.png",
+ "image": "2026-11-08.final.png",
  "animation_source": "2026-11-08.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "The bass breathes the swell's width like a tide, rising tension tightens the crest, the key leans its tint between navy and steel, treble adds a fine haze of glints along the crest, and each hour's energy leaves a faint tide mark below it.",
@@ -47,5 +59,36 @@
   "score": 7,
   "verdict": "A single soft steel crest on a true ink-blue ground answers the direction well, and the slow rise and broadening across the day gives a real arc while staying clearly apart from the recent warm glows on black. It is quiet and readable, though the crest is close to the recent day's single diagonal line, and the faint banding below the crest in the later stills edges toward busy."
  },
- "direction": "Ink tide"
+ "direction": "Ink tide",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "Today was quiet, with no music filling the room. The artwork traces a deep, calm swell of navy-blue ink, its crest barely catching a silvery light that slowly widens as the hours pass. It feels like the steady pulse of silence itself, gentle and unbroken throughout the day.",
+  "alt": "A smooth, deep navy-blue swell moves across the image from lower left to upper right, with a faint steel-colored crest rising and broadening along its length."
+ },
+ "final": true
 }

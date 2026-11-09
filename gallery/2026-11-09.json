@@ -1,7 +1,7 @@
 {
  "name": "Ink Tide, Long Crest",
  "description": "A single broad swell of deep water seen from above, its one long crest catching a faint steel light that slowly rises through the night-blue field as the day fills with music.",
- "image": "2026-11-09.png",
+ "image": "2026-11-09.final.png",
  "animation_source": "2026-11-09.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "The bass breathes the swell's width like a tide, rising tension tightens the crest into a finer line, the key leans its tint between slate and steel, treble adds a faint haze of sheen along the crest, and each hour's music leaves a soft tide mark beneath it so by midnight the water carries the day's sediment.",
@@ -47,5 +59,36 @@
   "score": 7,
   "verdict": "A single soft steel crest on a true navy ground follows the Ink Tide direction and reads as one calm luminous form, clearly unlike the recent warm-on-black days. The rising arc through the day is legible, but faint banding below the crest at 3 pm and later hints at fine lines that may shimmer on the LEDs."
  },
- "direction": "Ink tide"
+ "direction": "Ink tide",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "Today, the room was quiet from dawn to dusk, and the artwork reflects this stillness with a single broad wave, gently lit against a deep blue sea. Without music to stir its colors, the tide remains calm and undisturbed, holding the peaceful weight of silence throughout the day.",
+  "alt": "A wide, smooth dark blue wave seen from above under a faint, pale steel light along its long crest against a gradation of night-blue to lighter blue sky."
+ },
+ "final": true
 }

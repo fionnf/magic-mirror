@@ -1,0 +1,51 @@
+{
+ "name": "Rose Pebble",
+ "description": "A translucent rose-glass pebble floats above a dark ground, catching a peach side light and revealing a warm refracted core that slowly changes shape and presence through the day.",
+ "image": "2026-11-10.png",
+ "animation_source": "2026-11-10.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-10"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#2a1021 #8b4a63 #ffc2a1"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 4
+  }
+ ],
+ "listening": "It listens like a room breathing in slow tides: bass thickens the pebble, treble sharpens the rim, and the day arc moves the form from dawn hush to a fuller, brighter afterglow.",
+ "palette": [
+  "#2a1021",
+  "#8b4a63",
+  "#ffc2a1"
+ ],
+ "source_sha256": "14ce0c42276ee9e03c9aad291ea06746194913514b8a26de431b686846650d0f",
+ "model": "gpt-5.4-mini",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 6,
+ "created": 1794305862.8707905,
+ "curator": {
+  "score": 4,
+  "verdict": "This piece misses the required depth, refraction, and confident peach rim light; the form looks flat and weakly lit, more like a plain disc than a translucent rose glass pebble. The soft glow is uniform and the pebble lacks visible internal structure or strong shadows to suggest thickness, making it too dim and simple for the wall."
+ },
+ "direction": "Rose glass"
+}

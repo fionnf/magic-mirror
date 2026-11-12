@@ -1,7 +1,7 @@
 {
  "name": "Prism Line Descending",
  "description": "A single thread of pale light falls through the dark and, where it touches ground, opens into a soft narrow spectrum that widens and climbs as the day goes on, until by night the fan is a broad luminous veil.",
- "image": "2026-11-12.png",
+ "image": "2026-11-12.final.png",
  "animation_source": "2026-11-12.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 6
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 1
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": 13
   }
  ],
  "listening": "Bass breath gently widens the fan, tension tightens the line, the key leans the spectral tint within the palette, treble adds a fine haze, each song nudges where the line stands, and the day's hourly energy settles as faint glowing sediment along the floor.",
@@ -47,5 +59,36 @@
   "score": 6,
   "verdict": "A clean, luminous single form that departs clearly from the recent warm dim pieces, and the vertical white line reads well on the grid. But the fan is only blue fading to grey-white with no actual spectrum, so the prism idea is lost, and the arc between stills is too slight: 3 pm, 8 pm and 11 pm look nearly identical, and the fan tilts lopsidedly to the right."
  },
- "direction": "Prism line"
+ "direction": "Prism line",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.263,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "Today the light thread remained delicate and narrow, reflecting a quiet afternoon with just a hint of music gently unfolding. The soft blue glow at its base quietly marks the sparse moments of sound that touched the room. As night fell, the spectral fan stayed tender and restrained, holding the calm of the day within its glow.",
+  "alt": "A narrow, vertical beam of pale blue light descends through deep darkness, widening slightly into a soft, narrow blue fan near the base against a dark background."
+ },
+ "final": true
 }

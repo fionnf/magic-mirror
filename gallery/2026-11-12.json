@@ -1,0 +1,51 @@
+{
+ "name": "Prism Line Descending",
+ "description": "A single thread of pale light falls through the dark and, where it touches ground, opens into a soft narrow spectrum that widens and climbs as the day goes on, until by night the fan is a broad luminous veil.",
+ "image": "2026-11-12.png",
+ "animation_source": "2026-11-12.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-12"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#06081a #3a4fd0 #d8e6ff"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 6
+  }
+ ],
+ "listening": "Bass breath gently widens the fan, tension tightens the line, the key leans the spectral tint within the palette, treble adds a fine haze, each song nudges where the line stands, and the day's hourly energy settles as faint glowing sediment along the floor.",
+ "palette": [
+  "#06081a",
+  "#3a4fd0",
+  "#d8e6ff"
+ ],
+ "source_sha256": "13cfef78e7c4602ce4aa187dcbbd9189eaec1779fb5ea9b216f2e7fa71854de4",
+ "model": "claude-opus-5-5",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 4,
+ "created": 1794478518.3953853,
+ "curator": {
+  "score": 6,
+  "verdict": "A clean, luminous single form that departs clearly from the recent warm dim pieces, and the vertical white line reads well on the grid. But the fan is only blue fading to grey-white with no actual spectrum, so the prism idea is lost, and the arc between stills is too slight: 3 pm, 8 pm and 11 pm look nearly identical, and the fan tilts lopsidedly to the right."
+ },
+ "direction": "Prism line"
+}

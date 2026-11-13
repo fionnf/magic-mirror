@@ -1,0 +1,51 @@
+{
+ "name": "Edge Current",
+ "description": "A comb of luminous lines slips in from the edge and is bent by a slow two-wave field, so the wall reads like a quiet current that thickens, travels, and gathers memory over the day.",
+ "image": "2026-11-13.png",
+ "animation_source": "2026-11-13.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-13"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#040816 #1fd7ff #f2b7ff"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 5
+  }
+ ],
+ "listening": "It listens as a tide: iBass lifts the whole comb, iTreble sharpens the heads, iSong changes the spacing of the lines, and iDay lays down faint sediment so the same flow becomes denser by night.",
+ "palette": [
+  "#040816",
+  "#1fd7ff",
+  "#f2b7ff"
+ ],
+ "source_sha256": "8845827cac25910c7338220d416490a03f09ee5dc56a1300a8ad271d4668ac75",
+ "model": "gpt-5.4-mini",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 5,
+ "created": 1794560941.9572504,
+ "curator": {
+  "score": 5,
+  "verdict": "The piece successfully uses a soft glow and a limited palette, but it diverges from the 'flow lines' theme by presenting a broad, bright block rather than distinct flowing lines. The thickening current loses the delicate line structure required and reads overly bright and dense on the LED grid, diminishing the elegance."
+ },
+ "direction": "Flow lines"
+}

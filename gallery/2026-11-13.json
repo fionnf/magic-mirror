@@ -1,7 +1,7 @@
 {
  "name": "Edge Current",
  "description": "A comb of luminous lines slips in from the edge and is bent by a slow two-wave field, so the wall reads like a quiet current that thickens, travels, and gathers memory over the day.",
- "image": "2026-11-13.png",
+ "image": "2026-11-13.final.png",
  "animation_source": "2026-11-13.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 5
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "It listens as a tide: iBass lifts the whole comb, iTreble sharpens the heads, iSong changes the spacing of the lines, and iDay lays down faint sediment so the same flow becomes denser by night.",
@@ -47,5 +59,36 @@
   "score": 5,
   "verdict": "The piece successfully uses a soft glow and a limited palette, but it diverges from the 'flow lines' theme by presenting a broad, bright block rather than distinct flowing lines. The thickening current loses the delicate line structure required and reads overly bright and dense on the LED grid, diminishing the elegance."
  },
- "direction": "Flow lines"
+ "direction": "Flow lines",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "Today, \"Edge Current\" flows gently with no sound to ripple its luminous lines. The quiet of a musicless day lets the current thicken in subtle layers, gathering calm memory as night falls. This still reflects a peaceful, silent tide undisturbed by sound.",
+  "alt": "A smooth, luminous white and blue glow spreads from the left edge of the image into a dark background, resembling a soft, bent current of light."
+ },
+ "final": true
 }

@@ -1,0 +1,51 @@
+{
+ "name": "Lime Glass Drift",
+ "description": "A single frosted glow gathers through the day, shifting from a compact green ember into a larger chartreuse presence that seems to breathe against a dark petrol field.",
+ "image": "2026-11-14.png",
+ "animation_source": "2026-11-14.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-14"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#071d1a #2e6f55 #d8ff6a"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 8
+  }
+ ],
+ "listening": "It listens like a slow swell: bass rounds the blob\u2019s body, brightness sharpens its rim, and the day\u2019s accumulated music leaves a faint sediment in its edge and asymmetry.",
+ "palette": [
+  "#071d1a",
+  "#2e6f55",
+  "#d8ff6a"
+ ],
+ "source_sha256": "f59f6ab054cd8a2212f5a0d052490e5287043bae2d2650a2965bec70acc779d0",
+ "model": "gpt-5.4-mini",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 1,
+ "created": 1794647414.0862818,
+ "curator": {
+  "score": 8,
+  "verdict": "This piece captures the direction well with a clear lime-green glowing form that gently shifts shape against a deep petrol background, maintaining good luminosity and space around it. The gradual breathing effect and restrained palette are elegant and align nicely with the mood board without being busy or harsh on the LED grid."
+ },
+ "direction": "Lime glow"
+}

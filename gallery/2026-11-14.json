@@ -1,7 +1,7 @@
 {
  "name": "Lime Glass Drift",
  "description": "A single frosted glow gathers through the day, shifting from a compact green ember into a larger chartreuse presence that seems to breathe against a dark petrol field.",
- "image": "2026-11-14.png",
+ "image": "2026-11-14.final.png",
  "animation_source": "2026-11-14.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 8
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "It listens like a slow swell: bass rounds the blob\u2019s body, brightness sharpens its rim, and the day\u2019s accumulated music leaves a faint sediment in its edge and asymmetry.",
@@ -47,5 +59,36 @@
   "score": 8,
   "verdict": "This piece captures the direction well with a clear lime-green glowing form that gently shifts shape against a deep petrol background, maintaining good luminosity and space around it. The gradual breathing effect and restrained palette are elegant and align nicely with the mood board without being busy or harsh on the LED grid."
  },
- "direction": "Lime glow"
+ "direction": "Lime glow",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "Today was quiet, with no songs or music filling the hours. The piece reflects this stillness, softly expanding its pale green glow against a dark background, as if breathing gently in the silence. The calm presence feels like a faint pulse in the night, carrying an unspoken sense of calm and space.",
+  "alt": "A soft, glowing pale green orb with a diffuse edge, floating against a deep dark background."
+ },
+ "final": true
 }

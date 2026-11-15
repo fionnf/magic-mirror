@@ -1,7 +1,7 @@
 {
  "name": "Under Ash Ember",
  "description": "A low copper ember lies under a dark umber field, breathing almost imperceptibly as the day widens, lifts, and then settles back into heat.",
- "image": "2026-11-15.png",
+ "image": "2026-11-15.final.png",
  "animation_source": "2026-11-15.frag",
  "attributes": [
   {
@@ -27,6 +27,18 @@
   {
    "trait_type": "Curator score",
    "value": 7
+  },
+  {
+   "trait_type": "Hours with music",
+   "value": 0
+  },
+  {
+   "trait_type": "Songs heard",
+   "value": 0
+  },
+  {
+   "trait_type": "Loudest hour",
+   "value": null
   }
  ],
  "listening": "It listens like a hearth: iBreath gently changes the ember\u2019s breadth, iTension tightens its core, iBright thins the ash halo, and iDay leaves faint heat-sediment across the lower wall.",
@@ -47,5 +59,36 @@
   "score": 7,
   "verdict": "This piece respects the 'Umber ember' direction with a restrained, low wide glow and a deep umber ground. The gentle breathing form is quietly luminous and calming, fitting well with the house mood, though it could slightly boost the form's light peak for more impact in dim conditions."
  },
- "direction": "Umber ember"
+ "direction": "Umber ember",
+ "hours": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "post": {
+  "caption": "Under Ash Ember holds a quiet presence on this silent day, its warm glow barely shifting like a hearth left to rest. The stillness allowed the ember to deepen subtly, the ash halo thinning as the hours passed without sound. At midnight, the piece feels settled, a gentle warmth lingering in the dark space.",
+  "alt": "A low, glowing copper ember shape rests under a dark umber field, resembling a soft light spreading horizontally in a dark space."
+ },
+ "final": true
 }

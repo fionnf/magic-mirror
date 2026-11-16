@@ -1,0 +1,51 @@
+{
+ "name": "Aubergine Hour",
+ "description": "A single mauve orb gathers out of a deep plum field, its lit edge drifting through the day while the shadow side dissolves back into the room\u2019s darkness.",
+ "image": "2026-11-16.png",
+ "animation_source": "2026-11-16.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-16"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#2b102f #53285b #c39acb"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 8
+  }
+ ],
+ "listening": "It listens as a slow tidal body: iBreath swells the orb\u2019s presence, iBright tightens the rim-light, and iDay lays down a faint sediment of warmer or cooler plum as the day accumulates.",
+ "palette": [
+  "#2b102f",
+  "#53285b",
+  "#c39acb"
+ ],
+ "source_sha256": "ecc77a395653a3c557595d9d8ecf30b8d8cccf3dc06ad71e093d54f416489c38",
+ "model": "gpt-5.4-mini",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 1,
+ "created": 1794819809.7560937,
+ "curator": {
+  "score": 8,
+  "verdict": "This piece beautifully embodies the 'Aubergine hour' direction with its restrained palette, the deep plum ground, and a single, softly glowing orb that subtly shifts light throughout the day. Its calm, luminous quality and silent elegance resonate well with the house's mood board and tasteful restraint."
+ },
+ "direction": "Aubergine hour"
+}

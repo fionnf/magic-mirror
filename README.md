@@ -43,7 +43,7 @@ did shows in `GET /api/voice` (`heard`, `last_action`, `error`) and in the contr
 | Area | What you get | Needs |
 |---|---|---|
 | **Art gallery** | 67 pieces in 7 collections, plus every daily edition (33 shaders, 15 music visuals, plus hand-written pieces: marbling and op-art, lines and dots, long-exposure light, coral, ink and moire). Pace set in the app | Shaders need `moderngl` and an OpenGL context |
-| **Art of the day** | One new shader a day, composed by an AI model after looking at a Pinterest mood board, checked for flicker, scored by a second call, then hung. Also published to a public site | An OpenAI or Anthropic key, or just fetch the author's pieces from his public gallery (default) |
+| **Art of the day** | One new shader a day, composed by an AI model after looking at a Pinterest mood board, checked for flicker, scored by a second call, then hung. Made on the wall only: it is not published to the website | An OpenAI or Anthropic key (without one the wall hangs an offline piece or the bundled editions) |
 | **Live boards** | Planes, Satellites, Wind over Switzerland, Ireland and Europe, Snow, Limmat river, West Cork lights, Tides, Earthquakes, Tram map (timetable-driven), a Tram board, **Kilchberg trains** and **Zürich HB trains** (live station displays, [docs/train-boards.md](docs/train-boards.md)) and **Ländle**, a living map of the Remstal with the live S-Bahn on it ([docs/laendle.md](docs/laendle.md)). The app's *Live boards* chip is the current list | Internet, no keys. Most are tied to Zürich, West Cork or the Remstal: see [Make it yours](#make-it-yours) |
 | **Music** | Art that follows the room's sound. A party slider from "art just breathes" to dance floor, a beat tracker, song names (Shazam, Cast speakers, Spotify), album-cover colours | A USB microphone on the Pi |
 | **Mirror** | Two modes (also moods in the app): a **photo** (countdown, a bright warm-white flash round the screen edge, an AI one-liner or none, a printed receipt) and a **photobooth** (2 to 6 portraits, no prompts, printed as one HOUSE FORTUNA strip with a QR code to a styled gallery page for that day only; can repeat by itself). Photos are saved at the camera's full resolution; the AI's instructions are editable in the app. Start by a tap, the app or a **hand signal** (open palm, peace sign). Opt-in face recognition. [docs/mirror.md](docs/mirror.md) | A camera, an AI key. Printer optional |
@@ -51,7 +51,7 @@ did shows in `GET /api/voice` (`heard`, `last_action`, `error`) and in the contr
 | **Printing** | A 58 mm thermal printer on the wall's Pi, on a second Pi over Wi-Fi, on the network or on Bluetooth; pictures dithered and laid out for thermal paper (crisp text, framed portraits), quality chosen by a test slip. [docs/printing.md](docs/printing.md), [docs/printer-pi.md](docs/printer-pi.md) | A printer; python-escpos |
 | **Room** | Smart Life (Tuya) lights: presets, brightness, warmth, colour, per light, lights-off time, import of rooms and scenes from the cloud (untested). Two Bluetooth LED rods that follow the wall | `tinytuya` and your device keys; `bleak` for the rods |
 | **The app** | Phone web app: scenes, sleep timer, tour, gallery with search, live LED-dot preview, guest dedications by QR | Home Wi-Fi |
-| **Public gallery** | Every day's piece on a GitHub Pages site with RSS, a play-with-it page per piece, and the control app online | A GitHub repo; see [docs/gallery.md](docs/gallery.md) |
+| **Online control app** | The phone app on a small GitHub Pages site (the control app and the photo page; the daily art is not published there) | A GitHub repo; see [docs/gallery.md](docs/gallery.md) |
 
 ## Try it in 5 minutes without hardware
 
@@ -82,7 +82,7 @@ Notes, honestly:
 - **Microphone** (Music mode): the simulator streams the Mac's microphone with ffmpeg's `avfoundation` input (`MIC="..."` chooses one). On Linux or Windows there is no
   input unless you send 16-bit mono 22.05 kHz audio to UDP port 9099 yourself. **Webcam** (Mirror mode): the laptop's own.
 - The simulator also runs the wall's background jobs, so it **writes into `assets/daily/`** (an offline piece for today, and it finishes the bundled past days).
-  `git checkout assets/daily && git clean -fd assets/daily` puts that back. It also looks at the author's public gallery for today's piece (see [Make it yours](#make-it-yours)).
+  `git checkout assets/daily && git clean -fd assets/daily` puts that back. 
 - AI features fall back to built-in text without a key. To try them, copy `.env.example` to `.env` and set `OPENAI_API_KEY`.
 
 ## Parts and wiring
@@ -274,7 +274,7 @@ Set by the app for each mode it starts, not meant for `.env`: `WALL_DAILY_DATE`,
 | `PRINTER_BAUD` | `115200` | Serial printers |
 | `PRINTER_TARGET`, `PRINT_PORT` | `usb`, `8631` | For `tools/print_server.py` on a second Pi |
 
-**Remote access and public gallery** (see [docs/remote-access.md](docs/remote-access.md), [docs/gallery.md](docs/gallery.md))
+**Remote access and the online site** (see [docs/remote-access.md](docs/remote-access.md), [docs/gallery.md](docs/gallery.md))
 
 | Variable | Default | What it does | Secret |
 |---|---|---|---|
@@ -285,8 +285,6 @@ Set by the app for each mode it starts, not meant for `.env`: `WALL_DAILY_DATE`,
 | `GALLERY_REPO` | `fionnf/magic-mirror` | Repository the wall publishes to | no |
 | `GALLERY_BRANCH` | `master` | Branch it publishes to | no |
 | `GALLERY_DEPLOY_KEY` / `GALLERY_CLONE` | `~/.ssh/fortuna_deploy` / `~/fortuna-gallery` | SSH deploy key and local sparse clone used instead of a token | key: yes |
-| `GALLERY_RAW` | `https://raw.githubusercontent.com/fionnf/magic-mirror/master/gallery/` | Where the wall fetches daily pieces from | no |
-| `GALLERY_URL` | `https://fionnf.github.io/magic-mirror/` | Public site address used by `tools/build_gallery.py` | no |
 | `WALL_HOST` | `pi@192.168.1.129` | `tools/spotify_login.py`: where to copy the token | no |
 
 **Google Drive** (see [docs/google-drive.md](docs/google-drive.md))
@@ -335,16 +333,14 @@ These are the personal or place-specific things in the repository. The wall runs
 | Pi address, user | `panel_setup/deploy.sh` (`192.168.1.129`), `tools/spotify_login.py` (`WALL_HOST`) | Set `PI_HOST`/`PI_USER`/`WALL_HOST` |
 | Self-update source | `panel_setup/update.sh` (`fionnf/magic-mirror`, branch `master`) | Your fork, or remove the `ExecStartPre` line from the service |
 | Default camera stream | `panel_setup/wall_control.py` `DEFAULT_STATE["camera_url"]` (`http://192.168.1.217:8090/...`) | Use *Mirror, Start the mirror* (Pi camera) |
-| Public gallery and Pages | `GALLERY_REPO`, `GALLERY_RAW`, `GALLERY_URL`; `tools/build_gallery.py` (`TITLE`, `CREDIT`, `TAGLINE`); `.github/workflows/daily.yml` (time zone, cron); `gallery/` (the author's editions) | See [docs/gallery.md](docs/gallery.md) |
-| Online control app | `panel_setup/web/index.html` (`GALLERY`, `findWall()` reads `fionnf/magic-mirror`, login text "Made by Dewa and Fionn"), `WALL_APP_ORIGINS`, `wall/wall.json` (the author's last tunnel address) | See [docs/remote-access.md](docs/remote-access.md) |
+| Online site (Pages) | `GALLERY_REPO`; `tools/build_gallery.py`; `.github/workflows/gallery.yml` | See [docs/gallery.md](docs/gallery.md) |
+| Online control app | `panel_setup/web/index.html` (`findWall()` reads `fionnf/magic-mirror`, login text "Made by Dewa and Fionn"), `WALL_APP_ORIGINS`, `wall/wall.json` (the author's last tunnel address) | See [docs/remote-access.md](docs/remote-access.md) |
 | Smart Life | `lights.py` `import_room("living")` matches a Smart Life room whose name contains "living"; `devices.json` is yours | Name your room accordingly or call the API with your own names |
 | Bluetooth LED rods | `display/rods.py` `ADDRESSES` (two MELK-OA10 MAC addresses) | Your rods' addresses, or `WALL_RODS=0` |
 | Names, house and street | `config.py` (`MIRROR_PERSONA`, `PRINTER_HEADER = "FORTUNAGASSE 24"`, booth prompts), `display/wheel_of_fortuna.py` (`RESIDENTS`, `STREET`, the verdicts), AI briefs in `display/daily.py` and `display/music.py`, `main.py` ("House Fortuna") | Yours |
 | Personal shows | `display/dewa_story.py`, `display/maeva_story.py`, `display/max_fionn.py` (Max & Fionn: "In Arbeit", German), `display/lennart_film.py` and the Ländle intro `display/laend_intro.py` (real friends, jokes and street names), `display/cards.py` ("Dewa is a cow"), `display/welcome.py`, `display/pride_show.py`; their entries in `MODES` in `panel_setup/wall_control.py` | Delete or rewrite them |
 | Printer host and the address in the slip | `config.PRINTER_HEADER` ("FORTUNAGASSE 24"), `tools/setup_printer_pi.sh` (`printer.local`, the live wall's address) | Yours |
 | Printer USB ids | `config.PRINTER_VENDOR_ID`, `PRINTER_PRODUCT_ID` | See `lsusb` |
-
-By default your wall also **fetches the author's daily piece** from his public gallery (`GALLERY_RAW`): handy, but it is his pipeline, not yours.
 
 ## External services
 
@@ -372,11 +368,11 @@ Everything is optional; the wall is useful with none of them.
 | USGS | Earthquakes (no key) | Last cached day |
 | Cloudflare quick tunnel (`cloudflared`) | Remote access | Control from the home network only |
 
-## The public gallery and daily art pipeline
+## The online site and the daily art
 
-In short: around 05:00 an AI model composes the day's piece as a shader after looking at the mood board; it is checked (it must compile and be calm), scored by a second call (7/10 or better), hung on the wall and
-committed to `gallery/`; a GitHub Actions workflow rebuilds the Pages site (feed, one page per piece, RSS, `window/` for any screen). A scheduled workflow can make the piece in the cloud even
-when the wall is off, and the wall then hangs the same one. Details, secrets and the changes for your own fork: [docs/gallery.md](docs/gallery.md).
+In short: around 05:00 the wall composes the day's piece as a shader after looking at the mood board; it is checked (it must compile and be calm), scored by a second call (7/10 or better) and hung on
+the wall. The daily art is **not published to the website** (removed 2026-11-17 to keep the hosting small). The Pages site holds only the phone control app and the photo page (about 140 KB, it does not grow).
+The wall still announces its remote address in the repo (`wall/wall.json`) so the online app can find it. Details: [docs/gallery.md](docs/gallery.md).
 
 ## Tests
 
@@ -428,7 +424,7 @@ display/                      everything drawn on the wall
   library.py                  the one catalogue of gallery pieces
   shaders.py (assets/shaders/*.frag, vj/, live/)             GPU shaders (EGL on the Pi)
   art.py artsy.py shapes.py light_art.py organic.py ...     hand-written generative galleries
-  daily.py directions.py moodboard.py publish.py            art of the day, directions, mood board, gallery publisher
+  daily.py directions.py moodboard.py publish.py            art of the day, directions, mood board, wall-address announcer
   music.py beat.py intensity.py vj_fx.py cast.py spotify.py cover.py   music engine and now-playing sources
   planes.py satellites.py wind.py snow.py limmat.py westcork.py tides.py quakes.py tramlines.py departures.py kilchberg.py   live boards
   laend.py laend_intro.py laend_trains.py                    the Remstal map, its German intro film and the live S-Bahn
@@ -436,16 +432,16 @@ display/                      everything drawn on the wall
   dedications.py presence.py rods.py ...                     guests' lines, people on the art, Bluetooth rods
 panel_setup/                  wall_control.py (app server and process runner), web/index.html (the app), play.py (runs one mode),
                               deploy.sh, bootstrap_pi.sh, install_control.sh, update.sh, sim.sh, run.sh, bring-up tools, README
-tools/                        build_gallery.py, make_today.py, build_maps.py, build_relief.py, build_land.py, build_trams.py, build_laend.py,
+tools/                        build_gallery.py, build_maps.py, build_relief.py, build_land.py, build_trams.py, build_laend.py,
                               auth_drive.py, spotify_login.py, print_server.py, install_print_server.sh, setup_printer_pi.sh,
                               flash_sd.sh, print_test_slip.py, timelapse.py
 assets/                       shaders/, maps/ (incl. laend.npz), models/ (face and hand models), trams/ (timetable and layout), daily/ (local editions)
-gallery/, site/, wall/        published editions, the public site's static files, the wall's announced tunnel address
+site/, wall/                  the public site's static files, the wall's announced tunnel address
 simulator/                    pygame panel window, webcam and button mocks
 tests/                        manual test scripts (see Tests)
 docs/                         mirror.md, printing.md, printer-pi.md, laendle.md, train-boards.md, gallery.md, remote-access.md, google-drive.md, livecam.md
 hardware/led-wall-frame/      the printable frame (STL, 3MF, OpenSCAD)
-.github/workflows/            daily.yml (cloud artist), gallery.yml (Pages site)
+.github/workflows/            gallery.yml (the Pages site: control app and photo page)
 ```
 
 ## Safety

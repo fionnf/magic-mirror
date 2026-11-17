@@ -2033,27 +2033,6 @@ def main():
             or any(not os.path.exists(os.path.join(THUMB_DIR, m + ".png")) for m in LIVE_THUMBS)):
         threading.Thread(target=make_thumbs, daemon=True).start()   # normally shipped by deploy.sh
 
-    def _publish_pending(daily):
-        """Send new or changed editions to the public gallery (remembers what went out)."""
-        from display import publish
-        if not publish.available():
-            return
-        sent_path = os.path.join(HERE, "gallery_sent.json")
-        try:
-            with open(sent_path) as fh:
-                sent = json.load(fh)
-        except Exception:
-            sent = {}
-        todo = [d for d, m in daily.editions()[:14]
-                if not m.get("offline") and sent.get(d) != ("final" if m.get("final") else "new")]
-        if todo:
-            publish.publish(todo)
-            for d, m in daily.editions()[:14]:
-                if d in todo:
-                    sent[d] = "final" if m.get("final") else "new"
-            with open(sent_path, "w") as fh:
-                json.dump(sent, fh)
-
     def tunnel_watch(port):
         """A Cloudflare quick tunnel (no account): a public https address for the Pages control app.
         The address changes on every start, so the wall announces it in the repo (wall/wall.json)."""
@@ -2105,18 +2084,14 @@ def main():
                 today = _dt.date.today().isoformat()
                 mine = dict(daily.editions()).get(today)
                 if (mine is None or mine.get("offline")) and (_dt.datetime.now().hour >= 5 or not daily.editions()):
-                    # the cloud artist (daily workflow) makes the piece; the wall hangs the same one.
-                    # Only if the cloud has not delivered by 10:00 does the wall compose its own, so
-                    # the gallery never gets two different pieces for one day. With no internet at all
-                    # the wall makes one itself (compose_offline); the real one replaces it once online.
+                    # the wall composes its own piece (the daily art is no longer published to the website).
+                    # With no internet at all it makes one itself (compose_offline); the real one replaces it once online.
                     meta, net = None, daily.online()
                     if net:
-                        meta = daily.fetch(today)
-                        if meta is None and (_dt.datetime.now().hour >= 10 or not daily.editions()):
-                            try:
-                                meta = daily.generate(today)
-                            except Exception as e:
-                                print(f"[daily] the artist failed: {e}", flush=True)
+                        try:
+                            meta = daily.generate(today)
+                        except Exception as e:
+                            print(f"[daily] the artist failed: {e}", flush=True)
                     if meta is None and mine is None:
                         if not net or _dt.datetime.now().hour >= 10:
                             meta = daily.compose_offline(today)
@@ -2124,13 +2099,9 @@ def main():
                         print(f"[daily] {today}: {meta['name']}", flush=True)
                         if runner.current == "daily" and not runner.state.get("daily_date"):
                             runner.restart_current()
-                elif daily.refresh(today):                  # today's piece was replaced in the gallery
-                    if runner.current == "daily" and not runner.state.get("daily_date"):
-                        runner.restart_current()
                 for d, m in daily.editions():          # past days the wall did not close itself
                     if d < today and not m.get("final"):
                         daily.finalise(d)
-                _publish_pending(daily)
             except Exception as e:
                 print(f"[daily] {e}", flush=True)
                 time.sleep(1800)

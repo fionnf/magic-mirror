@@ -231,14 +231,12 @@
     <input type="password" id="loginPw" name="password" placeholder="Password" autocomplete="current-password" required>
     <button class="btn primary">Open the wall</button>
     <p class="hint" id="loginMsg" role="alert"></p>
-    <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/">See the gallery</a></p>
   </form>
 </div>
 <div class="gate" id="gateAway">
   <div class="wrap">
     <h1>Fortuna wall</h1>
     <p class="hint">The wall is not reachable right now. It may be switched off or restarting.</p>
-    <p><a class="btn primary" href="https://fionnf.github.io/magic-mirror/art/">See the gallery</a></p>
   </div>
 </div>
 <div class="stage wrap">
@@ -449,7 +447,6 @@
       <input type="range" id="pace" min="0" max="100" step="1" aria-label="Art pace">
       <div class="ends"><span>barely moving</span><span>lively</span></div>
       <div class="switch"><span>Show people on the art</span><input type="checkbox" id="tPresence"></div>
-      <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/" target="_blank" rel="noopener">The public gallery</a> shows every day's piece.</p>
     </section>
     <section>
       <h2>The Fortuna Brief</h2>
@@ -567,7 +564,6 @@ const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('s
 /* On the wall's own address the page talks to itself. Anywhere else (GitHub Pages) it finds the wall's
    current public address, which the wall announces in the repo, and logs in with a token. */
 const REMOTE = !/^(\d+\.){3}\d+$|\.local$|^localhost$/.test(location.hostname) && !location.hostname.endsWith('trycloudflare.com');
-const GALLERY = 'https://fionnf.github.io/magic-mirror/art/';
 let BASE = '', TOKEN = '';
 try { TOKEN = localStorage.getItem('wallToken') || ''; } catch (e) {}
 const u = path => BASE + path + (TOKEN && REMOTE ? (path.includes('?') ? '&' : '?') + 'k=' + TOKEN : '');
@@ -582,26 +578,7 @@ async function findWall() {
 }
 function askLogin(msg) {
   if (!REMOTE) { location.href = '/login'; return; }
-  $('loginMsg').textContent = msg || ''; document.body.classList.add('locked'); $('loginPw').focus(); welcome($('login'));
-}
-/* At the door (online), today's piece is already lit: the same program, run here in the browser. */
-async function welcome(into) {
-  if (welcome.done) return; welcome.done = true;
-  try {
-    const e = (await (await fetch('editions.json', {cache: 'no-store'})).json())[0]; if (!e) return;
-    await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'gallery.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
-    const F = window.Fortuna; if (!F || !F.ledify || F.still) return;
-    const box = document.createElement('div'); box.className = 'welcome';
-    box.innerHTML = `<canvas aria-hidden="true"></canvas><a href="${GALLERY.replace('art/', 'e/' + e.date + '/')}">On the wall today: <i>${esc(e.name)}</i></a>`;
-    into.prepend(box); box.style.setProperty('--wglow', e.palette[1] + 'aa');
-    const cv = box.querySelector('canvas'), x = cv.getContext('2d'), [w, h] = e.size || [192, 192];
-    cv.style.aspectRatio = w + ' / ' + h;            // whole device pixels per LED, or the dots shimmer
-    const cell = Math.max(1, Math.floor(cv.clientWidth * (devicePixelRatio || 1) / w)); cv.width = w * cell; cv.height = h * cell;
-    const piece = welcome.piece = F.add(cv, {always: true, w, h, pal: e.palette, day: e.hours || [],
-      draw: src => F.ledify(x, src, w, h, {x: 0, y: 0, w: cv.width, h: cv.height}, {bloom: .25}),
-      onfail: () => box.remove()});
-    F.setSource(piece, await (await fetch(e.frag)).text());
-  } catch (err) {}
+  $('loginMsg').textContent = msg || ''; document.body.classList.add('locked'); $('loginPw').focus();
 }
 $('login').addEventListener('submit', async ev => {
   ev.preventDefault();
@@ -1363,7 +1340,6 @@ async function start() {
   setInterval(() => step('loadScenes', loadScenes), 30000); setInterval(() => step('loadLook', loadLook), 15000);
   step('refresh', refresh);
   await Promise.resolve(loadModes()).catch(e => console.error('loadModes', e));
-  step('welcome.piece', () => { if (welcome.piece && window.Fortuna) { window.Fortuna.remove(welcome.piece); welcome.piece = null; } });   // the door piece stops once inside
   for (const [n, f] of [['shaderLib', shaderLib], ['loadScenes', loadScenes], ['loadDaily', loadDaily], ['loadMusic', loadMusic], ['loadArt', loadArt],
       ['loadVersion', loadVersion], ['loadMatter', loadMatter], ['loadWallSwitch', loadWallSwitch], ['loadLook', loadLook]]) step(n, f);
   step('tab', () => { const t = localStorage.getItem('tab'); if (t) document.querySelector(`nav [data-tab="${t}"]`).click(); });
@@ -1374,7 +1350,7 @@ async function start() {
   });
 }
 (async () => {
-  if (!(await findWall())) { document.body.classList.add('away'); if (REMOTE) welcome($('gateAway').querySelector('.wrap')); return; }
+  if (!(await findWall())) { document.body.classList.add('away'); return; }
   if (REMOTE && !TOKEN) return askLogin();
   start();
 })();

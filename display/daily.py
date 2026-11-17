@@ -536,56 +536,6 @@ def compose_offline(date=None, tries=8):
     return None
 
 
-GALLERY_RAW = os.environ.get("GALLERY_RAW", "https://raw.githubusercontent.com/fionnf/magic-mirror/master/gallery/")
-
-
-def refresh(date):
-    """If the gallery's piece for this date has been replaced (a better one hung), fetch it again.
-    -> new metadata, or None when nothing changed."""
-    import requests
-    if not os.path.exists(_path(date, "json")):
-        return None
-    try:
-        with open(_path(date, "json")) as fh:
-            mine = json.load(fh).get("source_sha256")
-        r = requests.get(f"{GALLERY_RAW}{date}.json", timeout=20)
-        if r.status_code != 200 or r.json().get("source_sha256") in (None, mine):
-            return None
-    except Exception:
-        return None
-    print(f"[daily] {date}: the gallery has a new piece", flush=True)
-    return fetch(date)
-
-
-def fetch(date):
-    """Today's piece may already have been made in the cloud (the daily workflow): pull it from the
-    public gallery into assets/daily so the wall hangs the same piece. -> metadata or None."""
-    import requests
-    try:
-        r = requests.get(f"{GALLERY_RAW}{date}.json", timeout=20)
-        if r.status_code != 200:
-            return None
-        meta = r.json()
-        files = {}
-        for ext in ("frag", "png") + (("final.png",) if meta.get("final") else ()):
-            fr = requests.get(f"{GALLERY_RAW}{date}.{ext}", timeout=30)
-            if ext == "final.png" and fr.status_code == 404:      # a day closed without its picture
-                continue
-            fr.raise_for_status()
-            files[ext] = fr.content
-    except Exception as e:
-        print(f"[daily] gallery fetch {date}: {e}", flush=True)
-        return None
-    os.makedirs(FOLDER, exist_ok=True)
-    for ext, data in files.items():
-        with open(_path(date, ext), "wb") as fh:
-            fh.write(data)
-    with open(_path(date, "json"), "w") as fh:
-        json.dump(meta, fh, indent=1)
-    print(f"[daily] {date}: fetched {meta.get('name')!r} from the gallery", flush=True)
-    return meta
-
-
 def ensure(date=None):
     date = date or datetime.date.today().isoformat()
     if os.path.exists(_path(date, "json")) and os.path.exists(_path(date, "frag")):

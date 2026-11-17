@@ -41,7 +41,7 @@ from PIL import Image, ImageDraw, ImageFont
 import config
 from panel_setup.monitor import PiMonitor
 
-PATTERNS = ["walk", "numbers", "gradient", "bar", "text", "anim", "white"]
+PATTERNS = ["walk", "numbers", "gradient", "bar", "text", "anim", "white", "flicker"]
 HOLD_SEC = 6.0
 
 
@@ -134,8 +134,33 @@ def pat_text():
     return img
 
 
+def pat_flicker(t, label=""):
+    """Bright saturated tiles with each panel's chain number, a moving white bar, and a test label along the top."""
+    W, H = config.TOTAL_WIDTH, config.TOTAL_HEIGHT
+    pw, ph = config.PANEL_COLS, config.PANEL_ROWS
+    img = Image.new("RGB", (W, H))
+    d = ImageDraw.Draw(img)
+    big, small = _font(26), _font(11)
+    n = len(config.PANEL_CHAIN_ORDER)
+    for k, (col, row) in enumerate(config.PANEL_CHAIN_ORDER):
+        x0, y0 = col * pw, row * ph
+        rgb = tuple(int(255 * c) for c in _hsv(k / n, 0.85, 1.0))
+        d.rectangle([x0, y0, x0 + pw - 1, y0 + ph - 1], fill=rgb, outline=(255, 255, 255))
+        d.text((x0 + pw // 2, y0 + ph // 2 + 6), str(k), fill=(255, 255, 255), font=big, anchor="mm",
+               stroke_width=2, stroke_fill=(0, 0, 0))
+    x = int((t * 40) % W)
+    d.rectangle([x, 0, x + 5, H - 1], fill=(255, 255, 255))
+    if label:
+        d.rectangle([0, 0, W - 1, 14], fill=(0, 0, 0))
+        d.text((W // 2, 7), label, fill=(255, 255, 255), font=small, anchor="mm")
+    return img
+
+
 def pat_white():
     return Image.new("RGB", (config.TOTAL_WIDTH, config.TOTAL_HEIGHT), (255, 255, 255))
+
+
+FLICKER_LABEL = ""
 
 
 def frames_for(name, panel=None, walk_sec=3.0):
@@ -170,6 +195,9 @@ def frames_for(name, panel=None, walk_sec=3.0):
     elif name == "bar":
         while True:
             yield pat_bar(time.monotonic() - t0)
+    elif name == "flicker":
+        while True:
+            yield pat_flicker(time.monotonic() - t0, FLICKER_LABEL)
     elif name == "anim":
         from display import animations
         a, b = animations.starfield(120), animations.ripple()
@@ -202,9 +230,12 @@ def run():
                    help="disable the Pi health readout")
     p.add_argument("--log", default="panel_setup/monitor.csv",
                    help="CSV file for health stats ('' to disable)")
+    p.add_argument("--label", default="", help="text along the top of the flicker pattern")
     p.add_argument("--show-refresh", action="store_true",
                    help="print the panel refresh rate (hardware only)")
     args = p.parse_args()
+    global FLICKER_LABEL
+    FLICKER_LABEL = args.label
 
     for flag, attr in (("brightness", "MATRIX_BRIGHTNESS"),
                        ("pwm_bits", "MATRIX_PWM_BITS"),

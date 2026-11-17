@@ -13,49 +13,49 @@ import random
 DIRECTIONS = [   # one quiet, glowing form each (the house's favourites: glass orb, dot ring, blue ring); colour varies
     {"name": "Violet glass", "hues": (235, 275), "ground": "dark",
      "colour": "deep violet and indigo glass with a cold white rim light",
-     "form": "one soft, slightly lumpy glass body in space, its edge catching the light, a faint glow below"},
+     "form": "a large faceted-looking glass body, lit from one side: a bright cold rim, a hot specular glint, light refracting through it so its inside glows and swirls, a faint violet caustic pooling on the dark ground beneath"},
     {"name": "Halftone ring", "hues": (300, 340), "ground": "dark",
      "colour": "magenta into warm orange, round a ring",
-     "form": "a wide ring of halftone dots around an empty dark centre, dots largest in the ring's middle"},
+     "form": "a wide ring of halftone dots around a dark centre, the dots swelling and glowing like lit beads, a second softer ring of light behind them for depth, the ring turning slowly in space"},
     {"name": "Azure ring", "hues": (185, 215), "ground": "dark",
      "colour": "cyan and azure light with a thin warm fringe on its outer edge",
-     "form": "one soft out-of-focus ring of light floating in the dark, drifting in and out of focus"},
+     "form": "a luminous ring floating in layered haze, in and out of focus: a crisp bright edge, a wide soft bloom, bokeh lights drifting behind, a warm fringe on the outer edge"},
     {"name": "Emerald orb", "hues": (140, 165), "ground": "dark",
      "colour": "emerald, jade and pale mint light",
-     "form": "one luminous orb with a soft halo, light pooling and fading around it"},
+     "form": "a luminous emerald orb like a lantern or a gem: light glowing inside it, a bright rim, a reflected glow on the dark surface below, drifting green mist around it"},
     {"name": "Ruby eclipse", "hues": (345, 10), "ground": "dark",
      "colour": "ruby and scarlet light with a hot pale core at the rim",
-     "form": "a dark disc with a burning rim of light escaping round its edge"},
+     "form": "a dark sphere eclipsing a hot light: a burning ruby corona escaping round its edge, light rays and glowing dust spilling past it into the dark"},
     {"name": "Amber aperture", "hues": (25, 45), "ground": "dark",
      "colour": "amber and soft gold light (glowing, not brown)",
-     "form": "a soft-edged rectangle of light - a window or aperture - with light bleeding past its frame"},
+     "form": "a tall window or aperture of glowing amber light in a dark wall, volumetric light beams streaming out of it across drifting dust, a pool of light on the floor"},
     {"name": "Ultraviolet arc", "hues": (265, 295), "ground": "dark",
      "colour": "ultraviolet and lilac neon",
-     "form": "one thin neon line or arc of light casting a soft coloured fan on the dark around it"},
+     "form": "a sweeping ribbon of ultraviolet neon in 3D, twisting through space with a bright core and a soft coloured fan of light on the haze around it, a second thinner ribbon behind for depth"},
     {"name": "Ice halo", "hues": (190, 220), "ground": "dark",
      "colour": "ice blue and glacier white",
-     "form": "a dark rounded shape with a cold halo of light spilling round its whole edge"},
+     "form": "a dark rounded crystal with a cold halo spilling round its edge: ice-blue refraction and frost light inside it, glinting facets, cold mist around its base"},
     {"name": "Rose glass", "hues": (330, 355), "ground": "dark",
      "colour": "rose and blush pink glass with a peach rim light",
-     "form": "a soft translucent glass droplet or pebble, lit from one side"},
+     "form": "a translucent rose-pink glass droplet or pebble, lit from one side with a peach rim light, light refracting through it, a soft shadow and a glowing reflection beneath it"},
     {"name": "Teal dot sphere", "hues": (170, 195), "ground": "dark",
      "colour": "teal and aqua points of light",
-     "form": "a sphere or blob made of fine light points, denser and brighter at its edges"},
+     "form": "a sphere made of thousands of fine glowing points, denser and brighter at its edges, with depth: nearer points larger and brighter, farther ones dimmer, a soft teal glow in the haze around it"},
     {"name": "Gold ring", "hues": (40, 55), "ground": "dark",
      "colour": "pale gold and champagne light on a deep blue-black",
-     "form": "a single thin ring of light, slightly broken, slowly closing or opening"},
+     "form": "a thick glowing ring of molten champagne-gold light, slightly broken, turning in 3D so one side is near and bright and the other far and soft, with sparks of light and a warm bloom on the blue-black ground"},
     {"name": "Coral bloom", "hues": (5, 25), "ground": "dark",
      "colour": "coral, salmon and soft peach light",
-     "form": "one soft glowing bloom - a blurred round light with a brighter heart"},
+     "form": "a luminous bloom or flower of soft coral-pink light, several translucent layered petals with bright edges and a hot heart, glowing mist around it"},
     {"name": "Cobalt pill", "hues": (215, 240), "ground": "dark",
      "colour": "cobalt and electric blue with a pale mint highlight",
-     "form": "a tall rounded capsule outline of neon light, its glow pooling softly below it"},
+     "form": "a tall glass capsule of electric blue neon, glowing from inside with a pale mint highlight and a bright rim, a pool of light and a faint reflection on the floor below it"},
     {"name": "Lime glow", "hues": (75, 100), "ground": "dark",
      "colour": "lime and chartreuse light on a dark petrol green",
-     "form": "one soft glowing blob that slowly changes shape, like light inside frosted glass"},
+     "form": "a blob of lime-green light inside frosted glass that slowly changes shape: bright inner core, translucent edges, soft refraction at its rim, glowing haze around it"},
     {"name": "Magenta cross", "hues": (300, 325), "ground": "mid",
      "colour": "magenta and violet light seeping between deep plum cushions",
-     "form": "four soft cushions pressed together, light escaping along the seams as a glowing cross"},
+     "form": "four soft glossy cushions pressed together with a glowing magenta and violet cross of light escaping along the seams, a bright sheen on each cushion's curve"},
     # deep grounds: a dark colour fills the wall (not black); the form is a few tones lighter in the same hue
     {"name": "Oxblood velvet", "hues": (345, 12), "ground": "deep",
      "colour": "oxblood, garnet and deep wine, the form a few tones lighter in dusky rose",
@@ -89,10 +89,10 @@ DIRECTIONS = [   # one quiet, glowing form each (the house's favourites: glass o
 ]
 
 GROUND = {   # mean brightness range (0..255) of the still for each ground
-    "dark": (22, 80, "a dark ground, but the piece should still glow clearly (not a dim smudge on black)"),
+    "dark": (22, 100, "a dark ground, but the piece should still glow clearly (not a dim smudge on black)"),
     "mid": (40, 130, "a mid-tone ground: the whole wall is coloured, not black"),
     "light": (90, 150, "a light, high-key ground: pale paper or sky, with darker marks on it"),
-    "deep": (30, 95, "a deep, dark COLOUR fills the whole wall (not black): the form is the same hue a few tones "
+    "deep": (30, 110, "a deep, dark COLOUR fills the whole wall (not black): the form is the same hue a few tones "
                      "lighter, a dark and moody piece"),
 }
 
@@ -143,9 +143,10 @@ def brief(direction):
                  "Few, deliberate, flowing shapes with lots of calm space; no grids, checkerboards or dense fine "
                  "patterns - they shimmer on an LED wall.")
     else:
-        style = ("Interpret it freely and make it yours, but stay inside it: ONE form, quiet and luminous, lots of "
-                 "calm space around it. No stripes, checkerboards, grids of fine lines or other busy patterns - "
-                 "they shimmer on an LED wall.")
+        style = ("Interpret it freely and make it yours, but stay inside it: ONE hero form, built with depth (real shading, "
+                 "a rim light, refraction or inner glow, atmosphere behind it, light landing on a surface), in bold, saturated "
+                 "colour with real contrast, big on the wall. Calm and slow, never busy. No stripes, checkerboards, grids of "
+                 "fine lines or other fine patterns - they shimmer on an LED wall.")
     return (f"TODAY'S DIRECTION - \"{direction['name']}\" (required; it keeps the wall from repeating itself):\n"
             f"- colour: {direction['colour']}\n- ground: {words}\n- form: {direction['form']}\n"
             f"{style}\n\n{VISIBILITY_DEEP if direction['ground'] == 'deep' else VISIBILITY}")

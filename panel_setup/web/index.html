@@ -266,6 +266,11 @@
   <!-- ART -->
   <div class="view on" id="v-art">
     <section>
+      <h2>At a glance</h2>
+      <div class="gallery" id="glanceGrid"></div>
+      <p class="hint" id="glanceHint">The Fortuna Brief prints its slip as it starts and plays once, then the wall goes back to what it was showing. The rain radar shows the last hour and the next two.</p>
+    </section>
+    <section>
       <h2>Moods</h2>
       <div class="scenes" id="scenes"></div>
       <p class="hint" id="sceneHint">One tap changes what the wall is doing. <b>Album art</b> listens to every speaker and shows the cover; choosing anything else ends it. Hold a mood you saved to remove it.</p>
@@ -445,6 +450,22 @@
       <div class="ends"><span>barely moving</span><span>lively</span></div>
       <div class="switch"><span>Show people on the art</span><input type="checkbox" id="tPresence"></div>
       <p class="hint"><a href="https://fionnf.github.io/magic-mirror/art/" target="_blank" rel="noopener">The public gallery</a> shows every day's piece.</p>
+    </section>
+    <section>
+      <h2>The Fortuna Brief</h2>
+      <p class="hint" style="margin-top:0">Date, weather at Fortunagasse 24, the weekend in the Swiss mountains and the top news: a short show (find it under Live), and a short paper slip. The AI picks the news that is worth knowing.</p>
+      <div class="switch"><span>Print the brief every morning</span><input type="checkbox" id="tBriefPrint"></div>
+      <div class="row" style="margin-top:6px"><span class="hint" style="margin:0">Print at</span><input type="time" id="briefAt" aria-label="Time to print the brief" style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 10px;color:inherit;font:inherit"></div>
+      <div class="row" style="margin-top:8px"><button class="btn" id="printBrief" onclick="printBrief()">Print it now</button><button class="btn" onclick="printBrief('en')">Print in English</button><button class="btn" onclick="playBrief()">Show it on the wall</button></div>
+      <p class="hint" id="briefState"></p>
+    </section>
+    <section>
+      <h2>Voice</h2>
+      <div class="switch"><span>Listen for "Hey Fortuna"</span><input type="checkbox" id="tVoice"></div>
+      <p class="hint" id="voiceState">Off.</p>
+      <div class="switch"><span>When it is not sure what it heard, ask the AI (the words only, never audio)</span><input type="checkbox" id="tVoiceAi"></div>
+      <p class="hint" id="voiceHeard" hidden></p>
+      <p class="hint">Say "Hey Fortuna, show West Cork", "…art of the day", "…the brief", "…rain radar", "…print the brief", "…surprise me", "…off"; "…turn the lights on / off" (living room; the rods stay as they are); "…sleep" (living-room lights off and the wall at rest) and "Hey Fortuna" on its own, or "…wake up", to bring it back. A faint light along the bottom edge shows it heard you. Music mode cannot be started by voice, and the wall does not listen for you while Music mode, or art set to move to music, is on. It listens on the wall's own computer: nothing is recorded.</p>
     </section>
     <section>
       <h2>Look through the camera</h2>
@@ -742,9 +763,38 @@ const offIn = s => !s.off_at ? '' : minsLeft(s.off_at) >= 90 ? 'off at ' + new D
 /* the pace slider is logarithmic: the slow end (0.5% of the old pace) gets as much room as the lively end */
 const paceToSpeed = v => +(0.005 * Math.pow(200, v / 100)).toFixed(4);
 const speedToPace = sp => 100 * Math.log(Math.max(0.005, sp) / 0.005) / Math.log(200);
+function loadBrief() {
+  api('/api/brief').then(b => {
+    if (document.activeElement !== $('tBriefPrint')) $('tBriefPrint').checked = !!b.print;
+    if (document.activeElement !== $('briefAt')) $('briefAt').value = b.at;
+    $('briefState').textContent = b.print ? 'Prints at ' + b.at + ' each day' + (b.printed ? ' (last printed ' + b.printed + ')' : '') + '. Or say "Hey Fortuna, print the brief".' : 'Not printed automatically. Or say "Hey Fortuna, print the brief".';
+  }).catch(() => {});
+}
+function playBrief() { api('/api/play', {mode: 'brief'}).then(r => { STATUS = r; render(); toast(r.brief_pending ? 'Preparing the Fortuna Brief…' : 'The Fortuna Brief is on the wall'); }).catch(err => toast(err.message)); }
+function printBrief(lang) {
+  const b = $('printBrief'); b.disabled = true;
+  api('/api/brief/print', lang ? {lang} : {}).then(() => toast('Printing the Fortuna Brief')).catch(err => toast(err.message)).finally(() => setTimeout(() => { b.disabled = false; }, 4000));
+}
+function renderVoice(v) {
+  if (!$('tVoice')) return;
+  const el = $('voiceState'), heard = $('voiceHeard');
+  if (!v) { $('tVoice').disabled = true; el.textContent = 'Voice is not available on this wall.'; return; }
+  $('tVoice').disabled = false;
+  if (document.activeElement !== $('tVoice')) $('tVoice').checked = !!v.enabled;
+  if (document.activeElement !== $('tVoiceAi')) $('tVoiceAi').checked = v.ai_on !== false;
+  el.textContent = !v.enabled ? (v.error || 'Off.') : v.error ? v.error : v.paused ? 'Paused: Music mode (or art moving to music) has the microphone.'
+    : v.listening ? 'Listening for "Hey Fortuna".' : 'Starting…';
+  const bits = [];
+  if (v.heard) bits.push('Last heard: "' + v.heard + '"');
+  if (v.last_action) bits.push('Did: ' + v.last_action.replace('play ', 'show ').replace('random ', 'surprise: '));
+  if (v.ai) bits.push('AI: ' + v.ai);
+  heard.hidden = !(v.enabled && bits.length);
+  heard.textContent = bits.join(' · ');
+}
 function render() {
   const s = STATUS, cur = s.current;
   if ($('tPresence')) $('tPresence').checked = !!s.presence;
+  renderVoice(s.voice);
   $('title').textContent = titleFor(cur);
   $('sub').textContent = s.error ? s.error : subFor(cur) + (s.off_at && cur && cur !== 'off' ? ' · ' + offIn(s) : '');
   $('moon').classList.toggle('on', !!s.off_at);
@@ -834,7 +884,7 @@ async function forgetScene(n) {
   if (!confirm('Remove the mood ' + n + '?')) return;
   await api('/api/scenes', {name: n, delete: true}); if (SCENE_ON === n) SCENE_ON = null; loadScenes.sig = null; loadScenes();
 }
-document.addEventListener('click', e => { if (e.target.closest('.list button, .strip button, #power, #artGrid button')) { SCENE_ON = null; setTimeout(markScene, 50); } });
+document.addEventListener('click', e => { if (e.target.closest('.list button, .strip button, #power, #artGrid button, #glanceGrid button')) { SCENE_ON = null; setTimeout(markScene, 50); } });
 
 /* ---------- sleep ---------- */
 async function sleepIn(m) { try { STATUS = await api('/api/sleep', {minutes: m}); render(); sleepSheet.close(); toast('Off in ' + (m >= 60 ? m / 60 + ' h' : m + ' min')); } catch (e) { toast(e.message); } }
@@ -852,7 +902,7 @@ async function shaderLib() {
 let ART = null, artFilter = 'all', musicArtFilter = 'all';
 // the hour-long pieces (their shader plays out a whole story once an hour), the live boards, the shows and the slideshows
 const HOUR_IDS = ['shader-aurora', 'shader-bloom', 'shader-crystal', 'shader-inkcloud', 'shader-metamorphosis', 'shader-orbit', 'shader-totality'];
-const LIVE_IDS = ['trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'windeu', 'polarbears', 'livecam', 'skylines', 'wanderers', 'nighttrains', 'issday', 'snow', 'tides', 'limmat', 'westcork', 'quakes', 'laend', 'kilchberg', 'zurichhb'];
+const LIVE_IDS = ['brief', 'radar', 'trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'windeu', 'polarbears', 'livecam', 'skylines', 'wanderers', 'nighttrains', 'issday', 'snow', 'tides', 'limmat', 'westcork', 'westcork_dusk', 'quakes', 'laend', 'kilchberg', 'zurichhb'];
 const SLIDE_IDS = ['lava', 'shapes', 'flow', 'shaders', 'artsy', 'glass', 'art', 'snapshots'];
 function openHome() { window.open(u('/home'), '_blank'); }
 const SHOW_IDS = ['pride', 'dewa', 'maeva', 'maxfionn', 'lennart', 'welcome', 'cow'];
@@ -875,6 +925,9 @@ async function loadArt() {
   const modeTile = m => `<button class="${STATUS.current === m.id ? 'sel' : ''}" onclick="play('${m.id}')">
       <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy"><span>${esc(m.title)}</span>${SHOW_IDS.includes(m.id) ? `<i class="gifshare" role="button" tabindex="0" aria-label="Share ${esc(m.title)} as a GIF" onclick="shareGif(event,'${m.id}')">GIF</i>` : ''}</button>`;
   const homeTile = artFilter === 'all' ? `<button onclick="openHome()"><img src="${u('/thumbs/home.png')}" alt="" loading="lazy"><span>Home screen (QR codes)</span></button>` : '';
+  const glance = ['brief', 'radar'].map(id => MODES.find(m => m.id === id)).filter(Boolean);
+  $('glanceGrid').innerHTML = glance.map(m => `<button class="${STATUS.current === m.id ? 'sel' : ''}" onclick="play('${m.id}')">
+      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy"><span>${esc(m.title)}</span></button>`).join('');
   $('artGrid').innerHTML = homeTile + modes.map(modeTile).join('') + list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
       <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
   if (MUSIC.settings && MUSIC.settings.style === 'art') {
@@ -1129,6 +1182,11 @@ $('party').addEventListener('input', debounce(e => api('/api/music', {party: +e.
 $('sens').addEventListener('input', debounce(e => api('/api/music', {sensitivity: +e.target.value}), 300));
 const musicSwitch = (id, key, val = c => c) => $(id).addEventListener('change', e => api('/api/music', {[key]: val(e.target.checked)}).then(loadMusic).catch(err => toast(err.message)));
 musicSwitch('tAuto', 'mode', c => c ? 'auto' : 'manual'); musicSwitch('tShz', 'shazam'); musicSwitch('tWall', 'song_on_wall'); musicSwitch('tReact', 'art_reacts'); musicSwitch('tCast', 'cast_follow');
+$('tBriefPrint').addEventListener('change', e => api('/api/brief', {print: e.target.checked}).then(loadBrief).then(() => toast(e.target.checked ? 'The brief prints every morning' : 'No automatic printing')).catch(err => toast(err.message)));
+$('briefAt').addEventListener('change', e => api('/api/brief', {at: e.target.value}).then(loadBrief).then(() => toast('Prints at ' + e.target.value)).catch(err => toast(err.message)));
+loadBrief();
+$('tVoice').addEventListener('change', e => api('/api/voice', {enabled: e.target.checked}).then(v => { STATUS.voice = v; renderVoice(v); toast(v.error ? v.error : e.target.checked ? 'Voice on' : 'Voice off'); }).catch(err => toast(err.message)));
+$('tVoiceAi').addEventListener('change', e => api('/api/voice', {ai: e.target.checked}).then(v => { STATUS.voice = v; renderVoice(v); toast(e.target.checked ? 'The AI helps when unsure' : 'The AI check is off'); }).catch(err => toast(err.message)));
 $('tPresence').addEventListener('change', e => api('/api/presence', {on: e.target.checked}).then(r => { STATUS = r; render(); toast(e.target.checked ? 'People on the art' : 'People off'); }).catch(err => toast(err.message))); musicSwitch('tCover', 'cover_show'); musicSwitch('tCoverCol', 'cover_colours');
 document.querySelectorAll('[data-ms2]').forEach(b => b.onclick = () =>
   api('/api/music', {style: b.dataset.ms2, start: true}).then(r => { STATUS = r.status || STATUS; loadMusic(); }).catch(e => toast(e.message)));

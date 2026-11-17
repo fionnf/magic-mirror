@@ -127,12 +127,12 @@ def _open(spec):
 
 
 def print_local(bw, spec="usb", cut=True):
-    """bw: a 1-bit image at printer width."""
+    """bw: a 1-bit image at printer width, sent at full speed in small bands (the head never starves)."""
     p = _open(spec)
     try:
         _quality(p)
         p.image(bw, impl="bitImageRaster", high_density_vertical=True, high_density_horizontal=True,
-                fragment_height=256, center=False)                # small bands: the head never starves
+                fragment_height=256, center=False)
         if cut:
             p._raw(b"\x1b\x4a" + bytes([FEED_DOTS]))                # feed just enough to clear the cutter, no more
             p.cut(feed=False)
@@ -149,9 +149,8 @@ def send(img, cut=True):
     if spec.startswith(("http://", "https://")):
         buf = io.BytesIO()
         bw.save(buf, "PNG")
-        req = urllib.request.Request(spec.rstrip("/") + "/print" + ("" if cut else "?cut=0"), data=buf.getvalue(),
-                                     headers={"Content-Type": "image/png",
-                                              "X-Print-Key": os.environ.get("PRINT_KEY", "")})
+        hdr = {"Content-Type": "image/png", "X-Print-Key": os.environ.get("PRINT_KEY", "")}
+        req = urllib.request.Request(spec.rstrip("/") + "/print" + ("" if cut else "?cut=0"), data=buf.getvalue(), headers=hdr)
         with urllib.request.urlopen(req, timeout=180) as r:
             if r.status != 200:
                 raise RuntimeError(f"print server: {r.status}")

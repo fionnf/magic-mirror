@@ -10,3 +10,8 @@ fetch face_recognition_sface face_recognition_sface_2021dec_int8.onnx
 fetch palm_detection_mediapipe palm_detection_mediapipe_2023feb.onnx            # hand signals (hands.py): open palm / peace sign
 fetch handpose_estimation_mediapipe handpose_estimation_mediapipe_2023feb.onnx
 ls -la *.onnx
+# Voice control ("Hey Fortuna", panel_setup/voice.py): the small offline Vosk English model (~40 MB, Apache-2.0). Not committed.
+if [ ! -d vosk-model-small-en-us-0.15 ]; then
+  echo "downloading vosk-model-small-en-us-0.15"
+  curl -fsSL -o vosk.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip && unzip -q vosk.zip && rm vosk.zip
+fi

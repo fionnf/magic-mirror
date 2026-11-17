@@ -39,18 +39,45 @@ a single form in a lot of space, flat mid-century cut paper, Bauhaus geometry, o
 moire, conic gradient tiles, halftone dot fields, fine topographic lines, neon rods casting coloured
 fans, ink on paper, Rothko and Turrell colour fields. Few colours per piece, but the wall should
 range widely from day to day: cold and warm, pale and deep, colour fields as well as glows. Each
-day comes with a DIRECTION (below) - follow it. Make your own piece, never a copy of a reference. Above all the house loves ONE luminous form in calm
-space - like a violet glass orb with a white rim light, a halftone dot ring, a soft out-of-focus blue
-ring - never busy patterns.
+day comes with a DIRECTION (below) - follow it. Make your own piece, never a copy of a reference. The house loves a luminous
+form in calm space - a violet glass orb with a white rim light, a halftone dot ring, a soft out-of-focus blue ring.
+
+TODAY'S AMBITION - the recent pieces were too plain: a flat, softly shaded disc with a glow, one tone, nothing to look
+at after the first second. Make something that makes a visitor stop and then keeps rewarding them: a luminous object
+or scene with real DEPTH and MATERIAL (glass, liquid light, silk, smoke, crystal, plasma, a nebula seen through a
+window) and confident, saturated colour with real contrast. Calm and slow still, never flashing - but RICH. Read
+"MAKE IT DIMENSIONAL" below and build the piece with those techniques.
 
 What makes a good piece here:
-- one clear idea, generous negative space or calm fields, beautiful at a glance and rewarding
-  over hours; abstract digital art in the spirit of a gallery piece - never a screensaver,
-  never a club visual, never busy
+- one clear idea, executed richly: a hero form with depth, light and atmosphere around it; beautiful at a
+  glance and rewarding over hours; abstract digital art in the spirit of a gallery piece - never a
+  screensaver or club visual. Layers of light and material are welcome; clutter and fine shimmering
+  patterns are not
 - SLOW: motion should be barely perceptible from moment to moment (multiply iTime by 0.01-0.06);
   nothing may flash, strobe, blink or pulse quickly
-- colour: use ONLY the scene colours iColA (deep shadow), iColB (mid tone), iColC (highlight),
-  mixed and tinted - many tints of one or two neighbouring hues, never a rainbow
+- colour: build from the scene colours iColA (deep shadow), iColB (mid tone), iColC (highlight),
+  mixed and tinted, and use them BOLDLY: saturated mid tones, real contrast between shadow and
+  light, a luminous highlight. For richness add ONE accent: hueShift(iColC, 0.4..0.8) for a rim, a
+  refraction fringe or a second light, or the complement at low weight. Never a rainbow
+- it is shown on LEDs: avoid large areas of glaring pure white; full colour fields and pale grounds
+  are welcome when the day's direction asks for them
+- it does NOT react to music or sound: nothing may move, swell, pulse or change colour with the room's audio
+  (that looked jittery on the wall). The audio uniforms (iBreath, iTension, iKey, iBright, iSong, iBeatPhase,
+  iDay) are always 0 or constant: do not use them. Motion comes only from slow time (iTime).
+
+MAKE IT DIMENSIONAL" below and build the piece with those techniques.
+
+What makes a good piece here:
+- one clear idea, executed richly: a hero form with depth, light and atmosphere around it; beautiful at a
+  glance and rewarding over hours; abstract digital art in the spirit of a gallery piece - never a
+  screensaver or club visual. Layers of light and material are welcome; clutter and fine shimmering
+  patterns are not
+- SLOW: motion should be barely perceptible from moment to moment (multiply iTime by 0.01-0.06);
+  nothing may flash, strobe, blink or pulse quickly
+- colour: build from the scene colours iColA (deep shadow), iColB (mid tone), iColC (highlight),
+  mixed and tinted, and use them BOLDLY: saturated mid tones, real contrast between shadow and
+  light, a luminous highlight. For richness add ONE accent: hueShift(iColC, 0.4..0.8) for a rim, a
+  refraction fringe or a second light, or the complement at low weight. Never a rainbow
 - it is shown on LEDs: avoid large areas of glaring pure white; full colour fields and pale grounds
   are welcome when the day's direction asks for them
 - it LISTENS to the room, and you decide how. Invent a musical idea for this piece - how it hears -
@@ -69,6 +96,29 @@ What makes a good piece here:
                portrait of the music that was played (it is finalised as the day's edition then)
   Rules: modulation changes size, position, density, shape or hue by small amounts and always
   smoothly; light level stays steady; nothing pulses faster than once every few seconds.
+
+MAKE IT DIMENSIONAL (the main upgrade; a flat shaded disc with a glow is rejected). A piece needs at least THREE of:
+  1. real shading from a light direction: diffuse + a bright specular + a coloured rim light (fresnel)
+  2. a second, differently coloured light, or light bouncing back from below / the ground
+  3. refraction or inner structure: look THROUGH the form (refract the view ray, sample a warped field behind it),
+     caustic bands, inner glow, layered translucency - glass, liquid, crystal, jelly
+  4. atmosphere and depth: a warped haze field behind (fbm, domain warp), a vignette, 2-3 parallax layers moving at
+     different slow speeds, soft volumetric halos and light beams
+  5. a surface that catches the form: a glowing floor or wall with a soft reflection, shadow or light pool
+  6. material texture at low contrast: silk folds, veins, grain, bubbles (smooth, never fine high-contrast noise)
+Compose boldly: the hero form large (a third to two thirds of the wall), off-centre or travelling over the day,
+colours saturated, deep shadows next to luminous highlights, with a dark vignette to hold the eye. Smooth,
+anti-aliased edges; no 1-pixel details. Output through tone() so glows roll off softly instead of clipping.
+
+A TOOLKIT of tested helper functions (noise, fbm, domain warp, rotation, the palette ramp, hueShift, tone, fresnel,
+SDF shapes, smooth union, and notes for raymarching). Paste what you need above mainImage; do not redefine uniforms:
+
+@@TOOLKIT@@
+
+A REFERENCE PIECE built with them (a technique reference, not a design to copy: invent your own form, motion and
+composition; it shows a day arc via `day`, refraction, rim light, halo and tone()):
+
+@@REFERENCE@@
 
 Technical contract (anything else will not compile):
 - write ONLY helper functions plus
@@ -110,6 +160,16 @@ Today's date, season and any notes are given by the user message. Let them inspi
 something you have not made before (recent titles are listed). Give: a title (2-5 words), a
 one-sentence artist's statement, a palette of three hex colours (shadow, mid, highlight - one or
 two neighbouring hues), one sentence on how the piece listens ("listening"), and the GLSL."""
+
+def _read(name):
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), name)) as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
+
+
+BRIEF = BRIEF.replace("@@TOOLKIT@@", _read("daily_toolkit.glsl")).replace("@@REFERENCE@@", _read("daily_reference.frag"))
 
 SCHEMA = {"type": "object",
           "properties": {"title": {"type": "string"}, "statement": {"type": "string"},
@@ -217,17 +277,21 @@ in the living room of a modern apartment in Zurich. Every day an artist proposes
 four stills of it through its day (9 am, 3 pm, 8 pm with music, 11 pm) and, when there is one, the house's mood
 board. The piece hangs all day, so it should have a day's arc: the same work, clearly different pictures.
 
-The house's taste: slow, restrained and elegant; one idea per piece; few colours rather than rainbow. Within
-that the wall should range widely - colour fields, pale paper grounds, cut paper, Bauhaus, op-art, halftone,
-neon, ink - not the same dim warm glow on black every day. They dislike busy, multicolour, clip-art,
-watercolour and lava-lamp looks. It must be beautiful enough to fall asleep in front of and read on a coarse
-LED grid. The residents' favourites are single glowing forms: a violet glass orb with a white rim light, a
-halftone dot ring, a soft out-of-focus blue ring. Busy pieces - stripes, checkerboards, many small elements,
-fine high-contrast patterns that shimmer on LEDs - cannot score above 5. Each day has a DIRECTION; a piece
-that ignores it, or looks like one of the recent days you are shown, cannot score above 5.
+The house wants pieces that make a visitor stop: RICH and DIMENSIONAL, with confident colour. Look for depth and
+material - real shading, a rim light, refraction or inner structure, atmosphere, a second light, a surface that
+catches the form - and for saturated colour with real contrast between deep shadow and luminous highlight. Calm and
+slow, never flashing; but not plain. Score harshly for plainness: a flat, evenly shaded disc, ring or blob with a
+soft glow and nothing else (one tone, no depth, no second light) cannot score above 5, however tasteful. Dull,
+grey, muddy or washed-out colour cannot score above 5. Busy clutter, fine high-contrast stripes, checkerboards or
+tiny elements that shimmer on a coarse LED grid cannot score above 5; layered light and material are fine. Clip-art,
+watercolour and lava-lamp looks are out. It must still read on a coarse LED grid and be beautiful enough to fall
+asleep in front of. The residents' favourites are luminous glass forms (a violet glass orb with a white rim light,
+a halftone dot ring, a soft out-of-focus blue ring) - at their best when rendered with real depth. Each day has a
+DIRECTION; a piece that ignores it, or looks like one of the recent days you are shown, cannot score above 5.
 
-Judge honestly. Score 1-10. 7 means you would hang it; below 7 it goes back with one concrete, actionable
-note for the artist (what to change in form, palette, density or motion). Keep the verdict to two sentences."""
+Judge honestly. Score 1-10. 8 means you would be proud to hang it, 7 means you would hang it; below 7 it goes
+back with one concrete, actionable note for the artist (what to add or change in depth, light, colour, form or
+motion). Keep the verdict to two sentences."""
 CURATOR_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["score", "verdict", "note"],
                   "properties": {"score": {"type": "integer"}, "verdict": {"type": "string"},
                                  "note": {"type": "string"}}}
@@ -634,8 +698,8 @@ class _Ears:
     def __init__(self):
         from display import music
         self.mu = music
-        self.l = music.Listener()
-        self.rec = music.Recognizer(self.l, enabled=lambda: music.load_settings().get("shazam", True))
+        self.l = music.Listener("none:")                   # the daily art does not react to sound: it hears nothing, and is complete in silence
+        self.rec = music.Recognizer(self.l, enabled=lambda: False)
         self.breath = self.tension = 0.0
         self.e_fast = self.e_slow = 0.0
         self.key = None

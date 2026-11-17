@@ -12,6 +12,32 @@ it are personal and need changing: see [Make it yours](#make-it-yours).
 
 ![A render of the printable frame holding twelve panels](hardware/led-wall-frame/images/01_front.png)
 
+## Rain Radar
+
+Mode **Rain Radar** (under Live; "Hey Fortuna, the rain radar"): a map of the region around Zürich looping through **the last hour of real rain
+radar** (RainViewer's composite radar, every 10 minutes) and then **the next two hours of forecast rain** (Open-Meteo's 15-minute precipitation
+on a grid of points, smoothed into a field). The forecast is a weather-model forecast, not radar: RainViewer no longer publishes a nowcast, and the
+wall says so (the tag reads RADAR or FORECAST and the map border is cyan or amber). A line under the map gives the verdict for the house
+(Fortunagasse 24: "Dry for the next 2 hours", "Rain from 14:30 (light)", "Raining now, dry from 15:00"). Data refreshes in the background (radar every
+5 minutes, the forecast grid every 30); with no internet the wall shows RADAR OFFLINE. Needs `requests`. The place is `WALL_BRIEF_LAT` / `WALL_BRIEF_LON`.
+
+## The Fortuna Brief
+
+A short show for the wall (mode **The Fortuna Brief**, under Live; also "Hey Fortuna, the brief"; about a minute and a half, as long as there is to read: `WALL_BRIEF_PACE` makes it slower or faster). It **prints a paper slip as it starts, plays once, and then goes back to whatever was on the wall before** (an art piece, a playlist, the mirror; the wall stays off if it was off). Replaying it within ten minutes does not print again.
+
+What it shows, each as a graphic rather than a table: the date and time with a live seconds line; the weather at the house now (ring gauges for feels-like, wind and humidity); the next 24 hours as a ribbon coloured by temperature with rain drops sized by the chance of rain; the days ahead as floating temperature capsules on one scale, and the sun's arc with the sun where it is now; **the weekend in the Swiss mountains**, first as a short AI-written summary (two sentences from the forecast numbers, with Saturday's and Sunday's ranges beneath), then Saturday and Sunday each as an alpine cross-section (Valais, Graubünden, Central, the Bernese Alps and the east: five peaks drawn to scale, the cloud as a band from its estimated base to its top, the 0 °C line with snow above it, the day's high, and snow depth from the nearest SLF snow station plus the forecast new snow); and the day's top six stories, each with its picture (The Local for Switzerland, BBC for the world). Data: Open-Meteo, SLF IMIS stations, RSS. It is drawn for the panel's 5-6 PWM bits: bold type of at least 12 px with dark outlines, bright colours, no faint fills.
+
+The slip is the short, paper-friendly version: a black masthead, a short AI-written intro for the day, the weather now, the next 24 hours with sunrise and sunset, and the six stories with plain AI summaries written from those headlines only (no pictures, no mountain weekend and no days-ahead table on paper: those are for the wall; the slip prints without the AI words if the AI is unavailable). It is **printed every morning** at 07:30 (Settings > The Fortuna Brief: off or another time; with the wall on that is the show, which prints at its start; with the wall off or busy, the slip only). "Print it now" or "Hey Fortuna, print the brief" prints one on request. With no internet the show still runs (clock and date) and the slip says what is missing. The place is `WALL_BRIEF_PLACE` / `WALL_BRIEF_LAT` / `WALL_BRIEF_LON` (default Fortunagasse 24, Zürich). Needs `requests`; the slip needs the receipt printer.
+
+## Voice control ("Hey Fortuna")
+
+Optional and off by default. Turn it on with `POST /api/voice {"enabled": true}` (remembered across restarts) or `WALL_VOICE=1`.
+Say **"Hey Fortuna, show West Cork"**, "Hey Fortuna, art of the day", "Hey Fortuna, wind over Ireland", "Hey Fortuna, surprise me" or
+"Hey Fortuna, off". You can also say "Hey Fortuna", pause, then the command (it waits 6 s). It runs offline on the Pi with Vosk and a
+restricted vocabulary (the wake word, mode names, a few commands), so no audio leaves the wall. The wall has no speaker: what it heard and
+did shows in `GET /api/voice` (`heard`, `last_action`, `error`) and in the controller log. Needs `pip install vosk` and
+`./assets/models/get_models.sh`. **Music mode cannot be started by voice** ("music", "party" and "dance" are refused). When voice is not sure (the wake word and then words it could not match, or a wake-word lookalike in ordinary talk), it sends the *text* of what it heard (never audio) to the AI, which decides whether it was a real request or passing conversation and picks the matching art ("something with the sea" -> Tides). At most 30 checks an hour; the verdict shows as `ai` in `GET /api/voice`. One microphone, one listener: voice **pauses while Music mode runs, or while art is set to move to music** (Music tab), and listens again when anything else is on. Art that is not listening to music never opens the microphone, including the art of the day.
+
 ## What it does
 
 | Area | What you get | Needs |
@@ -64,7 +90,7 @@ Notes, honestly:
 | Part | Notes |
 |---|---|
 | Raspberry Pi 4 | The code and settings are for a Pi 4B. Upstream `rpi-rgb-led-matrix` does not support the Pi 5 (not tested here) |
-| HUB75 driver board | Adafruit RGB Matrix Bonnet (3 HUB75 outputs; the wiring below uses ports 1 and 3, so a single-output HAT is not enough); `config.HARDWARE_MAPPING = "regular"` (not `adafruit-hat`). Upstream hzeller docs say Adafruit boards need a GPIO4-GPIO18 solder bridge for the `adafruit-hat` mapping; whether this build carries a modification, and that `regular` is right for it, is not verified here: check your board against the upstream wiring docs |
+| HUB75 driver board | Adafruit RGB Matrix Bonnet (3 HUB75 outputs; the wiring below uses all three ports, so a single-output HAT is not enough); `config.HARDWARE_MAPPING = "regular"` (not `adafruit-hat`). Upstream hzeller docs say Adafruit boards need a GPIO4-GPIO18 solder bridge for the `adafruit-hat` mapping; whether this build carries a modification, and that `regular` is right for it, is not verified here: check your board against the upstream wiring docs |
 | microSD card, Pi power | A microSD card (16 GB or more) for Raspberry Pi OS, and a separate USB-C supply for the Pi (or a feed from the 5 V rail) |
 | 12 x 64 x 64 HUB75 panels, 256 mm square | P4, 1/32 scan, FM6126A-type driver (`MATRIX_PANEL_TYPE = "FM6126A"`: these panels stay dark or garbled without that init sequence) |
 | 5 V power supply | The frame is designed for a 40 A / 200 W unit (CZCL A-200AF-5). See [Safety](#safety) |
@@ -75,10 +101,10 @@ Notes, honestly:
 | TTP223 touch sensor on GPIO 25, SK6812 LED strip, Bluetooth LED rods *(optional)* | Touch and strip are used by `main.py` (mirror); the control service starts the mirror with `--no-touch` |
 | Printed frame | [`hardware/led-wall-frame`](hardware/led-wall-frame/README.md): PETG, about 2 kg, OpenSCAD sources |
 
-**Wiring as built** (`config.py`): 12 panels in two chains of six, on Bonnet ports 1 and 3 (port 2 empty). Rows are numbered from the top (row 0) and
-columns from the left. Chain 1 (port 1): bottom row left to right, then the row above it right to left. Chain 2 (port 3): the next row right to left, then the top
-row left to right. The panels of the right-to-left rows are mounted turned 180 degrees so the short link cables reach, and the driver undoes that (`PANEL_ROTATE`).
-Two chains in parallel keep the refresh rate up (a comment in `config.py`: "Long chain => low refresh rate"). Run `./panel_setup/run.sh numbers` to see each panel's chain index and its up arrow, then fix
+**Wiring as built** (`config.py`): 12 panels in three chains of four, on Bonnet ports 1, 2 and 3. Rows are numbered from the top (row 0) and
+columns from the left. With chain panels numbered in cable order (port 1 is 0-3, port 2 is 4-7, port 3 is 8-11), the wall reads, top row first:
+`9 10 11 / 8 7 6 / 3 2 1 / 4 5 0`. The panels of the two middle rows (1, 2, 3, 6, 7, 8) are mounted turned 180 degrees, and the driver undoes that (`PANEL_ROTATE`).
+Three short chains in parallel keep the refresh rate up and avoided flicker (a comment in `config.py`: "Long chain => low refresh rate"). Run `./panel_setup/run.sh numbers` to see each panel's chain index and its up arrow, then fix
 `PANEL_CHAIN_ORDER` and `PANEL_ROTATE` until the picture is the right way up.
 
 ### Scaling to your own size
@@ -91,7 +117,7 @@ and remaps it onto the real chain(s) in software, so any wiring that you describ
 | `PANEL_ROWS`, `PANEL_COLS` | Pixels of one panel (64 x 64). Other sizes are untested |
 | `PANELS_WIDE`, `PANELS_TALL` | Panels across and down. `PANELS_TALL` can be set from `WALL_PANELS_TALL`; `PANELS_WIDE` is a literal in the file |
 | `CHAIN_LENGTH` | Panels in total (`PANELS_WIDE * PANELS_TALL`) |
-| `PORT_SLOTS` | Which Bonnet outputs carry a chain, 0-based: `[0, 2]` = ports 1 and 3, `[0]` = port 1 only |
+| `PORT_SLOTS` | Which Bonnet outputs carry a chain, 0-based: `[0, 1, 2]` = ports 1, 2 and 3, `[0]` = port 1 only |
 | `CHAIN_PER_PORT` | Panels on each chain |
 | `PARALLEL` | Number of output slots the library drives: the highest slot used plus one (3 here, 1 for a single chain) |
 | `PANEL_CHAIN_ORDER` | For every panel, `(col, row)` of its position on the wall (row 0 on top), in cable order: chain 1 from the panel its ribbon plugs into, then chain 2. The list needs `CHAIN_LENGTH` entries; each position exactly once |
@@ -213,7 +239,7 @@ Tools run by hand (`run.sh`, `display_test.py`, `tune.py`) do not read `.env`. "
 
 | Variable | Default | What it does |
 |---|---|---|
-| `WALL_PANELS_TALL` | `4` | Panel rows: 4 = 12 panels on two chains (192 x 256), 3 = nine on one chain (192 x 192) |
+| `WALL_PANELS_TALL` | `4` | Panel rows: 4 = 12 panels on three chains (192 x 256), 3 = nine on one chain (192 x 192) |
 | `WALL_BRIGHTNESS` | `40` | Hardware brightness 0-100 for tools run by hand. The app overrides it from its slider (5-100) |
 | `WALL_LIFT` | `0.5` | Shadow lift 0-1: lifts dark colours into the visible range, bright ones untouched |
 | `WALL_ART_SPEED` | `0.12` | Art pace (set by the app's Pace slider) |

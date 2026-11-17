@@ -89,6 +89,7 @@ def _anims():
         "planes":  (planes.frame, 3600.0 * 24),
         "limmat":  (limmat.frame, 3600.0 * 24),
         "westcork": (westcork.frame, 3600.0 * 24),
+        "westcork_dusk": (westcork.frame_dusk, 3600.0 * 24),
         "exposure": (exposure.frame, 3600.0 * 24),
         "windch":  (_lazy("wind", "frame_ch"), 3600.0 * 24),
         "windie":  (_lazy("wind", "frame_ie"), 3600.0 * 24),
@@ -115,6 +116,8 @@ def _anims():
         "maxfionn": (max_fionn.frame, max_fionn.LOOP_SEC),
         "pride":   (pride_show.frame, pride_show.LOOP_SEC),
         "welcome": (welcome.welcome_frame, welcome.LOOP_SEC),
+        "brief":   (_lazy("brief", "frame"), 150.0),
+        "radar":   (_lazy("radar", "frame"), 3600.0 * 24),
         "cow":     (cards.cow_card, 1.0),
     }
 
@@ -236,6 +239,59 @@ def _live_dot_inner(img):
     return img
 
 
+_VOICE_FLAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice_awake.json")
+_voice = {"t": 0.0, "until": 0.0, "kind": "wake", "alpha": None, "size": None}
+_GLOW_COLOURS = {"wake": (170, 225, 255), "think": (255, 190, 90), "ok": (130, 255, 170)}
+
+
+def _voice_glow(img):
+    """When the wall has heard "Hey Fortuna", a faint light breathes along the bottom edge so people know it is listening
+    (cool white-blue while it listens, amber while the AI thinks, a moment of green when it acts). Never allowed to break the display."""
+    try:
+        return _voice_glow_inner(img)
+    except Exception:
+        return img
+
+
+def _voice_glow_inner(img):
+    import json
+    import numpy as np
+    from PIL import Image
+    mono = time.monotonic()
+    if mono - _voice["t"] > 0.1:                                   # look at the signal ten times a second
+        _voice["t"] = mono
+        try:
+            with open(_VOICE_FLAG) as fh:
+                j = json.load(fh)
+            _voice["until"], _voice["kind"] = float(j.get("until", 0)), j.get("kind", "wake")
+        except (OSError, ValueError):
+            _voice["until"] = 0.0
+    left = _voice["until"] - time.time()
+    if left <= 0:
+        return img
+    W, H = img.size
+    if _voice["size"] != (W, H):                                   # the light's shape: a soft round aura at the bottom edge, brightest at the middle
+        gh = max(26, H // 6)
+        x = (np.arange(W, dtype=np.float32) - W / 2) / (W * 0.20)
+        y = np.arange(gh, dtype=np.float32)[:, None] / gh
+        _voice["alpha"] = (np.exp(-x * x)[None, :] * (1.0 - y) ** 1.25)[..., None]
+        _voice["size"] = (W, H)
+    if _voice.get("shown") != _voice["kind"]:
+        _voice["shown"] = _voice["kind"]
+        print(f"[voice glow] {_voice['kind']}", flush=True)
+    breath = 0.82 + 0.18 * np.sin(time.time() * 2.4)
+    fade = min(1.0, left / 0.7)                                    # fades out over the last 0.7 s
+    col = np.asarray(_GLOW_COLOURS.get(_voice["kind"], _GLOW_COLOURS["wake"]), np.float32)
+    a = _voice["alpha"]
+    gh = a.shape[0]
+    arr = np.asarray(img.convert("RGB"), np.float32).copy()
+    reg = arr[H - gh:]
+    # the panel shows nothing below roughly 80/255, so the aura is strong at its centre (about 200) and darkens what is behind it a little,
+    # which keeps it readable over bright art too
+    arr[H - gh:] = reg * (1.0 - 0.5 * a[::-1] * fade) + col[None, None, :] * (a[::-1] * 0.85 * breath * fade)
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+
+
 def _boot_frame(progress):
     """Start-up screen: HOUSE FORTUNA and a progress bar (shown while the animation loads)."""
     from PIL import Image, ImageDraw
@@ -349,7 +405,8 @@ def main():
         except Exception as e:
             print(f"[boot] welcome skipped: {e}")
     t0 = time.monotonic()
-    clock = _MusicClock() if a.anim != "music" else None
+    daily_piece = a.anim == "daily" or (a.anim == "piece" and os.environ.get("WALL_PIECE", "").startswith("daily-"))
+    clock = _MusicClock() if a.anim != "music" and not daily_piece else None      # (the art of the day, and its past editions, never move to sound)
     presence = None                                     # people on the art (app switch, off by default)
     if os.environ.get("WALL_PRESENCE") == "1" and a.anim in ART_MODES | {"music", "daily", "flow"}:
         from display.presence import Presence
@@ -446,6 +503,7 @@ def main():
                 img = presence.apply(img, ff / refresh)
             img = overlay.apply(img)
             img = _live_dot(img)
+            img = _voice_glow(img)
             if netstate is not None:
                 img = netstate.mark(img)
             if rods is not None:

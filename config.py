@@ -1,28 +1,33 @@
 import os
 # Panel hardware — 12× 64x64 panels (256 mm square) in a 3-wide x 4-tall portrait layout,
-# on two chains of 6 (bonnet ports 1 and 3).
+# on three chains of 4 (bonnet ports 1, 2 and 3).
 PANEL_ROWS = 64
 PANEL_COLS = 64
 PANELS_WIDE = 3
 PANELS_TALL = int(__import__("os").environ.get("WALL_PANELS_TALL", 4))   # the full wall is 4 (192 x 256); 3 = the old single-chain wall
 CHAIN_LENGTH = PANELS_WIDE * PANELS_TALL      # panels in all
-# Wiring (photo 2026-10-26): TWO chains of 6 on the bonnet's ports 1 and 3 (port 2 is empty). The library
-# drives them in parallel; port slots are 0-based, so "port 3" = slot 2 and PARALLEL = 3.
-PORT_SLOTS = [0, 2]
-CHAIN_PER_PORT = 6
+# Wiring (rewired 2026-11): THREE chains of 4 on the bonnet's ports 1, 2 and 3 (slots 0, 1, 2), to keep each chain short
+# and the refresh high without flicker. The library drives them in parallel.
+PORT_SLOTS = [0, 1, 2]
+CHAIN_PER_PORT = 4
 PARALLEL = 3
-# The built-in rpi-rgb-led-matrix mappers can't do this, so the driver runs each chain as a flat 64*6 x 64
+# The built-in rpi-rgb-led-matrix mappers can't do this, so the driver runs each chain as a flat 64*4 x 64
 # strip and remaps the image in software (see led_matrix.py). Leave PIXEL_MAPPER empty.
 PIXEL_MAPPER = ""
-# Physical order of every panel as (col, row), chain after chain (port 1's six, then port 3's six),
+# Physical order of every panel as (col, row), chain after chain (port 1's four, then port 2's, then port 3's),
 # starting at the panel each cable plugs into. Check with panel_setup/display_test.py --pattern numbers.
 if PANELS_TALL == 4:
+    # Measured 2026-11-17 with `numbers` after the rewiring to three ports. The wall, top row first, shows chain panels:
+    #    9 10 11
+    #    8  7  6   (mounted upside down)
+    #    3  2  1   (mounted upside down)
+    #    4  5  0
     PANEL_CHAIN_ORDER = [
-        (0, 3), (1, 3), (2, 3), (2, 2), (1, 2), (0, 2),      # port 1: left-to-right along row 4 (bottom), then right-to-left along row 3
-        (2, 1), (1, 1), (0, 1), (0, 0), (1, 0), (2, 0),      # port 3: the same, rows 2 then 1 (top)
+        (2, 3), (2, 2), (1, 2), (0, 2),      # port 1: 0..3
+        (0, 3), (1, 3), (2, 1), (1, 1),      # port 2: 4..7
+        (0, 1), (0, 0), (1, 0), (2, 0),      # port 3: 8..11
     ]
-    # Port 1's block was turned 180 on 2026-10-26: its 3-5 (row 3) are upside down; port 3's 0-2 (row 2) too.
-    PANEL_ROTATE = {3: 180, 4: 180, 5: 180, 6: 180, 7: 180, 8: 180}
+    PANEL_ROTATE = {1: 180, 2: 180, 3: 180, 6: 180, 7: 180, 8: 180}
 else:
     PORT_SLOTS, CHAIN_PER_PORT, PARALLEL = [0], CHAIN_LENGTH, 1
     PANEL_CHAIN_ORDER = [            # row serpentine from the bottom-left, any number of rows

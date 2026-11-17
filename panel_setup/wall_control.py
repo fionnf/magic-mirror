@@ -89,7 +89,7 @@ LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "
                "westcork_dusk": "westcork.thumb_dusk", "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "wanderers": "wanderers.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
                "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb", "lennart": "lennart_film.thumb", "kilchberg": "kilchberg.thumb", "snapshots": "slideshow.thumb", "brief": "brief.thumb", "zurichhb": "kilchberg.thumb_hb",
                "quakes": "quakes.thumb", "radar": "radar.thumb"}
-MIRROR_MAX_BRIGHTNESS = 75
+MIRROR_MAX_BRIGHTNESS = 100              # no mirror cap since 2026-11-17 (was 75)
 DARK_MODES = {"planes", "westcork", "westcork_dusk", "windch", "windie", "windeu", "polarbears", "wanderers", "nighttrains", "issday",
               "snow", "satellites", "tides", "tramlines", "quakes"}   # as play.py's list of dark, light-on-black pieces
 
@@ -252,12 +252,9 @@ class Runner:
                    PYTHONUNBUFFERED="1")
         if not os.environ.get("WALL_SIM") and not self._mic_wanted(what):
             env["WALL_AUDIO"] = "none:"          # only Music mode and music-reactive art open the microphone
-        if what in DARK_MODES:                   # single lit LEDs on black (West Cork, planes ...): the old, cleanest panel settings
-            # (slowdown and refresh are config.py's, the same as every piece: 2026-11-17 flicker tests, at least 110 Hz)
-            env["WALL_BRIGHTNESS_CAP"] = "100"                          # light on black: no flicker problem, and it needs the light
+        # (no per-mode panel settings: slowdown, refresh and brightness are config.py's for every piece, see docs/flicker-tests-2026-11-17.md)
         if what == "mirror":
             env["WALL_BRIGHTNESS"] = str(min(int(self.state.get("brightness", 40)), MIRROR_MAX_BRIGHTNESS))
-            env["WALL_BRIGHTNESS_CAP"] = str(MIRROR_MAX_BRIGHTNESS)        # mirror mode is never brighter than this, whatever the slider says
             env["WALL_FIXED_DEPTH"] = "1"        # a mostly dark picture must not drop to the slower, flickery refresh
         if getattr(self, "boot_pending", False) and self.state.get("boot_welcome", True):
             env["WALL_BOOT"] = "1"               # power-on only (not an app restart): a short greeting, once

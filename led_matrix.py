@@ -13,6 +13,8 @@ import numpy as np
 from PIL import Image
 import config
 
+LIVE_BRIGHTNESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "panel_setup", "brightness_live.json")
+
 
 _CH = np.arange(3)
 SNAPSHOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "panel_setup", "now.png")
@@ -113,11 +115,35 @@ class LedMatrix:
         self._lvl, self._lvl_t = 1.0, time.monotonic()                 # start "bright": the start-up animation stays on the safe bits
         LedMatrix._bits_now = config.MATRIX_PWM_BITS
         self.send_s = 0.0
+        self._live_t, self._live_m = 0.0, self._live_mtime()           # live brightness changes from the app (no restart)
         self._prepare_layout()
         self._luts = None
         if config.MATRIX_APPLY_PANEL_GAINS:
             self._load_gains()
         print(f"[power] current budget {config.MATRIX_MAX_AMPS:g} A (WALL_MAX_AMPS in .env; the supply is rated higher, see panel_setup/README.md)", flush=True)
+
+    @staticmethod
+    def _live_mtime():
+        try:
+            return os.stat(LIVE_BRIGHTNESS_FILE).st_mtime
+        except OSError:
+            return 0.0
+
+    def _poll_live_brightness(self) -> None:
+        """The app writes panel_setup/brightness_live.json when the slider moves; pick it up within ~0.4 s, so the art keeps running."""
+        now = time.monotonic()
+        if now - self._live_t < 0.4:
+            return
+        self._live_t = now
+        m = self._live_mtime()
+        if m == self._live_m:
+            return
+        self._live_m = m
+        try:
+            with open(LIVE_BRIGHTNESS_FILE) as fh:
+                self.set_brightness(int(json.load(fh)["brightness"]))
+        except Exception as e:
+            print(f"[brightness] live file: {e}", flush=True)
 
     @staticmethod
     def _hw_brightness(value) -> int:
@@ -335,6 +361,7 @@ class LedMatrix:
         """Show a frame. frame_fraction=N holds it for exactly N panel refreshes
         (the library paces it on vsync - smooth motion with no timer drift).
         Returns False if the frame was identical and nothing was sent."""
+        self._poll_live_brightness()
         if image.size != (config.TOTAL_WIDTH, config.TOTAL_HEIGHT):
             image = image.resize((config.TOTAL_WIDTH, config.TOTAL_HEIGHT))
         if image.mode != "RGB":

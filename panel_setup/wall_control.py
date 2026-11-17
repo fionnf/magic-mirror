@@ -89,6 +89,7 @@ LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "
                "westcork_dusk": "westcork.thumb_dusk", "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "wanderers": "wanderers.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
                "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb", "lennart": "lennart_film.thumb", "kilchberg": "kilchberg.thumb", "snapshots": "slideshow.thumb", "brief": "brief.thumb", "zurichhb": "kilchberg.thumb_hb",
                "quakes": "quakes.thumb", "radar": "radar.thumb"}
+LIVE_BRIGHTNESS_FILE = os.path.join(HERE, "brightness_live.json")   # read by led_matrix.py in every running mode
 MIRROR_MAX_BRIGHTNESS = 100              # no mirror cap since 2026-11-17 (was 75)
 DARK_MODES = {"planes", "westcork", "westcork_dusk", "windch", "windie", "windeu", "polarbears", "wanderers", "nighttrains", "issday",
               "snow", "satellites", "tides", "tramlines", "quakes"}   # as play.py's list of dark, light-on-black pieces
@@ -403,6 +404,8 @@ class Runner:
         if remember and what != "music":
             self._close_listening()
         with self.lock:
+            if what == "music" and self.current not in (None, "off", "music"):
+                self.before_music = self.current      # "stop listening" in the app goes back to this
             self.oneshot_resume = None
             self.cast_resume = None                    # a choice by hand wins over the speakers
             if remember:
@@ -460,6 +463,13 @@ class Runner:
                     self.voice.ai_verdict = f"could not print the brief: {str(e)[:80]}"
         threading.Thread(target=run, daemon=True).start()
 
+    def stop_listening(self):
+        """Music mode off: back to what was on before it (the art of the day if the wall was off or that is not known)."""
+        back = getattr(self, "before_music", None)
+        if back in (None, "off", "music") or back not in MODE_IDS:
+            back = "daily"
+        self.play(back)
+
     def restart_current(self):
         with self.lock:
             if self.current not in (None, "off"):
@@ -469,8 +479,15 @@ class Runner:
         with self.lock:
             self.state["brightness"] = max(5, min(100, int(value)))
             save_state(self.state)
-            if self.current not in (None, "off") and self.oneshot_resume is None:
-                self._start(self.current)               # brightness applies at start
+            try:                                         # the running art picks this up live (led_matrix.py), no restart
+                tmp = LIVE_BRIGHTNESS_FILE + ".tmp"
+                with open(tmp, "w") as fh:
+                    json.dump({"brightness": self.state["brightness"]}, fh)
+                os.replace(tmp, LIVE_BRIGHTNESS_FILE)
+            except OSError as e:
+                print(f"[brightness] live file: {e}", flush=True)
+            if os.environ.get("WALL_SIM") and self.current not in (None, "off") and self.oneshot_resume is None:
+                self._start(self.current)               # the laptop simulator has no live brightness: restart as before
 
     def reset(self):
         """Settings back to the defaults and the art of the day on the wall. Connections and accounts
@@ -1585,6 +1602,8 @@ def make_app(runner):
             runner.cast_music(False)                      # switched off mid-song: go back now
         if d.get("album_art"):
             runner.play("music")
+        elif d.get("stop") and runner.current == "music":
+            runner.stop_listening()
         elif d.get("start") and runner.current != "music":
             runner.play("music")
         elif runner.current == "music" and mu.load_settings()["source"] != old_source:

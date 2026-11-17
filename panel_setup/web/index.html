@@ -77,6 +77,7 @@
   .between { justify-content: space-between; }
   .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 500; }
   .btn.primary { background: var(--ink); color: var(--room); border-color: var(--ink); font-weight: 600; }
+  .btn.primary.on { background: transparent; color: var(--ink); }          /* a toggle that is on (Music: listening) */
   .btn:disabled { opacity: .4; cursor: default; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--surface); }
   .seg button { border: 0; background: none; padding: 7px 13px; border-radius: 999px; font-size: 14px; color: var(--muted); }
@@ -290,7 +291,7 @@
   <!-- MUSIC -->
   <div class="view" id="v-music">
     <section>
-      <button class="btn primary" style="width:100%;padding:10px" onclick="playMusic()" id="musicBtn">Let the wall listen</button>
+      <button class="btn primary" style="width:100%;padding:10px" onclick="toggleMusic()" id="musicBtn" aria-pressed="false">Let the wall listen</button>
       <p class="hint" id="song"></p>
     </section>
     <section class="party">
@@ -789,7 +790,8 @@ function render() {
   $('mirrorTitle').textContent = bm ? 'The photobooth is on' : 'The mirror is on';
   $('mirrorHint').textContent = bm ? 'Tap the wall, or press Photobooth strip: three poses, three countdowns, one printed strip.' : 'Step in front of the wall, then choose what happens.';
   $('boothToggle').querySelector('b').textContent = bm ? 'Photobooth mode: ON' : 'Photobooth mode';
-  $('musicBtn').textContent = cur === 'music' ? 'Listening now' : 'Let the wall listen';
+  $('musicBtn').textContent = cur === 'music' ? 'Listening now · tap to turn off' : 'Let the wall listen';
+  $('musicBtn').setAttribute('aria-pressed', cur === 'music' ? 'true' : 'false'); $('musicBtn').classList.toggle('on', cur === 'music');
   if (typeof markScene === 'function' && $('scenes').children.length) markScene();
 }
 async function refresh() { try { STATUS = await api('/api/status'); render(); } catch (e) {} }
@@ -1153,7 +1155,10 @@ async function loadMusic() {
   $('song').textContent = n && n.song && !n.silent ? n.song + (n.artist ? ' · ' + n.artist : '') : '';
   render();
 }
-function playMusic() { api('/api/music', {start: true}).then(r => { STATUS = r.status; render(); toast('Listening'); }).catch(e => toast(e.message)); }
+function toggleMusic() {
+  const on = STATUS && STATUS.current === 'music';
+  api('/api/music', on ? {stop: true} : {start: true}).then(r => { STATUS = r.status; render(); toast(on ? 'Stopped listening' : 'Listening'); }).catch(e => toast(e.message));
+}
 $('party').addEventListener('input', e => { $('partyLab').textContent = partyName(+e.target.value); });
 $('party').addEventListener('input', debounce(e => api('/api/music', {party: +e.target.value, mode: 'manual'}).then(loadMusic), 300));
 $('sens').addEventListener('input', debounce(e => api('/api/music', {sensitivity: +e.target.value}), 300));

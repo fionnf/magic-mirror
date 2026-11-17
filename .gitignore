@@ -72,3 +72,4 @@ assets/models/vosk-model-*/
 panel_setup/voice_awake.json
 panel_setup/brief_cache_*.json
 panel_setup/brief_images/
+panel_setup/brightness_live.json

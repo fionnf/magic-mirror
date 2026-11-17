@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Flicker-test runner (copy to the Pi, e.g. /tmp/ft.sh; see docs/flicker-tests-2026-11-17.md). Stops any running display_test, runs one
+# setting for SECS seconds with the Pi monitor, and prints the refresh dip, Pi load, throttling and temperature.
 # usage: ft.sh NAME BRIGHTNESS BITS LSB_NS SLOWDOWN [SECS] [PATTERN] [extra display_test args...]
 N=$1; B=$2; BITS=$3; LSB=$4; SL=$5; S=${6:-40}; P=${7:-gradient}
 shift $(( $# < 7 ? $# : 7 ))

@@ -123,6 +123,8 @@ class LedMatrix:
     def _hw_brightness(value) -> int:
         """The panel's duty grows with the refresh rate (less idle time between scans), so the app's
         brightness % is scaled back to what it looked like at BRIGHTNESS_REF_HZ."""
+        if not config.BRIGHTNESS_REF_HZ:
+            return max(1, int(value)) if value > 0 else 0        # no refresh compensation: the slider is the hardware brightness
         scale = min(1.0, config.BRIGHTNESS_REF_HZ / float(LedMatrix._hz_for(getattr(LedMatrix, "_bits_now", config.MATRIX_PWM_BITS))))
         return max(1, int(round(value * scale))) if value > 0 else 0
 

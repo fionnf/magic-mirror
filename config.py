@@ -68,7 +68,7 @@ PWM_BITS_HZ = {5: 130, 6: 130, 7: 92, 8: 80}  # refresh the panels reach with th
 MATRIX_REFRESH_LIMIT_HZ = int(__import__("os").environ.get("WALL_REFRESH_HZ", 130))   # lock refresh. Blind test 2026-10-26 at full brightness on coral: flicker fell steadily with refresh (60 awful, 72 flicker, 84 less, 100/6-bit very good, 110/5-bit best). 6 bits at 100 Hz (lsb 60) is the fallback if 5-bit banding shows.
                                # frames hold a whole number of refreshes: 42 fps (2) or 28 fps (3)
 FORCE_FAST_REFRESH = False      # set at run time (music mode, while the album cover shows): no deeper-colour, slower-refresh steps
-BRIGHTNESS_REF_HZ = 58         # the refresh the brightness settings were tuned at: a faster refresh is brighter, so it is scaled back
+BRIGHTNESS_REF_HZ = int(__import__("os").environ.get("WALL_BRIGHTNESS_REF_HZ", 0))   # 0 = off since 2026-11-17: the slider IS the panel brightness (100% = 100). It used to be 58: the refresh the settings were tuned at, a faster refresh is brighter, so the slider was scaled back by 58/refresh (about 45% at 130 Hz)
 MATRIX_MULTIPLEXING = 0        # change if the image looks striped/scrambled
 MATRIX_ROW_ADDRESS_TYPE = 0    # 64x64 panels with ABCDE addressing: usually 0
 MATRIX_SHOW_REFRESH = False    # print refresh rate to stdout

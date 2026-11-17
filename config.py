@@ -40,7 +40,8 @@ SCAN_RATE = 32  # most 64x64 panels are 1/32 scan — confirm from sticker
 #   hardware_mapping "regular", gpio_slowdown 3, panel_type FM6126A, pwm_bits 7
 # (FM6124 panels need the FM6126A init sequence, otherwise they stay dark/garbled.)
 HARDWARE_MAPPING = "regular"
-GPIO_SLOWDOWN = int(__import__("os").environ.get("WALL_SLOWDOWN", 7))   # 7 = the cleanest data and, in the numbered tests of 2026-11-04 (bright piece, brightness 75), flicker-free with the best colour depth. 5 (about 130 Hz) flickered slightly on bright pieces at 75; 4 and 3 gave streaky colours. If the colours come out wrong after a restart, check the data cable.
+GPIO_SLOWDOWN = int(__import__("os").environ.get("WALL_SLOWDOWN", 6))   # 6 since 2026-11-17 (3-port wiring, test Q6 in docs/flicker-tests-2026-11-17.md): next to no flicker, no colour jumps at 130 Hz. 4-5 gave streaks and banding, 7 flickered more. Older notes follow, from the 2-port wall:
+#   # 7 = the cleanest data and, in the numbered tests of 2026-11-04 (bright piece, brightness 75), flicker-free with the best colour depth. 5 (about 130 Hz) flickered slightly on bright pieces at 75; 4 and 3 gave streaky colours. If the colours come out wrong after a restart, check the data cable.
                     # history: 3 streaky, 4 better, 5 good, 6 clean (~67 Hz), 8 = ~57 Hz banding returns
                     # 8 = ~57 Hz banding returns. 6-bit at slowdown 6 = ~77 Hz but colour banding.
 MATRIX_PANEL_TYPE = "FM6126A"
@@ -60,10 +61,11 @@ ART_SHADOW_LIFT = float(__import__("os").environ.get("WALL_LIFT", 0.5))
 MATRIX_PWM_BITS = 6            # 1-11; fewer bits = much higher refresh
 COLOUR_DITHER = float(__import__("os").environ.get("WALL_DITHER", 0))   # static ordered dither, +-levels: more colour depth at 5 PWM bits without temporal flicker (0 = off, set WALL_DITHER in .env)
 MATRIX_PWM_DITHER_BITS = 0      # 0-2: smoother gradients at low pwm_bits, costs refresh
-MATRIX_PWM_LSB_NS = 60         # measured 2026-10-14: at 130 the refresh dips to 55 Hz under the 58 Hz lock (judder); at 80 it never drops below 62
-DEPTH_STEPS = [(0.02, 8), (0.04, 7)]   # (picture level below, PWM bits): darker pictures get more colour steps, brighter ones a faster refresh
-PWM_BITS_HZ = {5: 110, 6: 100, 7: 92, 8: 80}  # refresh the panels reach with that many bits under real art (sets the brightness scale)
-MATRIX_REFRESH_LIMIT_HZ = int(__import__("os").environ.get("WALL_REFRESH_HZ", 100))   # lock refresh. Blind test 2026-10-26 at full brightness on coral: flicker fell steadily with refresh (60 awful, 72 flicker, 84 less, 100/6-bit very good, 110/5-bit best). 6 bits at 100 Hz (lsb 60) is the fallback if 5-bit banding shows.
+MATRIX_PWM_LSB_NS = 50         # 50 is the library minimum (2026-11-17 tests: 50 with slowdown 6 and 6 bits was the cleanest). Older note:
+#        # measured 2026-10-14: at 130 the refresh dips to 55 Hz under the 58 Hz lock (judder); at 80 it never drops below 62
+DEPTH_STEPS = []   # OFF since 2026-11-17: 7-8 bits would pull the refresh under the 110 Hz minimum; the old steps were [(0.02, 8), (0.04, 7)]   # (picture level below, PWM bits): darker pictures get more colour steps, brighter ones a faster refresh
+PWM_BITS_HZ = {5: 130, 6: 130, 7: 92, 8: 80}  # refresh the panels reach with that many bits under real art (sets the brightness scale)
+MATRIX_REFRESH_LIMIT_HZ = int(__import__("os").environ.get("WALL_REFRESH_HZ", 130))   # lock refresh. Blind test 2026-10-26 at full brightness on coral: flicker fell steadily with refresh (60 awful, 72 flicker, 84 less, 100/6-bit very good, 110/5-bit best). 6 bits at 100 Hz (lsb 60) is the fallback if 5-bit banding shows.
                                # frames hold a whole number of refreshes: 42 fps (2) or 28 fps (3)
 FORCE_FAST_REFRESH = False      # set at run time (music mode, while the album cover shows): no deeper-colour, slower-refresh steps
 BRIGHTNESS_REF_HZ = 58         # the refresh the brightness settings were tuned at: a faster refresh is brighter, so it is scaled back

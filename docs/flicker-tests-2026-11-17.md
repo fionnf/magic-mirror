@@ -88,8 +88,14 @@ All six held at least 128.5 Hz; Pi 57-59 C, ~27 A at 100% on this pattern (28 A 
 ## 7. Result
 
 Best: **Q6 = slowdown 6, 6 PWM bits, lsb 50, refresh locked at 130 Hz**. Runner-up: Q1 (slowdown 7, 5 bits, lsb 60).
-Not yet applied to `config.py`. Open: `DEPTH_STEPS` (7-8 bits for dark art) would drop the refresh below 110 Hz and is untested at these settings;
-`PWM_BITS_HZ` needs 130 for 5 and 6 bits so brightness scaling matches the locked refresh; push to GitHub before the next `wall-control` start.
+**Applied 2026-11-17** (`config.py`): `GPIO_SLOWDOWN` 6, `MATRIX_PWM_BITS` 6, `MATRIX_PWM_LSB_NS` 50, `MATRIX_REFRESH_LIMIT_HZ` 130, `PWM_BITS_HZ` 130 for 5 and 6 bits
+(so the brightness scaling matches the locked refresh), `DEPTH_STEPS = []` (7-8 bits would pull the refresh under 110 Hz; untested at these settings).
+`wall_control.py` no longer overrides slowdown 7 / 100 Hz for the dark live boards (`DARK_MODES`): they use the same settings as every piece.
+`BRIGHTNESS_CAP` is still 75 (the tests ran at 100).
+
+**Applying settings to the Pi:** the service resets the code to GitHub on every start (see section 2), so after an rsync deploy run
+`sudo touch /tmp/wall-update.stamp` (the stamp is root-owned) before `sudo systemctl restart wall-control`; `update.sh` then skips for ten minutes.
+Pushing to `master` is the real fix.
 
 Reproduce: copy `tools/flicker_run.sh` to the Pi, then
 `/tmp/flicker_run.sh NAME BRIGHTNESS BITS LSB_NS SLOWDOWN SECS flicker --refresh-limit 130 --label "..."` (stop `wall-control` first).

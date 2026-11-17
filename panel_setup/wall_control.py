@@ -64,6 +64,7 @@ MODES = [
     ("limmat", "Art", "Limmat", "The river flowing at its real speed, coloured by the lake's temperature"),
     ("exposure", "Live", "Long exposure", "The camera paints where people move, building up all evening like a long photograph"),
     ("westcork", "Art", "West Cork", "Mizen, Fastnet, Schull and Baltimore at night, every light flashing its real signal"),
+    ("westcork_dusk", "Art", "West Cork Dusk", "The same lights as West Cork, every one flashing its real character (Fastnet's beam sweeps past once every five seconds), over land in a deep teal so you can read the coast without it taking attention from the lights"),
     ("windch", "Art", "Wind over Switzerland", "The real wind right now, thousands of points of light flowing over the country"),
     ("windie", "Art", "Wind over Ireland", "The Atlantic wind over Ireland right now, flowing in light"),
     ("nighttrains", "Art", "Night trains", "Every European night train on its timetable, with sleeping cities and the real night side of the Earth"),
@@ -78,15 +79,18 @@ MODES = [
     ("tides", "Art", "Tides", "The sea at Baltimore: the real tide rising and falling, the swell, the moon"),
     ("tramlines", "Art", "Tram map", "Every Zürich tram moving on an Underground-style map of its lines"),
     ("laend", "Art", "Ländle", "A long German intro (apples in Bittenfeld, vineyards to Korb, Federweißer in Schorndorf), then the Remstal as a living map: vineyards, fog, the Rems, the towns, live trains"),
+    ("brief", "Live", "The Fortuna Brief", "A short show: date and time, the weather at Fortunagasse 24, the next hours and days, the weekend in the Swiss mountains (snow or weather, cloud base), research highlights and the top news (The Local, BBC) chosen by the AI. Say \"Hey Fortuna, the brief\"; it prints its slip as it starts and then the wall goes back to what it was showing"),
+    ("radar", "Live", "Rain Radar", "The last hour of real rain radar over Zürich and the next two hours of forecast rain, looping, with a one-line verdict for the house (\"Dry for the next 2 hours\", \"Rain from 14:30\"). Also by voice: \"Hey Fortuna, the rain radar\""),
     ("quakes", "Art", "Earthquakes", "A turning globe, every earthquake of the last day rippling out from where it struck"),
 ]
 MODE_IDS = {m[0] for m in MODES}
+BRIEF_MODES = ("brief",)                  # shows that run once, print at the start, then hand back
 LIVE_THUMBS = {"planes": "planes.thumb", "limmat": "limmat.thumb", "westcork": "westcork.thumb",   # mode -> module.thumb
-               "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "wanderers": "wanderers.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
-               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb", "lennart": "lennart_film.thumb", "kilchberg": "kilchberg.thumb", "snapshots": "slideshow.thumb", "zurichhb": "kilchberg.thumb_hb",
-               "quakes": "quakes.thumb"}
+               "westcork_dusk": "westcork.thumb_dusk", "windch": "wind.thumb_ch", "windie": "wind.thumb_ie", "windeu": "wind.thumb_eu", "polarbears": "polarbears.thumb", "livecam": "livecam.thumb", "skylines": "skylines.thumb", "wanderers": "wanderers.thumb", "nighttrains": "nighttrains.thumb", "issday": "issday.thumb", "snow": "snow.thumb",
+               "satellites": "satellites.thumb", "tides": "tides.thumb", "tramlines": "tramlines.thumb", "laend": "laend.thumb", "lennart": "lennart_film.thumb", "kilchberg": "kilchberg.thumb", "snapshots": "slideshow.thumb", "brief": "brief.thumb", "zurichhb": "kilchberg.thumb_hb",
+               "quakes": "quakes.thumb", "radar": "radar.thumb"}
 MIRROR_MAX_BRIGHTNESS = 75
-DARK_MODES = {"planes", "westcork", "windch", "windie", "windeu", "polarbears", "wanderers", "nighttrains", "issday",
+DARK_MODES = {"planes", "westcork", "westcork_dusk", "windch", "windie", "windeu", "polarbears", "wanderers", "nighttrains", "issday",
               "snow", "satellites", "tides", "tramlines", "quakes"}   # as play.py's list of dark, light-on-black pieces
 
 DEFAULT_STATE = {"mode": "lava", "brightness": 40, "playlist": None,
@@ -158,14 +162,24 @@ class Runner:
         self.playlist_idx = 0
         self.playlist_next = 0.0
         self.cast_resume = None      # "follow the speakers": what to go back to when the music stops
+        self.voice = None            # voice.Voice, set in main(): owns the microphone while it is on
+        self.asleep = False          # "Hey Fortuna, sleep": the wall is at rest (off) until it is woken
+        self.sleep_prev = None       # what to bring back when it wakes
+        self.sleep_lights = False    # sleep switched the lights off, so waking switches them back on
+        self.brief_prev = None       # what was on the wall before the Brief started (it goes back to that when the show ends)
+        self.brief_seconds = 0.0
+        self.brief_pending = False   # a Brief is being prepared (data fetch) but is not on the wall yet
         os.makedirs(LOG_DIR, exist_ok=True)
         threading.Thread(target=self._watch, daemon=True).start()
 
     # -- commands
     def _cmd(self, what):
         if what in MODE_IDS:
-            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva", "maxfionn", "flow", "exposure", "laend", "lennart", "kilchberg", "zurichhb")
-            return [PY, "panel_setup/play.py", what, "--fps", "29" if heavy else "58"]   # art: 58 fps when it can
+            heavy = what in ("music", "trams", "ambient", "welcome", "pride", "dewa", "maeva", "maxfionn", "flow", "exposure", "laend", "lennart", "kilchberg", "zurichhb", "brief", "radar")
+            cmd = [PY, "panel_setup/play.py", what, "--fps", "29" if heavy else "58"]   # art: 58 fps when it can
+            if what in BRIEF_MODES and self.brief_prev is not None and self.brief_seconds:
+                cmd += ["--seconds", str(int(self.brief_seconds))]                         # one run of the show, then the process ends
+            return cmd
         if what == "mirror":
             cmd = [PY, "-u", "main.py", "--no-touch", "--no-mqtt"]
             if os.environ.get("WALL_SIM"):
@@ -186,6 +200,19 @@ class Runner:
                    ([] if self.state.get("wheel_print", True) else ["--no-print"])
         return None
 
+    @staticmethod
+    def _mic_wanted(what):
+        """Does this mode listen to the room? Music mode always; art only when "let all art move to music" is on."""
+        if what == "music":
+            return True
+        if what not in MODE_IDS or what == "daily":                  # the art of the day never listens
+            return False
+        try:
+            from display import music as mu
+            return bool(mu.load_settings().get("art_reacts"))
+        except Exception:
+            return False
+
     def _stop_proc(self):
         p = self.proc
         self.proc = None
@@ -202,6 +229,8 @@ class Runner:
     on_mirror_start = None       # set by make_app: closes the live camera view before the mirror takes the camera
 
     def _start(self, what):
+        if what not in BRIEF_MODES:
+            self.brief_prev = None                       # anything else on the wall cancels the way back from the Brief
         self._stop_proc()
         if what == "mirror" and self.on_mirror_start:
             try:
@@ -209,6 +238,8 @@ class Runner:
             except Exception as e:
                 print(f"[camera] could not close the live view: {e}", flush=True)
         self.current, self.since, self.error = what, time.time(), ""
+        if self.voice:
+            self.voice.set_hold(self._mic_wanted(what))     # voice steps aside for Music mode, and is back for everything else
         cmd = self._cmd(what)
         if cmd is None:                                 # "off"
             return
@@ -219,8 +250,10 @@ class Runner:
                    WALL_PRESENCE="1" if self.state.get("presence") else "0",
                    WALL_SMART_CROP="1" if self.state.get("smart_crop", True) else "0",
                    PYTHONUNBUFFERED="1")
+        if not os.environ.get("WALL_SIM") and not self._mic_wanted(what):
+            env["WALL_AUDIO"] = "none:"          # only Music mode and music-reactive art open the microphone
         if what in DARK_MODES:                   # single lit LEDs on black (West Cork, planes ...): the old, cleanest panel settings
-            env["WALL_SLOWDOWN"], env["WALL_REFRESH_HZ"] = "7", "100"                # (now the same as every piece)
+            # (slowdown and refresh are config.py's, the same as every piece: 2026-11-17 flicker tests, at least 110 Hz)
             env["WALL_BRIGHTNESS_CAP"] = "100"                          # light on black: no flicker problem, and it needs the light
         if what == "mirror":
             env["WALL_BRIGHTNESS"] = str(min(int(self.state.get("brightness", 40)), MIRROR_MAX_BRIGHTNESS))
@@ -256,7 +289,120 @@ class Runner:
         else:
             self._start(entry)
 
+    def lights(self, on):
+        """The living-room lights on or off (the same group as the app's Room button; the colour rods are separate and untouched)."""
+        def run():
+            try:
+                import lights as lt
+                if lt.installed() and lt.devices():
+                    lt.set_group(lt.room(), bool(on))
+                    print(f"[lights] living room {'on' if on else 'off'} (by voice)", flush=True)
+                else:
+                    print("[lights] no lights set up", flush=True)
+            except Exception as e:
+                print(f"[lights] {e}", flush=True)
+        threading.Thread(target=run, daemon=True).start()
+
+    def lamp(self, value):
+        """The dining table lamp: True/False for on/off, or a brightness 1-100 (0 = off). It is found by name (a light whose name has
+        dining, table or esstisch in it), so it works as soon as the lamp is in the wall's light list."""
+        def run():
+            try:
+                import lights as lt
+                names = [d["name"] for d in lt.devices() if any(k in d["name"].lower() for k in ("dining", "table", "esstisch", "tisch"))]
+                if not names:
+                    msg = "no dining table lamp in the wall's lights (name a light 'Dining table lamp' in the Lights settings)"
+                    print(f"[lights] {msg}", flush=True)
+                    if self.voice:
+                        self.voice.ai_verdict = msg
+                    return
+                if value is False or value == 0:
+                    lt.set_group(names, False)
+                elif value is True:
+                    lt.set_group(names, True)
+                else:
+                    lt.set_look(names, brightness=max(1, min(100, int(value))))
+                print(f"[lights] {names[0]}: {value}", flush=True)
+            except Exception as e:
+                print(f"[lights] {e}", flush=True)
+        threading.Thread(target=run, daemon=True).start()
+
+    def sleep_mode(self):
+        """Goodnight: the living-room lights off and the wall to rest; "Hey Fortuna" on its own brings it back."""
+        with self.lock:
+            prev = self.brief_prev if self.current in BRIEF_MODES else self.current
+            if prev not in (None, "off"):
+                self.sleep_prev = prev
+            self.asleep = True
+        try:
+            import lights as lt
+            self.sleep_lights = bool(lt.installed() and lt.devices())
+        except Exception:
+            self.sleep_lights = False
+        if self.sleep_lights:
+            self.lights(False)
+        self.play("off")
+        self.asleep = True                                          # (play() clears it for anything but off)
+
+    def wake_up(self):
+        """Back from sleep: what was on the wall before, and the lights it switched off."""
+        with self.lock:
+            if not self.asleep:
+                return False
+            prev, lights_back = self.sleep_prev or "daily", self.sleep_lights
+            self.asleep, self.sleep_lights = False, False
+        self.play(prev)
+        if lights_back:
+            self.lights(True)
+        return True
+
+    def play_brief(self, mode="brief", wait=False):
+        """Show the Fortuna Brief once, print it as it starts, then go back to whatever was on the wall before.
+        Runs in the background unless wait=True; returns (wait=True only) True when the show started and the slip printed."""
+        lang = None
+        with self.lock:
+            if self.current in BRIEF_MODES or self.brief_pending:
+                return False
+            self.brief_pending = True                                  # a second trigger while this one prepares does nothing
+
+        def go():
+            printed = False
+            try:
+                secs = 110.0
+                brief = None
+                try:
+                    from display import brief
+                    secs = brief.show_seconds(brief.data(max_age=300, lang=lang))      # fetched once; the show reads the same cache
+                except Exception as e:
+                    print(f"[brief] could not prepare: {e}", flush=True)
+                with self.lock:
+                    if self.current in BRIEF_MODES:
+                        return False
+                    # what to go back to is decided now, not when the data fetch began
+                    prev = "off" if self.asleep else ("daily" if self.current in ("wheel", None) else self.current)
+                    self.brief_prev, self.brief_seconds = prev, secs + 3
+                    self._start(mode)
+                try:
+                    if brief is None:
+                        from display import brief
+                    brief.print_once(lang=lang)                                      # the slip at the beginning
+                    printed = True
+                except Exception as e:
+                    print(f"[brief] could not print: {e}", flush=True)
+                return printed
+            finally:
+                with self.lock:
+                    self.brief_pending = False
+        if wait:
+            return go()
+        threading.Thread(target=go, daemon=True).start()
+        return True
+
     def play(self, what, remember=True):
+        if what in BRIEF_MODES:                            # never "the saved mode": it runs once and hands back
+            return self.play_brief(what)                   # (and it does not end the rest: asleep stays, the wall returns to off)
+        if what != "off":
+            self.asleep = False                                    # anything on the wall ends the rest
         if remember and what != "music":
             self._close_listening()
         with self.lock:
@@ -303,6 +449,19 @@ class Runner:
                 if self.current == "music":
                     print(f"[cast] music stopped: back to {back}", flush=True)
                     self._start(back)
+
+    def print_brief(self, lang=None):
+        """Print the brief (date, weather, headlines) as a paper slip, in the background ."""
+        def run():
+            try:
+                from display import brief
+                brief.print_slip(lang)
+                print("[brief] printed", flush=True)
+            except Exception as e:
+                print(f"[brief] could not print: {e}", flush=True)
+                if self.voice:
+                    self.voice.ai_verdict = f"could not print the brief: {str(e)[:80]}"
+        threading.Thread(target=run, daemon=True).start()
 
     def restart_current(self):
         with self.lock:
@@ -431,8 +590,9 @@ class Runner:
                     "presence": bool(self.state.get("presence")),
                     "off_at": self.state.get("off_at"),
                     "wall_w": __import__("config").TOTAL_WIDTH, "wall_h": __import__("config").TOTAL_HEIGHT,
-                    "error": self.error, "oneshot": self.oneshot_resume is not None,
-                    "cast_resume": self.cast_resume}
+                    "error": self.error, "oneshot": self.oneshot_resume is not None, "brief_pending": self.brief_pending,
+                    "cast_resume": self.cast_resume,
+                    "voice": self.voice.status() if self.voice else None}
 
     # -- watchdog: crashes, one-shots, playlists
     def _watch(self):
@@ -440,6 +600,11 @@ class Runner:
             time.sleep(1.0)
             with self.lock:
                 p = self.proc
+                if self.current in BRIEF_MODES and self.brief_prev is not None and p is not None and p.poll() is not None:
+                    back, self.brief_prev = self.brief_prev, None              # the show is over: back to what was on before
+                    print(f"[brief] show finished, back to {back}", flush=True)
+                    self._start(back)
+                    continue
                 if self.current not in (None, "off") and p is not None and p.poll() is not None:
                     if self.oneshot_resume is not None:          # wheel finished: go back
                         resume, self.oneshot_resume = self.oneshot_resume, None
@@ -464,7 +629,7 @@ class Runner:
                         self.play("off")
                     continue
                 pl = self.state.get("playlist")
-                if (self.state.get("mode") == "playlist" and pl and self.oneshot_resume is None
+                if (self.state.get("mode") == "playlist" and pl and self.oneshot_resume is None and self.brief_prev is None
                         and time.time() >= self.playlist_next):
                     self.playlist_idx = (self.playlist_idx + 1) % len(pl["ids"])
                     self.playlist_next = time.time() + pl["minutes"] * 60
@@ -860,6 +1025,76 @@ def make_app(runner):
         runner.play(mode)
         return jsonify(runner.status())
 
+    @app.get("/api/brief")
+    def brief_get():
+        from display import brief
+        st = runner.state
+        return jsonify({"print": bool(st.get("brief_print", True)), "at": st.get("brief_print_at") or brief.DEFAULT_PRINT_AT,
+                        "printed": st.get("brief_printed", "")})
+
+    @app.post("/api/brief")
+    def brief_set():
+        """The daily printed brief: {"print": bool, "at": "HH:MM"}."""
+        d = request.get_json(force=True, silent=True) or {}
+        with runner.lock:
+            if "print" in d:
+                runner.state["brief_print"] = bool(d["print"])
+            if "at" in d:
+                try:
+                    h, m = (int(v) for v in str(d["at"]).split(":")[:2])
+                    assert 0 <= h < 24 and 0 <= m < 60
+                except Exception:
+                    return jsonify({"error": "time as HH:MM"}), 400
+                runner.state["brief_print_at"] = f"{h:02d}:{m:02d}"
+                runner.state.pop("brief_printed", None)        # a new time may still print today
+            save_state(runner.state)
+        return brief_get()
+
+    @app.post("/api/brief/print")
+    def brief_print():
+        lang = (request.get_json(force=True, silent=True) or {}).get("lang")
+        runner.print_brief(lang if lang in ("de", "en") else None)
+        return jsonify({"ok": True})
+
+    @app.get("/api/brief/slip.png")
+    def brief_slip_preview():
+        import io
+        from display import brief
+        buf = io.BytesIO()
+        lang = request.args.get("lang")
+        brief.slip_image(brief.data(lang=lang if lang in ("de", "en") else None)).save(buf, "PNG")
+        return Response(buf.getvalue(), mimetype="image/png", headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/voice")
+    def voice_get():
+        return jsonify(runner.voice.status() if runner.voice else {"enabled": False, "error": "voice is not available"})
+
+    @app.post("/api/voice")
+    def voice_set():
+        """Voice control settings: {"enabled": bool} switches "Hey Fortuna" on or off, {"ai": bool} the AI check for
+        things it is unsure about. Both are remembered across restarts."""
+        if not runner.voice:
+            return jsonify({"error": "voice is not available"}), 503
+        d = request.get_json(force=True, silent=True) or {}
+        if "ai" in d:
+            runner.voice.ai_on = bool(d["ai"])
+            with runner.lock:
+                runner.state["voice_ai"] = runner.voice.ai_on
+                save_state(runner.state)
+        if "enabled" in d:
+            on = bool(d["enabled"])
+            with runner.lock:
+                changed = bool(runner.state.get("voice")) != on
+                runner.state["voice"] = on
+                save_state(runner.state)
+            runner.voice.set_enabled(on)
+            if changed:                                  # only a real switch can change who has the microphone
+                def settle():
+                    time.sleep(0.5)                      # let it open (or fail to open) the microphone
+                    runner.restart_current()             # (re)decides who has the microphone
+                threading.Thread(target=settle, daemon=True).start()
+        return jsonify(runner.voice.status())
+
     @app.post("/api/off")
     def off():
         runner.play("off")
@@ -1162,7 +1397,7 @@ def make_app(runner):
 
     @app.get("/api/share")
     def share_links():
-        """What the app can hand out: the guest page (works on the home Wi-Fi) and the day galleries (work anywhere, one link per day)."""
+        """What the app can hand out: the guest page (works on the home Wi-Fi) and the last two days' galleries (work anywhere, one link per day)."""
         out = {"guest": _lan_urls(), "days": [], "gallery": False, "error": ""}
         try:
             import cloud_uploader
@@ -1181,6 +1416,7 @@ def make_app(runner):
                         out["error"] = str(e)[:100]
         except Exception as e:
             out["error"] = str(e)[:100]
+        out["days"] = out["days"][:2]                                     # only the last two days' galleries are offered
         return jsonify(out)
 
     # ---- the home screen: QR codes for guests (Wi-Fi, message the board, today's pictures) ----
@@ -1338,6 +1574,7 @@ def make_app(runner):
         d = request.get_json(force=True, silent=True) or {}
         st = mu.load_settings()
         old_source = st.get("source")
+        old_react = bool(st.get("art_reacts"))
         for k in ("style", "palette", "vibe", "source", "sensitivity", "ai", "shazam",
                   "song_on_wall", "brain", "beat_offset", "beat_strength", "art_reacts", "prompt", "mode", "party", "art", "cast_follow", "cast_devices", "cast_all", "cover_show", "cover_colours"):
             if k in d:
@@ -1355,6 +1592,8 @@ def make_app(runner):
             runner.play("music")
         elif runner.current == "music" and mu.load_settings()["source"] != old_source:
             runner.restart_current()                      # new microphone: restart listening
+        elif bool(mu.load_settings().get("art_reacts")) != old_react:
+            runner.restart_current()                      # art starts (or stops) listening; voice gives the microphone up (or takes it back)
         return jsonify({"settings": mu.load_settings(), "status": runner.status()})
 
     import photo_store
@@ -1787,8 +2026,14 @@ def main():
     import requests  # noqa: F401
     from display import publish, daily  # noqa: F401
     runner = Runner()
-    runner.resume_saved()
-    if len([f for f in os.listdir(THUMB_DIR)] if os.path.isdir(THUMB_DIR) else []) < len(MODES) + 2:
+    from panel_setup.voice import Voice
+    runner.voice = Voice(runner, MODES)
+    runner.voice.ai_on = bool(runner.state.get("voice_ai", True))
+    if os.environ.get("WALL_VOICE") == "1" or (runner.state.get("voice") and not os.environ.get("WALL_SIM")):
+        runner.voice.set_enabled(True)
+    runner.resume_saved()                                # after voice, so the first mode starts with the microphone decided
+    if (len([f for f in os.listdir(THUMB_DIR)] if os.path.isdir(THUMB_DIR) else []) < len(MODES) + 2
+            or any(not os.path.exists(os.path.join(THUMB_DIR, m + ".png")) for m in LIVE_THUMBS)):
         threading.Thread(target=make_thumbs, daemon=True).start()   # normally shipped by deploy.sh
 
     def _publish_pending(daily):
@@ -1949,6 +2194,35 @@ def main():
                 print(f"[cast] {e}", flush=True)
                 time.sleep(30)
     threading.Thread(target=cast_watch, daemon=True).start()
+
+    def brief_watch():                       # prints the daily brief once a morning (Settings: The Brief)
+        from display import brief
+        tries, day = 0, ""
+        while True:
+            time.sleep(30)
+            try:
+                st = runner.state
+                today = brief.now().date().isoformat()
+                if today != day:
+                    tries, day = 0, today
+                with runner.lock:
+                    due = tries < 3 and brief.due(st)
+                    slip_only = runner.current in (None, "off", "mirror", "wheel") or bool(st.get("off_at"))
+                if due:
+                    tries += 1
+                    print(f"[brief] the daily brief (try {tries})", flush=True)
+                    if slip_only:
+                        brief.print_slip()                                  # the wall is off or busy: the slip only
+                    elif not runner.play_brief(wait=True):                  # the show, with the slip printed as it starts
+                        raise RuntimeError("the brief did not print (busy or printer error)")
+                    with runner.lock:
+                        st["brief_printed"] = today
+                        save_state(st)
+                    print("[brief] daily brief printed", flush=True)
+            except Exception as e:
+                print(f"[brief] daily print failed: {e}", flush=True)
+                time.sleep(570)                                  # try again in ~10 minutes (three tries a day)
+    threading.Thread(target=brief_watch, daemon=True).start()
 
     def lights_watch():                      # fires the daily "lights off at HH:MM"
         import lights

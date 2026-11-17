@@ -1,0 +1,51 @@
+{
+ "name": "Teal Orbit Field",
+ "description": "A quiet teal sphere of fine light points hovers in deep space, swelling and drifting through the day while its rim brightens and thickens like a held breath.",
+ "image": "2026-11-17.png",
+ "animation_source": "2026-11-17.frag",
+ "attributes": [
+  {
+   "trait_type": "Date",
+   "value": "2026-11-17"
+  },
+  {
+   "trait_type": "Season",
+   "value": "autumn"
+  },
+  {
+   "trait_type": "Palette",
+   "value": "#04131b #166b72 #8df7ea"
+  },
+  {
+   "trait_type": "Medium",
+   "value": "GLSL shader, 192 x 256 LED wall"
+  },
+  {
+   "trait_type": "Artist",
+   "value": "Dewa and Fionn"
+  },
+  {
+   "trait_type": "Curator score",
+   "value": 7
+  }
+ ],
+ "listening": "It listens as a slow tide: bass expands the sphere, treble sharpens the edge points, and the beat only nudges a barely perceptible sway.",
+ "palette": [
+  "#04131b",
+  "#166b72",
+  "#8df7ea"
+ ],
+ "source_sha256": "b7e2c336641a70508d4acd11c13cc9b89d94912f11e1e0e08325bf2016f66d45",
+ "model": "gpt-5.4-mini",
+ "size": [
+  192,
+  256
+ ],
+ "attempts": 3,
+ "created": 1794906315.8838205,
+ "curator": {
+  "score": 7,
+  "verdict": "This piece captures the day's theme of a teal dot sphere nicely, with a calm, luminous form and a clear progression through the day. The brightening and thickening rim gives a tranquil breath-like quality that fits well with the house's mood board, but the central blur could be made slightly sharper to improve visibility on the coarse LED grid."
+ },
+ "direction": "Teal dot sphere"
+}

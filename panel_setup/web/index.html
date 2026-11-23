@@ -219,6 +219,92 @@
   .toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0;
            background: var(--ink); color: var(--room); padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; transition: .25s; pointer-events: none; z-index: 9; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ===== overhaul: calmer, card-based, one-thumb ===== */
+  :root { --card: #1d1922; --card2: #26202c; --r: 20px; }
+  body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); -webkit-tap-highlight-color: transparent; }
+  .wrap { padding: 0 16px; }
+  /* hero: the wall, its name, and the few controls you use every day */
+  .stage { grid-template-columns: min(38vw, 164px) 1fr; gap: 10px 16px; padding-top: max(14px, env(safe-area-inset-top)); }
+  .stage .frame { grid-row: 1 / span 3; border-radius: 16px; }
+  .label h1 { font-size: clamp(26px, 7vw, 32px); }
+  .label p { font-size: 13px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .stepper { gap: 8px; margin: 0; }
+  .stepper .btn { width: 40px; height: 40px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: var(--card); }
+  .stepper .btn svg { width: 18px; height: 18px; }
+  .stepper .btn:active, .round:active, .btn:active { transform: scale(.94); }
+  .controls { gap: 10px; margin: 0; }
+  .controls input[type=range] { order: 0; flex: 1 1 0; min-width: 0; }
+  .controls { flex-wrap: nowrap; }
+  .round { background: var(--card); width: 40px; height: 40px; }
+  /* sections: plain on the Wall tab, cards everywhere else */
+  section { margin-top: 26px; }
+  h2 { font: 600 12px/1 var(--sans); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+  .view:not(#v-art) > section, .view > details.more > section { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; margin-top: 12px; }
+  .view:not(#v-art) > section:first-child { margin-top: 20px; }
+  .view:not(#v-art) > section > h2:first-child { margin-bottom: 12px; }
+  .view > section.mirrorcard { background: linear-gradient(160deg, var(--card2), var(--card)); }
+  .view > details.more { margin-top: 20px; border-top: 0; }
+  .view > details.more > summary { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; }
+  .view > details.more[open] > summary { margin-bottom: 0; }
+  .view > details.more > section:first-of-type { margin-top: 12px; }
+  #rodColour { margin-top: 12px; }
+  .hint { font-size: 12.5px; line-height: 1.4; opacity: .85; }
+  .btn { background: var(--card2); padding: 9px 15px; transition: transform .1s; }
+  .btn.primary { background: var(--ink); }
+  .btn.primary.on { background: transparent; }
+  .switch { padding: 11px 0; }
+  select, input[type=text], input[type=search], input[type=time] { background: var(--card2); border-radius: 14px; }
+  .seg { background: var(--card2); }
+  /* horizontal rails: recent and live */
+  .rail { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity; margin: 0 -16px; padding: 2px 16px 10px; scrollbar-width: none; }
+  .rail::-webkit-scrollbar { display: none; }
+  .rail button { flex: 0 0 auto; width: 92px; border: 0; background: none; padding: 0; text-align: left; scroll-snap-align: start; position: relative; }
+  .rail img { width: 92px; aspect-ratio: var(--aspect, 1); object-fit: cover; border-radius: 14px; display: block; background: #000; outline: 2px solid transparent; outline-offset: 2px; transition: transform .12s, outline-color .2s; }
+  .rail button:active img { transform: scale(.96); }
+  .rail .sel img { outline-color: rgb(var(--glow)); }
+  .rail span { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rail .sel span { color: var(--ink); }
+  .sechead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+  .sechead h2 { margin: 0; }
+  .sechead a, .sechead button { color: var(--muted); font-size: 12.5px; background: none; border: 0; padding: 0; text-decoration: none; }
+  /* moods */
+  .scenes button { background: var(--card); padding: 10px 16px; }
+  .scenes button.on { background: var(--ink); }
+  /* gallery: bigger tiles, a search bar that stays put */
+  .bar { position: sticky; top: 0; z-index: 4; margin: 0 -16px 10px; padding: 8px 16px 2px; background: linear-gradient(var(--room) 78%, rgba(23,20,26,0)); }
+  .bar .find { margin: 0 0 8px; }
+  .bar .chips { padding-bottom: 8px; }
+  .gallery { grid-template-columns: repeat(3, 1fr); gap: 14px 10px; }
+  .gallery img { border-radius: 14px; }
+  .gallery button:active img { transform: scale(.97); }
+  .gallery .sel img { outline-color: rgb(var(--glow)); }
+  .gallery span { font-size: 12px; margin-top: 5px; }
+  .chips button { background: var(--card); padding: 6px 13px; }
+  .chips button.on { background: var(--ink); }
+  /* nav: a clear active tab */
+  nav { background: rgba(23, 20, 26, .9); }
+  nav button { position: relative; padding: 8px 0 6px; font-size: 11.5px; letter-spacing: .01em; }
+  nav button[aria-current=page]::before { content: ""; position: absolute; top: 0; width: 22px; height: 3px; border-radius: 0 0 3px 3px; background: rgb(var(--glow)); }
+  .toast { bottom: calc(90px + env(safe-area-inset-bottom)); }
+  .empty-note { color: var(--muted); font-size: 13px; padding: 4px 0 8px; }
+  .stage { transition: none; }
+  body.sub .stage { grid-template-columns: 46px 1fr auto; align-items: center; gap: 0 12px; padding-top: max(10px, env(safe-area-inset-top)); padding-bottom: 6px; }
+  body.sub .stage .frame { grid-row: 1; width: 46px; border-radius: 10px; box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+  body.sub .frame .enlarge, body.sub .frame .grid, body.sub .stepper, body.sub #bright, body.sub #moon, body.sub .label p { display: none; }
+  body.sub .label { align-self: center; min-width: 0; }
+  body.sub .label h1 { font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.sub .controls { grid-column: 3; grid-row: 1; }
+  body.sub .view:not(#v-art) > section:first-child { margin-top: 10px; }
+  body.sub .stage { position: sticky; top: 0; z-index: 6; width: 100%; max-width: none; margin: 0; padding-left: max(16px, calc((100% - 560px) / 2 + 16px)); padding-right: max(16px, calc((100% - 560px) / 2 + 16px));
+    background: rgba(23, 20, 26, .88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+  body.sub .frame, body.sub .label { cursor: pointer; }
+  .bar .find input { padding: 8px 14px; font-size: 15px; width: 100%; }
+  body.bigwall .frame { width: min(94vw, calc(94vh * var(--cols, 3) / var(--rows, 3))); }
+  #castHint, #mirrorHint, #rodHint { display: none; }
+  .rail { scroll-padding-left: 16px; }
+  .rail button.skip { display: none; }
+  @media (min-width: 700px) { .wrap { width: min(640px, 100%); } .gallery { grid-template-columns: repeat(4, 1fr); } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -246,9 +332,12 @@
   <div class="label">
     <h1 id="title">Fortuna wall</h1>
     <p id="sub"></p>
-    <p class="hint" id="fwv" style="margin:6px 0 0;opacity:.6"></p>
   </div>
-  <div class="stepper"><button class="btn" onclick="stepPiece(-1)" aria-label="Previous piece">&#8592;</button><button class="btn" onclick="surprise()">Surprise me</button><button class="btn" onclick="stepPiece(1)" aria-label="Next piece">&#8594;</button></div>
+  <div class="stepper">
+    <button class="btn" onclick="stepPiece(-1)" aria-label="Previous piece"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <button class="btn" onclick="surprise()" aria-label="Surprise me" title="Surprise me"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
+    <button class="btn" onclick="stepPiece(1)" aria-label="Next piece"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+  </div>
   <div class="controls">
     <button class="round" id="power" aria-label="Turn the wall off" onclick="power()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>
@@ -264,22 +353,21 @@
 
   <!-- ART -->
   <div class="view on" id="v-art">
-    <section>
-      <h2>At a glance</h2>
-      <div class="gallery" id="glanceGrid"></div>
-      <p class="hint" id="glanceHint">The Fortuna Brief prints its slip as it starts and plays once, then the wall goes back to what it was showing. The rain radar shows the last hour and the next two.</p>
+    <section id="recentSec">
+      <div class="sechead"><h2>Recent</h2><button id="recentClear" onclick="clearRecent()">Clear</button></div>
+      <div class="rail" id="recentRail"></div>
     </section>
     <section>
       <h2>Moods</h2>
       <div class="scenes" id="scenes"></div>
-      <p class="hint" id="sceneHint">One tap changes what the wall is doing. <b>Album art</b> listens to every speaker and shows the cover; choosing anything else ends it. Hold a mood you saved to remove it.</p>
     </section>
     <section>
       <h2 id="galleryHead">Gallery</h2>
-      <div class="find"><input type="search" id="artFind" placeholder="Search the gallery" aria-label="Search the gallery" autocomplete="off"></div>
-      <div class="chips" id="artChips"></div>
+      <div class="bar">
+        <div class="find"><input type="search" id="artFind" placeholder="Search the gallery" aria-label="Search the gallery" autocomplete="off"></div>
+        <div class="chips" id="artChips"></div>
+      </div>
       <div class="gallery" id="artGrid"></div>
-      <p class="hint">Everything the wall can show is here: tap one to hang it. It stays until you choose something else.</p>
     </section>
   </div>
 
@@ -299,7 +387,6 @@
       <h2>What the wall shows</h2>
       <span class="seg" id="musicShow"><button data-ms2="auto">Chosen for the music</button><button data-ms2="art">Art</button></span>
       <div id="musicArtBox" hidden style="margin-top:12px">
-        <p class="hint" style="margin:0 0 10px">Pieces from the gallery, in their own colours, moving with the music. Pick one or let them change.</p>
         <div class="chips" id="musicArtChips"></div>
         <div class="gallery" id="musicArtGrid"></div>
       </div>
@@ -311,7 +398,6 @@
       <div class="chips" id="castChips"></div>
       <div class="switch"><span>Show the album cover</span><input type="checkbox" id="tCover"></div>
       <div class="switch"><span>Colour the art from the album cover</span><input type="checkbox" id="tCoverCol"></div>
-      <p class="hint">Covers come from the speakers and Spotify, so they show when the wall knows the song. The <b>Album art</b> mood on the Art tab switches all of this on in one tap.</p>
     </section>
     <section>
       <h2>Microphone</h2>
@@ -373,7 +459,6 @@
     <section class="mirrorcard">
       <div id="mirrorOff">
         <h3>Be the art</h3>
-        <p class="hint">The wall becomes a mirror: you appear in light, in your own colours, and the wall can speak to you.</p>
         <button class="btn primary big" onclick="startMirror()">Start the mirror</button>
         <button class="btn big" style="margin-top:10px" onclick="startBooth()">Start the photobooth</button>
       </div>
@@ -424,7 +509,6 @@
       <div class="switch"><span>Focus and expose the photo for the face (autofocus)</span><input type="checkbox" id="tFaceFocus" data-ms="face_focus"></div>
       <div class="switch"><span>Greet people by name</span><input type="checkbox" id="tRecog" data-ms="recognise"></div>
       <div class="switch"><span>Learn frequent faces</span><input type="checkbox" id="tLearn" data-ms="learn_faces"></div>
-      <p class="hint">Faces stay on the wall's computer as numbers. Nobody is learned unless you name them.</p>
     </section>
     <section>
       <h2>Quiet hours</h2>
@@ -438,15 +522,13 @@
   <!-- SETTINGS -->
   <div class="view" id="v-more">
     <section>
-      <h2>The art</h2>
-      <h3 class="sub" style="margin-top:0">Pace</h3>
+      <h2>Art pace</h2>
       <input type="range" id="pace" min="0" max="100" step="1" aria-label="Art pace">
       <div class="ends"><span>barely moving</span><span>lively</span></div>
       <div class="switch"><span>Show people on the art</span><input type="checkbox" id="tPresence"></div>
     </section>
     <section>
       <h2>The Fortuna Brief</h2>
-      <p class="hint" style="margin-top:0">Date, weather at Fortunagasse 24, the weekend in the Swiss mountains and the top news: a short show (find it under Live), and a short paper slip. The AI picks the news that is worth knowing.</p>
       <div class="switch"><span>Print the brief every morning</span><input type="checkbox" id="tBriefPrint"></div>
       <div class="row" style="margin-top:6px"><span class="hint" style="margin:0">Print at</span><input type="time" id="briefAt" aria-label="Time to print the brief" style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 10px;color:inherit;font:inherit"></div>
       <div class="row" style="margin-top:8px"><button class="btn" id="printBrief" onclick="printBrief()">Print it now</button><button class="btn" onclick="printBrief('en')">Print in English</button><button class="btn" onclick="playBrief()">Show it on the wall</button></div>
@@ -475,8 +557,6 @@
     </section>
     <section>
       <h2>Guests</h2>
-      <p class="hint" style="margin:0">Messages from guests always go across the wall, once each.</p>
-      <p class="hint" style="margin:6px 0 0">The QR code for guests is on the <a href="/home" onclick="openHome(); return false">Home screen</a>.</p>
       <div id="dList" style="margin-top:10px"></div>
     </section>
     <section id="matterBox" hidden>
@@ -495,10 +575,9 @@
       <h2>The wall's computer</h2>
       <p class="hint" id="version" style="margin:0 0 10px"></p>
       <div class="list actions">
-        <button onclick="location.href='/home'"><span></span><span><b>Home screen</b><small>QR codes for guests: Wi-Fi, message the board, today's pictures. Open it on a tablet.</small></span></button>
-        <button onclick="updSheet.showModal()"><span></span><span><b>Update &amp; restart</b><small>Fetches the newest version and restarts. Back in about a minute.</small></span></button>
-        <button onclick="resetSheet.showModal()"><span></span><span><b>Reset settings</b><small>Brightness, pace, music and rods back to their defaults.</small></span></button>
-        <button class="danger" onclick="shutSheet.showModal()"><span></span><span><b>Shut down</b><small>Powers the computer off. Unplug and replug to start it again.</small></span></button>
+        <button onclick="updSheet.showModal()"><span></span><span><b>Update &amp; restart</b></span></button>
+        <button onclick="resetSheet.showModal()"><span></span><span><b>Reset settings</b></span></button>
+        <button class="danger" onclick="shutSheet.showModal()"><span></span><span><b>Shut down</b></span></button>
       </div>
     </section>
   </div>
@@ -593,6 +672,8 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button').forEach(x => x.removeAttribute('aria-current'));
   b.setAttribute('aria-current', 'page');
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + b.dataset.tab));
+  document.body.classList.toggle('sub', b.dataset.tab !== 'art');
+  window.scrollTo(0, 0);
   if (b.dataset.tab !== 'more') stopLive();
   if (b.dataset.tab === 'photos') loadPhotos();
   if (b.dataset.tab === 'room') loadRoom();
@@ -600,6 +681,9 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   if (b.dataset.tab === 'more') loadShare();
   try { localStorage.setItem('tab', b.dataset.tab); } catch (e) {}
 });
+
+/* the compact bar on the other tabs: tap it to go back to the Wall */
+document.querySelector('.stage').addEventListener('click', e => { if (document.body.classList.contains('sub') && !e.target.closest('.controls')) document.querySelector('nav [data-tab="art"]').click(); });
 
 /* ---------- the wall, live ---------- */
 const nowImg = $('now');
@@ -732,7 +816,7 @@ function loadBrief() {
   api('/api/brief').then(b => {
     if (document.activeElement !== $('tBriefPrint')) $('tBriefPrint').checked = !!b.print;
     if (document.activeElement !== $('briefAt')) $('briefAt').value = b.at;
-    $('briefState').textContent = b.print ? 'Prints at ' + b.at + ' each day' + (b.printed ? ' (last printed ' + b.printed + ')' : '') + '. Or say "Hey Fortuna, print the brief".' : 'Not printed automatically. Or say "Hey Fortuna, print the brief".';
+    $('briefState').textContent = b.print ? 'Prints at ' + b.at + ' each day' + (b.printed ? ' (last printed ' + b.printed + ')' : '')+ '.' : 'Not printed automatically.';
   }).catch(() => {});
 }
 function playBrief() { api('/api/play', {mode: 'brief'}).then(r => { STATUS = r; render(); toast(r.brief_pending ? 'Preparing the Fortuna Brief…' : 'The Fortuna Brief is on the wall'); }).catch(err => toast(err.message)); }
@@ -742,6 +826,7 @@ function printBrief(lang) {
 }
 function render() {
   const s = STATUS, cur = s.current;
+  noteRecent(s);
   if ($('tPresence')) $('tPresence').checked = !!s.presence;
   $('title').textContent = titleFor(cur);
   $('sub').textContent = s.error ? s.error : subFor(cur) + (s.off_at && cur && cur !== 'off' ? ' · ' + offIn(s) : '');
@@ -774,6 +859,38 @@ async function power() {
 $('bright').addEventListener('input', debounce(e => api('/api/brightness', {value: +e.target.value}).then(s => { STATUS = s; render(); }), 350));
 $('pace').addEventListener('input', debounce(e => api('/api/artspeed', {value: paceToSpeed(+e.target.value)}).then(s => { STATUS = s; render(); }), 450));
 async function play(id) { try { STATUS = await api('/api/play', {mode: id}); render(); toast('Showing ' + titleFor(id)); } catch (e) { toast(e.message); } }
+
+
+/* ---------- recently on the wall (per phone: what the wall showed, whoever started it) ---------- */
+const RECENT_KEY = 'recent';
+const recentList = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch (e) { return []; } };
+function noteRecent(s) {
+  const cur = s && s.current;
+  if (!cur || ['off', 'mirror', 'music'].includes(cur) || (cur === 'piece' && !s.piece)) return;
+  const key = cur === 'piece' ? 'piece:' + s.piece : 'mode:' + cur;
+  if (noteRecent.last === key) return;
+  noteRecent.last = key;
+  const l = [key].concat(recentList().filter(k => k !== key)).slice(0, 12);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(l)); } catch (e) {}
+  renderRecent();
+}
+function clearRecent() { try { localStorage.removeItem(RECENT_KEY); } catch (e) {} noteRecent.last = ''; renderRecent(); }
+function renderRecent() {
+  const rail = $('recentRail'); if (!rail) return;
+  const cur = STATUS.current === 'piece' ? 'piece:' + STATUS.piece : 'mode:' + STATUS.current;
+  const hist = recentList(), keys = hist.concat(['mode:brief', 'mode:radar'].filter(k => !hist.includes(k)));
+  $('recentClear').hidden = !hist.length;
+  const tiles = keys.map(k => {
+    const i = k.indexOf(':'), kind = k.slice(0, i), id = k.slice(i + 1), sel = k === cur ? 'sel' : '';
+    if (kind === 'piece') {
+      const p = ART && ART.pieces.find(x => x.id === id); if (!p) return '';
+      return `<button class="${sel}" onclick="hangPiece('${p.id}')"><img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`;
+    }
+    const m = MODES.find(x => x.id === id); if (!m) return '';
+    return `<button class="${sel}" onclick="play('${m.id}')"><img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy"><span>${esc(m.title)}</span></button>`;
+  }).filter(Boolean);
+  rail.innerHTML = tiles.join('');
+}
 
 /* ---------- art ---------- */
 async function loadModes() {
@@ -853,7 +970,6 @@ let ART = null, artFilter = 'all', musicArtFilter = 'all';
 const HOUR_IDS = ['shader-aurora', 'shader-bloom', 'shader-crystal', 'shader-inkcloud', 'shader-metamorphosis', 'shader-orbit', 'shader-totality'];
 const LIVE_IDS = ['brief', 'radar', 'trams', 'tramlines', 'planes', 'satellites', 'windch', 'windie', 'windeu', 'polarbears', 'livecam', 'skylines', 'wanderers', 'nighttrains', 'issday', 'snow', 'tides', 'limmat', 'westcork', 'westcork_dusk', 'quakes', 'laend', 'kilchberg', 'zurichhb'];
 const SLIDE_IDS = ['lava', 'shapes', 'flow', 'shaders', 'artsy', 'glass', 'art', 'snapshots'];
-function openHome() { window.open(u('/home'), '_blank'); }
 const SHOW_IDS = ['pride', 'dewa', 'maeva', 'maxfionn', 'lennart', 'welcome', 'cow'];
 const modeGroup = {live: LIVE_IDS, slides: SLIDE_IDS, shows: SHOW_IDS};
 function modeTiles() {                       // the non-piece things the wall can show, filtered like the pieces
@@ -873,12 +989,9 @@ async function loadArt() {
   $('galleryHead').textContent = `Gallery · ${ART.pieces.length + MODES.filter(m => [].concat(SLIDE_IDS, SHOW_IDS, LIVE_IDS).includes(m.id)).length} things to show`;
   const modeTile = m => `<button class="${STATUS.current === m.id ? 'sel' : ''}" onclick="play('${m.id}')">
       <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy"><span>${esc(m.title)}</span>${SHOW_IDS.includes(m.id) ? `<i class="gifshare" role="button" tabindex="0" aria-label="Share ${esc(m.title)} as a GIF" onclick="shareGif(event,'${m.id}')">GIF</i>` : ''}</button>`;
-  const homeTile = artFilter === 'all' ? `<button onclick="openHome()"><img src="${u('/thumbs/home.png')}" alt="" loading="lazy"><span>Home screen (QR codes)</span></button>` : '';
-  const glance = ['brief', 'radar'].map(id => MODES.find(m => m.id === id)).filter(Boolean);
-  $('glanceGrid').innerHTML = glance.map(m => `<button class="${STATUS.current === m.id ? 'sel' : ''}" onclick="play('${m.id}')">
-      <img src="${u('/thumbs/' + m.id + '.png')}" alt="" loading="lazy"><span>${esc(m.title)}</span></button>`).join('');
-  $('artGrid').innerHTML = homeTile + modes.map(modeTile).join('') + list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
+  $('artGrid').innerHTML = modes.map(modeTile).join('') + list.map(p => `<button class="${p.id === cur ? 'sel' : ''}" onclick="hangPiece('${p.id}')">
       <img src="${u('/art/thumb/' + p.id + '.jpg')}" alt="" loading="lazy"><span>${esc(p.title)}</span></button>`).join('');
+  renderRecent();
   if (MUSIC.settings && MUSIC.settings.style === 'art') {
     $('musicArtChips').innerHTML = chips(musicArtFilter, 'filterMusicArt');
     const mcur = MUSIC.settings.art || '';
@@ -1298,7 +1411,6 @@ async function start() {
   await Promise.resolve(loadModes()).catch(e => console.error('loadModes', e));
   for (const [n, f] of [['shaderLib', shaderLib], ['loadScenes', loadScenes], ['loadDaily', loadDaily], ['loadMusic', loadMusic], ['loadArt', loadArt],
       ['loadVersion', loadVersion], ['loadMatter', loadMatter], ['loadWallSwitch', loadWallSwitch], ['loadLook', loadLook]]) step(n, f);
-  step('tab', () => { const t = localStorage.getItem('tab'); if (t) document.querySelector(`nav [data-tab="${t}"]`).click(); });
   step('aspect', () => {
     const r = Math.round((STATUS.wall_h || 192) / 64), c = Math.round((STATUS.wall_w || 192) / 64);
     document.documentElement.style.setProperty('--aspect', `${c} / ${r}`);

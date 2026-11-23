@@ -16,7 +16,6 @@ google-api-python-client>=2.120.0   # Drive photo archive (optional)
 google-auth>=2.29.0
 google-auth-oauthlib>=1.2.0
 google-auth-httplib2>=0.2.0
-vosk>=0.3.45; platform_machine=="armv7l" or platform_machine=="aarch64"   # offline voice control, "Hey Fortuna" (optional)
 # Pi only (bootstrap_pi.sh installs these and compiles the panel library):
 RPi.GPIO>=0.7.1; platform_machine=="armv7l" or platform_machine=="aarch64"
 picamera2>=0.3.19; platform_machine=="armv7l" or platform_machine=="aarch64"

@@ -1079,36 +1079,6 @@ def make_app(runner):
         brief.slip_image(brief.data(lang=lang if lang in ("de", "en") else None)).save(buf, "PNG")
         return Response(buf.getvalue(), mimetype="image/png", headers={"Cache-Control": "no-store"})
 
-    @app.get("/api/voice")
-    def voice_get():
-        return jsonify(runner.voice.status() if runner.voice else {"enabled": False, "error": "voice is not available"})
-
-    @app.post("/api/voice")
-    def voice_set():
-        """Voice control settings: {"enabled": bool} switches "Hey Fortuna" on or off, {"ai": bool} the AI check for
-        things it is unsure about. Both are remembered across restarts."""
-        if not runner.voice:
-            return jsonify({"error": "voice is not available"}), 503
-        d = request.get_json(force=True, silent=True) or {}
-        if "ai" in d:
-            runner.voice.ai_on = bool(d["ai"])
-            with runner.lock:
-                runner.state["voice_ai"] = runner.voice.ai_on
-                save_state(runner.state)
-        if "enabled" in d:
-            on = bool(d["enabled"])
-            with runner.lock:
-                changed = bool(runner.state.get("voice")) != on
-                runner.state["voice"] = on
-                save_state(runner.state)
-            runner.voice.set_enabled(on)
-            if changed:                                  # only a real switch can change who has the microphone
-                def settle():
-                    time.sleep(0.5)                      # let it open (or fail to open) the microphone
-                    runner.restart_current()             # (re)decides who has the microphone
-                threading.Thread(target=settle, daemon=True).start()
-        return jsonify(runner.voice.status())
-
     @app.post("/api/off")
     def off():
         runner.play("off")
@@ -2007,12 +1977,7 @@ def main():
     import requests  # noqa: F401
     from display import publish, daily  # noqa: F401
     runner = Runner()
-    from panel_setup.voice import Voice
-    runner.voice = Voice(runner, MODES)
-    runner.voice.ai_on = bool(runner.state.get("voice_ai", True))
-    if os.environ.get("WALL_VOICE") == "1" or (runner.state.get("voice") and not os.environ.get("WALL_SIM")):
-        runner.voice.set_enabled(True)
-    runner.resume_saved()                                # after voice, so the first mode starts with the microphone decided
+    runner.resume_saved()
     if (len([f for f in os.listdir(THUMB_DIR)] if os.path.isdir(THUMB_DIR) else []) < len(MODES) + 2
             or any(not os.path.exists(os.path.join(THUMB_DIR, m + ".png")) for m in LIVE_THUMBS)):
         threading.Thread(target=make_thumbs, daemon=True).start()   # normally shipped by deploy.sh

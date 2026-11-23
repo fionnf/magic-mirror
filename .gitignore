@@ -68,8 +68,6 @@ panel_setup/wall_switch.json
 panel_setup/exposure_now.npz
 panel_setup/exposures/
 panel_setup/liveview.on
-assets/models/vosk-model-*/
-panel_setup/voice_awake.json
 panel_setup/brief_cache_*.json
 panel_setup/brief_images/
 panel_setup/brightness_live.json

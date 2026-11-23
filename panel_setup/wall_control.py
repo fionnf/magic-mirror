@@ -1279,41 +1279,6 @@ def make_app(runner):
         from display import daily
         return send_from_directory(daily.FOLDER, name, max_age=3600)
 
-    GEN = {"busy": False, "error": "", "name": ""}
-
-    @app.post("/api/daily/new")
-    def daily_new():
-        """Make a new piece now with the AI artist (a minute or two, a few cents) and hang it. It replaces today's piece."""
-        if GEN["busy"]:
-            return jsonify({"busy": True}), 202
-        from display import daily, library
-        GEN.update(busy=True, error="", name="")
-
-        def work():
-            try:
-                today = __import__("datetime").date.today().isoformat()
-                meta = daily.generate(today, notes="Make something clearly different from today's earlier piece.")
-                for f in glob.glob(os.path.join(glob.escape(library.THUMBS), "daily-" + today + "-*")):
-                    try:
-                        os.remove(f)                       # the old picture of this date
-                    except OSError:
-                        pass
-                GEN["name"] = meta.get("name", "")
-                runner.state["daily_date"] = ""
-                save_state(runner.state)
-                runner.play("daily") if runner.current != "daily" else runner.restart_current()
-            except Exception as e:
-                GEN["error"] = str(e)[:200]
-                print(f"[daily] new piece failed: {e}", flush=True)
-            finally:
-                GEN["busy"] = False
-        threading.Thread(target=work, daemon=True, name="new-piece").start()
-        return jsonify({"busy": True})
-
-    @app.get("/api/daily/new")
-    def daily_new_state():
-        return jsonify(GEN)
-
     @app.post("/api/daily/show")
     def daily_show():
         d = (request.get_json(force=True, silent=True) or {}).get("date", "")
@@ -2094,31 +2059,14 @@ def main():
                 print(f"[tunnel] {e}", flush=True)
             time.sleep(15)
 
-    def daily_watch():                       # compose the art of the day (once a day, ~05:00 or at boot)
+    def daily_watch():                       # close past days (bake the music in); no new art is made
         import datetime as _dt
         from display import daily
         time.sleep(30)
         while True:
             try:
                 today = _dt.date.today().isoformat()
-                mine = dict(daily.editions()).get(today)
-                if (mine is None or mine.get("offline")) and (_dt.datetime.now().hour >= 5 or not daily.editions()):
-                    # the wall composes its own piece (the daily art is no longer published to the website).
-                    # With no internet at all it makes one itself (compose_offline); the real one replaces it once online.
-                    meta, net = None, daily.online()
-                    if net:
-                        try:
-                            meta = daily.generate(today)
-                        except Exception as e:
-                            print(f"[daily] the artist failed: {e}", flush=True)
-                    if meta is None and mine is None:
-                        if not net or _dt.datetime.now().hour >= 10:
-                            meta = daily.compose_offline(today)
-                    if meta:
-                        print(f"[daily] {today}: {meta['name']}", flush=True)
-                        if runner.current == "daily" and not runner.state.get("daily_date"):
-                            runner.restart_current()
-                for d, m in daily.editions():          # past days the wall did not close itself
+                for d, m in daily.editions():
                     if d < today and not m.get("final"):
                         daily.finalise(d)
             except Exception as e:

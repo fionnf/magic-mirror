@@ -275,11 +275,6 @@
       <p class="hint" id="sceneHint">One tap changes what the wall is doing. <b>Album art</b> listens to every speaker and shows the cover; choosing anything else ends it. Hold a mood you saved to remove it.</p>
     </section>
     <section>
-      <h2>New piece</h2>
-      <button class="btn primary" id="newPieceBtn" style="width:100%;padding:10px" onclick="newPiece()">Make a new piece</button>
-      <p class="hint" id="newPieceNote">The AI artist makes a brand-new animation for the wall (a minute or two) and hangs it. It replaces today's piece in the gallery.</p>
-    </section>
-    <section>
       <h2 id="galleryHead">Gallery</h2>
       <div class="find"><input type="search" id="artFind" placeholder="Search the gallery" aria-label="Search the gallery" autocomplete="off"></div>
       <div class="chips" id="artChips"></div>
@@ -937,23 +932,6 @@ async function surprise() {
   const l = shownPieces().length ? shownPieces() : ART.pieces;
   hangPiece(l[Math.floor(Math.random() * l.length)].id);
 }
-let newPieceTimer = null;
-async function newPiece() {
-  const b = $('newPieceBtn');
-  try { await api('/api/daily/new', {}); } catch (e) { return toast(e.message); }
-  b.disabled = true; b.textContent = 'Making it…'; $('newPieceNote').textContent = 'The artist is working. This takes a minute or two; you can leave this page.';
-  clearInterval(newPieceTimer);
-  newPieceTimer = setInterval(async () => {
-    try {
-      const g = await api('/api/daily/new'); if (g.busy) return;
-      clearInterval(newPieceTimer); b.disabled = false; b.textContent = 'Make a new piece';
-      if (g.error) { $('newPieceNote').textContent = 'That did not work: ' + g.error; return toast('The artist could not finish. Try again.'); }
-      $('newPieceNote').textContent = 'Now on the wall: ' + (g.name || 'a new piece'); toast('New piece: ' + (g.name || ''));
-      ART = null; loadArt(); loadDaily();
-    } catch (e) {}
-  }, 4000);
-}
-
 const GIFS = {};                        // id -> File, fetched once per page
 async function shareGif(ev, id) {       // a short GIF of the show, shared through the phone's own share sheet
   ev.stopPropagation(); ev.preventDefault();

@@ -231,7 +231,6 @@ Tools run by hand (`run.sh`, `display_test.py`, `tune.py`) do not read `.env`. "
 | `GROQ_API_KEY` | none | Only for `WALL_AI_PROVIDER=groq` (text only; vision calls go to OpenAI) | yes |
 | `WALL_AI_PROVIDER` | `openai` (`config.AI_PROVIDER`) | `openai`, `anthropic` or `groq` | no |
 | `WALL_OPENAI_MODEL` | `gpt-4.1-mini` | Model for quick calls | no |
-| `WALL_OPENAI_ART_MODEL` | `gpt-5.4-mini` (`config.AI_OPENAI_ART_MODEL`) | Model for the daily art | no |
 | `WALL_GROQ_MODEL` | `openai/gpt-oss-120b` | Groq model | no |
 | `WALL_MOODBOARD` | `fionnferreira/motion-graphics` | Public Pinterest board, `user/board`, that the daily artist looks at. Also a GitHub Actions repository variable | no |
 

@@ -6,9 +6,10 @@ for that model, so output depth is set with output_config.effort ("low" for thes
 Server-side refusal fallbacks are enabled (fallbacks="default") so a declined request is re-run on
 a fallback model inside the same call instead of failing.
 
-A cheaper provider is the default now (config.AI_PROVIDER = "openai", model config.AI_OPENAI_MODEL,
-key OPENAI_API_KEY in .env; "groq" works too with GROQ_API_KEY): the art of the day, its curator, the music brain and the mirror lines all
-go through ask(). Set WALL_AI_PROVIDER=anthropic to use Claude again.
+Groq's free tier is the default (config.AI_PROVIDER = "groq", GROQ_API_KEY in .env): the music brain,
+the Brief, the wheel, voice and booth prompts go through ask(). Groq's models cannot see pictures, so
+the one call that sends the camera image (the mirror one-liner) goes to OpenAI (OPENAI_API_KEY). No
+other feature sends an image, so nothing else touches OpenAI. Set WALL_AI_PROVIDER=anthropic to use Claude.
 """
 import os
 import io
@@ -43,22 +44,15 @@ def _get_client():
 
 
 def provider() -> str:
-    """The chosen provider, or Claude when the chosen one has no key but Claude has (a missing
-    OPENAI_API_KEY secret must not cost the day its piece)."""
-    p = (os.environ.get("WALL_AI_PROVIDER") or getattr(config, "AI_PROVIDER", "anthropic")).lower()
-    if p != "anthropic":
-        _load_env()
-        if not os.environ.get(_compat(p)[1]) and os.environ.get("ANTHROPIC_API_KEY"):
-            return "anthropic"
-    return p
+    """The chosen provider: Groq (free) unless WALL_AI_PROVIDER says otherwise. There is no silent
+    fallback to a paid key: a missing key means the feature uses its built-in text."""
+    return (os.environ.get("WALL_AI_PROVIDER") or getattr(config, "AI_PROVIDER", "groq")).lower()
 
 
-def model_name(art: bool = False) -> str:
-    """The model behind a call (an edition records the one that made its piece: art=True)."""
+def model_name() -> str:
+    """The model behind a call."""
     if provider() == "anthropic":
         return config.AI_MODEL
-    if art and provider() == "openai":
-        return os.environ.get("WALL_OPENAI_ART_MODEL", config.AI_OPENAI_ART_MODEL)
     return _compat(provider())[2]
 
 
@@ -153,7 +147,7 @@ def _has_image(content) -> bool:
     return not isinstance(content, str) and any(b.get("type") == "image" for b in content)
 
 
-def _ask_openai(system, content, max_tokens, schema, timeout, effort="low", images="route", prov=None, art=False):
+def _ask_openai(system, content, max_tokens, schema, timeout, effort="low", images="route", prov=None):
     import requests
     _load_env()
     prov = prov or provider()
@@ -163,8 +157,6 @@ def _ask_openai(system, content, max_tokens, schema, timeout, effort="low", imag
         else:
             prov = "openai"                          # a vision call goes to OpenAI instead
     base, keyvar, model = _compat(prov)
-    if art and prov == "openai":
-        model = model_name(art=True)
     key = os.environ.get(keyvar)
     if not key:
         raise RuntimeError(f"{keyvar} is not set")
@@ -198,12 +190,12 @@ def _ask_openai(system, content, max_tokens, schema, timeout, effort="low", imag
 
 
 def ask(system: str, content, max_tokens: int = 2048, effort: str = "low", schema: dict = None,
-        timeout: float = None, images: str = "route", art: bool = False):
+        timeout: float = None, images: str = "route"):
     """One Claude call. `content` is a string or a list of content blocks. With `schema`, the reply
     is guaranteed to be JSON matching it (structured output) and is returned parsed.
     Returns (text_or_dict, input_tokens, output_tokens). Raises on refusal or API errors."""
     if provider() != "anthropic":
-        return _ask_openai(system, content, max_tokens, schema, timeout, effort, images, art=art)
+        return _ask_openai(system, content, max_tokens, schema, timeout, effort, images)
     client = _get_client()
     kwargs = dict(model=config.AI_MODEL, max_tokens=max_tokens, system=system,
                   output_config={"effort": effort},
